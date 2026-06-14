@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Play, CheckCircle2, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
@@ -50,9 +51,9 @@ export default function MaintenanceDetailPage() {
           <>
             {m.statut === 'PLANIFIEE' && <Button icon={Play} loading={start.isPending} onClick={() => start.mutate()}>Démarrer</Button>}
             {m.statut === 'EN_COURS' && <Button icon={CheckCircle2} loading={close.isPending} onClick={() => close.mutate()}>Clôturer</Button>}
-            <a href={`${process.env.NEXT_PUBLIC_API_URL}/maintenances/${id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <button type="button" onClick={() => downloadFile(`/maintenances/${id}/pdf`, `maintenance-${id}.pdf`, true)} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <FileText size={15} /> PDF
-            </a>
+            </button>
           </>
         }
       />

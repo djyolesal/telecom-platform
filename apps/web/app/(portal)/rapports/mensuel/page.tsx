@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { FileText, Send, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Select, Input } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
@@ -19,8 +20,7 @@ export default function RapportMensuelPage() {
   const [destinataires, setDestinataires] = useState('');
   const [sentOk, setSentOk] = useState(false);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL;
-  const pdfUrl = `${apiBase}/rapports/mensuel/${annee}/${mois}${region ? `?region=${region}` : ''}`;
+  const pdfPath = `/rapports/mensuel/${annee}/${mois}${region ? `?region=${region}` : ''}`;
 
   const sendMutation = useMutation({
     mutationFn: () =>
@@ -49,9 +49,9 @@ export default function RapportMensuelPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
-          <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-[#1B3F6B] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#2471A3]">
+          <button type="button" onClick={() => downloadFile(pdfPath, `rapport-${annee}-${mois}.pdf`, true)} className="inline-flex items-center gap-2 rounded-lg bg-[#1B3F6B] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#2471A3]">
             <FileText size={15} /> Consulter le PDF
-          </a>
+          </button>
         </div>
 
         <div className="border-t border-gray-100 pt-4">

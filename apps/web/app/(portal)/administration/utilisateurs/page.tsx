@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Download, Power, KeyRound, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { DataTable, Column } from '@/components/shared/DataTable';
@@ -111,9 +112,9 @@ export default function UtilisateursPage() {
         backHref="/administration"
         actions={
           <>
-            <a href={`${process.env.NEXT_PUBLIC_API_URL}/users/export/csv`} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <button type="button" onClick={() => downloadFile('/users/export/csv', 'utilisateurs.csv')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <Download size={15} /> Export
-            </a>
+            </button>
             <Button icon={Plus} onClick={() => setShowModal(true)}>Nouvel utilisateur</Button>
           </>
         }
