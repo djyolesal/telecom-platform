@@ -1,0 +1,77 @@
+import '../../../core/network/dio_client.dart';
+import '../../../core/network/network_info.dart';
+import '../../../core/sync/sync_service.dart';
+import '../../../core/errors/exceptions.dart';
+import 'incident_model.dart';
+
+class IncidentRepository {
+  final DioClient _client;
+  final NetworkInfo _network;
+  final SyncService _sync;
+
+  IncidentRepository(this._client, this._network, this._sync);
+
+  Future<List<Incident>> getIncidents({String? statut, String? severite}) async {
+    if (!await _network.isConnected) return [];
+    return _client.request(
+      (dio) => dio.get('/incidents', queryParameters: {
+        'limit': 50,
+        if (statut != null && statut.isNotEmpty) 'statut': statut,
+        if (severite != null && severite.isNotEmpty) 'severite': severite,
+      }),
+      (data) => (data['data'] as List).map((e) => Incident.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  Future<Incident> getIncident(String id) async {
+    if (!await _network.isConnected) throw const ServerException('Incident indisponible hors-ligne');
+    return _client.request(
+      (dio) => dio.get('/incidents/$id'),
+      (data) => Incident.fromJson(data['data'] as Map<String, dynamic>),
+    );
+  }
+
+  /// Déclaration offline-first.
+  Future<SubmitResult> declare({
+    required String siteId,
+    required String type,
+    required String severite,
+    required String description,
+    double? latitude,
+    double? longitude,
+  }) {
+    return _sync.submit(
+      endpoint: '/incidents',
+      entityType: 'incident',
+      payload: {
+        'siteId': siteId,
+        'type': type,
+        'severite': severite,
+        'description': description,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      },
+    );
+  }
+
+  Future<SubmitResult> close({
+    required String id,
+    required DateTime dateIntervention,
+    required DateTime dateResolution,
+    String? causeProbable,
+    String? actionCorrective,
+    bool creerMaintenance = false,
+  }) {
+    return _sync.submit(
+      endpoint: '/incidents/$id/close',
+      entityType: 'incident_close',
+      payload: {
+        'dateIntervention': dateIntervention.toUtc().toIso8601String(),
+        'dateResolution': dateResolution.toUtc().toIso8601String(),
+        if (causeProbable != null && causeProbable.isNotEmpty) 'causeProbable': causeProbable,
+        if (actionCorrective != null && actionCorrective.isNotEmpty) 'actionCorrective': actionCorrective,
+        'creerMaintenance': creerMaintenance,
+      },
+    );
+  }
+}

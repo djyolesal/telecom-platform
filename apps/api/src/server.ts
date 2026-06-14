@@ -1,0 +1,112 @@
+import 'dotenv/config';
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
+import morgan from 'morgan';
+import { Server as SocketIOServer } from 'socket.io';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+
+import { env } from './config/env';
+import { prisma } from './config/database';
+import { redisClient } from './config/redis';
+import { ensureBucket } from './config/minio';
+import { metricsMiddleware, metricsHandler } from './config/metrics';
+import { setupSocketIO } from './sockets';
+import { setupCronJobs } from './jobs/scheduler';
+import { router } from './routes';
+import { errorHandler } from './middlewares/errorHandler';
+import { logger } from './utils/logger';
+
+const app = express();
+const httpServer = http.createServer(app);
+
+// ── Socket.IO ────────────────────────────────────────────────
+export const io = new SocketIOServer(httpServer, {
+  cors: { origin: env.CORS_ORIGIN, credentials: true },
+  transports: ['websocket', 'polling'],
+});
+setupSocketIO(io);
+
+// ── Middlewares ───────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+app.use(compression());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+app.use(metricsMiddleware);
+
+// ── Métriques Prometheus ──────────────────────────────────────
+app.get('/metrics', metricsHandler);
+
+// ── Swagger ───────────────────────────────────────────────────
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: { title: 'Telecom API', version: '1.0.0', description: 'API Plateforme Gestion Télécom & Énergie' },
+    servers: [{ url: '/api/v1' }],
+    components: {
+      securitySchemes: {
+        BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      },
+    },
+    security: [{ BearerAuth: [] }],
+  },
+  apis: ['./src/routes/*.ts'],
+};
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(swaggerOptions)));
+
+// ── Health check ──────────────────────────────────────────────
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    await redisClient.ping();
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' });
+  } catch (err) {
+    res.status(503).json({ status: 'error', message: String(err) });
+  }
+});
+
+// ── Routes API ────────────────────────────────────────────────
+app.use('/v1', router);
+
+// ── Error handler ─────────────────────────────────────────────
+app.use(errorHandler);
+
+// ── Démarrage ─────────────────────────────────────────────────
+async function bootstrap() {
+  try {
+    await prisma.$connect();
+    logger.info('✅ PostgreSQL connecté');
+
+    await redisClient.connect();
+    logger.info('✅ Redis connecté');
+
+    await ensureBucket();
+    logger.info('✅ Bucket MinIO prêt');
+
+    setupCronJobs();
+    logger.info('✅ Cron jobs démarrés');
+
+    httpServer.listen(env.PORT, () => {
+      logger.info(`✅ API démarrée sur le port ${env.PORT}`);
+      logger.info(`📚 Swagger : http://localhost:${env.PORT}/docs`);
+    });
+  } catch (err) {
+    logger.error('❌ Erreur démarrage:', err);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM reçu — arrêt gracieux...');
+  await prisma.$disconnect();
+  await redisClient.quit();
+  httpServer.close(() => process.exit(0));
+});
+
+bootstrap();

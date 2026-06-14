@@ -1,0 +1,100 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:logger/logger.dart';
+import '../constants/app_constants.dart';
+import '../errors/exceptions.dart';
+import '../storage/secure_storage.dart';
+import 'auth_interceptor.dart';
+
+/// Active l'acceptation des certificats TLS auto-signés.
+/// À passer au build pour un serveur en HTTPS auto-signé (IP sans domaine) :
+///   flutter build apk --dart-define=ALLOW_SELF_SIGNED=true --dart-define=API_URL=https://<IP>/api/v1
+const bool _allowSelfSigned = bool.fromEnvironment('ALLOW_SELF_SIGNED');
+
+/// Client HTTP central (Dio) avec intercepteurs auth/retry et journalisation.
+class DioClient {
+  late final Dio dio;
+  final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
+
+  DioClient(SecureStorage storage, {void Function()? onSessionExpired}) {
+    dio = Dio(
+      BaseOptions(
+        baseUrl: AppConstants.apiBaseUrl,
+        connectTimeout: AppConstants.connectTimeout,
+        receiveTimeout: AppConstants.receiveTimeout,
+        contentType: 'application/json',
+        // validateStatus par défaut (2xx = succès) : les 4xx deviennent des
+        // DioException, ce qui permet à l'AuthInterceptor de gérer les 401.
+      ),
+    );
+
+    // Serveur en HTTPS auto-signé : faire confiance au certificat (flag de build).
+    if (_allowSelfSigned) {
+      dio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () {
+          final client = HttpClient();
+          client.badCertificateCallback = (cert, host, port) => true;
+          return client;
+        },
+      );
+    }
+
+    dio.interceptors.add(AuthInterceptor(storage, onSessionExpired: onSessionExpired));
+    dio.interceptors.add(_RetryInterceptor(dio, _logger));
+
+    assert(() {
+      dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: false));
+      return true;
+    }());
+  }
+
+  /// Normalise les réponses : déballe l'enveloppe { success, data, meta }.
+  Future<T> request<T>(Future<Response> Function(Dio) call, T Function(dynamic data) parse) async {
+    try {
+      final res = await call(dio);
+      return parse(res.data);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        throw NetworkException();
+      }
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      final msg = data is Map && data['error'] != null ? data['error'].toString() : (e.message ?? 'Erreur réseau');
+      if (status == 401) throw UnauthorizedException(msg);
+      throw ServerException(msg, statusCode: status);
+    }
+  }
+}
+
+/// Réessaie automatiquement les requêtes GET en cas d'erreur réseau transitoire.
+class _RetryInterceptor extends Interceptor {
+  final Dio dio;
+  final Logger logger;
+  static const _maxRetries = 2;
+
+  _RetryInterceptor(this.dio, this.logger);
+
+  @override
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
+    final retries = (err.requestOptions.extra['__retries'] as int?) ?? 0;
+    final isTransient = err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.receiveTimeout ||
+        err.type == DioExceptionType.connectionError;
+
+    if (isTransient && err.requestOptions.method == 'GET' && retries < _maxRetries) {
+      final next = retries + 1;
+      err.requestOptions.extra['__retries'] = next;
+      await Future.delayed(Duration(milliseconds: 400 * next));
+      try {
+        final res = await dio.fetch(err.requestOptions);
+        return handler.resolve(res);
+      } catch (_) {
+        // continue vers le rejet
+      }
+    }
+    handler.next(err);
+  }
+}

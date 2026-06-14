@@ -1,0 +1,49 @@
+import '../../../core/network/dio_client.dart';
+import '../../../core/network/network_info.dart';
+import '../../../core/sync/sync_service.dart';
+import 'depotage_model.dart';
+
+class DepotageRepository {
+  final DioClient _client;
+  final NetworkInfo _network;
+  final SyncService _sync;
+
+  DepotageRepository(this._client, this._network, this._sync);
+
+  Future<List<Depotage>> getDepotages() async {
+    if (!await _network.isConnected) return [];
+    return _client.request(
+      (dio) => dio.get('/depotages', queryParameters: {'limit': 50}),
+      (data) => (data['data'] as List).map((e) => Depotage.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  Future<SubmitResult> create({
+    required String siteId,
+    required double volumeLitres,
+    double? stockAvantLitres,
+    String? fournisseur,
+    String? numeroBonLivraison,
+    double? prixLitre,
+    String? observations,
+    double? latitude,
+    double? longitude,
+  }) {
+    return _sync.submit(
+      endpoint: '/depotages',
+      entityType: 'depotage',
+      payload: {
+        'siteId': siteId,
+        'volumeLitres': volumeLitres,
+        'dateDepotage': DateTime.now().toUtc().toIso8601String(),
+        if (stockAvantLitres != null) 'stockAvantLitres': stockAvantLitres,
+        if (fournisseur != null && fournisseur.isNotEmpty) 'fournisseur': fournisseur,
+        if (numeroBonLivraison != null && numeroBonLivraison.isNotEmpty) 'numeroBonLivraison': numeroBonLivraison,
+        if (prixLitre != null) 'prixLitre': prixLitre,
+        if (observations != null && observations.isNotEmpty) 'observations': observations,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      },
+    );
+  }
+}

@@ -1,0 +1,75 @@
+import '../../../core/network/dio_client.dart';
+import '../../../core/network/network_info.dart';
+import '../../../core/sync/sync_service.dart';
+import '../../../core/errors/exceptions.dart';
+import 'maintenance_model.dart';
+
+class MaintenanceRepository {
+  final DioClient _client;
+  final NetworkInfo _network;
+  final SyncService _sync;
+
+  MaintenanceRepository(this._client, this._network, this._sync);
+
+  Future<List<Maintenance>> getMaintenances({String? statut, String? type}) async {
+    if (!await _network.isConnected) return [];
+    return _client.request(
+      (dio) => dio.get('/maintenances', queryParameters: {
+        'limit': 50,
+        if (statut != null && statut.isNotEmpty) 'statut': statut,
+        if (type != null && type.isNotEmpty) 'type': type,
+      }),
+      (data) => (data['data'] as List).map((e) => Maintenance.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  Future<Maintenance> getMaintenance(String id) async {
+    if (!await _network.isConnected) throw const ServerException('Maintenance indisponible hors-ligne');
+    return _client.request(
+      (dio) => dio.get('/maintenances/$id'),
+      (data) => Maintenance.fromJson(data['data'] as Map<String, dynamic>),
+    );
+  }
+
+  /// Création offline-first (mise en file si hors-ligne).
+  Future<SubmitResult> create({
+    required String siteId,
+    required String type,
+    required String categorie,
+    required String equipement,
+    String? description,
+    required DateTime datePlanifiee,
+    double? latitude,
+    double? longitude,
+  }) {
+    return _sync.submit(
+      endpoint: '/maintenances',
+      entityType: 'maintenance',
+      payload: {
+        'siteId': siteId,
+        'type': type,
+        'categorie': categorie,
+        'equipement': equipement,
+        if (description != null && description.isNotEmpty) 'description': description,
+        'datePlanifiee': datePlanifiee.toUtc().toIso8601String(),
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      },
+    );
+  }
+
+  Future<SubmitResult> start(String id, {double? latitude, double? longitude}) => _sync.submit(
+        endpoint: '/maintenances/$id/start',
+        entityType: 'maintenance_start',
+        payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
+      );
+
+  Future<SubmitResult> close(String id, {String? observations, String? signaturePath}) => _sync.submit(
+        endpoint: '/maintenances/$id/close',
+        entityType: 'maintenance_close',
+        payload: {
+          if (observations != null) 'observations': observations,
+          if (signaturePath != null) 'signaturePath': signaturePath,
+        },
+      );
+}

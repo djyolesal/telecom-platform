@@ -1,0 +1,148 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/widgets/common_widgets.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/constants/enums.dart';
+import '../../../core/utils/formatters.dart';
+import '../data/site_model.dart';
+import '../data/site_repository.dart';
+
+class SiteDetailScreen extends StatefulWidget {
+  final String siteId;
+  const SiteDetailScreen({super.key, required this.siteId});
+
+  @override
+  State<SiteDetailScreen> createState() => _SiteDetailScreenState();
+}
+
+class _SiteDetailScreenState extends State<SiteDetailScreen> {
+  late Future<Site> _siteFuture;
+  late Future<SiteStock?> _stockFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final repo = context.read<SiteRepository>();
+    _siteFuture = repo.getSite(widget.siteId);
+    _stockFuture = repo.getStock(widget.siteId);
+  }
+
+  Color _stockColor(String niveau) {
+    switch (niveau) {
+      case 'VIDE':
+      case 'CRITIQUE':
+        return AppColors.critique;
+      case 'FAIBLE':
+        return AppColors.majeur;
+      case 'OK':
+        return AppColors.accent;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Fiche site')),
+      body: FutureBuilder<Site>(
+        future: _siteFuture,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
+          if (snap.hasError || !snap.hasData) {
+            return ErrorView(message: 'Site indisponible', onRetry: () {});
+          }
+          final s = snap.data!;
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(s.code, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.brand)),
+              Text(s.nom, style: const TextStyle(fontSize: 15, color: Colors.black87)),
+              Text('${s.region}${s.ville != null ? ' · ${s.ville}' : ''}', style: TextStyle(color: Colors.grey.shade600)),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: [
+                      _row('Configuration', s.powerConfig),
+                      _row('Statut GE', s.statutGe),
+                      _row('Puissance GE', '${s.puissanceGeKva.toStringAsFixed(0)} kVA'),
+                      if (s.latitude != null) _row('Coordonnées', '${s.latitude!.toStringAsFixed(4)}, ${s.longitude!.toStringAsFixed(4)}'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              FutureBuilder<SiteStock?>(
+                future: _stockFuture,
+                builder: (context, stockSnap) {
+                  final stock = stockSnap.data;
+                  if (stock == null) return const SizedBox.shrink();
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('Stock carburant', style: TextStyle(fontWeight: FontWeight.w600)),
+                              const Spacer(),
+                              StatusChip(label: stock.niveauAlerte, color: _stockColor(stock.niveauAlerte)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          _row('Stock actuel', fmtLitres(stock.stockLitres)),
+                          if (stock.autonomieJours != null) _row('Autonomie', '${stock.autonomieJours} jours'),
+                          _row('Conso estimée', '${fmtLitres(stock.litresMois)} / mois'),
+                          _row('Coût estimé', fmtFcfa(stock.coutMoisFCFA)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _action(context, Icons.build, 'Maintenance', () => context.push('/maintenance/nouveau?siteId=${s.id}')),
+                  _action(context, Icons.local_gas_station, 'Dépotage', () => context.push('/carburant/nouveau?siteId=${s.id}')),
+                  _action(context, Icons.bolt, 'Relevé', () => context.push('/energie/nouveau?siteId=${s.id}')),
+                  _action(context, Icons.warning_amber, 'Incident', () => context.push('/incidents/nouveau?siteId=${s.id}')),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+            Text(_label(value), style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+          ],
+        ),
+      );
+
+  // Traduit certains codes enum en libellés lisibles si connus.
+  String _label(String v) =>
+      kStatutMaintenance[v] ?? kSourceEnergie[v] ?? v;
+
+  Widget _action(BuildContext context, IconData icon, String label, VoidCallback onTap) => SizedBox(
+        width: (MediaQuery.of(context).size.width - 42) / 2,
+        child: OutlinedButton.icon(
+          onPressed: onTap,
+          icon: Icon(icon, size: 18),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+        ),
+      );
+}

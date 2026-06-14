@@ -1,0 +1,353 @@
+generator client {
+  provider      = "prisma-client-js"
+  // "native" pour le dev local ; cible musl pour l'image Docker Alpine (node:20-alpine)
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ─────────────────────────────────────────────────────
+
+enum PowerConfig {
+  CEET_GE
+  CEET_UNIQUEMENT
+  GE_UNIQUEMENT
+  HYBRIDE_GE
+  SOLAIRE_UNIQUEMENT
+  HYBRIDE_CEET_GE
+}
+
+enum StatutGE {
+  GE_PERMANENT
+  GE_SECOURS
+  PAS_DE_GE
+}
+
+enum RoleUser {
+  TECHNICIEN
+  SUPERVISEUR
+  MANAGER
+  ADMIN
+  DIRECTION
+}
+
+enum TypeMaintenance {
+  PREVENTIVE
+  CURATIVE
+}
+
+enum StatutMaintenance {
+  PLANIFIEE
+  EN_COURS
+  TERMINEE
+  ANNULEE
+}
+
+enum CategorieEquipement {
+  GE
+  BATTERIE
+  CLIMATISEUR
+  ANTENNE
+  CABLE
+  RESEAU
+  AUTRE
+}
+
+enum SourceEnergie {
+  CEET
+  GE
+  SOLAIRE
+}
+
+enum TypeIncident {
+  ALARME
+  COUPURE_CEET
+  COUPURE_TOTALE
+  PANNE_GE
+  INTRUSION
+  VANDALISME
+  AUTRE
+}
+
+enum NiveauSeverite {
+  CRITIQUE
+  MAJEUR
+  MINEUR
+  INFORMATIF
+}
+
+enum StatutIncident {
+  OUVERT
+  EN_COURS
+  RESOLU
+  CLOS
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  ASSIGN
+  CLOSE
+}
+
+// ── Models ────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(uuid())
+  nom          String    @db.VarChar(50)
+  prenom       String    @db.VarChar(50)
+  email        String    @unique @db.VarChar(100)
+  telephone    String?   @db.VarChar(20)
+  role         RoleUser
+  region       String?   @db.VarChar(50)
+  passwordHash String    @map("password_hash")
+  fcmToken     String?   @map("fcm_token")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  maintenances      Maintenance[] @relation("TechnicienMaintenances")
+  depotages         Depotage[]    @relation("TechnicienDepotages")
+  releves           ReleveEnergie[]
+  incidents         Incident[]    @relation("TechnicienIncidents")
+  incidentsDeclares Incident[]    @relation("DeclarantIncidents")
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+model Site {
+  id             String      @id @default(uuid())
+  nom            String      @db.VarChar(100)
+  code           String      @unique @db.VarChar(20)
+  region         String      @db.VarChar(50)
+  ville          String?     @db.VarChar(50)
+  adresse        String?
+  latitude       Decimal?    @db.Decimal(10, 8)
+  longitude      Decimal?    @db.Decimal(11, 8)
+  powerConfig    PowerConfig @map("power_config")
+  statutGE       StatutGE    @map("statut_ge")
+  puissanceGEkva Decimal     @default(0) @map("puissance_ge_kva") @db.Decimal(6, 2)
+  isActive       Boolean     @default(true) @map("is_active")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  maintenances Maintenance[]
+  depotages    Depotage[]
+  releves      ReleveEnergie[]
+  incidents    Incident[]
+
+  @@index([region])
+  @@index([statutGE])
+  @@index([powerConfig])
+  @@map("sites")
+}
+
+model Maintenance {
+  id             String              @id @default(uuid())
+  siteId         String              @map("site_id")
+  incidentId     String?             @map("incident_id")
+  type           TypeMaintenance
+  categorie      CategorieEquipement
+  equipement     String              @db.VarChar(100)
+  description    String?
+  statut         StatutMaintenance   @default(PLANIFIEE)
+  datePlanifiee  DateTime            @map("date_planifiee")
+  dateDebut      DateTime?           @map("date_debut")
+  dateFin        DateTime?           @map("date_fin")
+  dureeMinutes   Int?                @map("duree_minutes")
+  technicienId   String?             @map("technicien_id")
+  signaturePath  String?             @map("signature_path")
+  rapportPdfPath String?             @map("rapport_pdf_path")
+  observations   String?
+  latitudeDebut  Decimal?            @map("latitude_debut") @db.Decimal(10, 8)
+  longitudeDebut Decimal?            @map("longitude_debut") @db.Decimal(11, 8)
+  isSynced       Boolean             @default(true) @map("is_synced")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  site       Site        @relation(fields: [siteId], references: [id])
+  incident   Incident?   @relation(fields: [incidentId], references: [id])
+  technicien User?       @relation("TechnicienMaintenances", fields: [technicienId], references: [id])
+  pieces     PieceRechange[]
+  photos     Photo[]
+
+  @@index([siteId])
+  @@index([technicienId])
+  @@index([datePlanifiee])
+  @@index([statut])
+  @@map("maintenances")
+}
+
+model PieceRechange {
+  id            String      @id @default(uuid())
+  maintenanceId String      @map("maintenance_id")
+  nom           String      @db.VarChar(100)
+  reference     String?     @db.VarChar(50)
+  quantite      Int
+  coutUnitaire  Decimal?    @map("cout_unitaire") @db.Decimal(10, 2)
+
+  maintenance Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+
+  @@map("pieces_rechange")
+}
+
+model Photo {
+  id           String      @id @default(uuid())
+  entityType   String      @map("entity_type") @db.VarChar(30)
+  entityId     String      @map("entity_id")
+  url          String
+  minioKey     String      @map("minio_key")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  maintenance Maintenance? @relation(fields: [entityId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("photos")
+}
+
+model Depotage {
+  id                 String    @id @default(uuid())
+  siteId             String    @map("site_id")
+  dateDepotage       DateTime  @map("date_depotage")
+  volumeLitres       Decimal   @map("volume_litres") @db.Decimal(8, 2)
+  stockAvantLitres   Decimal?  @map("stock_avant_litres") @db.Decimal(8, 2)
+  stockApresLitres   Decimal?  @map("stock_apres_litres") @db.Decimal(8, 2)
+  fournisseur        String?   @db.VarChar(100)
+  numeroBonLivraison String?   @map("numero_bon_livraison") @db.VarChar(50)
+  prixLitre          Decimal?  @map("prix_litre") @db.Decimal(6, 0)
+  coutTotal          Decimal?  @map("cout_total") @db.Decimal(12, 0)
+  technicienId       String?   @map("technicien_id")
+  signaturePath      String?   @map("signature_path")
+  bonLivraisonPath   String?   @map("bon_livraison_path")
+  observations       String?
+  latitude           Decimal?  @db.Decimal(10, 8)
+  longitude          Decimal?  @db.Decimal(11, 8)
+  isSynced           Boolean   @default(true) @map("is_synced")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  site       Site  @relation(fields: [siteId], references: [id])
+  technicien User? @relation("TechnicienDepotages", fields: [technicienId], references: [id])
+
+  @@index([siteId])
+  @@index([dateDepotage])
+  @@map("depotages")
+}
+
+model ReleveEnergie {
+  id                 String        @id @default(uuid())
+  siteId             String        @map("site_id")
+  dateReleve         DateTime      @map("date_releve")
+  source             SourceEnergie
+  indexCompteur      Decimal?      @map("index_compteur") @db.Decimal(10, 2)
+  consommationKwh    Decimal?      @map("consommation_kwh") @db.Decimal(10, 2)
+  volumeGasoilLitres Decimal?      @map("volume_gasoil_litres") @db.Decimal(8, 2)
+  heuresFonctGE      Decimal?      @map("heures_fonct_ge") @db.Decimal(8, 1)
+  puissanceKva       Decimal?      @map("puissance_kva") @db.Decimal(6, 2)
+  coutEstime         Decimal?      @map("cout_estime") @db.Decimal(12, 0)
+  technicienId       String?       @map("technicien_id")
+  observations       String?
+  latitude           Decimal?      @db.Decimal(10, 8)
+  longitude          Decimal?      @db.Decimal(11, 8)
+  isSynced           Boolean       @default(true) @map("is_synced")
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  site       Site  @relation(fields: [siteId], references: [id])
+  technicien User? @relation(fields: [technicienId], references: [id])
+
+  @@index([siteId])
+  @@index([dateReleve])
+  @@index([source])
+  @@map("releves_energie")
+}
+
+model Incident {
+  id                       String         @id @default(uuid())
+  siteId                   String         @map("site_id")
+  type                     TypeIncident
+  severite                 NiveauSeverite
+  statut                   StatutIncident @default(OUVERT)
+  description              String
+  dateOuverture            DateTime       @default(now()) @map("date_ouverture")
+  dateIntervention         DateTime?      @map("date_intervention")
+  dateResolution           DateTime?      @map("date_resolution")
+  delaiInterventionMinutes Int?           @map("delai_intervention_minutes")
+  dureeCoupureMinutes      Int?           @map("duree_coupure_minutes")
+  technicienId             String?        @map("technicien_id")
+  declarePar               String?        @map("declare_par")
+  causeProbable            String?        @map("cause_probable")
+  actionCorrective         String?        @map("action_corrective")
+  signaturePath            String?        @map("signature_path")
+  latitude                 Decimal?       @db.Decimal(10, 8)
+  longitude                Decimal?       @db.Decimal(11, 8)
+  isSynced                 Boolean        @default(true) @map("is_synced")
+  createdAt                DateTime       @default(now()) @map("created_at")
+  updatedAt                DateTime       @updatedAt @map("updated_at")
+
+  site             Site          @relation(fields: [siteId], references: [id])
+  technicien       User?         @relation("TechnicienIncidents", fields: [technicienId], references: [id])
+  declarant        User?         @relation("DeclarantIncidents", fields: [declarePar], references: [id])
+  maintenances     Maintenance[]
+
+  @@index([siteId])
+  @@index([statut])
+  @@index([severite])
+  @@index([dateOuverture])
+  @@map("incidents")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String      @map("user_id")
+  action     AuditAction
+  resource   String      @db.VarChar(50)
+  resourceId String?     @map("resource_id")
+  details    Json?
+  ipAddress  String?     @map("ip_address") @db.VarChar(45)
+  userAgent  String?     @map("user_agent")
+  success    Boolean     @default(true)
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resource])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSettings {
+  id          String   @id @default(uuid())
+  key         String   @unique @db.VarChar(100)
+  value       Json
+  description String?
+  updatedBy   String?  @map("updated_by")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String   @db.VarChar(50)
+  title     String   @db.VarChar(200)
+  body      String
+  data      Json?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}

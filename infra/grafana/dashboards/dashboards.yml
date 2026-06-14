@@ -1,0 +1,14 @@
+# Provider de dashboards : charge tous les fichiers JSON de ce répertoire
+apiVersion: 1
+
+providers:
+  - name: 'Télécom'
+    orgId: 1
+    folder: 'Télécom'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

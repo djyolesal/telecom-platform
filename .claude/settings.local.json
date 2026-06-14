@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(AUTH_SECRET=dummy_build_secret NEXTAUTH_SECRET=dummy_build_secret npx next build)",
+      "Bash(chmod +x infra/scripts/*.sh)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('infra/grafana/dashboards/api-overview.json'\\)\\); print\\('dashboard JSON valid'\\)\")",
+      "Bash(AUTH_SECRET=dummy NEXTAUTH_SECRET=dummy npx next build)",
+      "Bash(flutter --version)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(grep -A2 'name: geolocator$' pubspec.lock)",
+      "Bash(awk '/name: geolocator$/{f=1} f&&/version:/{print \"geolocator \" $2; f=0}' pubspec.lock)",
+      "Bash(awk '/name: geolocator_platform_interface$/{f=1} f&&/version:/{print \"gpi \" $2; f=0}' pubspec.lock)",
+      "Bash(bash -n infra/scripts/setup-server.sh)",
+      "Bash(bash -n infra/scripts/gen-selfsigned-cert.sh)",
+      "Bash(bash infra/scripts/gen-selfsigned-cert.sh 203.0.113.10 1)",
+      "Bash(openssl x509 *)",
+      "Bash(openssl version *)",
+      "Bash(rm -rf dist-seed)",
+      "Bash(printf 'dist-seed\\\\n')",
+      "Bash(printf 'apps/api/dist-seed/\\\\n')",
+      "Bash(ls -la prisma/migrations/)",
+      "Bash(find prisma/migrations -name \"*.sql\")",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script)",
+      "Read(//tmp/**)",
+      "Bash(ls app/page.tsx)",
+      "Bash(ls -la app/*.tsx)",
+      "Bash(ls -d app/*/)"
+    ]
+  }
+}

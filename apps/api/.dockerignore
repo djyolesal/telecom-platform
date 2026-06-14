@@ -1,0 +1,9 @@
+node_modules
+dist
+logs
+*.log
+.env
+.git
+coverage
+prisma/*.db
+dist-seed

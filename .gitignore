@@ -1,0 +1,36 @@
+# Dépendances
+node_modules/
+
+# Builds
+dist/
+.next/
+out/
+build/
+
+# Environnement
+.env
+.env.local
+*.local
+
+# Logs
+logs/
+*.log
+
+# Données & backups
+/opt/telecom/
+*.sql.gz
+
+# SSL
+infra/ssl/*.pem
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Flutter
+apps/mobile/build/
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins*
+apps/api/dist-seed/

@@ -1,0 +1,62 @@
+name: telecom_mobile
+description: Application terrain — Plateforme Gestion Télécom & Énergie
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_bloc: ^8.1.5
+  equatable: ^2.0.5
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Réseau
+  dio: ^5.4.3+1
+
+  # Offline (SQLite)
+  drift: ^2.18.0
+  drift_flutter: ^0.2.0
+
+  # Stockage
+  flutter_secure_storage: ^9.2.2
+  hive_flutter: ^1.1.0
+
+  # Sécurité / biométrie
+  local_auth: ^2.3.0
+
+  # Connectivité
+  connectivity_plus: ^6.0.5
+
+  # Notifications push
+  firebase_core: ^3.1.0
+  firebase_messaging: ^15.0.0
+  flutter_local_notifications: ^17.2.0
+
+  # Terrain
+  image_picker: ^1.1.2
+  geolocator: ^12.0.0
+  signature: ^5.5.0
+  cached_network_image: ^3.3.1
+
+  # Utilitaires
+  intl: ^0.19.0
+  uuid: ^4.4.2
+  logger: ^2.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  drift_dev: ^2.18.0
+
+flutter:
+  uses-material-design: true

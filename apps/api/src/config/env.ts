@@ -1,0 +1,59 @@
+import { z } from 'zod';
+import 'dotenv/config';
+
+/**
+ * Schéma de validation des variables d'environnement.
+ * L'application refuse de démarrer si une variable obligatoire est absente ou invalide.
+ */
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.coerce.number().default(3001),
+
+  // Base de données
+  DATABASE_URL: z.string().url(),
+
+  // Redis
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+
+  // MinIO
+  MINIO_ENDPOINT: z.string().default('minio'),
+  MINIO_PORT: z.coerce.number().default(9000),
+  MINIO_ACCESS_KEY: z.string(),
+  MINIO_SECRET_KEY: z.string(),
+  MINIO_BUCKET: z.string().default('telecom-files'),
+  MINIO_USE_SSL: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
+  // JWT
+  JWT_SECRET: z.string().min(16),
+  JWT_REFRESH_SECRET: z.string().min(16),
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
+
+  // SMTP
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default('noreply@telecom.local'),
+
+  // Firebase Cloud Messaging
+  FCM_SERVER_KEY: z.string().optional(),
+
+  // Divers
+  APP_URL: z.string().default('http://localhost:3000'),
+  CORS_ORIGIN: z.string().default('*'),
+});
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  // eslint-disable-next-line no-console
+  console.error('❌ Variables d\'environnement invalides :', parsed.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+export const env = parsed.data;
+export type Env = typeof env;
