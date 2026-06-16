@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import '../constants/app_constants.dart';
 import '../storage/secure_storage.dart';
+
+const bool _allowSelfSigned = bool.fromEnvironment('ALLOW_SELF_SIGNED');
 
 /// Attache le jeton d'accès à chaque requête et rafraîchit automatiquement
 /// le jeton sur 401 (une seule tentative, puis rejoue la requête initiale).
@@ -11,7 +15,18 @@ class AuthInterceptor extends Interceptor {
   final void Function()? onSessionExpired;
 
   AuthInterceptor(this._storage, {this.onSessionExpired})
-      : _refreshDio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
+      : _refreshDio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl)) {
+    // Même tolérance au certificat auto-signé que le client principal.
+    if (_allowSelfSigned) {
+      _refreshDio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () {
+          final client = HttpClient();
+          client.badCertificateCallback = (cert, host, port) => true;
+          return client;
+        },
+      );
+    }
+  }
 
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {

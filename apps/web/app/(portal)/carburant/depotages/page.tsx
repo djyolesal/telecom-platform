@@ -52,6 +52,7 @@ export default function DepotagesPage() {
       <PageHeader
         title="Dépotages carburant"
         subtitle="Historique des livraisons de gasoil"
+        backHref="/carburant/stock"
         actions={
           <button type="button" onClick={() => downloadFile('/depotages/export/xlsx', 'depotages.xlsx')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             <Download size={15} /> Export

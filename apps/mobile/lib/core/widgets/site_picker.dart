@@ -33,7 +33,7 @@ class _SitePickerState extends State<SitePicker> {
         // Évite l'assertion Dropdown : la valeur doit exister dans les items.
         final value = sites.any((s) => s.id == _value) ? _value : null;
         return DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Site *', prefixIcon: Icon(Icons.cell_tower)),
           items: sites

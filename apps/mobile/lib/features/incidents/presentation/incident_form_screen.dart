@@ -37,22 +37,29 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
     final repo = context.read<IncidentRepository>();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
     setState(() => _saving = true);
-    final pos = await LocationService().currentPosition();
-    final res = await repo.declare(
-          siteId: _siteId!,
-          type: _type,
-          severite: _severite,
-          description: _description.text.trim(),
-          latitude: pos?.lat,
-          longitude: pos?.lng,
-        );
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(res.isQueued ? 'Hors-ligne : incident mis en file de synchronisation' : 'Incident déclaré'),
-    ));
-    context.pop();
+    try {
+      final pos = await LocationService().currentPosition();
+      final res = await repo.declare(
+        siteId: _siteId!,
+        type: _type,
+        severite: _severite,
+        description: _description.text.trim(),
+        latitude: pos?.lat,
+        longitude: pos?.lng,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(res.isQueued ? 'Hors-ligne : incident mis en file de synchronisation' : 'Incident déclaré'),
+      ));
+      router.pop();
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -67,14 +74,14 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
             SitePicker(initialSiteId: _siteId, onChanged: (v) => _siteId = v),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              value: _type,
+              initialValue: _type,
               decoration: const InputDecoration(labelText: 'Type'),
               items: kTypeIncident.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
               onChanged: (v) => setState(() => _type = v!),
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              value: _severite,
+              initialValue: _severite,
               decoration: const InputDecoration(labelText: 'Sévérité'),
               items: kSeverite.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
               onChanged: (v) => setState(() => _severite = v!),

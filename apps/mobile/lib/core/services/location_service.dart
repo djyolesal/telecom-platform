@@ -16,11 +16,18 @@ class LocationService {
         return null;
       }
 
+      // Position connue récente (instantanée), sinon nouvelle mesure avec timeout.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) return (lat: last.latitude, lng: last.longitude);
+
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy: LocationAccuracy.medium,
+        // Timeout : sur émulateur/sans fix GPS, on n'attend pas indéfiniment.
+        timeLimit: const Duration(seconds: 8),
       );
       return (lat: pos.latitude, lng: pos.longitude);
     } catch (_) {
+      // TimeoutException, GPS indisponible, permission refusée… → on enregistre sans GPS.
       return null;
     }
   }

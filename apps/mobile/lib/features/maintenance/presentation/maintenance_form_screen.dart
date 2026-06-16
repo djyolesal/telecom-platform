@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/services/location_service.dart';
-import '../../../core/sync/sync_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/site_picker.dart';
 import '../data/maintenance_repository.dart';
@@ -53,31 +52,33 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
     final repo = context.read<MaintenanceRepository>();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
     setState(() => _saving = true);
-
-    final pos = await LocationService().currentPosition();
-    final res = await repo.create(
-          siteId: _siteId!,
-          type: _type,
-          categorie: _categorie,
-          equipement: _equipement.text.trim(),
-          description: _description.text.trim(),
-          datePlanifiee: _datePlanifiee,
-          latitude: pos?.lat,
-          longitude: pos?.lng,
-        );
-
-    if (!mounted) return;
-    setState(() => _saving = false);
-    _showResult(res);
-    context.pop();
-  }
-
-  void _showResult(SubmitResult res) {
-    final msg = res.isQueued
-        ? 'Hors-ligne : maintenance enregistrée et mise en file de synchronisation'
-        : 'Maintenance planifiée';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    try {
+      final pos = await LocationService().currentPosition();
+      final res = await repo.create(
+        siteId: _siteId!,
+        type: _type,
+        categorie: _categorie,
+        equipement: _equipement.text.trim(),
+        description: _description.text.trim(),
+        datePlanifiee: _datePlanifiee,
+        latitude: pos?.lat,
+        longitude: pos?.lng,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(res.isQueued
+            ? 'Hors-ligne : maintenance enregistrée et mise en file de synchronisation'
+            : 'Maintenance planifiée'),
+      ));
+      router.pop();
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -92,14 +93,14 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
             SitePicker(initialSiteId: _siteId, onChanged: (v) => _siteId = v),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              value: _type,
+              initialValue: _type,
               decoration: const InputDecoration(labelText: 'Type'),
               items: kTypeMaintenance.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
               onChanged: (v) => setState(() => _type = v!),
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              value: _categorie,
+              initialValue: _categorie,
               decoration: const InputDecoration(labelText: 'Catégorie équipement'),
               items: kCategorieEquipement.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
               onChanged: (v) => setState(() => _categorie = v!),

@@ -52,16 +52,19 @@ class SyncService {
     required Map<String, dynamic> payload,
     String method = 'POST',
   }) async {
+    // clientUuid sert uniquement au suivi local (outbox) — il n'est PAS envoyé
+    // au serveur, sinon Prisma rejette ce champ inconnu (erreur 500).
+    final clientUuid = _uuid.v4();
     final body = Map<String, dynamic>.from(payload);
-    body.putIfAbsent('clientUuid', () => _uuid.v4());
 
-    if (await _network.isConnected) {
-      try {
-        final data = await _send(endpoint, method, body);
-        return SubmitResult(SubmitOutcome.sent, data);
-      } on NetworkException {
-        // bascule hors-ligne → file d'attente
-      }
+    // On tente TOUJOURS l'envoi direct (le pré-check de connectivité n'est pas
+    // fiable, notamment sur émulateur). On ne met en file que si le réseau échoue
+    // réellement (NetworkException). Une erreur serveur (4xx/5xx) est, elle, relancée.
+    try {
+      final data = await _send(endpoint, method, body);
+      return SubmitResult(SubmitOutcome.sent, data);
+    } on NetworkException {
+      // hors-ligne réel → file d'attente
     }
 
     await _db.enqueue(OutboxEntriesCompanion.insert(
@@ -69,7 +72,7 @@ class SyncService {
       method: Value(method),
       payload: jsonEncode(body),
       entityType: entityType,
-      clientUuid: body['clientUuid'] as String,
+      clientUuid: clientUuid,
     ));
     return const SubmitResult(SubmitOutcome.queued);
   }
@@ -77,7 +80,8 @@ class SyncService {
   /// Rejoue toutes les opérations en attente.
   Future<void> sync() async {
     if (_syncing) return;
-    if (!await _network.isConnected) return;
+    // On tente le drainage sans se fier au pré-check de connectivité :
+    // chaque envoi qui échoue pour cause réseau interrompt la boucle (réessai plus tard).
     _syncing = true;
     try {
       final pending = await _db.pendingOutbox();

@@ -59,7 +59,7 @@ class _IncidentsView extends StatelessWidget {
                 final inc = state.items[i];
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: AppTheme.severiteColor(inc.severite).withOpacity(0.15),
+                    backgroundColor: AppTheme.severiteColor(inc.severite).withValues(alpha: 0.15),
                     child: Icon(Icons.warning_amber, color: AppTheme.severiteColor(inc.severite), size: 20),
                   ),
                   title: Text('${inc.siteCode ?? '—'} · ${kTypeIncident[inc.type] ?? inc.type}', style: const TextStyle(fontWeight: FontWeight.w600)),

@@ -44,25 +44,32 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
     final repo = context.read<DepotageRepository>();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
     setState(() => _saving = true);
-    final pos = await LocationService().currentPosition();
-    final res = await repo.create(
-          siteId: _siteId!,
-          volumeLitres: _num(_volume) ?? 0,
-          stockAvantLitres: _num(_stockAvant),
-          fournisseur: _fournisseur.text.trim(),
-          numeroBonLivraison: _bon.text.trim(),
-          prixLitre: _num(_prix),
-          observations: _obs.text.trim(),
-          latitude: pos?.lat,
-          longitude: pos?.lng,
-        );
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(res.isQueued ? 'Hors-ligne : dépotage mis en file de synchronisation' : 'Dépotage enregistré'),
-    ));
-    context.pop();
+    try {
+      final pos = await LocationService().currentPosition();
+      final res = await repo.create(
+        siteId: _siteId!,
+        volumeLitres: _num(_volume) ?? 0,
+        stockAvantLitres: _num(_stockAvant),
+        fournisseur: _fournisseur.text.trim(),
+        numeroBonLivraison: _bon.text.trim(),
+        prixLitre: _num(_prix),
+        observations: _obs.text.trim(),
+        latitude: pos?.lat,
+        longitude: pos?.lng,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(res.isQueued ? 'Hors-ligne : dépotage mis en file de synchronisation' : 'Dépotage enregistré'),
+      ));
+      router.pop();
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override

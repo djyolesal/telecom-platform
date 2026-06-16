@@ -88,7 +88,7 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
@@ -106,7 +106,7 @@ class OfflineBanner extends StatelessWidget {
     if (pendingCount == 0) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
-      color: AppColors.majeur.withOpacity(0.15),
+      color: AppColors.majeur.withValues(alpha: 0.15),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [

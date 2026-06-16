@@ -75,7 +75,7 @@ class _SitesViewState extends State<_SitesView> {
                       final s = state.items[i];
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: AppColors.brand.withOpacity(0.1),
+                          backgroundColor: AppColors.brand.withValues(alpha: 0.1),
                           child: const Icon(Icons.cell_tower, color: AppColors.brand, size: 20),
                         ),
                         title: Text(s.code, style: const TextStyle(fontWeight: FontWeight.w600)),

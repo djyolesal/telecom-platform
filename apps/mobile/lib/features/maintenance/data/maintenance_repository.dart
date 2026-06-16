@@ -52,8 +52,8 @@ class MaintenanceRepository {
         'equipement': equipement,
         if (description != null && description.isNotEmpty) 'description': description,
         'datePlanifiee': datePlanifiee.toUtc().toIso8601String(),
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
+        // NB : le modèle Maintenance n'a pas de latitude/longitude à la création
+        // (la position est enregistrée au démarrage via latitudeDebut/longitudeDebut).
       },
     );
   }

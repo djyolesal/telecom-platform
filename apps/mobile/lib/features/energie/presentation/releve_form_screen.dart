@@ -45,25 +45,32 @@ class _ReleveFormScreenState extends State<ReleveFormScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
     final repo = context.read<ReleveRepository>();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
     setState(() => _saving = true);
-    final pos = await LocationService().currentPosition();
-    final res = await repo.create(
-          siteId: _siteId!,
-          source: _source,
-          indexCompteur: _num(_index),
-          consommationKwh: _num(_kwh),
-          volumeGasoilLitres: _num(_gasoil),
-          heuresFonctGE: _num(_heures),
-          observations: _obs.text.trim(),
-          latitude: pos?.lat,
-          longitude: pos?.lng,
-        );
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(res.isQueued ? 'Hors-ligne : relevé mis en file de synchronisation' : 'Relevé enregistré'),
-    ));
-    context.pop();
+    try {
+      final pos = await LocationService().currentPosition();
+      final res = await repo.create(
+        siteId: _siteId!,
+        source: _source,
+        indexCompteur: _num(_index),
+        consommationKwh: _num(_kwh),
+        volumeGasoilLitres: _num(_gasoil),
+        heuresFonctGE: _num(_heures),
+        observations: _obs.text.trim(),
+        latitude: pos?.lat,
+        longitude: pos?.lng,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(res.isQueued ? 'Hors-ligne : relevé mis en file de synchronisation' : 'Relevé enregistré'),
+      ));
+      router.pop();
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -79,7 +86,7 @@ class _ReleveFormScreenState extends State<ReleveFormScreen> {
             SitePicker(initialSiteId: _siteId, onChanged: (v) => _siteId = v),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              value: _source,
+              initialValue: _source,
               decoration: const InputDecoration(labelText: 'Source'),
               items: kSourceEnergie.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
               onChanged: (v) => setState(() => _source = v!),

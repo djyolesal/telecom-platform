@@ -4,6 +4,10 @@ analyzer:
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
+    - "build/**"
+    - "ios/**"
+    - "android/**"
+    - "**/.symlinks/**"
   errors:
     invalid_annotation_target: ignore
 

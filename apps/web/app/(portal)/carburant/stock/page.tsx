@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Fuel, AlertTriangle, Droplet, Banknote } from 'lucide-react';
+import { Fuel, AlertTriangle, Droplet, Banknote, History } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable, Column } from '@/components/shared/DataTable';
+import { ButtonLink } from '@/components/shared/Button';
 import { Loading, EmptyState } from '@/components/shared/states';
 import { NiveauStockBadge } from '@/components/shared/Badge';
 import { regionOptions } from '@/lib/constants';
@@ -54,7 +55,11 @@ export default function StockCarburantPage() {
 
   return (
     <div>
-      <PageHeader title="Stock carburant" subtitle="Vue globale du parc et alertes d'autonomie" />
+      <PageHeader
+        title="Stock carburant"
+        subtitle="Vue globale du parc et alertes d'autonomie"
+        actions={<ButtonLink href="/carburant/depotages" variant="secondary" icon={History}>Dépotages</ButtonLink>}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard title="Stock total" value={`${fmtNumber(Math.round((resume.totalLitres ?? 0) / 1000))}k L`} icon={Fuel} color="bg-[#0E7C6B]" />
