@@ -64,12 +64,19 @@ class MaintenanceRepository {
         payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
       );
 
-  Future<SubmitResult> close(String id, {String? observations, String? signaturePath}) => _sync.submit(
+  Future<SubmitResult> close(
+    String id, {
+    String? observations,
+    String? signaturePath,
+    Map<String, dynamic>? energie,
+  }) =>
+      _sync.submit(
         endpoint: '/maintenances/$id/close',
         entityType: 'maintenance_close',
         payload: {
           if (observations != null) 'observations': observations,
           if (signaturePath != null) 'signaturePath': signaturePath,
+          if (energie != null && energie.isNotEmpty) 'energie': energie,
         },
       );
 }

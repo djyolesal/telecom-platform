@@ -30,7 +30,10 @@
       "Bash(ls -la app/*.tsx)",
       "Bash(ls -d app/*/)",
       "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" npx prisma validate)",
-      "Bash(node -e \"const{PrismaClient}=require\\('@prisma/client'\\); const p=new PrismaClient\\(\\); console.log\\('prestataire:', typeof p.prestataire, '| lot:', typeof p.lot, '| lotAssignment:', typeof p.lotAssignment\\);\")"
+      "Bash(node -e \"const{PrismaClient}=require\\('@prisma/client'\\); const p=new PrismaClient\\(\\); console.log\\('prestataire:', typeof p.prestataire, '| lot:', typeof p.lot, '| lotAssignment:', typeof p.lotAssignment\\);\")",
+      "Bash(sed -i '' 's/fmtNum\\(/fmtNumber\\(/g; s/import { fmtDateTime, fmtNumber }/import { fmtDateTime, fmtNumber }/' \"app/\\(portal\\)/maintenance/[id]/page.tsx\")",
+      "Bash(sed -i '' 's/import { fmtDateTime, fmtNum }/import { fmtDateTime, fmtNumber }/' \"app/\\(portal\\)/maintenance/[id]/page.tsx\")",
+      "Bash(python3 e2e_test.py)"
     ]
   }
 }

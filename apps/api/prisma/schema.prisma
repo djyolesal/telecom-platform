@@ -189,6 +189,7 @@ model Maintenance {
   prestataire Prestataire? @relation(fields: [prestataireId], references: [id])
   pieces      PieceRechange[]
   photos      Photo[]
+  releves     ReleveEnergie[]
 
   @@index([siteId])
   @@index([technicienId])
@@ -265,18 +266,21 @@ model ReleveEnergie {
   puissanceKva       Decimal?      @map("puissance_kva") @db.Decimal(6, 2)
   coutEstime         Decimal?      @map("cout_estime") @db.Decimal(12, 0)
   technicienId       String?       @map("technicien_id")
+  maintenanceId      String?       @map("maintenance_id")
   observations       String?
   latitude           Decimal?      @db.Decimal(10, 8)
   longitude          Decimal?      @db.Decimal(11, 8)
   isSynced           Boolean       @default(true) @map("is_synced")
   createdAt          DateTime      @default(now()) @map("created_at")
 
-  site       Site  @relation(fields: [siteId], references: [id])
-  technicien User? @relation(fields: [technicienId], references: [id])
+  site        Site         @relation(fields: [siteId], references: [id])
+  technicien  User?        @relation(fields: [technicienId], references: [id])
+  maintenance Maintenance? @relation(fields: [maintenanceId], references: [id])
 
   @@index([siteId])
   @@index([dateReleve])
   @@index([source])
+  @@index([maintenanceId])
   @@map("releves_energie")
 }
 

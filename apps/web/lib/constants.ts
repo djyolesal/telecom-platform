@@ -90,3 +90,25 @@ export const SCOPE_COLORS: Record<string, string> = {
   ACTIVE: 'bg-orange-100 text-orange-700',
   LES_DEUX: 'bg-purple-100 text-purple-700',
 };
+
+// Catégories d'équipement considérées « passives » (→ relevés énergie à la clôture)
+export const PASSIVE_CATEGORIES = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
+
+/** Sources d'énergie présentes selon la configuration du site (aligné sur l'API). */
+export function energySourcesForConfig(powerConfig?: string): string[] {
+  switch (powerConfig) {
+    case 'CEET_GE':
+    case 'HYBRIDE_CEET_GE':
+      return ['CEET', 'GE'];
+    case 'CEET_UNIQUEMENT':
+      return ['CEET'];
+    case 'GE_UNIQUEMENT':
+      return ['GE'];
+    case 'HYBRIDE_GE':
+      return ['GE', 'SOLAIRE'];
+    case 'SOLAIRE_UNIQUEMENT':
+      return ['SOLAIRE'];
+    default:
+      return [];
+  }
+}

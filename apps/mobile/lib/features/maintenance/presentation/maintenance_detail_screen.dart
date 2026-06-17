@@ -40,13 +40,18 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     _reload();
   }
 
-  Future<void> _close() async {
+  Future<void> _close(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();
     final uploadService = context.read<UploadService>();
     final navigator = Navigator.of(context);
 
-    final observations = await _askObservations();
-    if (observations == null) return;
+    // Formulaire de clôture (observations + relevés énergie si maintenance passive)
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _CloseSheet(maintenance: m),
+    );
+    if (result == null) return;
 
     setState(() => _busy = true);
 
@@ -59,26 +64,16 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       signatureKey = await uploadService.uploadImage(bytes, 'signature-${widget.id}.png');
     }
 
-    final res = await repo.close(widget.id, observations: observations, signaturePath: signatureKey);
+    final res = await repo.close(
+      widget.id,
+      observations: result['observations'] as String?,
+      signaturePath: signatureKey,
+      energie: result['energie'] as Map<String, dynamic>?,
+    );
     if (!mounted) return;
     setState(() => _busy = false);
     _snack(res.isQueued ? 'Clôture mise en file (hors-ligne)' : 'Maintenance clôturée');
     _reload();
-  }
-
-  Future<String?> _askObservations() {
-    final ctrl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clôturer la maintenance'),
-        content: TextField(controller: ctrl, maxLines: 4, decoration: const InputDecoration(hintText: 'Observations / travaux réalisés')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Continuer')),
-        ],
-      ),
-    );
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -105,8 +100,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                   padding: const EdgeInsets.all(14),
                   child: Column(children: [
                     _row('Type', kTypeMaintenance[m.type] ?? m.type),
-                    _row('Catégorie', kCategorieEquipement[m.categorie] ?? m.categorie),
+                    _row('Catégorie', '${kCategorieEquipement[m.categorie] ?? m.categorie}${m.isPassive ? ' · passive' : ' · active'}'),
                     _row('Technicien', m.technicien ?? '—'),
+                    if (m.prestataire != null) _row('Prestataire', m.prestataire!),
                     _row('Planifiée', fmtDateTime(m.datePlanifiee)),
                     _row('Début', fmtDateTime(m.dateDebut)),
                     _row('Fin', fmtDateTime(m.dateFin)),
@@ -122,7 +118,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
               if (m.statut == 'PLANIFIEE')
                 FilledButton.icon(onPressed: _busy ? null : _start, icon: const Icon(Icons.play_arrow), label: const Text('Démarrer')),
               if (m.statut == 'EN_COURS')
-                FilledButton.icon(onPressed: _busy ? null : _close, icon: const Icon(Icons.check_circle), label: const Text('Clôturer')),
+                FilledButton.icon(onPressed: _busy ? null : () => _close(m), icon: const Icon(Icons.check_circle), label: const Text('Clôturer')),
             ],
           );
         },
@@ -137,4 +133,146 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
         ]),
       );
+}
+
+/// Sources d'énergie présentes selon la configuration du site (aligné sur l'API).
+List<String> sourcesForConfig(String? config) {
+  switch (config) {
+    case 'CEET_GE':
+    case 'HYBRIDE_CEET_GE':
+      return ['CEET', 'GE'];
+    case 'CEET_UNIQUEMENT':
+      return ['CEET'];
+    case 'GE_UNIQUEMENT':
+      return ['GE'];
+    case 'HYBRIDE_GE':
+      return ['GE', 'SOLAIRE'];
+    case 'SOLAIRE_UNIQUEMENT':
+      return ['SOLAIRE'];
+    default:
+      return [];
+  }
+}
+
+/// Formulaire de clôture : observations + relevés énergie (obligatoires si maintenance passive).
+class _CloseSheet extends StatefulWidget {
+  final Maintenance maintenance;
+  const _CloseSheet({required this.maintenance});
+
+  @override
+  State<_CloseSheet> createState() => _CloseSheetState();
+}
+
+class _CloseSheetState extends State<_CloseSheet> {
+  final _obs = TextEditingController();
+  final _gasoil = TextEditingController();
+  final _heures = TextEditingController();
+  final _index = TextEditingController();
+  final _kwh = TextEditingController();
+  final _puissance = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    for (final c in [_obs, _gasoil, _heures, _index, _kwh, _puissance]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  double? _num(TextEditingController c) =>
+      c.text.trim().isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
+
+  void _submit() {
+    final m = widget.maintenance;
+    final sources = m.isPassive ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+    final energie = <String, dynamic>{};
+
+    if (sources.contains('GE')) {
+      if (_num(_gasoil) == null || _num(_heures) == null) {
+        setState(() => _error = 'Renseignez le volume gasoil et les heures de fonctionnement GE.');
+        return;
+      }
+      energie['volumeGasoilLitres'] = _num(_gasoil);
+      energie['heuresFonctGE'] = _num(_heures);
+    }
+    if (sources.contains('CEET')) {
+      if (_num(_index) == null) {
+        setState(() => _error = "Renseignez l'index compteur CEET.");
+        return;
+      }
+      energie['indexCompteur'] = _num(_index);
+      if (_num(_kwh) != null) energie['consommationKwh'] = _num(_kwh);
+    }
+    if (sources.contains('SOLAIRE')) {
+      if (_num(_puissance) == null) {
+        setState(() => _error = 'Renseignez la puissance solaire.');
+        return;
+      }
+      energie['puissanceKva'] = _num(_puissance);
+    }
+
+    Navigator.pop(context, {'observations': _obs.text.trim(), 'energie': energie});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.maintenance;
+    final sources = m.isPassive ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+    const numKb = TextInputType.numberWithOptions(decimal: true);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Clôturer la maintenance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (sources.isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Relevés énergie requis (${m.sitePowerConfig})',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue.shade800)),
+                    const SizedBox(height: 10),
+                    if (sources.contains('GE')) ...[
+                      TextField(controller: _gasoil, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Volume gasoil (L) *')),
+                      const SizedBox(height: 10),
+                      TextField(controller: _heures, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Heures fonctionnement GE *')),
+                      const SizedBox(height: 10),
+                    ],
+                    if (sources.contains('CEET')) ...[
+                      TextField(controller: _index, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index compteur CEET *')),
+                      const SizedBox(height: 10),
+                      TextField(controller: _kwh, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Consommation (kWh)')),
+                      const SizedBox(height: 10),
+                    ],
+                    if (sources.contains('SOLAIRE'))
+                      TextField(controller: _puissance, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Puissance solaire (kVA) *')),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(controller: _obs, maxLines: 3, decoration: const InputDecoration(labelText: 'Observations / travaux réalisés')),
+            if (_error != null)
+              Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12))),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(onPressed: _submit, child: const Text('Continuer (signature)')),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 }

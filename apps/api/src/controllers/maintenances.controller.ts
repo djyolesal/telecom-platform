@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ScopeMaintenance } from '@prisma/client';
+import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
@@ -8,12 +8,35 @@ import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf } from '../services/pdf.service';
 import { uploadBuffer } from '../services/storage.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { GE_PARAMS } from '../utils/calculator';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
 // Catégories d'équipement → nature de maintenance (passive = infra/énergie, active = télécom).
 const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
 const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
+const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
+
+const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
+
+/** Sources d'énergie présentes selon la configuration du site. */
+function sourcesForConfig(powerConfig: string): SourceEnergie[] {
+  switch (powerConfig) {
+    case 'CEET_GE':
+    case 'HYBRIDE_CEET_GE':
+      return ['CEET', 'GE'];
+    case 'CEET_UNIQUEMENT':
+      return ['CEET'];
+    case 'GE_UNIQUEMENT':
+      return ['GE'];
+    case 'HYBRIDE_GE':
+      return ['GE', 'SOLAIRE'];
+    case 'SOLAIRE_UNIQUEMENT':
+      return ['SOLAIRE'];
+    default:
+      return [];
+  }
+}
 
 /**
  * Détermine le prestataire responsable d'une maintenance à partir du lot du site
@@ -82,6 +105,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
         prestataire: { select: { id: true, nom: true, telephone: true } },
         pieces: true,
         photos: true,
+        releves: true,
         incident: { select: { id: true, type: true, severite: true } },
       },
     });
@@ -156,12 +180,42 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
   } catch (err) { next(err); }
 }
 
-/** Clôture une maintenance : durée calculée, pièces ajoutées, PDF généré. */
+/** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), PDF généré. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { observations, pieces, signaturePath } = req.body;
-    const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
+    const { observations, pieces, signaturePath, energie } = req.body as {
+      observations?: string;
+      pieces?: Record<string, unknown>[];
+      signaturePath?: string;
+      energie?: Record<string, unknown>;
+    };
+    const existing = await prisma.maintenance.findUnique({
+      where: { id: req.params.id },
+      include: { site: { select: { id: true, powerConfig: true } } },
+    });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+
+    // Maintenance passive → relevés énergie obligatoires selon la config du site.
+    const passive = isPassiveCategorie(existing.categorie);
+    const sources = passive ? sourcesForConfig(existing.site.powerConfig) : [];
+    const e = energie ?? {};
+    const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
+
+    if (passive && sources.length) {
+      const missing: string[] = [];
+      if (sources.includes('GE')) {
+        if (num(e.volumeGasoilLitres) == null) missing.push('volume gasoil');
+        if (num(e.heuresFonctGE) == null) missing.push('heures de fonctionnement GE');
+      }
+      if (sources.includes('CEET') && num(e.indexCompteur) == null) missing.push('index compteur CEET');
+      if (sources.includes('SOLAIRE') && num(e.puissanceKva) == null) missing.push('puissance solaire');
+      if (missing.length) {
+        throw new AppError(
+          `Paramètres énergie requis pour clôturer cette maintenance passive : ${missing.join(', ')}.`,
+          422
+        );
+      }
+    }
 
     const dateFin = new Date();
     const dateDebut = existing.dateDebut ?? dateFin;
@@ -169,7 +223,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
 
     if (pieces?.length) {
       await prisma.pieceRechange.createMany({
-        data: pieces.map((p: Record<string, unknown>) => ({ ...p, maintenanceId: existing.id })),
+        data: pieces.map((p) => ({ ...p, maintenanceId: existing.id })) as unknown as Prisma.PieceRechangeCreateManyInput[],
       });
     }
 
@@ -177,6 +231,33 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       where: { id: req.params.id },
       data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations, signaturePath },
     });
+
+    // Création des relevés énergie liés à la maintenance (un par source présente)
+    if (passive && sources.length) {
+      for (const source of sources) {
+        const data: Prisma.ReleveEnergieUncheckedCreateInput = {
+          siteId: existing.siteId,
+          dateReleve: dateFin,
+          source,
+          technicienId: existing.technicienId ?? req.user!.id,
+          maintenanceId: existing.id,
+        };
+        if (source === 'GE') {
+          const vol = num(e.volumeGasoilLitres);
+          data.volumeGasoilLitres = vol;
+          data.heuresFonctGE = num(e.heuresFonctGE);
+          data.coutEstime = vol != null ? Math.round(vol * GE_PARAMS.prixLitreFCFA) : null;
+        } else if (source === 'CEET') {
+          const kwh = num(e.consommationKwh);
+          data.indexCompteur = num(e.indexCompteur);
+          data.consommationKwh = kwh;
+          data.coutEstime = kwh != null ? Math.round(kwh * TARIF_CEET_FCFA) : null;
+        } else if (source === 'SOLAIRE') {
+          data.puissanceKva = num(e.puissanceKva);
+        }
+        await prisma.releveEnergie.create({ data });
+      }
+    }
 
     // Génération + stockage du rapport PDF
     const full = await prisma.maintenance.findUnique({

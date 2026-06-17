@@ -12,7 +12,9 @@ class Maintenance {
   final DateTime? dateFin;
   final int? dureeMinutes;
   final String? siteCode;
+  final String? sitePowerConfig;
   final String? technicien;
+  final String? prestataire;
 
   const Maintenance({
     required this.id,
@@ -27,12 +29,19 @@ class Maintenance {
     this.dateFin,
     this.dureeMinutes,
     this.siteCode,
+    this.sitePowerConfig,
     this.technicien,
+    this.prestataire,
   });
+
+  /// Catégories considérées « passives » (relevés énergie requis à la clôture).
+  static const passiveCategories = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
+  bool get isPassive => passiveCategories.contains(categorie);
 
   factory Maintenance.fromJson(Map<String, dynamic> j) {
     final site = j['site'] as Map<String, dynamic>?;
     final tech = j['technicien'] as Map<String, dynamic>?;
+    final presta = j['prestataire'] as Map<String, dynamic>?;
     return Maintenance(
       id: j['id'] as String,
       siteId: j['siteId'] as String?,
@@ -46,7 +55,9 @@ class Maintenance {
       dateFin: DateTime.tryParse(j['dateFin']?.toString() ?? ''),
       dureeMinutes: j['dureeMinutes'] as int?,
       siteCode: site?['code'] as String?,
+      sitePowerConfig: site?['powerConfig'] as String?,
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
+      prestataire: presta?['nom'] as String?,
     );
   }
 }
