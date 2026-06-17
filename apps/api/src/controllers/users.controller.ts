@@ -11,6 +11,8 @@ const SALT_ROUNDS = 12;
 const SAFE_SELECT = {
   id: true, nom: true, prenom: true, email: true, telephone: true,
   role: true, region: true, isActive: true, lastLoginAt: true, createdAt: true,
+  prestataireId: true, equipe: true,
+  prestataire: { select: { id: true, nom: true } },
 };
 
 export async function getUsers(req: Request, res: Response, next: NextFunction) {

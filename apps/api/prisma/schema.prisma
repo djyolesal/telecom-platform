@@ -111,9 +111,12 @@ model User {
   fcmToken     String?   @map("fcm_token")
   isActive     Boolean   @default(true) @map("is_active")
   lastLoginAt  DateTime? @map("last_login_at")
+  prestataireId String?  @map("prestataire_id")
+  equipe       EquipeMaintenance?
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
+  prestataire       Prestataire?  @relation(fields: [prestataireId], references: [id])
   maintenances      Maintenance[] @relation("TechnicienMaintenances")
   depotages         Depotage[]    @relation("TechnicienDepotages")
   releves           ReleveEnergie[]
@@ -122,6 +125,7 @@ model User {
   auditLogs         AuditLog[]
   notifications     Notification[]
 
+  @@index([prestataireId])
   @@map("users")
 }
 
@@ -138,9 +142,11 @@ model Site {
   statutGE       StatutGE    @map("statut_ge")
   puissanceGEkva Decimal     @default(0) @map("puissance_ge_kva") @db.Decimal(6, 2)
   isActive       Boolean     @default(true) @map("is_active")
+  lotId          String?     @map("lot_id")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
+  lot          Lot?            @relation(fields: [lotId], references: [id])
   maintenances Maintenance[]
   depotages    Depotage[]
   releves      ReleveEnergie[]
@@ -149,6 +155,7 @@ model Site {
   @@index([region])
   @@index([statutGE])
   @@index([powerConfig])
+  @@index([lotId])
   @@map("sites")
 }
 
@@ -166,6 +173,7 @@ model Maintenance {
   dateFin        DateTime?           @map("date_fin")
   dureeMinutes   Int?                @map("duree_minutes")
   technicienId   String?             @map("technicien_id")
+  prestataireId  String?             @map("prestataire_id")
   signaturePath  String?             @map("signature_path")
   rapportPdfPath String?             @map("rapport_pdf_path")
   observations   String?
@@ -175,14 +183,16 @@ model Maintenance {
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
-  site       Site        @relation(fields: [siteId], references: [id])
-  incident   Incident?   @relation(fields: [incidentId], references: [id])
-  technicien User?       @relation("TechnicienMaintenances", fields: [technicienId], references: [id])
-  pieces     PieceRechange[]
-  photos     Photo[]
+  site        Site         @relation(fields: [siteId], references: [id])
+  incident    Incident?    @relation(fields: [incidentId], references: [id])
+  technicien  User?        @relation("TechnicienMaintenances", fields: [technicienId], references: [id])
+  prestataire Prestataire? @relation(fields: [prestataireId], references: [id])
+  pieces      PieceRechange[]
+  photos      Photo[]
 
   @@index([siteId])
   @@index([technicienId])
+  @@index([prestataireId])
   @@index([datePlanifiee])
   @@index([statut])
   @@map("maintenances")
@@ -350,4 +360,68 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// ── Prestataires de maintenance ───────────────────────────────
+
+enum ScopeMaintenance {
+  PASSIVE
+  ACTIVE
+  LES_DEUX
+}
+
+// Équipe d'un technicien chez un prestataire (un agent fait passive OU active).
+enum EquipeMaintenance {
+  PASSIVE
+  ACTIVE
+}
+
+model Prestataire {
+  id         String   @id @default(uuid())
+  nom        String   @db.VarChar(120)
+  contactNom String?  @map("contact_nom") @db.VarChar(100)
+  telephone  String?  @db.VarChar(20)
+  email      String?  @db.VarChar(100)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  assignments  LotAssignment[]
+  users        User[]
+  maintenances Maintenance[]
+
+  @@map("prestataires")
+}
+
+model Lot {
+  id        String   @id @default(uuid())
+  code      String   @unique @db.VarChar(30)
+  nom       String   @db.VarChar(120)
+  region    String?  @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sites       Site[]
+  assignments LotAssignment[]
+
+  @@map("lots")
+}
+
+// Attribution d'un lot à un prestataire pour un périmètre (passive / active / les deux).
+// Un lot peut avoir 1 ligne LES_DEUX, ou 2 lignes (PASSIVE + ACTIVE) chez des prestataires différents.
+model LotAssignment {
+  id            String           @id @default(uuid())
+  lotId         String           @map("lot_id")
+  prestataireId String           @map("prestataire_id")
+  scope         ScopeMaintenance
+  dateDebut     DateTime?        @map("date_debut")
+  dateFin       DateTime?        @map("date_fin")
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  lot         Lot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  prestataire Prestataire @relation(fields: [prestataireId], references: [id])
+
+  @@unique([lotId, prestataireId, scope])
+  @@index([prestataireId])
+  @@map("lot_assignments")
 }

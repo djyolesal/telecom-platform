@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog } from 'lucide-react';
+import { Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes } from 'lucide-react';
 
 const SECTIONS = [
   { href: '/administration/utilisateurs', icon: Users, title: 'Utilisateurs', desc: 'Créer, modifier et désactiver les comptes.' },
+  { href: '/administration/prestataires', icon: Building2, title: 'Prestataires', desc: 'Sociétés de maintenance externes.' },
+  { href: '/administration/lots', icon: Boxes, title: 'Lots de maintenance', desc: 'Lots de sites, attributions passive/active.' },
   { href: '/administration/roles', icon: ShieldCheck, title: 'Rôles & permissions', desc: 'Matrice des droits par rôle.' },
   { href: '/administration/parametres', icon: Settings, title: 'Paramètres système', desc: 'Configuration générale de la plateforme.' },
   { href: '/administration/seuils', icon: SlidersHorizontal, title: 'Seuils d\'alerte', desc: 'Seuils carburant et tarifs énergie.' },

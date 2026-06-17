@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { ScopeMaintenance } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
@@ -9,6 +10,35 @@ import { uploadBuffer } from '../services/storage.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
+
+// Catégories d'équipement → nature de maintenance (passive = infra/énergie, active = télécom).
+const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
+const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
+
+/**
+ * Détermine le prestataire responsable d'une maintenance à partir du lot du site
+ * et du périmètre (passive/active déduit de la catégorie). Renvoie null si non attribué.
+ */
+async function resolvePrestataireId(siteId: string, categorie: string): Promise<string | null> {
+  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { lotId: true } });
+  if (!site?.lotId) return null;
+
+  const scope = PASSIVE_CATS.includes(categorie)
+    ? 'PASSIVE'
+    : ACTIVE_CATS.includes(categorie)
+      ? 'ACTIVE'
+      : null;
+  // Périmètre spécifique d'abord, puis "les deux"
+  const scopes: ScopeMaintenance[] = scope
+    ? [scope as ScopeMaintenance, 'LES_DEUX']
+    : ['LES_DEUX'];
+
+  const assignment = await prisma.lotAssignment.findFirst({
+    where: { lotId: site.lotId, scope: { in: scopes } },
+    orderBy: { scope: 'asc' },
+  });
+  return assignment?.prestataireId ?? null;
+}
 
 export async function getMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
@@ -49,6 +79,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
       include: {
         site: true,
         technicien: { select: { id: true, nom: true, prenom: true, telephone: true } },
+        prestataire: { select: { id: true, nom: true, telephone: true } },
         pieces: true,
         photos: true,
         incident: { select: { id: true, type: true, severite: true } },
@@ -62,14 +93,17 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
 export async function createMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
     const { pieces, ...data } = req.body;
+    // Détermine automatiquement le prestataire responsable (site → lot → attribution).
+    const prestataireId = await resolvePrestataireId(data.siteId, data.categorie);
     const maintenance = await prisma.maintenance.create({
       data: {
         ...data,
         datePlanifiee: new Date(data.datePlanifiee),
         technicienId: data.technicienId ?? req.user!.id,
+        prestataireId,
         ...(pieces?.length ? { pieces: { create: pieces } } : {}),
       },
-      include: { pieces: true },
+      include: { pieces: true, prestataire: { select: { id: true, nom: true } } },
     });
     await auditLog(req.user!.id, 'CREATE', 'maintenances', maintenance.id, data, req);
     res.status(201).json({ success: true, data: maintenance });

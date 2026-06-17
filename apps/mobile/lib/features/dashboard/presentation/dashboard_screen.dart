@@ -85,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         physics: const NeverScrollableScrollPhysics(),
                         mainAxisSpacing: 10,
                         crossAxisSpacing: 10,
-                        childAspectRatio: 1.5,
+                        childAspectRatio: 1.35,
                         children: [
                           StatTile(title: 'Sites actifs', value: fmtNum(d['sitesActifs']), icon: Icons.cell_tower, color: AppColors.brand),
                           StatTile(title: 'Incidents ouverts', value: fmtNum(d['incidentsOuverts']), icon: Icons.warning_amber, color: AppColors.critique),

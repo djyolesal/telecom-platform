@@ -28,7 +28,9 @@
       "Read(//tmp/**)",
       "Bash(ls app/page.tsx)",
       "Bash(ls -la app/*.tsx)",
-      "Bash(ls -d app/*/)"
+      "Bash(ls -d app/*/)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" npx prisma validate)",
+      "Bash(node -e \"const{PrismaClient}=require\\('@prisma/client'\\); const p=new PrismaClient\\(\\); console.log\\('prestataire:', typeof p.prestataire, '| lot:', typeof p.lot, '| lotAssignment:', typeof p.lotAssignment\\);\")"
     ]
   }
 }

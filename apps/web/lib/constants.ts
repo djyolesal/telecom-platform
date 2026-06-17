@@ -78,3 +78,15 @@ export const STATUTS_INCIDENT = [
 ];
 
 export const regionOptions = REGIONS.map((r) => ({ value: r, label: r }));
+
+export const SCOPES_MAINTENANCE = [
+  { value: 'PASSIVE', label: 'Passive' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'LES_DEUX', label: 'Passive + Active' },
+];
+
+export const SCOPE_COLORS: Record<string, string> = {
+  PASSIVE: 'bg-blue-100 text-blue-700',
+  ACTIVE: 'bg-orange-100 text-orange-700',
+  LES_DEUX: 'bg-purple-100 text-purple-700',
+};

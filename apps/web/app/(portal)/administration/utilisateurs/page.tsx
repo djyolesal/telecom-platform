@@ -26,16 +26,32 @@ interface User {
   region?: string;
   isActive: boolean;
   lastLoginAt?: string;
+  equipe?: string;
+  prestataire?: { id: string; nom: string };
 }
+
+const EQUIPES = [{ value: 'PASSIVE', label: 'Passive' }, { value: 'ACTIVE', label: 'Active' }];
 
 function CreateModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ nom: '', prenom: '', email: '', telephone: '', role: 'TECHNICIEN', region: '', password: '' });
+  const [form, setForm] = useState({ nom: '', prenom: '', email: '', telephone: '', role: 'TECHNICIEN', region: '', password: '', prestataireId: '', equipe: '' });
   const [error, setError] = useState('');
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  const { data: prestataires } = useQuery({
+    queryKey: ['prestataires-select'],
+    queryFn: () => api.get('/prestataires', { params: { is_active: true, limit: 200 } }).then((r) => r.data.data),
+  });
+  const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
+
   const mutation = useMutation({
-    mutationFn: () => api.post('/users', { ...form, region: form.region || undefined, password: form.password || undefined }),
+    mutationFn: () => api.post('/users', {
+      ...form,
+      region: form.region || undefined,
+      password: form.password || undefined,
+      prestataireId: form.prestataireId || undefined,
+      equipe: form.equipe || undefined,
+    }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); onClose(); },
     onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur'),
   });
@@ -55,7 +71,9 @@ function CreateModal({ onClose }: { onClose: () => void }) {
           <Field label="Téléphone"><Input value={form.telephone} onChange={(e) => set('telephone', e.target.value)} /></Field>
           <Field label="Rôle" required><Select value={form.role} onChange={(e) => set('role', e.target.value)} options={ROLES} /></Field>
           <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="—" /></Field>
-          <Field label="Mot de passe" className="col-span-1"><Input type="text" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="(auto si vide)" /></Field>
+          <Field label="Prestataire"><Select value={form.prestataireId} onChange={(e) => set('prestataireId', e.target.value)} options={prestataireOptions} placeholder="(interne)" /></Field>
+          <Field label="Équipe"><Select value={form.equipe} onChange={(e) => set('equipe', e.target.value)} options={EQUIPES} placeholder="—" /></Field>
+          <Field label="Mot de passe" className="col-span-2"><Input type="text" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="(auto si vide)" /></Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
             <Button type="submit" loading={mutation.isPending}>Créer</Button>
@@ -92,6 +110,7 @@ export default function UtilisateursPage() {
     { key: 'nom', header: 'Nom', render: (u) => <span className="font-medium text-gray-800">{u.prenom} {u.nom}</span> },
     { key: 'email', header: 'Email' },
     { key: 'role', header: 'Rôle', render: (u) => ROLES.find((r) => r.value === u.role)?.label ?? u.role },
+    { key: 'prestataire', header: 'Prestataire', render: (u) => (u.prestataire ? `${u.prestataire.nom}${u.equipe ? ` (${u.equipe === 'PASSIVE' ? 'passive' : 'active'})` : ''}` : 'Interne') },
     { key: 'region', header: 'Région', render: (u) => u.region || '—' },
     { key: 'isActive', header: 'Statut', render: (u) => <Badge className={u.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>{u.isActive ? 'Actif' : 'Inactif'}</Badge> },
     { key: 'lastLoginAt', header: 'Dernière connexion', render: (u) => fmtDateTime(u.lastLoginAt) },

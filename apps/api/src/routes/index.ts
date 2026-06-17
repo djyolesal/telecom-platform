@@ -14,6 +14,8 @@ import * as usersCtrl from '../controllers/users.controller';
 import * as adminCtrl from '../controllers/admin.controller';
 import * as notifCtrl from '../controllers/notifications.controller';
 import * as uploadCtrl from '../controllers/upload.controller';
+import * as prestatairesCtrl from '../controllers/prestataires.controller';
+import * as lotsCtrl from '../controllers/lots.controller';
 import { uploadMiddleware } from '../middlewares/upload';
 
 export const router = Router();
@@ -45,6 +47,25 @@ router.get('/sites/:id/maintenances', sitesCtrl.getSiteMaintenances);
 router.get('/sites/:id/depotages', sitesCtrl.getSiteDepotages);
 router.get('/sites/:id/releves', sitesCtrl.getSiteReleves);
 router.get('/sites/:id/incidents', sitesCtrl.getSiteIncidents);
+
+// ── Prestataires ──────────────────────────────────────────────
+router.get('/prestataires', prestatairesCtrl.getPrestataires);
+router.post('/prestataires', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.createPrestataire);
+router.get('/prestataires/:id', prestatairesCtrl.getPrestataireById);
+router.put('/prestataires/:id', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.updatePrestataire);
+router.post('/prestataires/:id/toggle-active', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.togglePrestataire);
+router.delete('/prestataires/:id', rbac(['ADMIN']), prestatairesCtrl.deletePrestataire);
+
+// ── Lots de maintenance ───────────────────────────────────────
+router.get('/lots', lotsCtrl.getLots);
+router.post('/lots', rbac(['MANAGER', 'ADMIN']), lotsCtrl.createLot);
+router.get('/lots/:id', lotsCtrl.getLotById);
+router.put('/lots/:id', rbac(['MANAGER', 'ADMIN']), lotsCtrl.updateLot);
+router.delete('/lots/:id', rbac(['ADMIN']), lotsCtrl.deleteLot);
+router.post('/lots/:id/assignments', rbac(['MANAGER', 'ADMIN']), lotsCtrl.addAssignment);
+router.delete('/lots/:id/assignments/:assignmentId', rbac(['MANAGER', 'ADMIN']), lotsCtrl.removeAssignment);
+router.post('/lots/:id/sites', rbac(['MANAGER', 'ADMIN']), lotsCtrl.assignSites);
+router.delete('/lots/:id/sites/:siteId', rbac(['MANAGER', 'ADMIN']), lotsCtrl.removeSite);
 
 // ── Maintenances ──────────────────────────────────────────────
 router.get('/maintenances', maintenanceCtrl.getMaintenances);

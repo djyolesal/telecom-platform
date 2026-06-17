@@ -104,6 +104,39 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   );
                 },
               ),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Maintenance', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      if (s.lotCode == null)
+                        Text('Aucun lot attribué', style: TextStyle(color: Colors.grey.shade500, fontSize: 13))
+                      else ...[
+                        _row('Lot', '${s.lotCode}${s.lotNom != null ? ' — ${s.lotNom}' : ''}'),
+                        const SizedBox(height: 4),
+                        if (s.attributions.isEmpty)
+                          Text('Aucun prestataire attribué', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                        ...s.attributions.map((a) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                children: [
+                                  StatusChip(label: _scopeLabel(a.scope), color: AppColors.brandLight),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(a.prestataireNom, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                                  if (a.prestataireTel != null)
+                                    Text(a.prestataireTel!, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                                ],
+                              ),
+                            )),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 10,
@@ -135,6 +168,19 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
   // Traduit certains codes enum en libellés lisibles si connus.
   String _label(String v) =>
       kStatutMaintenance[v] ?? kSourceEnergie[v] ?? v;
+
+  String _scopeLabel(String s) {
+    switch (s) {
+      case 'PASSIVE':
+        return 'Passive';
+      case 'ACTIVE':
+        return 'Active';
+      case 'LES_DEUX':
+        return 'Passive + Active';
+      default:
+        return s;
+    }
+  }
 
   Widget _action(BuildContext context, IconData icon, String label, VoidCallback onTap) => SizedBox(
         width: (MediaQuery.of(context).size.width - 42) / 2,

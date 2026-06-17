@@ -39,7 +39,19 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
 
 export async function getSiteById(req: Request, res: Response, next: NextFunction) {
   try {
-    const site = await prisma.site.findUnique({ where: { id: req.params.id } });
+    const site = await prisma.site.findUnique({
+      where: { id: req.params.id },
+      include: {
+        lot: {
+          include: {
+            assignments: {
+              include: { prestataire: { select: { id: true, nom: true, telephone: true } } },
+              orderBy: { scope: 'asc' },
+            },
+          },
+        },
+      },
+    });
     if (!site) throw new AppError('Site introuvable', 404);
     res.json({ success: true, data: site });
   } catch (err) { next(err); }
