@@ -8,6 +8,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/photo_gallery.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
@@ -131,6 +132,23 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
               if (m.description != null && m.description!.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(m.description!))),
+              ],
+              if (m.photoUrls.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Photos (${m.photoUrls.length})',
+                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13)),
+                        const SizedBox(height: 10),
+                        PhotoThumbnails(urls: m.photoUrls),
+                      ],
+                    ),
+                  ),
+                ),
               ],
               const SizedBox(height: 16),
               if (m.statut == 'PLANIFIEE')

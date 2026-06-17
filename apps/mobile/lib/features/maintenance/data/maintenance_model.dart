@@ -15,6 +15,7 @@ class Maintenance {
   final String? sitePowerConfig;
   final String? technicien;
   final String? prestataire;
+  final List<String> photoUrls;
 
   const Maintenance({
     required this.id,
@@ -32,6 +33,7 @@ class Maintenance {
     this.sitePowerConfig,
     this.technicien,
     this.prestataire,
+    this.photoUrls = const [],
   });
 
   /// Catégories considérées « passives » (relevés énergie requis à la clôture).
@@ -42,6 +44,12 @@ class Maintenance {
     final site = j['site'] as Map<String, dynamic>?;
     final tech = j['technicien'] as Map<String, dynamic>?;
     final presta = j['prestataire'] as Map<String, dynamic>?;
+    final photos = (j['photos'] as List?)
+            ?.map((p) => (p as Map)['url']?.toString())
+            .whereType<String>()
+            .where((u) => u.isNotEmpty)
+            .toList() ??
+        const <String>[];
     return Maintenance(
       id: j['id'] as String,
       siteId: j['siteId'] as String?,
@@ -58,6 +66,7 @@ class Maintenance {
       sitePowerConfig: site?['powerConfig'] as String?,
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
       prestataire: presta?['nom'] as String?,
+      photoUrls: photos,
     );
   }
 }
