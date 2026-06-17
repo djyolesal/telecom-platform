@@ -70,7 +70,11 @@ class _MaintenanceView extends StatelessWidget {
                 final m = state.items[i];
                 return ListTile(
                   title: Text('${m.siteCode ?? '—'} · ${m.equipement}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text('${kTypeMaintenance[m.type] ?? m.type} · ${fmtDate(m.datePlanifiee)}'),
+                  subtitle: Text(
+                    '${kTypeMaintenance[m.type] ?? m.type} · ${fmtDate(m.datePlanifiee)}'
+                    '${m.prestataire != null ? '\n${m.prestataire}' : ''}',
+                  ),
+                  isThreeLine: m.prestataire != null,
                   trailing: StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: _statutColor(m.statut)),
                   onTap: () async {
                     await context.push('/maintenance/${m.id}');

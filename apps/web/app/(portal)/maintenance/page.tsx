@@ -25,6 +25,7 @@ interface Maintenance {
   datePlanifiee: string;
   site?: { code: string; region: string };
   technicien?: { nom: string; prenom: string };
+  prestataire?: { id: string; nom: string };
 }
 
 export default function MaintenancePage() {
@@ -32,11 +33,18 @@ export default function MaintenancePage() {
   const [page, setPage] = useState(1);
   const [type, setType] = useState('');
   const [statut, setStatut] = useState('');
+  const [prestataireId, setPrestataireId] = useState('');
+
+  const { data: prestataires } = useQuery({
+    queryKey: ['prestataires-select'],
+    queryFn: () => api.get('/prestataires', { params: { is_active: true, limit: 200 } }).then((r) => r.data.data),
+  });
+  const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['maintenances', { page, type, statut }],
+    queryKey: ['maintenances', { page, type, statut, prestataireId }],
     queryFn: () =>
-      api.get('/maintenances', { params: { page, limit: 20, type: type || undefined, statut: statut || undefined } }).then((r) => r.data),
+      api.get('/maintenances', { params: { page, limit: 20, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined } }).then((r) => r.data),
   });
 
   const rows: Maintenance[] = data?.data ?? [];
@@ -47,6 +55,7 @@ export default function MaintenancePage() {
     { key: 'equipement', header: 'Équipement' },
     { key: 'type', header: 'Type', render: (m) => TYPES_MAINTENANCE.find((t) => t.value === m.type)?.label ?? m.type },
     { key: 'categorie', header: 'Catégorie', render: (m) => CATEGORIES_EQUIPEMENT.find((c) => c.value === m.categorie)?.label ?? m.categorie },
+    { key: 'prestataire', header: 'Prestataire', render: (m) => m.prestataire?.nom ?? '—' },
     { key: 'statut', header: 'Statut', render: (m) => <StatutMaintBadge value={m.statut} /> },
     { key: 'technicien', header: 'Technicien', render: (m) => (m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—') },
     { key: 'datePlanifiee', header: 'Planifiée', render: (m) => fmtDateTime(m.datePlanifiee) },
@@ -71,6 +80,7 @@ export default function MaintenancePage() {
         filters={[
           { key: 'type', label: 'Tous types', value: type, options: TYPES_MAINTENANCE, onChange: (v) => { setType(v); setPage(1); } },
           { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_MAINTENANCE, onChange: (v) => { setStatut(v); setPage(1); } },
+          { key: 'prestataire', label: 'Tous prestataires', value: prestataireId, options: prestataireOptions, onChange: (v) => { setPrestataireId(v); setPage(1); } },
         ]}
       />
 

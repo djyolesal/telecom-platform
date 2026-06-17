@@ -65,7 +65,7 @@ async function resolvePrestataireId(siteId: string, categorie: string): Promise<
 
 export async function getMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
-    const { type, statut, site_id, technicien_id, categorie, date_debut, date_fin, page = '1', limit = '20' } =
+    const { type, statut, site_id, technicien_id, prestataire_id, categorie, date_debut, date_fin, page = '1', limit = '20' } =
       req.query as Record<string, string>;
 
     const where: Record<string, unknown> = {};
@@ -74,6 +74,7 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
     if (categorie) where.categorie = categorie;
     if (site_id) where.siteId = site_id;
     if (technicien_id) where.technicienId = technicien_id;
+    if (prestataire_id) where.prestataireId = prestataire_id;
     if (date_debut || date_fin) {
       where.datePlanifiee = {
         ...(date_debut ? { gte: parseISO(date_debut) } : {}),
@@ -86,7 +87,11 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       {
         where,
         orderBy: { datePlanifiee: 'desc' },
-        include: { ...techInclude, site: { select: { nom: true, code: true, region: true } } },
+        include: {
+          ...techInclude,
+          site: { select: { nom: true, code: true, region: true } },
+          prestataire: { select: { id: true, nom: true } },
+        },
       },
       { page: parseInt(page), limit: parseInt(limit) }
     );

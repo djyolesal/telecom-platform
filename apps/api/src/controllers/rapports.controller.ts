@@ -297,3 +297,63 @@ export async function sendRapportMensuel(req: Request, res: Response, next: Next
     res.json({ success: true, message: sent ? 'Rapport envoyé' : 'SMTP non configuré — rapport non envoyé', data: { sent } });
   } catch (err) { next(err); }
 }
+
+// ── Conformité des maintenances passives ─────────────────────
+// Maintenances passives clôturées AVEC vs SANS relevés énergie, par prestataire.
+const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
+
+export async function getConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { periode = '90', prestataire_id, region } = req.query as Record<string, string>;
+    const since = new Date(Date.now() - parseInt(periode) * 24 * 60 * 60 * 1000);
+
+    const maints = await prisma.maintenance.findMany({
+      where: {
+        statut: 'TERMINEE',
+        categorie: { in: PASSIVE_CATS as never[] },
+        dateFin: { gte: since },
+        ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
+        ...(region ? { site: { region } } : {}),
+      },
+      select: {
+        prestataireId: true,
+        prestataire: { select: { nom: true } },
+        _count: { select: { releves: true } },
+      },
+    });
+
+    const map = new Map<string, { prestataireId: string; prestataireNom: string; total: number; conformes: number }>();
+    for (const m of maints) {
+      const key = m.prestataireId ?? 'NON_ATTRIBUE';
+      if (!map.has(key)) {
+        map.set(key, { prestataireId: key, prestataireNom: m.prestataire?.nom ?? 'Non attribué', total: 0, conformes: 0 });
+      }
+      const e = map.get(key)!;
+      e.total++;
+      if (m._count.releves > 0) e.conformes++;
+    }
+
+    const parPrestataire = Array.from(map.values())
+      .map((e) => ({
+        ...e,
+        nonConformes: e.total - e.conformes,
+        tauxConformite: e.total ? Math.round((e.conformes / e.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const conformes = parPrestataire.reduce((s, x) => s + x.conformes, 0);
+    res.json({
+      success: true,
+      data: {
+        periodeJours: parseInt(periode),
+        totaux: {
+          total: maints.length,
+          conformes,
+          nonConformes: maints.length - conformes,
+          tauxConformite: maints.length ? Math.round((conformes / maints.length) * 100) : 0,
+        },
+        parPrestataire,
+      },
+    });
+  } catch (err) { next(err); }
+}

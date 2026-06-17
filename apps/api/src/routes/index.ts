@@ -110,6 +110,7 @@ router.get('/rapports/stock-carburant', rapportsCtrl.getStockCarburant);
 router.get('/rapports/conso-energie', rapportsCtrl.getConsoEnergie);
 router.get('/rapports/maintenance', rapportsCtrl.getRapportMaintenance);
 router.get('/rapports/incidents', rapportsCtrl.getRapportIncidents);
+router.get('/rapports/conformite', rapportsCtrl.getConformiteMaintenance);
 router.get('/rapports/mensuel/:annee/:mois', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMensuelPdf);
 router.post('/rapports/mensuel/send', rbac(['MANAGER','ADMIN']), rapportsCtrl.sendRapportMensuel);
 
