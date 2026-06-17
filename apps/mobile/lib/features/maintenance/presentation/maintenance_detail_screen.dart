@@ -14,7 +14,7 @@ import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 
 const kMinPhotosPreventive = 6;
-const kGeofenceRadiusM = 500.0; // rayon toléré autour du site (aligné serveur)
+const kGeofenceRadiusM = 20.0; // rayon toléré autour du site (aligné serveur)
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;

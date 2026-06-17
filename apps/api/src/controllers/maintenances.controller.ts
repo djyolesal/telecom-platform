@@ -18,7 +18,7 @@ const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
 const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
 const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
 // Rayon (m) toléré autour des coordonnées du site pour démarrer/clôturer sur place.
-const GEOFENCE_RADIUS_M = Number(process.env.GEOFENCE_RADIUS_M ?? 500);
+const GEOFENCE_RADIUS_M = Number(process.env.GEOFENCE_RADIUS_M ?? 20);
 
 const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
 
