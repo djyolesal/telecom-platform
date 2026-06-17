@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Download, CalendarDays } from 'lucide-react';
+import { Plus, Download, CalendarDays, Camera } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -26,6 +26,7 @@ interface Maintenance {
   site?: { code: string; region: string };
   technicien?: { nom: string; prenom: string };
   prestataire?: { id: string; nom: string };
+  _count?: { photos: number };
 }
 
 export default function MaintenancePage() {
@@ -52,7 +53,24 @@ export default function MaintenancePage() {
 
   const columns: Column<Maintenance>[] = [
     { key: 'site', header: 'Site', render: (m) => <span className="font-medium text-gray-800">{m.site?.code ?? '—'}</span> },
-    { key: 'equipement', header: 'Équipement' },
+    {
+      key: 'equipement',
+      header: 'Équipement',
+      render: (m) => (
+        <div className="flex items-center gap-2">
+          <span>{m.equipement}</span>
+          {!!m._count?.photos && (
+            <span
+              title={`${m._count.photos} photo${m._count.photos > 1 ? 's' : ''}`}
+              className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600 ring-1 ring-inset ring-indigo-100"
+            >
+              <Camera size={11} strokeWidth={2.5} />
+              {m._count.photos}
+            </span>
+          )}
+        </div>
+      ),
+    },
     { key: 'type', header: 'Type', render: (m) => TYPES_MAINTENANCE.find((t) => t.value === m.type)?.label ?? m.type },
     { key: 'categorie', header: 'Catégorie', render: (m) => CATEGORIES_EQUIPEMENT.find((c) => c.value === m.categorie)?.label ?? m.categorie },
     { key: 'prestataire', header: 'Prestataire', render: (m) => m.prestataire?.nom ?? '—' },

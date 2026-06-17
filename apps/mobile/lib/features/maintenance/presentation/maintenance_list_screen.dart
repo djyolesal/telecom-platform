@@ -75,7 +75,18 @@ class _MaintenanceView extends StatelessWidget {
                     '${m.prestataire != null ? '\n${m.prestataire}' : ''}',
                   ),
                   isThreeLine: m.prestataire != null,
-                  trailing: StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: _statutColor(m.statut)),
+                  trailing: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: _statutColor(m.statut)),
+                      if (m.photoCount > 0) ...[
+                        const SizedBox(height: 6),
+                        _PhotoBadge(count: m.photoCount),
+                      ],
+                    ],
+                  ),
                   onTap: () async {
                     await context.push('/maintenance/${m.id}');
                     if (context.mounted) _reload(context);
@@ -85,6 +96,33 @@ class _MaintenanceView extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Pastille moderne indiquant le nombre de photos d'une maintenance.
+class _PhotoBadge extends StatelessWidget {
+  final int count;
+  const _PhotoBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF2FF), // indigo 50
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFC7D2FE)), // indigo 200
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.photo_camera_rounded, size: 12, color: Color(0xFF4F46E5)),
+          const SizedBox(width: 3),
+          Text('$count',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4F46E5))),
+        ],
       ),
     );
   }

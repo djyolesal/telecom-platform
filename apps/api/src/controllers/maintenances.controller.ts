@@ -92,6 +92,7 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
           ...techInclude,
           site: { select: { nom: true, code: true, region: true } },
           prestataire: { select: { id: true, nom: true } },
+          _count: { select: { photos: true } },
         },
       },
       { page: parseInt(page), limit: parseInt(limit) }

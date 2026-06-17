@@ -16,6 +16,7 @@ class Maintenance {
   final String? technicien;
   final String? prestataire;
   final List<String> photoUrls;
+  final int photoCount;
 
   const Maintenance({
     required this.id,
@@ -34,6 +35,7 @@ class Maintenance {
     this.technicien,
     this.prestataire,
     this.photoUrls = const [],
+    this.photoCount = 0,
   });
 
   /// Catégories considérées « passives » (relevés énergie requis à la clôture).
@@ -67,6 +69,8 @@ class Maintenance {
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
       prestataire: presta?['nom'] as String?,
       photoUrls: photos,
+      // Liste : compteur via _count.photos ; détail : longueur du tableau photos.
+      photoCount: (j['_count'] as Map?)?['photos'] as int? ?? photos.length,
     );
   }
 }
