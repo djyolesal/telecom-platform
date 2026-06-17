@@ -13,6 +13,8 @@ class Maintenance {
   final int? dureeMinutes;
   final String? siteCode;
   final String? sitePowerConfig;
+  final double? siteLatitude;
+  final double? siteLongitude;
   final String? technicien;
   final String? prestataire;
   final List<String> photoUrls;
@@ -32,6 +34,8 @@ class Maintenance {
     this.dureeMinutes,
     this.siteCode,
     this.sitePowerConfig,
+    this.siteLatitude,
+    this.siteLongitude,
     this.technicien,
     this.prestataire,
     this.photoUrls = const [],
@@ -66,6 +70,8 @@ class Maintenance {
       dureeMinutes: j['dureeMinutes'] as int?,
       siteCode: site?['code'] as String?,
       sitePowerConfig: site?['powerConfig'] as String?,
+      siteLatitude: site?['latitude'] == null ? null : double.tryParse(site!['latitude'].toString()),
+      siteLongitude: site?['longitude'] == null ? null : double.tryParse(site!['longitude'].toString()),
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
       prestataire: presta?['nom'] as String?,
       photoUrls: photos,

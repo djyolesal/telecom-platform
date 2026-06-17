@@ -74,6 +74,8 @@ class MaintenanceRepository {
     String? signatureLocalPath,
     Map<String, dynamic>? energie,
     List<String> photoPaths = const [],
+    double? latitude,
+    double? longitude,
   }) {
     final attachments = <Map<String, String>>[
       for (final p in photoPaths) {'path': p, 'kind': 'photo'},
@@ -85,6 +87,9 @@ class MaintenanceRepository {
       payload: {
         if (observations != null) 'observations': observations,
         if (energie != null && energie.isNotEmpty) 'energie': energie,
+        // Position au moment de la clôture (vérification "sur site" côté serveur).
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       },
       attachments: attachments,
     );

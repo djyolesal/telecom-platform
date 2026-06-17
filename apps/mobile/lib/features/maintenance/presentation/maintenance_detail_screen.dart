@@ -14,6 +14,7 @@ import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 
 const kMinPhotosPreventive = 6;
+const kGeofenceRadiusM = 500.0; // rayon toléré autour du site (aligné serveur)
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
@@ -35,15 +36,54 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
   void _reload() => setState(() => _future = context.read<MaintenanceRepository>().getMaintenance(widget.id));
 
-  Future<void> _start() async {
+  /// Vérifie la présence physique sur le site avant une opération.
+  /// Retourne (ok, lat, lng). Si le site n'a pas de coordonnées, la vérification
+  /// est ignorée (le serveur tranchera). Affiche un dialogue si hors site.
+  Future<({bool ok, double? lat, double? lng})> _verifyOnSite(Maintenance m, String action) async {
+    final pos = await LocationService().freshPosition();
+    final hasSiteCoords = m.siteLatitude != null && m.siteLongitude != null;
+    if (hasSiteCoords) {
+      if (pos == null) {
+        await _siteDialog('Position GPS indisponible',
+            'Impossible de vérifier votre présence sur site pour $action. Activez la localisation (précision élevée) et réessayez.');
+        return (ok: false, lat: null, lng: null);
+      }
+      final dist = LocationService.distanceMeters(pos.lat, pos.lng, m.siteLatitude!, m.siteLongitude!);
+      if (dist > kGeofenceRadiusM) {
+        await _siteDialog('Vous n\'êtes pas sur le site',
+            'Vous êtes à ${dist.round()} m du site ${m.siteCode ?? ''}.\nRapprochez-vous à moins de ${kGeofenceRadiusM.round()} m pour $action.');
+        return (ok: false, lat: null, lng: null);
+      }
+    }
+    return (ok: true, lat: pos?.lat, lng: pos?.lng);
+  }
+
+  Future<void> _siteDialog(String title, String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.location_off, color: Colors.red, size: 32),
+        title: Text(title),
+        content: Text(message),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Compris'))],
+      ),
+    );
+  }
+
+  Future<void> _start(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();
     setState(() => _busy = true);
-    final pos = await LocationService().currentPosition();
-    final res = await repo.start(widget.id, latitude: pos?.lat, longitude: pos?.lng);
-    if (!mounted) return;
-    setState(() => _busy = false);
-    _snack(res.isQueued ? 'Démarrage mis en file (hors-ligne)' : 'Maintenance démarrée');
-    _reload();
+    try {
+      final check = await _verifyOnSite(m, 'le démarrage');
+      if (!check.ok) return;
+      final res = await repo.start(widget.id, latitude: check.lat, longitude: check.lng);
+      if (!mounted) return;
+      _snack(res.isQueued ? 'Démarrage mis en file (hors-ligne)' : 'Maintenance démarrée');
+      _reload();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _close(Maintenance m) async {
@@ -61,6 +101,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
     setState(() => _busy = true);
     try {
+      // Vérification "sur site" obligatoire avant toute clôture.
+      final check = await _verifyOnSite(m, 'la clôture');
+      if (!check.ok) return;
+
       // Photos (caméra) → copie dans un stockage persistant. L'upload vers MinIO
       // est DIFFÉRÉ au moteur de sync : immédiat si en ligne, sinon à la reconnexion.
       final photoFiles = (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];
@@ -84,6 +128,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         signatureLocalPath: signaturePath,
         energie: result['energie'] as Map<String, dynamic>?,
         photoPaths: photoPaths,
+        latitude: check.lat,
+        longitude: check.lng,
       );
       if (!mounted) return;
       _snack(res.isQueued
@@ -152,7 +198,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
               ],
               const SizedBox(height: 16),
               if (m.statut == 'PLANIFIEE')
-                FilledButton.icon(onPressed: _busy ? null : _start, icon: const Icon(Icons.play_arrow), label: const Text('Démarrer')),
+                FilledButton.icon(onPressed: _busy ? null : () => _start(m), icon: const Icon(Icons.play_arrow), label: const Text('Démarrer')),
               if (m.statut == 'EN_COURS')
                 FilledButton.icon(onPressed: _busy ? null : () => _close(m), icon: const Icon(Icons.check_circle), label: const Text('Clôturer')),
             ],

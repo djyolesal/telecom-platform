@@ -31,4 +31,31 @@ class LocationService {
       return null;
     }
   }
+
+  /// Mesure GPS FRAÎCHE et précise (pas de position en cache) pour vérifier la
+  /// présence sur site avant un démarrage/clôture. Retourne null si indisponible.
+  Future<({double lat, double lng})?> freshPosition() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 12),
+      );
+      return (lat: pos.latitude, lng: pos.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Distance en mètres entre deux points GPS.
+  static double distanceMeters(double lat1, double lng1, double lat2, double lng2) =>
+      Geolocator.distanceBetween(lat1, lng1, lat2, lng2);
 }

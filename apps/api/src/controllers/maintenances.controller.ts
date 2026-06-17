@@ -17,8 +17,48 @@ const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
 const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
 const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
 const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
+// Rayon (m) toléré autour des coordonnées du site pour démarrer/clôturer sur place.
+const GEOFENCE_RADIUS_M = Number(process.env.GEOFENCE_RADIUS_M ?? 500);
 
 const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
+
+/** Distance en mètres entre deux points GPS (formule de haversine). */
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // rayon terrestre (m)
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/**
+ * Vérifie que l'opération (démarrage/clôture) est réalisée SUR le site.
+ * - Si le site n'a pas de coordonnées, on ne peut pas vérifier → on laisse passer.
+ * - Sinon la position GPS est obligatoire et doit être à moins de GEOFENCE_RADIUS_M.
+ */
+function assertOnSite(
+  site: { latitude: Prisma.Decimal | null; longitude: Prisma.Decimal | null; code?: string },
+  latitude: unknown,
+  longitude: unknown,
+  action: string
+) {
+  if (site.latitude == null || site.longitude == null) return; // site non géolocalisé
+  const lat = latitude == null || latitude === '' ? null : Number(latitude);
+  const lng = longitude == null || longitude === '' ? null : Number(longitude);
+  if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+    throw new AppError(`Position GPS requise : ${action} doit être effectué(e) sur le site.`, 422);
+  }
+  const dist = distanceMeters(lat, lng, Number(site.latitude), Number(site.longitude));
+  if (dist > GEOFENCE_RADIUS_M) {
+    throw new AppError(
+      `Vous n'êtes pas sur le site ${site.code ?? ''} (à ${Math.round(dist)} m, max ${GEOFENCE_RADIUS_M} m). ${action} autorisé(e) uniquement sur place.`.trim(),
+      422
+    );
+  }
+}
 
 /** Sources d'énergie présentes selon la configuration du site. */
 function sourcesForConfig(powerConfig: string): SourceEnergie[] {
@@ -76,6 +116,19 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
     if (site_id) where.siteId = site_id;
     if (technicien_id) where.technicienId = technicien_id;
     if (prestataire_id) where.prestataireId = prestataire_id;
+
+    // Un technicien ne voit que les activités de SON entreprise (prestataire)
+    // et de SON périmètre (équipe passive → catégories passives, active → actives).
+    if (req.user!.role === 'TECHNICIEN') {
+      const me = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+        select: { prestataireId: true, equipe: true },
+      });
+      where.prestataireId = me?.prestataireId ?? '__none__'; // sans prestataire → aucune activité
+      if (me?.equipe) {
+        where.categorie = { in: me.equipe === 'ACTIVE' ? ACTIVE_CATS : PASSIVE_CATS };
+      }
+    }
     if (date_debut || date_fin) {
       where.datePlanifiee = {
         ...(date_debut ? { gte: parseISO(date_debut) } : {}),
@@ -169,9 +222,15 @@ export async function deleteMaintenance(req: Request, res: Response, next: NextF
 export async function startMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
     const { latitude, longitude } = req.body;
-    const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.maintenance.findUnique({
+      where: { id: req.params.id },
+      include: { site: { select: { latitude: true, longitude: true, code: true } } },
+    });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
     if (existing.statut === 'TERMINEE') throw new AppError('Maintenance déjà terminée', 409);
+
+    // Tout ticket doit être DÉMARRÉ sur le site.
+    assertOnSite(existing.site, latitude, longitude, 'le démarrage');
 
     const updated = await prisma.maintenance.update({
       where: { id: req.params.id },
@@ -190,18 +249,23 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
 /** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), photos (préventive), PDF. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { observations, pieces, signaturePath, energie, photos } = req.body as {
+    const { observations, pieces, signaturePath, energie, photos, latitude, longitude } = req.body as {
       observations?: string;
       pieces?: Record<string, unknown>[];
       signaturePath?: string;
       energie?: Record<string, unknown>;
       photos?: { url: string; key: string }[];
+      latitude?: number;
+      longitude?: number;
     };
     const existing = await prisma.maintenance.findUnique({
       where: { id: req.params.id },
-      include: { site: { select: { id: true, powerConfig: true } } },
+      include: { site: { select: { id: true, powerConfig: true, latitude: true, longitude: true, code: true } } },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+
+    // Tout ticket doit être CLÔTURÉ sur le site.
+    assertOnSite(existing.site, latitude, longitude, 'la clôture');
 
     // Maintenance préventive → minimum de photos requis pour clôturer.
     if (existing.type === 'PREVENTIVE') {
