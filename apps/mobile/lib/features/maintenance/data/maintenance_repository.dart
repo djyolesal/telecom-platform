@@ -64,19 +64,29 @@ class MaintenanceRepository {
         payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
       );
 
+  /// Clôture offline-first.
+  /// [photoPaths] et [signatureLocalPath] sont des chemins de fichiers LOCAUX
+  /// (photos prises à la caméra, signature). Ils sont uploadés vers MinIO par le
+  /// moteur de sync — immédiatement si en ligne, sinon à la reconnexion.
   Future<SubmitResult> close(
     String id, {
     String? observations,
-    String? signaturePath,
+    String? signatureLocalPath,
     Map<String, dynamic>? energie,
-  }) =>
-      _sync.submit(
-        endpoint: '/maintenances/$id/close',
-        entityType: 'maintenance_close',
-        payload: {
-          if (observations != null) 'observations': observations,
-          if (signaturePath != null) 'signaturePath': signaturePath,
-          if (energie != null && energie.isNotEmpty) 'energie': energie,
-        },
-      );
+    List<String> photoPaths = const [],
+  }) {
+    final attachments = <Map<String, String>>[
+      for (final p in photoPaths) {'path': p, 'kind': 'photo'},
+      if (signatureLocalPath != null) {'path': signatureLocalPath, 'kind': 'signature'},
+    ];
+    return _sync.submit(
+      endpoint: '/maintenances/$id/close',
+      entityType: 'maintenance_close',
+      payload: {
+        if (observations != null) 'observations': observations,
+        if (energie != null && energie.isNotEmpty) 'energie': energie,
+      },
+      attachments: attachments,
+    );
+  }
 }

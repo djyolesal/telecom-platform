@@ -16,6 +16,7 @@ const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
 const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
 const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
+const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
 
 const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
 
@@ -185,20 +186,35 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
   } catch (err) { next(err); }
 }
 
-/** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), PDF généré. */
+/** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), photos (préventive), PDF. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { observations, pieces, signaturePath, energie } = req.body as {
+    const { observations, pieces, signaturePath, energie, photos } = req.body as {
       observations?: string;
       pieces?: Record<string, unknown>[];
       signaturePath?: string;
       energie?: Record<string, unknown>;
+      photos?: { url: string; key: string }[];
     };
     const existing = await prisma.maintenance.findUnique({
       where: { id: req.params.id },
       include: { site: { select: { id: true, powerConfig: true } } },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+
+    // Maintenance préventive → minimum de photos requis pour clôturer.
+    if (existing.type === 'PREVENTIVE') {
+      const dejaPresentes = await prisma.photo.count({
+        where: { entityType: 'maintenance', entityId: existing.id },
+      });
+      const totalPhotos = dejaPresentes + (photos?.length ?? 0);
+      if (totalPhotos < MIN_PHOTOS_PREVENTIVE) {
+        throw new AppError(
+          `Au moins ${MIN_PHOTOS_PREVENTIVE} photos sont requises pour clôturer une maintenance préventive (${totalPhotos} fournie(s)).`,
+          422
+        );
+      }
+    }
 
     // Maintenance passive → relevés énergie obligatoires selon la config du site.
     const passive = isPassiveCategorie(existing.categorie);
@@ -229,6 +245,15 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     if (pieces?.length) {
       await prisma.pieceRechange.createMany({
         data: pieces.map((p) => ({ ...p, maintenanceId: existing.id })) as unknown as Prisma.PieceRechangeCreateManyInput[],
+      });
+    }
+
+    // Photos prises sur place (carte GE, compteur CEET, activités)
+    if (photos?.length) {
+      await prisma.photo.createMany({
+        data: photos
+          .filter((p) => p && p.url && p.key)
+          .map((p) => ({ entityType: 'maintenance', entityId: existing.id, url: p.url, minioKey: p.key })),
       });
     }
 

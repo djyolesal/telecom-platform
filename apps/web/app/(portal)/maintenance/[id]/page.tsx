@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle2, FileText, Zap } from 'lucide-react';
+import { Play, CheckCircle2, FileText, Zap, Image as ImageIcon, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -30,6 +30,7 @@ export default function MaintenanceDetailPage() {
   const queryClient = useQueryClient();
   const [observations, setObservations] = useState('');
   const [energie, setEnergie] = useState<Energie>({});
+  const [photos, setPhotos] = useState<File[]>([]);
   const setE = (k: keyof Energie, v: string) => setEnergie((p) => ({ ...p, [k]: v }));
 
   const { data: m, isLoading, isError } = useQuery({
@@ -40,14 +41,26 @@ export default function MaintenanceDetailPage() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['maintenance', id] });
   const start = useMutation({ mutationFn: () => api.post(`/maintenances/${id}/start`), onSuccess: refresh });
   const close = useMutation({
-    mutationFn: () => api.post(`/maintenances/${id}/close`, { observations, energie }),
-    onSuccess: refresh,
+    mutationFn: async () => {
+      const uploaded: { url: string; key: string }[] = [];
+      for (const f of photos) {
+        const form = new FormData();
+        form.append('folder', 'photos');
+        form.append('file', f);
+        const r = await api.post('/upload/image', form);
+        if (r.data?.data) uploaded.push(r.data.data);
+      }
+      return api.post(`/maintenances/${id}/close`, { observations, energie, photos: uploaded });
+    },
+    onSuccess: () => { setPhotos([]); refresh(); },
   });
 
   if (isLoading) return <Loading />;
   if (isError || !m) return <ErrorState message="Maintenance introuvable" />;
 
   const isPassive = PASSIVE_CATEGORIES.includes(m.categorie);
+  const isPreventive = m.type === 'PREVENTIVE';
+  const MIN_PHOTOS = 6;
   const sources = isPassive ? energySourcesForConfig(m.site?.powerConfig) : [];
   const hasGe = sources.includes('GE');
   const hasCeet = sources.includes('CEET');
@@ -58,6 +71,7 @@ export default function MaintenanceDetailPage() {
     (!hasGe || (!!energie.volumeGasoilLitres && !!energie.heuresFonctGE)) &&
     (!hasCeet || !!energie.indexCompteur) &&
     (!hasSolaire || !!energie.puissanceKva);
+  const photosComplete = !isPreventive || photos.length >= MIN_PHOTOS;
 
   return (
     <div>
@@ -131,12 +145,37 @@ export default function MaintenanceDetailPage() {
                 </div>
               )}
 
+              {isPreventive && (
+                <div className={`mb-4 rounded-lg border p-3 ${photosComplete ? 'border-green-100 bg-green-50/50' : 'border-orange-100 bg-orange-50/50'}`}>
+                  <p className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${photosComplete ? 'text-green-800' : 'text-orange-900'}`}>
+                    <ImageIcon size={13} /> Photos {photos.length}/{MIN_PHOTOS} (carte GE, compteur CEET, activités) — obligatoire
+                  </p>
+                  {photos.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {photos.map((f, i) => (
+                        <div key={i} className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={URL.createObjectURL(f)} alt="" className="h-16 w-16 rounded object-cover" />
+                          <button type="button" onClick={() => setPhotos(photos.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 rounded-full bg-white shadow">
+                            <X size={14} className="text-red-500" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" capture="environment" multiple
+                    onChange={(e) => { setPhotos([...photos, ...Array.from(e.target.files ?? [])]); e.target.value = ''; }}
+                    className="text-xs" />
+                  <p className="mt-1 text-[11px] text-gray-500">Sur mobile : ouvre la caméra pour une prise sur site.</p>
+                </div>
+              )}
+
               <Field label="Observations">
                 <Textarea value={observations} onChange={(e) => setObservations(e.target.value)} placeholder="Travaux réalisés, constats…" />
               </Field>
-              {close.isError && <p className="mt-2 text-xs text-red-500">Erreur : vérifiez les paramètres énergie requis.</p>}
+              {close.isError && <p className="mt-2 text-xs text-red-500">Erreur : vérifiez les paramètres énergie et photos requis.</p>}
               <div className="mt-3 flex justify-end">
-                <Button icon={CheckCircle2} loading={close.isPending} disabled={isPassive && !energyComplete} onClick={() => close.mutate()}>
+                <Button icon={CheckCircle2} loading={close.isPending} disabled={(isPassive && !energyComplete) || !photosComplete} onClick={() => close.mutate()}>
                   Clôturer la maintenance
                 </Button>
               </div>
@@ -159,6 +198,20 @@ export default function MaintenanceDetailPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {m.photos?.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <h3 className="font-semibold text-gray-700 text-sm mb-2">Photos ({m.photos.length})</h3>
+              <div className="flex flex-wrap gap-2">
+                {m.photos.map((p: { id: string; url: string }) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
+                    <img src={p.url} alt="" className="h-20 w-20 rounded object-cover border border-gray-100" />
+                  </a>
+                ))}
+              </div>
             </div>
           )}
 

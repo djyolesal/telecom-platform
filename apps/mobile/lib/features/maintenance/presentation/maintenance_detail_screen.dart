@@ -1,13 +1,18 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/services/location_service.dart';
-import '../../../core/services/upload_service.dart';
+import '../../../core/sync/attachment_store.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
+
+const kMinPhotosPreventive = 6;
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
@@ -42,10 +47,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
   Future<void> _close(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();
-    final uploadService = context.read<UploadService>();
     final navigator = Navigator.of(context);
 
-    // Formulaire de clôture (observations + relevés énergie si maintenance passive)
+    // Formulaire de clôture (observations + énergie si passive + photos si préventive).
+    // La feuille impose déjà ≥ kMinPhotosPreventive photos prises à la caméra.
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -54,26 +59,39 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     if (result == null) return;
 
     setState(() => _busy = true);
+    try {
+      // Photos (caméra) → copie dans un stockage persistant. L'upload vers MinIO
+      // est DIFFÉRÉ au moteur de sync : immédiat si en ligne, sinon à la reconnexion.
+      final photoFiles = (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];
+      final photoPaths = <String>[];
+      for (final f in photoFiles) {
+        photoPaths.add(await AttachmentStore.persistFile(f.path));
+      }
 
-    // Signature optionnelle
-    String? signatureKey;
-    final bytes = await navigator.push<dynamic>(
-      MaterialPageRoute(builder: (_) => const SignaturePadScreen()),
-    );
-    if (bytes != null) {
-      signatureKey = await uploadService.uploadImage(bytes, 'signature-${widget.id}.png');
+      // Signature optionnelle → persistée localement (uploadée par la sync elle aussi).
+      String? signaturePath;
+      final bytes = await navigator.push<dynamic>(
+        MaterialPageRoute(builder: (_) => const SignaturePadScreen()),
+      );
+      if (bytes != null) {
+        signaturePath = await AttachmentStore.persistBytes(bytes as Uint8List, 'signature-${widget.id}.png');
+      }
+
+      final res = await repo.close(
+        widget.id,
+        observations: result['observations'] as String?,
+        signatureLocalPath: signaturePath,
+        energie: result['energie'] as Map<String, dynamic>?,
+        photoPaths: photoPaths,
+      );
+      if (!mounted) return;
+      _snack(res.isQueued
+          ? 'Clôture enregistrée hors-ligne — photos envoyées dès la reconnexion'
+          : 'Maintenance clôturée');
+      _reload();
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-
-    final res = await repo.close(
-      widget.id,
-      observations: result['observations'] as String?,
-      signaturePath: signatureKey,
-      energie: result['energie'] as Map<String, dynamic>?,
-    );
-    if (!mounted) return;
-    setState(() => _busy = false);
-    _snack(res.isQueued ? 'Clôture mise en file (hors-ligne)' : 'Maintenance clôturée');
-    _reload();
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -170,6 +188,8 @@ class _CloseSheetState extends State<_CloseSheet> {
   final _index = TextEditingController();
   final _kwh = TextEditingController();
   final _puissance = TextEditingController();
+  final _picker = ImagePicker();
+  final List<XFile> _photos = [];
   String? _error;
 
   @override
@@ -183,10 +203,25 @@ class _CloseSheetState extends State<_CloseSheet> {
   double? _num(TextEditingController c) =>
       c.text.trim().isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
 
+  /// Prise de photo SUR SITE uniquement (caméra). La galerie est volontairement
+  /// désactivée : chaque photo doit être prise au moment de l'intervention.
+  Future<void> _takePhoto() async {
+    try {
+      final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+      if (img != null) setState(() => _photos.add(img));
+    } catch (_) {/* annulé / permission refusée */}
+  }
+
   void _submit() {
     final m = widget.maintenance;
     final sources = m.isPassive ? sourcesForConfig(m.sitePowerConfig) : <String>[];
     final energie = <String, dynamic>{};
+
+    // Photos obligatoires pour une maintenance préventive
+    if (m.type == 'PREVENTIVE' && _photos.length < kMinPhotosPreventive) {
+      setState(() => _error = 'Au moins $kMinPhotosPreventive photos sont requises (${_photos.length} prise(s)).');
+      return;
+    }
 
     if (sources.contains('GE')) {
       if (_num(_gasoil) == null || _num(_heures) == null) {
@@ -212,7 +247,7 @@ class _CloseSheetState extends State<_CloseSheet> {
       energie['puissanceKva'] = _num(_puissance);
     }
 
-    Navigator.pop(context, {'observations': _obs.text.trim(), 'energie': energie});
+    Navigator.pop(context, {'observations': _obs.text.trim(), 'energie': energie, 'photos': _photos});
   }
 
   @override
@@ -256,6 +291,61 @@ class _CloseSheetState extends State<_CloseSheet> {
                     ],
                     if (sources.contains('SOLAIRE'))
                       TextField(controller: _puissance, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Puissance solaire (kVA) *')),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (m.type == 'PREVENTIVE') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _photos.length >= kMinPhotosPreventive ? Colors.green.shade50 : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Photos ${_photos.length}/$kMinPhotosPreventive (carte GE, compteur CEET, activités)',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _photos.length >= kMinPhotosPreventive ? Colors.green.shade800 : Colors.orange.shade900)),
+                    Text('À prendre sur site avec la caméra — pas d\'import galerie',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                    const SizedBox(height: 8),
+                    if (_photos.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(_photos.length, (i) {
+                          return Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.file(File(_photos[i].path), width: 60, height: 60, fit: BoxFit.cover),
+                              ),
+                              Positioned(
+                                top: -6, right: -6,
+                                child: IconButton(
+                                  icon: const Icon(Icons.cancel, size: 18, color: Colors.red),
+                                  onPressed: () => setState(() => _photos.removeAt(i)),
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
+                      ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _takePhoto,
+                        icon: const Icon(Icons.camera_alt, size: 18),
+                        label: const Text('Prendre une photo'),
+                      ),
+                    ),
                   ],
                 ),
               ),

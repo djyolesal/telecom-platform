@@ -25,7 +25,8 @@ export async function uploadBuffer(
     'Content-Type': mimeType,
   });
 
-  return { key, url: `${env.APP_URL}/minio/${MINIO_BUCKET}/${key}` };
+  // URL publique servie par Nginx (/storage/ → API objets MinIO :9000, bucket en lecture publique)
+  return { key, url: `${env.APP_URL}/storage/${MINIO_BUCKET}/${key}` };
 }
 
 /** Supprime un objet du bucket. */

@@ -10,7 +10,7 @@ class ServerException implements Exception {
 
 class NetworkException implements Exception {
   final String message;
-  NetworkException([this.message = 'Pas de connexion réseau']);
+  const NetworkException([this.message = 'Pas de connexion réseau']);
   @override
   String toString() => 'NetworkException: $message';
 }

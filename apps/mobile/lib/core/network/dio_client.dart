@@ -58,7 +58,7 @@ class DioClient {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout) {
-        throw NetworkException();
+        throw const NetworkException();
       }
       final status = e.response?.statusCode;
       final data = e.response?.data;
