@@ -40,7 +40,8 @@
       "Bash(/Users/yohaness/Library/Android/sdk/platform-tools/adb shell *)",
       "Bash(awk '/\"main\" /{f=1} f{print} f&&/^$/{c++; if\\(c>1\\) exit}' /tmp/anr_full.txt)",
       "Bash(curl -ks -m 10 -o /dev/null -w \"health http=%{http_code}\\\\n\" https://41.78.137.83/api/v1/health)",
-      "Bash(curl -ks -m 10 -o /dev/null -w \"sites http=%{http_code}\\\\n\" https://41.78.137.83/api/v1/sites)"
+      "Bash(curl -ks -m 10 -o /dev/null -w \"sites http=%{http_code}\\\\n\" https://41.78.137.83/api/v1/sites)",
+      "Bash(curl -ks -m 15 -o /dev/null -w \"http=%{http_code} type=%{content_type} size=%{size_download}\\\\n\" \"https://41.78.137.83/storage/telecom-files/photos/2026-06-18/851f1f9d-be03-4f90-b01e-9dc8bdc1bcef.jpg\")"
     ]
   }
 }

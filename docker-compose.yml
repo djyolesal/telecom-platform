@@ -89,6 +89,9 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       FCM_SERVER_KEY: ${FCM_SERVER_KEY}
       CORS_ORIGIN: https://${DOMAIN}
+      # Base publique pour les URLs de fichiers MinIO (photos, signatures, PDF).
+      # Sans ça l'API génère http://localhost:3000/storage/... (vignettes vides).
+      APP_URL: https://${DOMAIN}
     expose: ["3001"]
     depends_on:
       postgres:
