@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Fuel, Zap, Gauge, Pencil, Trash2 } from 'lucide-react';
+import { MapPin, Fuel, Zap, Gauge, Pencil, Trash2, Building2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -13,6 +13,12 @@ import { DataTable } from '@/components/shared/DataTable';
 import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { POWER_CONFIGS, STATUTS_GE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
+
+const SCOPE_LABELS: Record<string, string> = {
+  PASSIVE: 'Passive',
+  ACTIVE: 'Active',
+  LES_DEUX: 'Passive + Active',
+};
 
 export default function SiteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -84,6 +90,27 @@ export default function SiteDetailPage() {
         <StatCard title="Statut GE" value={STATUTS_GE.find((p) => p.value === site.statutGE)?.label ?? site.statutGE} icon={Gauge} color="bg-[#1B3F6B]" />
         <StatCard title="Stock gasoil" value={`${fmtNumber(stock?.stockLitres)} L`} subtitle={stock?.autonomieJours != null ? `Autonomie ${stock.autonomieJours} j` : undefined} icon={Fuel} color="bg-[#0E7C6B]" />
         <StatCard title="Puissance GE" value={`${Number(site.puissanceGEkva).toFixed(0)} kVA`} icon={MapPin} color="bg-[#1B3F6B]" />
+      </div>
+
+      <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
+        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-gray-700"><Building2 size={15} /> Rattachement</h3>
+        {!site.lot ? (
+          <p className="text-sm text-gray-500">Aucun lot rattaché — utilisez « Modifier » pour l&apos;affecter à un lot.</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+            <div><span className="text-gray-500">Lot : </span><b className="text-gray-800">{site.lot.code}</b> — {site.lot.nom}</div>
+            {site.lot.assignments?.length ? (
+              site.lot.assignments.map((a: { id: string; scope: string; prestataire?: { nom: string } }) => (
+                <div key={a.id} className="flex items-center gap-1.5">
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">{SCOPE_LABELS[a.scope] ?? a.scope}</span>
+                  <span className="text-gray-800">{a.prestataire?.nom ?? '—'}</span>
+                </div>
+              ))
+            ) : (
+              <span className="text-gray-400">Aucun prestataire attribué à ce lot.</span>
+            )}
+          </div>
+        )}
       </div>
 
       {stock && stock.niveauAlerte !== 'NA' && (

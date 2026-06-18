@@ -18,7 +18,7 @@ export default function ModifierSitePage() {
   const [form, setForm] = useState({
     code: '', nom: '', region: '', ville: '', adresse: '',
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
-    latitude: '', longitude: '',
+    latitude: '', longitude: '', lotId: '',
   });
   const [error, setError] = useState('');
 
@@ -26,6 +26,12 @@ export default function ModifierSitePage() {
     queryKey: ['site', id],
     queryFn: () => api.get(`/sites/${id}`).then((r) => r.data.data),
   });
+
+  const { data: lots } = useQuery({
+    queryKey: ['lots-select'],
+    queryFn: () => api.get('/lots', { params: { limit: 500 } }).then((r) => r.data.data),
+  });
+  const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} — ${l.nom}` }));
 
   useEffect(() => {
     if (!site) return;
@@ -40,6 +46,7 @@ export default function ModifierSitePage() {
       puissanceGEkva: site.puissanceGEkva != null ? String(site.puissanceGEkva) : '0',
       latitude: site.latitude != null ? String(site.latitude) : '',
       longitude: site.longitude != null ? String(site.longitude) : '',
+      lotId: site.lotId ?? '',
     });
   }, [site]);
 
@@ -53,6 +60,7 @@ export default function ModifierSitePage() {
         puissanceGEkva: Number(form.puissanceGEkva) || 0,
         latitude: form.latitude ? Number(form.latitude) : null,
         longitude: form.longitude ? Number(form.longitude) : null,
+        lotId: form.lotId || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site', id] });
@@ -94,6 +102,9 @@ export default function ModifierSitePage() {
           </Field>
           <Field label="Puissance GE (kVA)">
             <Input type="number" step="0.01" value={form.puissanceGEkva} onChange={(e) => set('puissanceGEkva', e.target.value)} />
+          </Field>
+          <Field label="Lot (rattachement / prestataire)">
+            <Select value={form.lotId} onChange={(e) => set('lotId', e.target.value)} options={lotOptions} placeholder="Aucun lot" />
           </Field>
           <Field label="Adresse">
             <Input value={form.adresse} onChange={(e) => set('adresse', e.target.value)} />

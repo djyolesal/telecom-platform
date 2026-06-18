@@ -158,8 +158,8 @@ function ImportSitesModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="mb-3 text-sm text-gray-600">
-          Fichier <b>.xlsx</b> avec les colonnes : <code className="text-xs">code, nom, region, ville, adresse, latitude, longitude, powerConfig, statutGE, puissanceGEkva</code>.
-          L&apos;import met à jour les sites existants (par <b>code</b>) et crée les nouveaux.
+          Fichier <b>.xlsx</b> avec les colonnes : <code className="text-xs">code, nom, region, ville, adresse, latitude, longitude, powerConfig, statutGE, puissanceGEkva, lot</code>.
+          L&apos;import met à jour les sites existants (par <b>code</b>) et crée les nouveaux. La colonne <b>lot</b> (code du lot) rattache le site à son lot — et donc au prestataire via les attributions.
         </p>
 
         <button

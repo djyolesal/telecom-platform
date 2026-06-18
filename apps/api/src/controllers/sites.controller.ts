@@ -21,6 +21,7 @@ const IMPORT_COLUMNS = [
   { key: 'powerConfig', header: 'powerConfig' },
   { key: 'statutGE', header: 'statutGE' },
   { key: 'puissanceGEkva', header: 'puissanceGEkva' },
+  { key: 'lot', header: 'lot' },
 ];
 
 // Normalise un en-tête : minuscules, sans accents ni séparateurs.
@@ -39,6 +40,7 @@ const HEADER_ALIASES: Record<string, string> = {
   powerconfig: 'powerConfig', configenergie: 'powerConfig', configurationenergie: 'powerConfig',
   statutge: 'statutGE',
   puissancegekva: 'puissanceGEkva', puissancekva: 'puissanceGEkva', kva: 'puissanceGEkva',
+  lot: 'lot', codelot: 'lot', lotcode: 'lot',
 };
 
 /**
@@ -129,7 +131,7 @@ export async function sitesImportTemplate(_req: Request, res: Response, next: Ne
       {
         code: 'MAR-001', nom: 'Site Exemple', region: 'Maritime', ville: 'Lomé',
         adresse: 'Quartier X', latitude: 6.1725, longitude: 1.2314,
-        powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: 100,
+        powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: 100, lot: 'LOT-01',
       },
     ]);
     setXlsxHeaders(res, 'modele_import_sites.xlsx');
@@ -162,6 +164,14 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
 
     const POWER = Object.values(PowerConfig) as string[];
     const STATUT = Object.values(StatutGE) as string[];
+
+    // Préchargement des lots pour résoudre le rattachement (par code, puis nom).
+    const lots = await prisma.lot.findMany({ select: { id: true, code: true, nom: true } });
+    const lotByKey = new Map<string, string>();
+    for (const l of lots) {
+      lotByKey.set(norm(l.code), l.id);
+      lotByKey.set(norm(l.nom), l.id);
+    }
     const cellText = (row: ExcelJS.Row, field: string): string => {
       const col = colByField[field];
       if (col == null) return '';
@@ -189,6 +199,14 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
         const statutGE = cellText(row, 'statutGE') || 'GE_SECOURS';
         if (!STATUT.includes(statutGE)) throw new Error(`statutGE invalide « ${statutGE} » (attendu : ${STATUT.join(', ')})`);
 
+        // Rattachement au lot (optionnel). Colonne vide → lotId inchangé (préservé en update).
+        let lotId: string | undefined;
+        const lotRef = cellText(row, 'lot');
+        if (lotRef) {
+          lotId = lotByKey.get(norm(lotRef));
+          if (!lotId) throw new Error(`lot introuvable « ${lotRef} » (code de lot attendu)`);
+        }
+
         const data = {
           nom,
           region,
@@ -199,6 +217,7 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           powerConfig: powerConfig as PowerConfig,
           statutGE: statutGE as StatutGE,
           puissanceGEkva: numOrNull(cellText(row, 'puissanceGEkva')) ?? 0,
+          lotId,
           isActive: true,
         };
 

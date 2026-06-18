@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -16,11 +16,17 @@ export default function NouveauSitePage() {
   const [form, setForm] = useState({
     code: '', nom: '', region: '', ville: '', adresse: '',
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
-    latitude: '', longitude: '',
+    latitude: '', longitude: '', lotId: '',
   });
   const [error, setError] = useState('');
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const { data: lots } = useQuery({
+    queryKey: ['lots-select'],
+    queryFn: () => api.get('/lots', { params: { limit: 500 } }).then((r) => r.data.data),
+  });
+  const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} — ${l.nom}` }));
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -30,6 +36,7 @@ export default function NouveauSitePage() {
         puissanceGEkva: Number(form.puissanceGEkva) || 0,
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
+        lotId: form.lotId || undefined,
       }),
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
@@ -67,6 +74,9 @@ export default function NouveauSitePage() {
           </Field>
           <Field label="Puissance GE (kVA)">
             <Input type="number" step="0.01" value={form.puissanceGEkva} onChange={(e) => set('puissanceGEkva', e.target.value)} />
+          </Field>
+          <Field label="Lot (rattachement / prestataire)">
+            <Select value={form.lotId} onChange={(e) => set('lotId', e.target.value)} options={lotOptions} placeholder="Aucun lot" />
           </Field>
           <Field label="Adresse">
             <Input value={form.adresse} onChange={(e) => set('adresse', e.target.value)} />
