@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/enums.dart';
+import '../../../core/errors/exceptions.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../../../core/utils/formatters.dart';
@@ -34,7 +35,11 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     _future = context.read<MaintenanceRepository>().getMaintenance(widget.id);
   }
 
-  void _reload() => setState(() => _future = context.read<MaintenanceRepository>().getMaintenance(widget.id));
+  void _reload() => setState(() {
+        // Bloc (pas de flèche) : une flèche renverrait le Future de l'assignation,
+        // ce que setState rejette ("callback argument returned a Future").
+        _future = context.read<MaintenanceRepository>().getMaintenance(widget.id);
+      });
 
   /// Vérifie la présence physique sur le site avant une opération.
   /// Retourne (ok, lat, lng). Si le site n'a pas de coordonnées, la vérification
@@ -79,8 +84,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       if (!check.ok) return;
       final res = await repo.start(widget.id, latitude: check.lat, longitude: check.lng);
       if (!mounted) return;
-      _snack(res.isQueued ? 'Démarrage mis en file (hors-ligne)' : 'Maintenance démarrée');
+      _snack(res.isQueued ? 'Démarrage mis en file — il partira à la reconnexion' : 'Maintenance démarrée');
       _reload();
+    } catch (e) {
+      if (mounted) _snack(_errMsg(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -136,12 +143,22 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           ? 'Clôture enregistrée hors-ligne — photos envoyées dès la reconnexion'
           : 'Maintenance clôturée');
       _reload();
+    } catch (e) {
+      if (mounted) _snack(_errMsg(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  /// Message clair selon le type d'erreur (au lieu d'une exception brute).
+  String _errMsg(Object e) {
+    if (e is ServerException) return e.message; // ex: « Vous n'êtes pas sur le site… », photos < 6
+    if (e is UnauthorizedException) return 'Session expirée — reconnectez-vous puis réessayez.';
+    if (e is NetworkException) return 'Connexion indisponible — réessayez une fois en ligne.';
+    return 'Erreur : $e';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +288,15 @@ class _CloseSheetState extends State<_CloseSheet> {
   /// désactivée : chaque photo doit être prise au moment de l'intervention.
   Future<void> _takePhoto() async {
     try {
-      final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+      // maxWidth/maxHeight LIMITENT le redimensionnement natif : sans bornes,
+      // image_picker décode+recompresse la photo pleine résolution (12 Mpx) sur
+      // le thread principal → ANR (l'app se fige) au bout de quelques photos.
+      final img = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 70,
+      );
       if (img != null) setState(() => _photos.add(img));
     } catch (_) {/* annulé / permission refusée */}
   }
@@ -388,7 +413,9 @@ class _CloseSheetState extends State<_CloseSheet> {
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(6),
-                                child: Image.file(File(_photos[i].path), width: 60, height: 60, fit: BoxFit.cover),
+                                // cacheWidth : décode une miniature (pas l'image pleine
+                                // résolution) → évite la surcharge mémoire / le gel.
+                                child: Image.file(File(_photos[i].path), width: 60, height: 60, fit: BoxFit.cover, cacheWidth: 160),
                               ),
                               Positioned(
                                 top: -6, right: -6,

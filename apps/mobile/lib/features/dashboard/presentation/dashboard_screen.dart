@@ -24,7 +24,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _future = context.read<DashboardRepository>().getDashboard();
   }
 
-  void _reload() => setState(() => _future = context.read<DashboardRepository>().getDashboard());
+  void _reload() => setState(() {
+        _future = context.read<DashboardRepository>().getDashboard();
+      });
 
   @override
   Widget build(BuildContext context) {

@@ -29,7 +29,7 @@ const envSchema = z.object({
   // JWT
   JWT_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
-  JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_EXPIRES_IN: z.string().default('12h'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
 
   // SMTP

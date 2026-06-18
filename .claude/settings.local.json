@@ -33,7 +33,14 @@
       "Bash(node -e \"const{PrismaClient}=require\\('@prisma/client'\\); const p=new PrismaClient\\(\\); console.log\\('prestataire:', typeof p.prestataire, '| lot:', typeof p.lot, '| lotAssignment:', typeof p.lotAssignment\\);\")",
       "Bash(sed -i '' 's/fmtNum\\(/fmtNumber\\(/g; s/import { fmtDateTime, fmtNumber }/import { fmtDateTime, fmtNumber }/' \"app/\\(portal\\)/maintenance/[id]/page.tsx\")",
       "Bash(sed -i '' 's/import { fmtDateTime, fmtNum }/import { fmtDateTime, fmtNumber }/' \"app/\\(portal\\)/maintenance/[id]/page.tsx\")",
-      "Bash(python3 e2e_test.py)"
+      "Bash(python3 e2e_test.py)",
+      "Bash(grep -A2 \"name: geolocator$\" pubspec.lock)",
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/mobile; echo \"=== getCurrentPosition signature \\(geolocator 12\\) ===\"; grep -rn \"getCurrentPosition\" ~/.pub-cache/hosted/pub.dev/geolocator-12.0.0/lib/geolocator.dart | head; echo \"---\"; sed -n '/static Future<Position> getCurrentPosition/,/{/p' ~/.pub-cache/hosted/pub.dev/geolocator-12.0.0/lib/geolocator.dart | head -20)",
+      "Bash(/Users/yohaness/Library/Android/sdk/platform-tools/adb logcat *)",
+      "Bash(/Users/yohaness/Library/Android/sdk/platform-tools/adb shell *)",
+      "Bash(awk '/\"main\" /{f=1} f{print} f&&/^$/{c++; if\\(c>1\\) exit}' /tmp/anr_full.txt)",
+      "Bash(curl -ks -m 10 -o /dev/null -w \"health http=%{http_code}\\\\n\" https://41.78.137.83/api/v1/health)",
+      "Bash(curl -ks -m 10 -o /dev/null -w \"sites http=%{http_code}\\\\n\" https://41.78.137.83/api/v1/sites)"
     ]
   }
 }

@@ -25,7 +25,9 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     _future = context.read<IncidentRepository>().getIncident(widget.id);
   }
 
-  void _reload() => setState(() => _future = context.read<IncidentRepository>().getIncident(widget.id));
+  void _reload() => setState(() {
+        _future = context.read<IncidentRepository>().getIncident(widget.id);
+      });
 
   Future<void> _closeFlow() async {
     final repo = context.read<IncidentRepository>();

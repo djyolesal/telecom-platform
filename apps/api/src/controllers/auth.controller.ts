@@ -11,7 +11,10 @@ import { sendEmail } from '../services/email.service';
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 12;
-const ACCESS_TTL = '15m';
+// Durée de vie du jeton d'accès. 15 min était trop court pour le terrain
+// (le jeton expirait pendant une intervention et faisait échouer l'upload
+// multipart des photos lors de la clôture). Configurable via JWT_EXPIRES_IN.
+const ACCESS_TTL = env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'];
 const REFRESH_TTL = '30d';
 const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 
