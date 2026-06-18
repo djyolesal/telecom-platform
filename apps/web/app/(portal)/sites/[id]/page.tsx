@@ -1,11 +1,13 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { MapPin, Fuel, Zap, Gauge } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { MapPin, Fuel, Zap, Gauge, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { DataTable } from '@/components/shared/DataTable';
 import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/components/shared/Badge';
@@ -14,6 +16,20 @@ import { fmtDateTime, fmtNumber } from '@/lib/utils';
 
 export default function SiteDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string })?.role ?? '';
+  const canEdit = role === 'MANAGER' || role === 'ADMIN';
+  const isAdmin = role === 'ADMIN';
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/sites/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      router.push('/sites');
+    },
+  });
 
   const { data: site, isLoading, isError } = useQuery({
     queryKey: ['site', id],
@@ -44,6 +60,23 @@ export default function SiteDetailPage() {
         title={`${site.code} — ${site.nom}`}
         subtitle={`${site.region}${site.ville ? ' · ' + site.ville : ''}`}
         backHref="/sites"
+        actions={
+          (canEdit || isAdmin) && (
+            <>
+              {canEdit && <ButtonLink href={`/sites/${id}/modifier`} variant="secondary" icon={Pencil}>Modifier</ButtonLink>}
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  icon={Trash2}
+                  loading={remove.isPending}
+                  onClick={() => { if (confirm(`Désactiver le site ${site.code} ? Il n'apparaîtra plus dans les listes.`)) remove.mutate(); }}
+                >
+                  Supprimer
+                </Button>
+              )}
+            </>
+          )
+        }
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

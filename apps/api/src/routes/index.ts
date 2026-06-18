@@ -16,7 +16,7 @@ import * as notifCtrl from '../controllers/notifications.controller';
 import * as uploadCtrl from '../controllers/upload.controller';
 import * as prestatairesCtrl from '../controllers/prestataires.controller';
 import * as lotsCtrl from '../controllers/lots.controller';
-import { uploadMiddleware } from '../middlewares/upload';
+import { uploadMiddleware, uploadSpreadsheet } from '../middlewares/upload';
 
 export const router = Router();
 
@@ -38,6 +38,8 @@ router.post('/auth/fcm-token', authCtrl.updateFcmToken);
 router.get('/sites', sitesCtrl.getSites);
 router.get('/sites/geojson', sitesCtrl.getSitesGeoJSON);
 router.get('/sites/export/xlsx', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
+router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
+router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
 router.post('/sites', rbac(['MANAGER','ADMIN']), sitesCtrl.createSite);
 router.get('/sites/:id', sitesCtrl.getSiteById);
 router.put('/sites/:id', rbac(['MANAGER','ADMIN']), sitesCtrl.updateSite);

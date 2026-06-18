@@ -21,3 +21,23 @@ export const uploadMiddleware = multer({
     cb(new AppError(`Type de fichier non autorisé : ${file.mimetype}`, 415));
   },
 });
+
+// Import de tableurs (.xlsx). Le mimetype varie selon le navigateur/OS,
+// on accepte donc aussi sur l'extension du nom de fichier.
+const SPREADSHEET_MIME = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/octet-stream',
+  'text/csv',
+  'application/csv',
+]);
+
+export const uploadSpreadsheet = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = SPREADSHEET_MIME.has(file.mimetype) || /\.(xlsx|xls|csv)$/i.test(file.originalname);
+    if (ok) return cb(null, true);
+    cb(new AppError(`Format non autorisé : importez un fichier .xlsx (${file.mimetype})`, 415));
+  },
+});

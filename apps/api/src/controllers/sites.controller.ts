@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
+import ExcelJS from 'exceljs';
+import { PowerConfig, StatutGE } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
@@ -6,6 +8,38 @@ import { auditLog } from '../services/audit.service';
 import { cacheService } from '../services/cache.service';
 import { calculerStockSite } from '../utils/calculator';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+
+// Colonnes du modèle d'import / export (en-têtes normalisés → champ).
+const IMPORT_COLUMNS = [
+  { key: 'code', header: 'code' },
+  { key: 'nom', header: 'nom' },
+  { key: 'region', header: 'region' },
+  { key: 'ville', header: 'ville' },
+  { key: 'adresse', header: 'adresse' },
+  { key: 'latitude', header: 'latitude' },
+  { key: 'longitude', header: 'longitude' },
+  { key: 'powerConfig', header: 'powerConfig' },
+  { key: 'statutGE', header: 'statutGE' },
+  { key: 'puissanceGEkva', header: 'puissanceGEkva' },
+];
+
+// Normalise un en-tête : minuscules, sans accents ni séparateurs.
+const norm = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+
+// Synonymes acceptés (normalisés) → champ Site.
+const HEADER_ALIASES: Record<string, string> = {
+  code: 'code',
+  nom: 'nom', name: 'nom',
+  region: 'region',
+  ville: 'ville', city: 'ville',
+  adresse: 'adresse', address: 'adresse',
+  latitude: 'latitude', lat: 'latitude',
+  longitude: 'longitude', lng: 'longitude', lon: 'longitude',
+  powerconfig: 'powerConfig', configenergie: 'powerConfig', configurationenergie: 'powerConfig',
+  statutge: 'statutGE',
+  puissancegekva: 'puissanceGEkva', puissancekva: 'puissanceGEkva', kva: 'puissanceGEkva',
+};
 
 /**
  * @swagger
@@ -83,7 +117,107 @@ export async function deleteSite(req: Request, res: Response, next: NextFunction
     if (!site) throw new AppError('Site introuvable', 404);
     await prisma.site.update({ where: { id: req.params.id }, data: { isActive: false } });
     await auditLog(req.user!.id, 'DELETE', 'sites', site.id, {}, req);
+    await cacheService.invalidate('sites:geojson');
     res.json({ success: true, message: 'Site désactivé' });
+  } catch (err) { next(err); }
+}
+
+/** Modèle xlsx d'import (en-têtes + une ligne d'exemple). */
+export async function sitesImportTemplate(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const buffer = await buildXlsx('Sites', IMPORT_COLUMNS, [
+      {
+        code: 'MAR-001', nom: 'Site Exemple', region: 'Maritime', ville: 'Lomé',
+        adresse: 'Quartier X', latitude: 6.1725, longitude: 1.2314,
+        powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: 100,
+      },
+    ]);
+    setXlsxHeaders(res, 'modele_import_sites.xlsx');
+    res.send(buffer);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Import en masse de sites depuis un .xlsx. Upsert par `code` :
+ * code existant → mise à jour, sinon création. Renvoie un récapitulatif.
+ */
+export async function importSites(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) throw new AppError('Aucun fichier reçu (champ "file").', 400);
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+    const ws = wb.worksheets[0];
+    if (!ws || ws.rowCount < 2) throw new AppError('Fichier vide ou sans données.', 400);
+
+    // En-têtes (ligne 1) → index de colonne par champ Site.
+    const colByField: Record<string, number> = {};
+    ws.getRow(1).eachCell((cell, col) => {
+      const field = HEADER_ALIASES[norm(String(cell.value ?? ''))];
+      if (field) colByField[field] = col;
+    });
+    if (colByField.code == null) {
+      throw new AppError('Colonne "code" introuvable. Utilisez le modèle d\'import.', 422);
+    }
+
+    const POWER = Object.values(PowerConfig) as string[];
+    const STATUT = Object.values(StatutGE) as string[];
+    const cellText = (row: ExcelJS.Row, field: string): string => {
+      const col = colByField[field];
+      if (col == null) return '';
+      return String(row.getCell(col).text ?? '').trim();
+    };
+    const numOrNull = (v: string): number | null => (v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+
+    const results = { total: 0, created: 0, updated: 0, errors: [] as { ligne: number; code: string; message: string }[] };
+
+    for (let r = 2; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      const code = cellText(row, 'code');
+      // Ligne entièrement vide → on ignore.
+      if (!code && !cellText(row, 'nom')) continue;
+      results.total++;
+      try {
+        if (!code) throw new Error('code manquant');
+        const nom = cellText(row, 'nom');
+        const region = cellText(row, 'region');
+        if (!nom) throw new Error('nom manquant');
+        if (!region) throw new Error('region manquante');
+
+        const powerConfig = cellText(row, 'powerConfig') || 'CEET_GE';
+        if (!POWER.includes(powerConfig)) throw new Error(`powerConfig invalide « ${powerConfig} » (attendu : ${POWER.join(', ')})`);
+        const statutGE = cellText(row, 'statutGE') || 'GE_SECOURS';
+        if (!STATUT.includes(statutGE)) throw new Error(`statutGE invalide « ${statutGE} » (attendu : ${STATUT.join(', ')})`);
+
+        const data = {
+          nom,
+          region,
+          ville: cellText(row, 'ville') || null,
+          adresse: cellText(row, 'adresse') || null,
+          latitude: numOrNull(cellText(row, 'latitude')),
+          longitude: numOrNull(cellText(row, 'longitude')),
+          powerConfig: powerConfig as PowerConfig,
+          statutGE: statutGE as StatutGE,
+          puissanceGEkva: numOrNull(cellText(row, 'puissanceGEkva')) ?? 0,
+          isActive: true,
+        };
+
+        const existing = await prisma.site.findUnique({ where: { code } });
+        if (existing) {
+          await prisma.site.update({ where: { code }, data });
+          results.updated++;
+        } else {
+          await prisma.site.create({ data: { ...data, code } });
+          results.created++;
+        }
+      } catch (e) {
+        results.errors.push({ ligne: r, code, message: e instanceof Error ? e.message : 'Erreur inconnue' });
+      }
+    }
+
+    await auditLog(req.user!.id, 'CREATE', 'sites', 'bulk-import', { fichier: req.file.originalname, ...results }, req);
+    await cacheService.invalidate('sites:geojson');
+    res.json({ success: true, data: results });
   } catch (err) { next(err); }
 }
 
