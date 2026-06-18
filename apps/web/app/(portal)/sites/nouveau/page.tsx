@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
-import { regionOptions, STATUTS_GE, POWER_CONFIGS } from '@/lib/constants';
+import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON } from '@/lib/constants';
 
 export default function NouveauSitePage() {
   const router = useRouter();
@@ -17,6 +17,8 @@ export default function NouveauSitePage() {
     code: '', nom: '', region: '', ville: '', adresse: '',
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
     latitude: '', longitude: '', lotId: '',
+    hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
+    cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
   });
   const [error, setError] = useState('');
 
@@ -37,6 +39,12 @@ export default function NouveauSitePage() {
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         lotId: form.lotId || undefined,
+        hasClimatiseur: form.hasClimatiseur === 'true',
+        hasExtincteurs: form.hasExtincteurs === 'true',
+        typePylone: form.typePylone || undefined,
+        cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : undefined,
+        formeCuve: form.formeCuve || undefined,
+        cuveDimensions: form.cuveDimensions || undefined,
       }),
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
@@ -86,6 +94,26 @@ export default function NouveauSitePage() {
           </Field>
           <Field label="Longitude">
             <Input type="number" step="0.000001" value={form.longitude} onChange={(e) => set('longitude', e.target.value)} placeholder="1.2314" />
+          </Field>
+
+          <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Infrastructure</div>
+          <Field label="Type de pylône">
+            <Select value={form.typePylone} onChange={(e) => set('typePylone', e.target.value)} options={TYPES_PYLONE} placeholder="Sélectionner…" />
+          </Field>
+          <Field label="Climatiseur sur le site">
+            <Select value={form.hasClimatiseur} onChange={(e) => set('hasClimatiseur', e.target.value)} options={OUI_NON} />
+          </Field>
+          <Field label="Extincteurs sur le site">
+            <Select value={form.hasExtincteurs} onChange={(e) => set('hasExtincteurs', e.target.value)} options={OUI_NON} />
+          </Field>
+          <Field label="Volume cuve gasoil (L)">
+            <Input type="number" step="0.01" value={form.cuveVolumeLitres} onChange={(e) => set('cuveVolumeLitres', e.target.value)} placeholder="2000" />
+          </Field>
+          <Field label="Forme de la cuve">
+            <Select value={form.formeCuve} onChange={(e) => set('formeCuve', e.target.value)} options={FORMES_CUVE} placeholder="Sélectionner…" />
+          </Field>
+          <Field label="Dimensions de la cuve">
+            <Input value={form.cuveDimensions} onChange={(e) => set('cuveDimensions', e.target.value)} placeholder="ex: 2m × 1m × 1m" />
           </Field>
 
           <div className="md:col-span-2 flex justify-end gap-2 pt-2">

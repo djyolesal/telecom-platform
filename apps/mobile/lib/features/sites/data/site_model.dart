@@ -34,6 +34,13 @@ class Site {
   final String? lotCode;
   final String? lotNom;
   final List<LotAttribution> attributions;
+  // Infrastructure (fiche détail uniquement)
+  final bool hasClimatiseur;
+  final bool hasExtincteurs;
+  final String? typePylone;
+  final double? cuveVolumeLitres;
+  final String? formeCuve;
+  final String? cuveDimensions;
 
   const Site({
     required this.id,
@@ -49,6 +56,12 @@ class Site {
     this.lotCode,
     this.lotNom,
     this.attributions = const [],
+    this.hasClimatiseur = false,
+    this.hasExtincteurs = false,
+    this.typePylone,
+    this.cuveVolumeLitres,
+    this.formeCuve,
+    this.cuveDimensions,
   });
 
   static double _toD(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
@@ -71,6 +84,12 @@ class Site {
       lotCode: lot?['code'] as String?,
       lotNom: lot?['nom'] as String?,
       attributions: assignments.map((a) => LotAttribution.fromJson(a as Map<String, dynamic>)).toList(),
+      hasClimatiseur: j['hasClimatiseur'] == true,
+      hasExtincteurs: j['hasExtincteurs'] == true,
+      typePylone: j['typePylone'] as String?,
+      cuveVolumeLitres: _toDn(j['cuveVolumeLitres']),
+      formeCuve: j['formeCuve'] as String?,
+      cuveDimensions: j['cuveDimensions'] as String?,
     );
   }
 

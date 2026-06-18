@@ -26,6 +26,23 @@ enum StatutGE {
   PAS_DE_GE
 }
 
+// Type de pylône du site (les libellés "TGC-GREENFIELD"/"LP-GREENFIELD" utilisent
+// un underscore car un identifiant d'enum ne peut pas contenir de tiret).
+enum TypePylone {
+  GREENFIELD
+  ROOFTOP
+  TGC_GREENFIELD
+  TROTTOIR
+  RURAL
+  LP_GREENFIELD
+}
+
+// Forme de la cuve à gasoil.
+enum FormeCuve {
+  RECTANGULAIRE
+  CYLINDRE_COUCHE
+}
+
 enum RoleUser {
   TECHNICIEN
   SUPERVISEUR
@@ -100,28 +117,28 @@ enum AuditAction {
 // ── Models ────────────────────────────────────────────────────
 
 model User {
-  id           String    @id @default(uuid())
-  nom          String    @db.VarChar(50)
-  prenom       String    @db.VarChar(50)
-  email        String    @unique @db.VarChar(100)
-  telephone    String?   @db.VarChar(20)
-  role         RoleUser
-  region       String?   @db.VarChar(50)
-  passwordHash String    @map("password_hash")
-  fcmToken     String?   @map("fcm_token")
-  isActive     Boolean   @default(true) @map("is_active")
-  lastLoginAt  DateTime? @map("last_login_at")
-  prestataireId String?  @map("prestataire_id")
-  equipe       EquipeMaintenance?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id            String             @id @default(uuid())
+  nom           String             @db.VarChar(50)
+  prenom        String             @db.VarChar(50)
+  email         String             @unique @db.VarChar(100)
+  telephone     String?            @db.VarChar(20)
+  role          RoleUser
+  region        String?            @db.VarChar(50)
+  passwordHash  String             @map("password_hash")
+  fcmToken      String?            @map("fcm_token")
+  isActive      Boolean            @default(true) @map("is_active")
+  lastLoginAt   DateTime?          @map("last_login_at")
+  prestataireId String?            @map("prestataire_id")
+  equipe        EquipeMaintenance?
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
 
-  prestataire       Prestataire?  @relation(fields: [prestataireId], references: [id])
-  maintenances      Maintenance[] @relation("TechnicienMaintenances")
-  depotages         Depotage[]    @relation("TechnicienDepotages")
+  prestataire       Prestataire?    @relation(fields: [prestataireId], references: [id])
+  maintenances      Maintenance[]   @relation("TechnicienMaintenances")
+  depotages         Depotage[]      @relation("TechnicienDepotages")
   releves           ReleveEnergie[]
-  incidents         Incident[]    @relation("TechnicienIncidents")
-  incidentsDeclares Incident[]    @relation("DeclarantIncidents")
+  incidents         Incident[]      @relation("TechnicienIncidents")
+  incidentsDeclares Incident[]      @relation("DeclarantIncidents")
   auditLogs         AuditLog[]
   notifications     Notification[]
 
@@ -130,21 +147,28 @@ model User {
 }
 
 model Site {
-  id             String      @id @default(uuid())
-  nom            String      @db.VarChar(100)
-  code           String      @unique @db.VarChar(20)
-  region         String      @db.VarChar(50)
-  ville          String?     @db.VarChar(50)
-  adresse        String?
-  latitude       Decimal?    @db.Decimal(10, 8)
-  longitude      Decimal?    @db.Decimal(11, 8)
-  powerConfig    PowerConfig @map("power_config")
-  statutGE       StatutGE    @map("statut_ge")
-  puissanceGEkva Decimal     @default(0) @map("puissance_ge_kva") @db.Decimal(6, 2)
-  isActive       Boolean     @default(true) @map("is_active")
-  lotId          String?     @map("lot_id")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  id               String      @id @default(uuid())
+  nom              String      @db.VarChar(100)
+  code             String      @unique @db.VarChar(20)
+  region           String      @db.VarChar(50)
+  ville            String?     @db.VarChar(50)
+  adresse          String?
+  latitude         Decimal?    @db.Decimal(10, 8)
+  longitude        Decimal?    @db.Decimal(11, 8)
+  powerConfig      PowerConfig @map("power_config")
+  statutGE         StatutGE    @map("statut_ge")
+  puissanceGEkva   Decimal     @default(0) @map("puissance_ge_kva") @db.Decimal(6, 2)
+  // Infrastructure du site
+  hasClimatiseur   Boolean     @default(false) @map("has_climatiseur")
+  hasExtincteurs   Boolean     @default(false) @map("has_extincteurs")
+  typePylone       TypePylone? @map("type_pylone")
+  cuveVolumeLitres Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
+  formeCuve        FormeCuve?  @map("forme_cuve")
+  cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100)
+  isActive         Boolean     @default(true) @map("is_active")
+  lotId            String?     @map("lot_id")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
 
   lot          Lot?            @relation(fields: [lotId], references: [id])
   maintenances Maintenance[]
@@ -183,10 +207,10 @@ model Maintenance {
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
-  site        Site         @relation(fields: [siteId], references: [id])
-  incident    Incident?    @relation(fields: [incidentId], references: [id])
-  technicien  User?        @relation("TechnicienMaintenances", fields: [technicienId], references: [id])
-  prestataire Prestataire? @relation(fields: [prestataireId], references: [id])
+  site        Site            @relation(fields: [siteId], references: [id])
+  incident    Incident?       @relation(fields: [incidentId], references: [id])
+  technicien  User?           @relation("TechnicienMaintenances", fields: [technicienId], references: [id])
+  prestataire Prestataire?    @relation(fields: [prestataireId], references: [id])
   pieces      PieceRechange[]
   photos      Photo[]
   releves     ReleveEnergie[]
@@ -200,12 +224,12 @@ model Maintenance {
 }
 
 model PieceRechange {
-  id            String      @id @default(uuid())
-  maintenanceId String      @map("maintenance_id")
-  nom           String      @db.VarChar(100)
-  reference     String?     @db.VarChar(50)
+  id            String   @id @default(uuid())
+  maintenanceId String   @map("maintenance_id")
+  nom           String   @db.VarChar(100)
+  reference     String?  @db.VarChar(50)
   quantite      Int
-  coutUnitaire  Decimal?    @map("cout_unitaire") @db.Decimal(10, 2)
+  coutUnitaire  Decimal? @map("cout_unitaire") @db.Decimal(10, 2)
 
   maintenance Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
 
@@ -213,12 +237,12 @@ model PieceRechange {
 }
 
 model Photo {
-  id           String      @id @default(uuid())
-  entityType   String      @map("entity_type") @db.VarChar(30)
-  entityId     String      @map("entity_id")
-  url          String
-  minioKey     String      @map("minio_key")
-  createdAt    DateTime    @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  entityType String   @map("entity_type") @db.VarChar(30)
+  entityId   String   @map("entity_id")
+  url        String
+  minioKey   String   @map("minio_key")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   maintenance Maintenance? @relation(fields: [entityId], references: [id])
 
@@ -227,24 +251,24 @@ model Photo {
 }
 
 model Depotage {
-  id                 String    @id @default(uuid())
-  siteId             String    @map("site_id")
-  dateDepotage       DateTime  @map("date_depotage")
-  volumeLitres       Decimal   @map("volume_litres") @db.Decimal(8, 2)
-  stockAvantLitres   Decimal?  @map("stock_avant_litres") @db.Decimal(8, 2)
-  stockApresLitres   Decimal?  @map("stock_apres_litres") @db.Decimal(8, 2)
-  fournisseur        String?   @db.VarChar(100)
-  numeroBonLivraison String?   @map("numero_bon_livraison") @db.VarChar(50)
-  prixLitre          Decimal?  @map("prix_litre") @db.Decimal(6, 0)
-  coutTotal          Decimal?  @map("cout_total") @db.Decimal(12, 0)
-  technicienId       String?   @map("technicien_id")
-  signaturePath      String?   @map("signature_path")
-  bonLivraisonPath   String?   @map("bon_livraison_path")
+  id                 String   @id @default(uuid())
+  siteId             String   @map("site_id")
+  dateDepotage       DateTime @map("date_depotage")
+  volumeLitres       Decimal  @map("volume_litres") @db.Decimal(8, 2)
+  stockAvantLitres   Decimal? @map("stock_avant_litres") @db.Decimal(8, 2)
+  stockApresLitres   Decimal? @map("stock_apres_litres") @db.Decimal(8, 2)
+  fournisseur        String?  @db.VarChar(100)
+  numeroBonLivraison String?  @map("numero_bon_livraison") @db.VarChar(50)
+  prixLitre          Decimal? @map("prix_litre") @db.Decimal(6, 0)
+  coutTotal          Decimal? @map("cout_total") @db.Decimal(12, 0)
+  technicienId       String?  @map("technicien_id")
+  signaturePath      String?  @map("signature_path")
+  bonLivraisonPath   String?  @map("bon_livraison_path")
   observations       String?
-  latitude           Decimal?  @db.Decimal(10, 8)
-  longitude          Decimal?  @db.Decimal(11, 8)
-  isSynced           Boolean   @default(true) @map("is_synced")
-  createdAt          DateTime  @default(now()) @map("created_at")
+  latitude           Decimal? @db.Decimal(10, 8)
+  longitude          Decimal? @db.Decimal(11, 8)
+  isSynced           Boolean  @default(true) @map("is_synced")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   site       Site  @relation(fields: [siteId], references: [id])
   technicien User? @relation("TechnicienDepotages", fields: [technicienId], references: [id])
@@ -307,10 +331,10 @@ model Incident {
   createdAt                DateTime       @default(now()) @map("created_at")
   updatedAt                DateTime       @updatedAt @map("updated_at")
 
-  site             Site          @relation(fields: [siteId], references: [id])
-  technicien       User?         @relation("TechnicienIncidents", fields: [technicienId], references: [id])
-  declarant        User?         @relation("DeclarantIncidents", fields: [declarePar], references: [id])
-  maintenances     Maintenance[]
+  site         Site          @relation(fields: [siteId], references: [id])
+  technicien   User?         @relation("TechnicienIncidents", fields: [technicienId], references: [id])
+  declarant    User?         @relation("DeclarantIncidents", fields: [declarePar], references: [id])
+  maintenances Maintenance[]
 
   @@index([siteId])
   @@index([statut])

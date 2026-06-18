@@ -11,7 +11,7 @@ import { Button, ButtonLink } from '@/components/shared/Button';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { DataTable } from '@/components/shared/DataTable';
 import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/components/shared/Badge';
-import { POWER_CONFIGS, STATUTS_GE } from '@/lib/constants';
+import { POWER_CONFIGS, STATUTS_GE, TYPES_PYLONE, FORMES_CUVE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -113,6 +113,18 @@ export default function SiteDetailPage() {
         )}
       </div>
 
+      <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">Infrastructure</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+          <InfoRow label="Type de pylône" value={TYPES_PYLONE.find((t) => t.value === site.typePylone)?.label ?? '—'} />
+          <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
+          <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
+          <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '—'} />
+          <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '—'} />
+          <InfoRow label="Dimensions cuve" value={site.cuveDimensions || '—'} />
+        </div>
+      </div>
+
       {stock && stock.niveauAlerte !== 'NA' && (
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 text-sm">
           <span className="text-gray-600">Niveau d&apos;alerte stock :</span>
@@ -159,6 +171,15 @@ export default function SiteDetailPage() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-gray-500">{label} : </span>
+      <span className="font-medium text-gray-800">{value}</span>
     </div>
   );
 }

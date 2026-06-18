@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import ExcelJS from 'exceljs';
-import { PowerConfig, StatutGE } from '@prisma/client';
+import { PowerConfig, StatutGE, TypePylone, FormeCuve } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
@@ -22,6 +22,12 @@ const IMPORT_COLUMNS = [
   { key: 'statutGE', header: 'statutGE' },
   { key: 'puissanceGEkva', header: 'puissanceGEkva' },
   { key: 'lot', header: 'lot' },
+  { key: 'typePylone', header: 'typePylone' },
+  { key: 'hasClimatiseur', header: 'climatiseur' },
+  { key: 'hasExtincteurs', header: 'extincteurs' },
+  { key: 'cuveVolumeLitres', header: 'cuveVolumeLitres' },
+  { key: 'formeCuve', header: 'formeCuve' },
+  { key: 'cuveDimensions', header: 'cuveDimensions' },
 ];
 
 // Normalise un en-tête : minuscules, sans accents ni séparateurs.
@@ -41,6 +47,12 @@ const HEADER_ALIASES: Record<string, string> = {
   statutge: 'statutGE',
   puissancegekva: 'puissanceGEkva', puissancekva: 'puissanceGEkva', kva: 'puissanceGEkva',
   lot: 'lot', codelot: 'lot', lotcode: 'lot',
+  typepylone: 'typePylone', pylone: 'typePylone', pylon: 'typePylone',
+  climatiseur: 'hasClimatiseur', clim: 'hasClimatiseur', hasclimatiseur: 'hasClimatiseur',
+  extincteurs: 'hasExtincteurs', extincteur: 'hasExtincteurs', hasextincteurs: 'hasExtincteurs',
+  cuvevolumelitres: 'cuveVolumeLitres', volumecuve: 'cuveVolumeLitres', volumegasoil: 'cuveVolumeLitres', capacitecuve: 'cuveVolumeLitres',
+  formecuve: 'formeCuve', forme: 'formeCuve',
+  cuvedimensions: 'cuveDimensions', dimensionscuve: 'cuveDimensions', dimensions: 'cuveDimensions',
 };
 
 /**
@@ -132,6 +144,8 @@ export async function sitesImportTemplate(_req: Request, res: Response, next: Ne
         code: 'MAR-001', nom: 'Site Exemple', region: 'Maritime', ville: 'Lomé',
         adresse: 'Quartier X', latitude: 6.1725, longitude: 1.2314,
         powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: 100, lot: 'LOT-01',
+        typePylone: 'GREENFIELD', hasClimatiseur: 'oui', hasExtincteurs: 'oui',
+        cuveVolumeLitres: 2000, formeCuve: 'CYLINDRE_COUCHE', cuveDimensions: '2m x 1m x 1m',
       },
     ]);
     setXlsxHeaders(res, 'modele_import_sites.xlsx');
@@ -164,6 +178,11 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
 
     const POWER = Object.values(PowerConfig) as string[];
     const STATUT = Object.values(StatutGE) as string[];
+    // Résolution tolérante des enums (insensible casse/accents/tirets).
+    const pyloneByNorm = new Map((Object.values(TypePylone) as string[]).map((v) => [norm(v), v]));
+    const formeByNorm = new Map((Object.values(FormeCuve) as string[]).map((v) => [norm(v), v]));
+    const TRUE_SET = new Set(['1', 'oui', 'true', 'vrai', 'x', 'yes', 'y']);
+    const toBool = (s: string) => TRUE_SET.has(norm(s));
 
     // Préchargement des lots pour résoudre le rattachement (par code, puis nom).
     const lots = await prisma.lot.findMany({ select: { id: true, code: true, nom: true } });
@@ -207,6 +226,24 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           if (!lotId) throw new Error(`lot introuvable « ${lotRef} » (code de lot attendu)`);
         }
 
+        // Infrastructure (toutes optionnelles). Colonne vide → champ préservé en update.
+        let typePylone: TypePylone | undefined;
+        const tp = cellText(row, 'typePylone');
+        if (tp) {
+          const found = pyloneByNorm.get(norm(tp));
+          if (!found) throw new Error(`type pylône invalide « ${tp} »`);
+          typePylone = found as TypePylone;
+        }
+        let formeCuve: FormeCuve | undefined;
+        const fc = cellText(row, 'formeCuve');
+        if (fc) {
+          const found = formeByNorm.get(norm(fc));
+          if (!found) throw new Error(`forme cuve invalide « ${fc} » (Rectangulaire ou Cylindre couché)`);
+          formeCuve = found as FormeCuve;
+        }
+        const cuveVol = numOrNull(cellText(row, 'cuveVolumeLitres'));
+        const cuveDim = cellText(row, 'cuveDimensions');
+
         const data = {
           nom,
           region,
@@ -218,6 +255,13 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           statutGE: statutGE as StatutGE,
           puissanceGEkva: numOrNull(cellText(row, 'puissanceGEkva')) ?? 0,
           lotId,
+          typePylone,
+          formeCuve,
+          cuveVolumeLitres: cuveVol,
+          cuveDimensions: cuveDim || null,
+          // Booléens : seulement si la colonne existe (sinon on préserve l'existant).
+          ...(colByField.hasClimatiseur != null ? { hasClimatiseur: toBool(cellText(row, 'hasClimatiseur')) } : {}),
+          ...(colByField.hasExtincteurs != null ? { hasExtincteurs: toBool(cellText(row, 'hasExtincteurs')) } : {}),
           isActive: true,
         };
 

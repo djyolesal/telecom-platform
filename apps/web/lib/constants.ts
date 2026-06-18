@@ -17,6 +17,25 @@ export const STATUTS_GE = [
   { value: 'PAS_DE_GE', label: 'Pas de GE' },
 ];
 
+export const TYPES_PYLONE = [
+  { value: 'GREENFIELD', label: 'Greenfield' },
+  { value: 'ROOFTOP', label: 'Rooftop' },
+  { value: 'TGC_GREENFIELD', label: 'TGC-Greenfield' },
+  { value: 'TROTTOIR', label: 'Trottoir' },
+  { value: 'RURAL', label: 'Rural' },
+  { value: 'LP_GREENFIELD', label: 'LP-Greenfield' },
+];
+
+export const FORMES_CUVE = [
+  { value: 'RECTANGULAIRE', label: 'Rectangulaire' },
+  { value: 'CYLINDRE_COUCHE', label: 'Cylindre couché' },
+];
+
+export const OUI_NON = [
+  { value: 'true', label: 'Oui' },
+  { value: 'false', label: 'Non' },
+];
+
 export const ROLES = [
   { value: 'TECHNICIEN', label: 'Technicien' },
   { value: 'SUPERVISEUR', label: 'Superviseur' },

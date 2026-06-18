@@ -75,6 +75,25 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Infrastructure', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      if (s.typePylone != null) _row('Type de pylône', _pyloneLabel(s.typePylone!)),
+                      _row('Climatiseur', s.hasClimatiseur ? 'Oui' : 'Non'),
+                      _row('Extincteurs', s.hasExtincteurs ? 'Oui' : 'Non'),
+                      if (s.cuveVolumeLitres != null) _row('Volume cuve', '${s.cuveVolumeLitres!.toStringAsFixed(0)} L'),
+                      if (s.formeCuve != null) _row('Forme cuve', _formeLabel(s.formeCuve!)),
+                      if (s.cuveDimensions != null && s.cuveDimensions!.isNotEmpty) _row('Dimensions cuve', s.cuveDimensions!),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               FutureBuilder<SiteStock?>(
                 future: _stockFuture,
                 builder: (context, stockSnap) {
@@ -168,6 +187,16 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
   // Traduit certains codes enum en libellés lisibles si connus.
   String _label(String v) =>
       kStatutMaintenance[v] ?? kSourceEnergie[v] ?? v;
+
+  String _pyloneLabel(String v) {
+    const m = {
+      'GREENFIELD': 'Greenfield', 'ROOFTOP': 'Rooftop', 'TGC_GREENFIELD': 'TGC-Greenfield',
+      'TROTTOIR': 'Trottoir', 'RURAL': 'Rural', 'LP_GREENFIELD': 'LP-Greenfield',
+    };
+    return m[v] ?? v;
+  }
+
+  String _formeLabel(String v) => v == 'CYLINDRE_COUCHE' ? 'Cylindre couché' : (v == 'RECTANGULAIRE' ? 'Rectangulaire' : v);
 
   String _scopeLabel(String s) {
     switch (s) {
