@@ -6,7 +6,7 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf } from '../services/pdf.service';
-import { uploadBuffer } from '../services/storage.service';
+import { uploadBuffer, publicFileUrl } from '../services/storage.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { GE_PARAMS } from '../utils/calculator';
 
@@ -170,7 +170,13 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
       },
     });
     if (!maintenance) throw new AppError('Maintenance introuvable', 404);
-    res.json({ success: true, data: maintenance });
+    // URL des photos recalculée depuis la clé MinIO (jamais figée en base) :
+    // robuste si l'IP/domaine (APP_URL) change après l'upload.
+    const data = {
+      ...maintenance,
+      photos: maintenance.photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
+    };
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 

@@ -9,6 +9,15 @@ export interface StoredFile {
 }
 
 /**
+ * Construit l'URL publique d'un objet MinIO à partir de sa clé.
+ * Calculée à la volée (jamais figée en base) → robuste si l'IP/domaine change.
+ * Servie par Nginx (/storage/ → MinIO :9000, bucket en lecture publique).
+ */
+export function publicFileUrl(key: string): string {
+  return `${env.APP_URL}/storage/${MINIO_BUCKET}/${key}`;
+}
+
+/**
  * Pousse un buffer vers MinIO et renvoie la clé + l'URL publique (servie via Nginx /minio).
  * @param folder sous-dossier logique (photos, signatures, documents, rapports...)
  */
@@ -25,8 +34,7 @@ export async function uploadBuffer(
     'Content-Type': mimeType,
   });
 
-  // URL publique servie par Nginx (/storage/ → API objets MinIO :9000, bucket en lecture publique)
-  return { key, url: `${env.APP_URL}/storage/${MINIO_BUCKET}/${key}` };
+  return { key, url: publicFileUrl(key) };
 }
 
 /** Supprime un objet du bucket. */
