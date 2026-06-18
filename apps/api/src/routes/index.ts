@@ -16,6 +16,7 @@ import * as notifCtrl from '../controllers/notifications.controller';
 import * as uploadCtrl from '../controllers/upload.controller';
 import * as prestatairesCtrl from '../controllers/prestataires.controller';
 import * as lotsCtrl from '../controllers/lots.controller';
+import * as tachesCtrl from '../controllers/taches.controller';
 import { uploadMiddleware, uploadSpreadsheet } from '../middlewares/upload';
 
 export const router = Router();
@@ -40,10 +41,16 @@ router.get('/sites/geojson', sitesCtrl.getSitesGeoJSON);
 router.get('/sites/export/xlsx', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
+
+// ── Tâches préventives contractuelles ─────────────────────
+router.get('/taches-preventives', tachesCtrl.getCatalogue);
+router.post('/taches-preventives/generer', rbac(['MANAGER', 'ADMIN']), tachesCtrl.genererPlanning);
+router.get('/rapports/echeancier-preventif', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), tachesCtrl.getEcheancier);
 router.post('/sites', rbac(['MANAGER','ADMIN']), sitesCtrl.createSite);
 router.get('/sites/:id', sitesCtrl.getSiteById);
 router.put('/sites/:id', rbac(['MANAGER','ADMIN']), sitesCtrl.updateSite);
 router.delete('/sites/:id', rbac(['ADMIN']), sitesCtrl.deleteSite);
+router.get('/sites/:id/taches-preventives', tachesCtrl.getTachesForSite);
 router.get('/sites/:id/stock', sitesCtrl.getSiteStock);
 router.get('/sites/:id/maintenances', sitesCtrl.getSiteMaintenances);
 router.get('/sites/:id/depotages', sitesCtrl.getSiteDepotages);

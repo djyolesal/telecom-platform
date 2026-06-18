@@ -49,6 +49,19 @@ class SiteRepository {
     return sites;
   }
 
+  /// Tâches préventives contractuelles applicables au site (en ligne uniquement).
+  Future<List<TacheSite>> getTachesPreventives(String id) async {
+    if (!await _network.isConnected) return [];
+    try {
+      return await _client.request(
+        (dio) => dio.get('/sites/$id/taches-preventives'),
+        (data) => (data['data'] as List).map((e) => TacheSite.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<Site> getSite(String id) async {
     if (await _network.isConnected) {
       try {

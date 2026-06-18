@@ -19,6 +19,22 @@ class LotAttribution {
 }
 
 /// Site BTS / antenne.
+/// Tâche préventive contractuelle applicable à un site (avec statut d'échéance).
+class TacheSite {
+  final String key;
+  final String libelle;
+  final String frequenceLabel;
+  final String statut; // JAMAIS / EN_RETARD / A_JOUR
+  const TacheSite({required this.key, required this.libelle, required this.frequenceLabel, required this.statut});
+
+  factory TacheSite.fromJson(Map<String, dynamic> j) => TacheSite(
+        key: j['key'] as String,
+        libelle: j['libelle'] as String,
+        frequenceLabel: (j['frequenceLabel'] ?? '') as String,
+        statut: (j['statut'] ?? '') as String,
+      );
+}
+
 class Site {
   final String id;
   final String code;

@@ -19,6 +19,7 @@ class SiteDetailScreen extends StatefulWidget {
 class _SiteDetailScreenState extends State<SiteDetailScreen> {
   late Future<Site> _siteFuture;
   late Future<SiteStock?> _stockFuture;
+  late Future<List<TacheSite>> _tachesFuture;
 
   @override
   void initState() {
@@ -26,7 +27,23 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     final repo = context.read<SiteRepository>();
     _siteFuture = repo.getSite(widget.siteId);
     _stockFuture = repo.getStock(widget.siteId);
+    _tachesFuture = repo.getTachesPreventives(widget.siteId);
   }
+
+  Color _tacheColor(String s) {
+    switch (s) {
+      case 'EN_RETARD':
+        return AppColors.critique;
+      case 'JAMAIS':
+        return AppColors.majeur;
+      case 'A_JOUR':
+        return AppColors.accent;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _tacheStatut(String s) => s == 'EN_RETARD' ? 'En retard' : s == 'JAMAIS' ? 'Jamais' : s == 'A_JOUR' ? 'À jour' : '—';
 
   Color _stockColor(String niveau) {
     switch (niveau) {
@@ -155,6 +172,37 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 8),
+              FutureBuilder<List<TacheSite>>(
+                future: _tachesFuture,
+                builder: (context, tSnap) {
+                  final taches = tSnap.data ?? [];
+                  if (taches.isEmpty) return const SizedBox.shrink();
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Tâches préventives contractuelles (${taches.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          ...taches.map((t) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                child: Row(
+                                  children: [
+                                    StatusChip(label: _tacheStatut(t.statut), color: _tacheColor(t.statut)),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(t.libelle, style: const TextStyle(fontSize: 13))),
+                                    Text(t.frequenceLabel, style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                                  ],
+                                ),
+                              )),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Wrap(

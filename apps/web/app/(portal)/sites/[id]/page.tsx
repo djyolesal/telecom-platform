@@ -56,6 +56,11 @@ export default function SiteDetailPage() {
     queryFn: () => api.get(`/sites/${id}/incidents`, { params: { limit: 5 } }).then((r) => r.data.data),
     enabled: !!site,
   });
+  const { data: taches } = useQuery({
+    queryKey: ['site-taches', id],
+    queryFn: () => api.get(`/sites/${id}/taches-preventives`).then((r) => r.data.data),
+    enabled: !!site,
+  });
 
   if (isLoading) return <Loading />;
   if (isError || !site) return <ErrorState message="Site introuvable" />;
@@ -124,6 +129,27 @@ export default function SiteDetailPage() {
           <InfoRow label="Dimensions cuve" value={site.cuveDimensions || '—'} />
         </div>
       </div>
+
+      {taches && taches.length > 0 && (
+        <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Tâches préventives contractuelles ({taches.length})</h3>
+          <div className="space-y-1.5">
+            {taches.map((t: { key: string; libelle: string; frequenceLabel: string; statut: string; prochaineEcheance: string | null }) => (
+              <div key={t.key} className="flex items-center gap-3 text-sm">
+                <span className={`inline-flex w-20 justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
+                  t.statut === 'EN_RETARD' ? 'bg-red-50 text-red-700 ring-red-100'
+                  : t.statut === 'JAMAIS' ? 'bg-orange-50 text-orange-700 ring-orange-100'
+                  : t.statut === 'A_JOUR' ? 'bg-green-50 text-green-700 ring-green-100'
+                  : 'bg-gray-100 text-gray-500 ring-gray-200'}`}>
+                  {t.statut === 'EN_RETARD' ? 'En retard' : t.statut === 'JAMAIS' ? 'Jamais' : t.statut === 'A_JOUR' ? 'À jour' : '—'}
+                </span>
+                <span className="flex-1 text-gray-700">{t.libelle}</span>
+                <span className="text-xs text-gray-400">{t.frequenceLabel}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {stock && stock.niveauAlerte !== 'NA' && (
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 text-sm">

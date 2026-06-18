@@ -201,6 +201,7 @@ model Maintenance {
   signaturePath  String?             @map("signature_path")
   rapportPdfPath String?             @map("rapport_pdf_path")
   observations   String?
+  tachePreventiveKey String?         @map("tache_preventive_key") @db.VarChar(40)
   latitudeDebut  Decimal?            @map("latitude_debut") @db.Decimal(10, 8)
   longitudeDebut Decimal?            @map("longitude_debut") @db.Decimal(11, 8)
   isSynced       Boolean             @default(true) @map("is_synced")
@@ -220,6 +221,7 @@ model Maintenance {
   @@index([prestataireId])
   @@index([datePlanifiee])
   @@index([statut])
+  @@index([tachePreventiveKey])
   @@map("maintenances")
 }
 
