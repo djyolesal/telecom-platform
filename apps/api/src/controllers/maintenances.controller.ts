@@ -104,6 +104,17 @@ async function resolvePrestataireId(siteId: string, categorie: string): Promise<
   return assignment?.prestataireId ?? null;
 }
 
+/** Résout le prestataire d'un site pour un périmètre donné (+ LES_DEUX en repli). */
+async function resolvePrestataireIdByScope(siteId: string, scope: 'PASSIVE' | 'ACTIVE'): Promise<string | null> {
+  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { lotId: true } });
+  if (!site?.lotId) return null;
+  const assignment = await prisma.lotAssignment.findFirst({
+    where: { lotId: site.lotId, scope: { in: [scope, 'LES_DEUX'] as ScopeMaintenance[] } },
+    orderBy: { scope: 'asc' },
+  });
+  return assignment?.prestataireId ?? null;
+}
+
 export async function getMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
     const { type, statut, site_id, technicien_id, prestataire_id, categorie, date_debut, date_fin, page = '1', limit = '20' } =
@@ -184,7 +195,11 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
   try {
     const { pieces, ...data } = req.body;
     // Détermine automatiquement le prestataire responsable (site → lot → attribution).
-    const prestataireId = await resolvePrestataireId(data.siteId, data.categorie);
+    // Une tâche contractuelle est toujours passive → on résout sur le périmètre passif,
+    // quelle que soit la catégorie (ex. AUTRE pour pylône/terre/désherbage…).
+    const prestataireId = data.tachePreventiveKey
+      ? await resolvePrestataireIdByScope(data.siteId, 'PASSIVE')
+      : await resolvePrestataireId(data.siteId, data.categorie);
     const maintenance = await prisma.maintenance.create({
       data: {
         ...data,
