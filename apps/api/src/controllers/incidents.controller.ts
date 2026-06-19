@@ -242,7 +242,7 @@ export async function getIncidentKPIs(req: Request, res: Response, next: NextFun
     // Incidents de la période
     const incidents = await prisma.incident.findMany({
       where: { dateOuverture: { gte: since }, ...siteFilter },
-      include: { site: { select: { region: true, code: true } } },
+      include: { site: { select: { region: true, code: true, nom: true } } },
     });
 
     const resolus = incidents.filter(i => i.statut === 'RESOLU' || i.statut === 'CLOS');
@@ -270,9 +270,9 @@ export async function getIncidentKPIs(req: Request, res: Response, next: NextFun
     incidents.forEach(i => { parSeverite[i.severite] = (parSeverite[i.severite] || 0) + 1; });
 
     // Top 10 sites
-    const parSite: Record<string, { count: number; code: string }> = {};
+    const parSite: Record<string, { count: number; code: string; nom: string }> = {};
     incidents.forEach(i => {
-      if (!parSite[i.siteId]) parSite[i.siteId] = { count: 0, code: i.site.code };
+      if (!parSite[i.siteId]) parSite[i.siteId] = { count: 0, code: i.site.code, nom: i.site.nom };
       parSite[i.siteId].count++;
     });
     const top10 = Object.entries(parSite).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
@@ -292,7 +292,7 @@ export async function getIncidentKPIs(req: Request, res: Response, next: NextFun
         tauxResolutionJ7: incidents.length ? Math.round(j7 / incidents.length * 100) : 0,
         parType,
         parSeverite,
-        top10Sites: top10.map(([id, { count, code }]) => ({ siteId: id, code, count })),
+        top10Sites: top10.map(([id, { count, code, nom }]) => ({ siteId: id, code, nom, count })),
       },
     });
   } catch (err) { next(err); }

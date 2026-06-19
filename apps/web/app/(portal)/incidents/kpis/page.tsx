@@ -83,9 +83,9 @@ export default function IncidentKpisPage() {
         <div className="bg-white rounded-xl border border-gray-100 p-5 xl:col-span-2">
           <h3 className="font-semibold text-gray-700 text-sm mb-4">Top 10 sites les plus impactés</h3>
           <div className="space-y-2">
-            {(d.top10Sites ?? []).map((s: { siteId: string; code: string; count: number }) => (
+            {(d.top10Sites ?? []).map((s: { siteId: string; code: string; nom: string; count: number }) => (
               <div key={s.siteId} className="flex items-center gap-3 text-sm">
-                <span className="font-medium text-gray-700 w-24">{s.code}</span>
+                <span className="font-medium text-gray-700 w-40 truncate" title={s.code}>{s.nom ?? s.code}</span>
                 <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div className="h-full bg-[#C0392B]" style={{ width: `${Math.min(100, (s.count / ((d.top10Sites?.[0]?.count) || 1)) * 100)}%` }} />
                 </div>
