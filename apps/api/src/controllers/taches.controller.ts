@@ -4,6 +4,7 @@ import { addMonths } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
+import { genererPlanningPreventif } from '../services/planning.service';
 import {
   CONTRACTUAL_TASKS,
   TASK_BY_KEY,
@@ -88,77 +89,9 @@ export async function getTachesForSite(req: Request, res: Response, next: NextFu
 export async function genererPlanning(req: Request, res: Response, next: NextFunction) {
   try {
     const horizonJours = Math.max(0, Number(req.query.horizon_jours ?? 0) || 0);
-    const now = new Date();
-    const limite = new Date(now.getTime() + horizonJours * 86400000);
-
-    const sites = await prisma.site.findMany({ where: { isActive: true } });
-
-    // Préchargement : prestataire passif par lot.
-    const assignments = await prisma.lotAssignment.findMany({
-      where: { scope: { in: SCOPES_PASSIFS } },
-      orderBy: { scope: 'asc' },
-    });
-    const passifByLot = new Map<string, string>();
-    for (const a of assignments) if (!passifByLot.has(a.lotId)) passifByLot.set(a.lotId, a.prestataireId);
-
-    // Dernières exécutions terminées (site+clé).
-    const done = await prisma.maintenance.groupBy({
-      by: ['siteId', 'tachePreventiveKey'],
-      where: { statut: 'TERMINEE', tachePreventiveKey: { not: null } },
-      _max: { dateFin: true },
-    });
-    const lastByKey = new Map<string, Date>();
-    for (const d of done) if (d.tachePreventiveKey && d._max.dateFin) lastByKey.set(`${d.siteId}:${d.tachePreventiveKey}`, d._max.dateFin);
-
-    // Tickets déjà ouverts (PLANIFIEE/EN_COURS) → ne pas dupliquer.
-    const ouverts = await prisma.maintenance.findMany({
-      where: { statut: { in: ['PLANIFIEE', 'EN_COURS'] }, tachePreventiveKey: { not: null } },
-      select: { siteId: true, tachePreventiveKey: true },
-    });
-    const ouvertSet = new Set(ouverts.map((o) => `${o.siteId}:${o.tachePreventiveKey}`));
-
-    let crees = 0;
-    let ignoresSansPrestataire = 0;
-    const aCreer: { siteId: string; categorie: string; equipement: string; key: string; datePlanifiee: Date; prestataireId: string }[] = [];
-
-    for (const site of sites) {
-      const prestataireId = site.lotId ? passifByLot.get(site.lotId) : undefined;
-      for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
-        const mapKey = `${site.id}:${t.key}`;
-        if (ouvertSet.has(mapKey)) continue; // déjà planifié
-        const freq = FREQUENCE_MOIS[t.frequence]!;
-        const last = lastByKey.get(mapKey) ?? null;
-        const prochaine = last ? addMonths(last, freq) : now;
-        if (prochaine > limite) continue; // pas encore dû
-        if (!prestataireId) { ignoresSansPrestataire++; continue; } // pas de prestataire passif
-        aCreer.push({
-          siteId: site.id,
-          categorie: t.categorie,
-          equipement: t.libelle,
-          key: t.key,
-          datePlanifiee: prochaine < now ? now : prochaine,
-          prestataireId,
-        });
-      }
-    }
-
-    for (const m of aCreer) {
-      await prisma.maintenance.create({
-        data: {
-          siteId: m.siteId,
-          type: 'PREVENTIVE',
-          categorie: m.categorie as never,
-          equipement: m.equipement,
-          datePlanifiee: m.datePlanifiee,
-          prestataireId: m.prestataireId,
-          tachePreventiveKey: m.key,
-        },
-      });
-      crees++;
-    }
-
-    await auditLog(req.user!.id, 'CREATE', 'maintenances', 'planning-preventif', { crees, ignoresSansPrestataire, horizonJours }, req);
-    res.json({ success: true, data: { crees, ignoresSansPrestataire } });
+    const result = await genererPlanningPreventif(horizonJours);
+    await auditLog(req.user!.id, 'CREATE', 'maintenances', 'planning-preventif', { ...result, horizonJours }, req);
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
 

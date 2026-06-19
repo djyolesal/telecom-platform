@@ -5,6 +5,7 @@ import { maintenanceReminderJob } from './maintenance-reminder';
 import { monthlyReportJob } from './monthly-report';
 import { dbBackupJob } from './db-backup';
 import { incidentEscalationJob } from './incident-escalation';
+import { preventivePlanJob } from './preventive-plan';
 
 export function setupCronJobs() {
   // ── Vérif stock carburant — tous les jours à 8h ─────────────
@@ -37,5 +38,11 @@ export function setupCronJobs() {
     try { await incidentEscalationJob(); } catch (e) { logger.error('[CRON] escalation error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 5 cron jobs planifiés (TZ: Africa/Lome)');
+  // ── Planning préventif contractuel — 1er du mois à 5h ──────
+  cron.schedule('0 5 1 * *', async () => {
+    logger.info('[CRON] Génération du planning préventif mensuel');
+    try { await preventivePlanJob(); } catch (e) { logger.error('[CRON] preventivePlan error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
+  logger.info('✅ 6 cron jobs planifiés (TZ: Africa/Lome)');
 }
