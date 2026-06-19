@@ -71,7 +71,7 @@ export default function EcheancierPreventifPage() {
   const lignes: Ligne[] = data?.lignes ?? [];
 
   const columns: Column<Ligne>[] = [
-    { key: 'siteCode', header: 'Site', render: (l) => <span className="font-medium text-gray-800">{l.siteCode}</span> },
+    { key: 'siteNom', header: 'Site', render: (l) => <span className="font-medium text-gray-800">{l.siteNom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'prestataire', header: 'Prestataire', render: (l) => l.prestataire ?? '—' },
     { key: 'tache', header: 'Tâche' },

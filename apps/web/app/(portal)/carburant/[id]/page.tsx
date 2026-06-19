@@ -28,7 +28,7 @@ export default function DepotageDetailPage() {
 
   return (
     <div>
-      <PageHeader title={`Dépotage — ${d.site?.code ?? ''}`} subtitle={fmtDateTime(d.dateDepotage)} backHref="/carburant/depotages" />
+      <PageHeader title={`Dépotage — ${d.site?.nom ?? d.site?.code ?? ""}`} subtitle={fmtDateTime(d.dateDepotage)} backHref="/carburant/depotages" />
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
         <Row label="Site" value={d.site ? `${d.site.code} — ${d.site.nom}` : '—'} />
         <Row label="Date" value={fmtDateTime(d.dateDepotage)} />

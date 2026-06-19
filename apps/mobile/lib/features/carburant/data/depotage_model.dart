@@ -2,6 +2,7 @@
 class Depotage {
   final String id;
   final String? siteCode;
+  final String? siteNom;
   final DateTime? dateDepotage;
   final double volumeLitres;
   final double? stockApresLitres;
@@ -11,6 +12,7 @@ class Depotage {
   const Depotage({
     required this.id,
     this.siteCode,
+    this.siteNom,
     this.dateDepotage,
     required this.volumeLitres,
     this.stockApresLitres,
@@ -26,6 +28,7 @@ class Depotage {
     return Depotage(
       id: j['id'] as String,
       siteCode: site?['code'] as String?,
+      siteNom: site?['nom'] as String?,
       dateDepotage: DateTime.tryParse(j['dateDepotage']?.toString() ?? ''),
       volumeLitres: _d(j['volumeLitres']),
       stockApresLitres: _dn(j['stockApresLitres']),

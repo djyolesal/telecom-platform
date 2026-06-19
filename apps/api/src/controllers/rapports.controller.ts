@@ -80,7 +80,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
       where: region ? { site: { region } } : {},
       orderBy: { dateOuverture: 'desc' },
       take: 8,
-      include: { site: { select: { code: true } } },
+      include: { site: { select: { code: true, nom: true } } },
     });
 
     res.json({
@@ -96,7 +96,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
         stockParRegion,
         consoMensuelle,
         incidentsRecents: incidentsRecents.map((i) => ({
-          id: i.id, siteCode: i.site?.code, type: i.type, severite: i.severite, statut: i.statut,
+          id: i.id, siteCode: i.site?.code, siteNom: i.site?.nom, type: i.type, severite: i.severite, statut: i.statut,
         })),
       },
     });

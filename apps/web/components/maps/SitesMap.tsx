@@ -43,8 +43,8 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
           >
             <Popup>
               <div className="text-xs">
-                <p className="font-bold text-gray-800">{f.properties.code}</p>
-                <p className="text-gray-600">{f.properties.nom}</p>
+                <p className="font-bold text-gray-800">{f.properties.nom}</p>
+                <p className="text-gray-600">{f.properties.code}</p>
                 <p className="text-gray-500">{f.properties.region}</p>
                 <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
                 <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>

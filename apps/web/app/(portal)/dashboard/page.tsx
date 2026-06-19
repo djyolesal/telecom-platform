@@ -136,7 +136,7 @@ export default function DashboardPage() {
             {(d.incidentsRecents || []).map((inc: Record<string, string>) => (
               <div key={inc.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 text-xs">
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${inc.severite === 'CRITIQUE' ? 'bg-red-500' : inc.severite === 'MAJEUR' ? 'bg-orange-500' : 'bg-yellow-400'}`} />
-                <span className="font-medium text-gray-700 flex-1 truncate">{inc.siteCode} — {inc.type}</span>
+                <span className="font-medium text-gray-700 flex-1 truncate">{inc.siteNom ?? inc.siteCode} — {inc.type}</span>
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${inc.statut === 'OUVERT' ? 'bg-red-100 text-red-700' : inc.statut === 'EN_COURS' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
                   {inc.statut}
                 </span>

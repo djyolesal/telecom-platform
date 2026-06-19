@@ -23,13 +23,15 @@ class LotAttribution {
 class TacheSite {
   final String key;
   final String libelle;
+  final String categorie;
   final String frequenceLabel;
   final String statut; // JAMAIS / EN_RETARD / A_JOUR
-  const TacheSite({required this.key, required this.libelle, required this.frequenceLabel, required this.statut});
+  const TacheSite({required this.key, required this.libelle, required this.categorie, required this.frequenceLabel, required this.statut});
 
   factory TacheSite.fromJson(Map<String, dynamic> j) => TacheSite(
         key: j['key'] as String,
         libelle: j['libelle'] as String,
+        categorie: (j['categorie'] ?? 'AUTRE') as String,
         frequenceLabel: (j['frequenceLabel'] ?? '') as String,
         statut: (j['statut'] ?? '') as String,
       );

@@ -69,7 +69,7 @@ class _MaintenanceView extends StatelessWidget {
               itemBuilder: (context, i) {
                 final m = state.items[i];
                 return ListTile(
-                  title: Text('${m.siteCode ?? '—'} · ${m.equipement}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text('${m.siteNom ?? m.siteCode ?? '—'} · ${m.equipement}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text(
                     '${kTypeMaintenance[m.type] ?? m.type} · ${fmtDate(m.datePlanifiee)}'
                     '${m.prestataire != null ? '\n${m.prestataire}' : ''}',

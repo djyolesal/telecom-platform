@@ -44,7 +44,25 @@
       "Bash(curl -ks -m 15 -o /dev/null -w \"http=%{http_code} type=%{content_type} size=%{size_download}\\\\n\" \"https://41.78.137.83/storage/telecom-files/photos/2026-06-18/851f1f9d-be03-4f90-b01e-9dc8bdc1bcef.jpg\")",
       "Bash(mkdir -p prisma/migrations/5_tache_preventive)",
       "Bash(printf '%s\\\\n' '-- Lien optionnel maintenance ↔ tâche préventive contractuelle' 'ALTER TABLE \"maintenances\" ADD COLUMN \"tache_preventive_key\" VARCHAR\\(40\\);' 'CREATE INDEX \"maintenances_tache_preventive_key_idx\" ON \"maintenances\"\\(\"tache_preventive_key\"\\);')",
-      "Bash(/Users/yohaness/Library/Android/sdk/platform-tools/adb devices *)"
+      "Bash(/Users/yohaness/Library/Android/sdk/platform-tools/adb devices *)",
+      "Bash(sed -i '' 's/site?: { code: string; region: string };/site?: { code: string; nom: string; region: string };/' __TRACKED_VAR__/supervision/incidents/page.tsx __TRACKED_VAR__/carburant/depotages/page.tsx __TRACKED_VAR__/incidents/page.tsx)",
+      "Bash(sed -i '' 's/site?: { code: string };/site?: { code: string; nom: string };/' __TRACKED_VAR__/energie/releves/page.tsx)",
+      "Bash(sed -i '' 's/{r.site?.code ?? .—.}/{r.site?.nom ?? r.site?.code ?? \"—\"}/' __TRACKED_VAR__/energie/releves/page.tsx)",
+      "Bash(sed -i '' 's/{i.site?.code ?? .—.}/{i.site?.nom ?? i.site?.code ?? \"—\"}/' __TRACKED_VAR__/incidents/page.tsx)",
+      "Bash(sed -i '' 's/{d.site?.code ?? .—.}/{d.site?.nom ?? d.site?.code ?? \"—\"}/' __TRACKED_VAR__/carburant/depotages/page.tsx)",
+      "Bash(sed -i '' 's/{inc.site?.code}<\\\\/span>/{inc.site?.nom ?? inc.site?.code}<\\\\/span>/' __TRACKED_VAR__/supervision/incidents/page.tsx)",
+      "Bash(sed -i '' 's/Incident — ${inc.site?.code ?? .\\\\{0,2\\\\}}/Incident — ${inc.site?.nom ?? inc.site?.code ?? \"\"}/' __TRACKED_VAR__/incidents/[id]/page.tsx)",
+      "Bash(sed -i '' 's/Dépotage — ${d.site?.code ?? .\\\\{0,2\\\\}}/Dépotage — ${d.site?.nom ?? d.site?.code ?? \"\"}/' __TRACKED_VAR__/carburant/[id]/page.tsx)",
+      "Bash(grep -n 'code:\\\\|nom:\\\\|interface\\\\|{s.code}' __TRACKED_VAR__/carburant/stock/page.tsx __TRACKED_VAR__/supervision/alertes/page.tsx)",
+      "Bash(sed -i '' 's/{ key: '\\\\''code'\\\\'', header: '\\\\''Site'\\\\'', render: \\(s\\) => <span className=\"font-medium text-gray-800\">{s.code}<\\\\/span> }/{ key: '\\\\''code'\\\\'', header: '\\\\''Site'\\\\'', render: \\(s\\) => <span className=\"font-medium text-gray-800\">{s.nom ?? s.code}<\\\\/span> }/' __TRACKED_VAR__/carburant/stock/page.tsx)",
+      "Bash(sed -i '' 's/{ siteId: string; code: string; region: string;/{ siteId: string; code: string; nom: string; region: string;/' __TRACKED_VAR__/supervision/alertes/page.tsx)",
+      "Bash(sed -i '' 's/{s.code}<\\\\/span>/{s.nom ?? s.code}<\\\\/span>/' __TRACKED_VAR__/supervision/alertes/page.tsx)",
+      "Bash(sed -i '' 's/site?: { code: string }/site?: { code: string; nom: string }/' __TRACKED_VAR__/supervision/alertes/page.tsx)",
+      "Bash(sed -i '' 's/{i.site?.code}/{i.site?.nom ?? i.site?.code}/' __TRACKED_VAR__/supervision/alertes/page.tsx)",
+      "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{r\\\\.siteCode \\\\?\\\\? '—'\\\\}/\\\\\\\\\\\\${r.siteNom ?? r.siteCode ?? '—'}/\" lib/features/energie/presentation/releve_list_screen.dart)",
+      "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{d\\\\.siteCode \\\\?\\\\? '—'\\\\}/\\\\\\\\\\\\${d.siteNom ?? d.siteCode ?? '—'}/\" lib/features/carburant/presentation/depotage_list_screen.dart)",
+      "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? '—'\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? '—'}/\" lib/features/incidents/presentation/incidents_list_screen.dart)",
+      "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? ''\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? ''}/\" lib/features/incidents/presentation/incident_detail_screen.dart)"
     ]
   }
 }

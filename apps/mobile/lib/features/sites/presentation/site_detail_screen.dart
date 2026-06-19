@@ -74,8 +74,8 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(s.code, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.brand)),
-              Text(s.nom, style: const TextStyle(fontSize: 15, color: Colors.black87)),
+              Text(s.nom, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.brand)),
+              Text(s.code, style: const TextStyle(fontSize: 15, color: Colors.black87)),
               Text('${s.region}${s.ville != null ? ' · ${s.ville}' : ''}', style: TextStyle(color: Colors.grey.shade600)),
               const SizedBox(height: 16),
               Card(

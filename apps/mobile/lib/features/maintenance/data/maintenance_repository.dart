@@ -41,6 +41,7 @@ class MaintenanceRepository {
     required DateTime datePlanifiee,
     double? latitude,
     double? longitude,
+    String? tachePreventiveKey,
   }) {
     return _sync.submit(
       endpoint: '/maintenances',
@@ -50,6 +51,7 @@ class MaintenanceRepository {
         'type': type,
         'categorie': categorie,
         'equipement': equipement,
+        if (tachePreventiveKey != null) 'tachePreventiveKey': tachePreventiveKey,
         if (description != null && description.isNotEmpty) 'description': description,
         'datePlanifiee': datePlanifiee.toUtc().toIso8601String(),
         // NB : le modèle Maintenance n'a pas de latitude/longitude à la création

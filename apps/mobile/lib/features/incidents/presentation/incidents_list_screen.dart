@@ -62,7 +62,7 @@ class _IncidentsView extends StatelessWidget {
                     backgroundColor: AppTheme.severiteColor(inc.severite).withValues(alpha: 0.15),
                     child: Icon(Icons.warning_amber, color: AppTheme.severiteColor(inc.severite), size: 20),
                   ),
-                  title: Text('${inc.siteCode ?? '—'} · ${kTypeIncident[inc.type] ?? inc.type}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text('${inc.siteNom ?? inc.siteCode ?? '—'} · ${kTypeIncident[inc.type] ?? inc.type}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text('${inc.description}\n${fmtDateTime(inc.dateOuverture)}', maxLines: 2, overflow: TextOverflow.ellipsis),
                   isThreeLine: true,
                   trailing: StatusChip(label: kStatutIncident[inc.statut] ?? inc.statut, color: AppTheme.severiteColor(inc.severite)),

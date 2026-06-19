@@ -22,7 +22,7 @@ interface Incident {
   severite: string;
   statut: string;
   dateOuverture: string;
-  site?: { code: string; region: string };
+  site?: { code: string; nom: string; region: string };
   technicien?: { nom: string; prenom: string };
 }
 
@@ -44,7 +44,7 @@ export default function IncidentsPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Incident>[] = [
-    { key: 'site', header: 'Site', render: (i) => <span className="font-medium text-gray-800">{i.site?.code ?? '—'}</span> },
+    { key: 'site', header: 'Site', render: (i) => <span className="font-medium text-gray-800">{i.site?.nom ?? i.site?.code ?? "—"}</span> },
     { key: 'type', header: 'Type', render: (i) => TYPES_INCIDENT.find((t) => t.value === i.type)?.label ?? i.type },
     { key: 'severite', header: 'Sévérité', render: (i) => <SeveriteBadge value={i.severite} /> },
     { key: 'statut', header: 'Statut', render: (i) => <StatutIncidentBadge value={i.statut} /> },

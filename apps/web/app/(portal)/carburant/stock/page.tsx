@@ -44,7 +44,7 @@ export default function StockCarburantPage() {
   sites = [...sites].sort((a, b) => (ORDRE[a.niveauAlerte] ?? 9) - (ORDRE[b.niveauAlerte] ?? 9) || a.stockLitres - b.stockLitres);
 
   const columns: Column<SiteStock>[] = [
-    { key: 'code', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.code}</span> },
+    { key: 'code', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.nom ?? s.code}</span> },
     { key: 'region', header: 'Région' },
     { key: 'stockLitres', header: 'Stock (L)', align: 'right', render: (s) => fmtNumber(s.stockLitres) },
     { key: 'autonomieJours', header: 'Autonomie', align: 'right', render: (s) => (s.autonomieJours != null ? `${s.autonomieJours} j` : '—') },

@@ -16,7 +16,7 @@ interface Maint {
   equipement: string;
   statut: string;
   datePlanifiee: string;
-  site?: { code: string };
+  site?: { code: string; nom: string };
 }
 
 export default function PlanningPage() {
@@ -70,7 +70,7 @@ export default function PlanningPage() {
                       onClick={() => router.push(`/maintenance/${m.id}`)}
                       className="block w-full rounded-lg bg-gray-50 hover:bg-gray-100 p-2 text-left"
                     >
-                      <p className="text-[11px] font-medium text-gray-700 truncate">{m.site?.code}</p>
+                      <p className="text-[11px] font-medium text-gray-700 truncate">{m.site?.nom ?? m.site?.code}</p>
                       <p className="text-[10px] text-gray-500 truncate">{m.equipement}</p>
                       <div className="mt-1"><StatutMaintBadge value={m.statut} /></div>
                     </button>

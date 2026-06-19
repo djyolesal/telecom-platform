@@ -56,7 +56,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       final dist = LocationService.distanceMeters(pos.lat, pos.lng, m.siteLatitude!, m.siteLongitude!);
       if (dist > kGeofenceRadiusM) {
         await _siteDialog('Vous n\'êtes pas sur le site',
-            'Vous êtes à ${dist.round()} m du site ${m.siteCode ?? ''}.\nRapprochez-vous à moins de ${kGeofenceRadiusM.round()} m pour $action.');
+            'Vous êtes à ${dist.round()} m du site ${m.siteNom ?? m.siteCode ?? ''}.\nRapprochez-vous à moins de ${kGeofenceRadiusM.round()} m pour $action.');
         return (ok: false, lat: null, lng: null);
       }
     }
@@ -173,7 +173,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text('${m.siteCode ?? ''} · ${m.equipement}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('${m.siteNom ?? m.siteCode ?? ''} · ${m.equipement}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: Colors.blue),
               const SizedBox(height: 16),

@@ -90,7 +90,7 @@ export default function MaintenanceDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`Maintenance — ${m.site?.code ?? ''}`}
+        title={`Maintenance — ${m.site?.nom ?? m.site?.code ?? ''}`}
         subtitle={m.equipement}
         backHref="/maintenance"
         actions={

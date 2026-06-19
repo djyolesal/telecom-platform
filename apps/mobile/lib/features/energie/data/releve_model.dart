@@ -2,6 +2,7 @@
 class Releve {
   final String id;
   final String? siteCode;
+  final String? siteNom;
   final DateTime? dateReleve;
   final String source;
   final double? consommationKwh;
@@ -11,6 +12,7 @@ class Releve {
   const Releve({
     required this.id,
     this.siteCode,
+    this.siteNom,
     this.dateReleve,
     required this.source,
     this.consommationKwh,
@@ -25,6 +27,7 @@ class Releve {
     return Releve(
       id: j['id'] as String,
       siteCode: site?['code'] as String?,
+      siteNom: site?['nom'] as String?,
       dateReleve: DateTime.tryParse(j['dateReleve']?.toString() ?? ''),
       source: j['source'] as String? ?? 'CEET',
       consommationKwh: _dn(j['consommationKwh']),

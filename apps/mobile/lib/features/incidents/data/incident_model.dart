@@ -3,6 +3,7 @@ class Incident {
   final String id;
   final String? siteId;
   final String? siteCode;
+  final String? siteNom;
   final String? region;
   final String type;
   final String severite;
@@ -17,6 +18,7 @@ class Incident {
     required this.id,
     this.siteId,
     this.siteCode,
+    this.siteNom,
     this.region,
     required this.type,
     required this.severite,
@@ -35,6 +37,7 @@ class Incident {
       id: j['id'] as String,
       siteId: j['siteId'] as String?,
       siteCode: site?['code'] as String?,
+      siteNom: site?['nom'] as String?,
       region: site?['region'] as String?,
       type: j['type'] as String,
       severite: j['severite'] as String,

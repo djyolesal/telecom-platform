@@ -12,6 +12,7 @@ class Maintenance {
   final DateTime? dateFin;
   final int? dureeMinutes;
   final String? siteCode;
+  final String? siteNom;
   final String? sitePowerConfig;
   final double? siteLatitude;
   final double? siteLongitude;
@@ -33,6 +34,7 @@ class Maintenance {
     this.dateFin,
     this.dureeMinutes,
     this.siteCode,
+    this.siteNom,
     this.sitePowerConfig,
     this.siteLatitude,
     this.siteLongitude,
@@ -69,6 +71,7 @@ class Maintenance {
       dateFin: DateTime.tryParse(j['dateFin']?.toString() ?? ''),
       dureeMinutes: j['dureeMinutes'] as int?,
       siteCode: site?['code'] as String?,
+      siteNom: site?['nom'] as String?,
       sitePowerConfig: site?['powerConfig'] as String?,
       siteLatitude: site?['latitude'] == null ? null : double.tryParse(site!['latitude'].toString()),
       siteLongitude: site?['longitude'] == null ? null : double.tryParse(site!['longitude'].toString()),

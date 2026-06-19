@@ -21,7 +21,7 @@ interface Releve {
   consommationKwh?: number;
   volumeGasoilLitres?: number;
   heuresFonctGE?: number;
-  site?: { code: string };
+  site?: { code: string; nom: string };
 }
 
 const SOURCE_COLOR: Record<string, string> = {
@@ -43,7 +43,7 @@ export default function RelevesPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Releve>[] = [
-    { key: 'site', header: 'Site', render: (r) => <span className="font-medium text-gray-800">{r.site?.code ?? '—'}</span> },
+    { key: 'site', header: 'Site', render: (r) => <span className="font-medium text-gray-800">{r.site?.nom ?? r.site?.code ?? "—"}</span> },
     { key: 'dateReleve', header: 'Date', render: (r) => fmtDate(r.dateReleve) },
     { key: 'source', header: 'Source', render: (r) => <Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{r.source}</Badge> },
     { key: 'consommationKwh', header: 'Conso (kWh)', align: 'right', render: (r) => (r.consommationKwh != null ? fmtNumber(Number(r.consommationKwh)) : '—') },

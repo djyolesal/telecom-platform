@@ -23,7 +23,7 @@ interface Maintenance {
   categorie: string;
   statut: string;
   datePlanifiee: string;
-  site?: { code: string; region: string };
+  site?: { code: string; nom: string; region: string };
   technicien?: { nom: string; prenom: string };
   prestataire?: { id: string; nom: string };
   _count?: { photos: number };
@@ -52,7 +52,7 @@ export default function MaintenancePage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Maintenance>[] = [
-    { key: 'site', header: 'Site', render: (m) => <span className="font-medium text-gray-800">{m.site?.code ?? '—'}</span> },
+    { key: 'site', header: 'Site', render: (m) => <span className="font-medium text-gray-800">{m.site?.nom ?? m.site?.code ?? '—'}</span> },
     {
       key: 'equipement',
       header: 'Équipement',

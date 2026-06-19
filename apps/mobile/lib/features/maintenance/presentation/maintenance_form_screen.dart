@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/constants/enums.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/site_picker.dart';
+import '../../sites/data/site_model.dart';
+import '../../sites/data/site_repository.dart';
 import '../data/maintenance_repository.dart';
 
 class MaintenanceFormScreen extends StatefulWidget {
@@ -17,12 +18,12 @@ class MaintenanceFormScreen extends StatefulWidget {
 
 class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _equipement = TextEditingController();
   final _description = TextEditingController();
 
   String? _siteId;
-  String _type = 'PREVENTIVE';
-  String _categorie = 'GE';
+  String? _tacheKey;
+  List<TacheSite> _taches = [];
+  bool _loadingTaches = false;
   DateTime _datePlanifiee = DateTime.now();
   bool _saving = false;
 
@@ -30,13 +31,30 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   void initState() {
     super.initState();
     _siteId = widget.initialSiteId;
+    if (_siteId != null) _loadTaches(_siteId!);
   }
 
   @override
   void dispose() {
-    _equipement.dispose();
     _description.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadTaches(String siteId) async {
+    setState(() { _loadingTaches = true; _taches = []; _tacheKey = null; });
+    final repo = context.read<SiteRepository>();
+    final taches = await repo.getTachesPreventives(siteId);
+    if (!mounted) return;
+    setState(() { _taches = taches; _loadingTaches = false; });
+  }
+
+  void _onSiteChanged(String? v) {
+    _siteId = v;
+    if (v != null) {
+      _loadTaches(v);
+    } else {
+      setState(() { _taches = []; _tacheKey = null; });
+    }
   }
 
   Future<void> _pickDate() async {
@@ -51,6 +69,14 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
+    TacheSite? tache;
+    for (final t in _taches) {
+      if (t.key == _tacheKey) { tache = t; break; }
+    }
+    if (tache == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sélectionnez une tâche contractuelle')));
+      return;
+    }
     final repo = context.read<MaintenanceRepository>();
     final messenger = ScaffoldMessenger.of(context);
     final router = GoRouter.of(context);
@@ -59,9 +85,10 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       final pos = await LocationService().currentPosition();
       final res = await repo.create(
         siteId: _siteId!,
-        type: _type,
-        categorie: _categorie,
-        equipement: _equipement.text.trim(),
+        type: 'PREVENTIVE',
+        categorie: tache.categorie,
+        equipement: tache.libelle,
+        tachePreventiveKey: tache.key,
         description: _description.text.trim(),
         datePlanifiee: _datePlanifiee,
         latitude: pos?.lat,
@@ -90,27 +117,30 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            SitePicker(initialSiteId: _siteId, onChanged: (v) => _siteId = v),
+            SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              initialValue: _type,
-              decoration: const InputDecoration(labelText: 'Type'),
-              items: kTypeMaintenance.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-              onChanged: (v) => setState(() => _type = v!),
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<String>(
-              initialValue: _categorie,
-              decoration: const InputDecoration(labelText: 'Catégorie équipement'),
-              items: kCategorieEquipement.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-              onChanged: (v) => setState(() => _categorie = v!),
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _equipement,
-              decoration: const InputDecoration(labelText: 'Équipement *', hintText: 'GE Perkins 60kVA'),
+              initialValue: _tacheKey,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Tâche contractuelle *',
+                hintText: _siteId == null ? 'Choisissez d\'abord un site' : null,
+                suffixIcon: _loadingTaches
+                    ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : null,
+              ),
+              items: _taches
+                  .map((t) => DropdownMenuItem(value: t.key, child: Text('${t.libelle} (${t.frequenceLabel})', overflow: TextOverflow.ellipsis)))
+                  .toList(),
+              onChanged: _siteId == null ? null : (v) => setState(() => _tacheKey = v),
               validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
             ),
+            if (_siteId != null && !_loadingTaches && _taches.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('Aucune tâche disponible (connexion requise, ou site sans tâche applicable).',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+              ),
             const SizedBox(height: 14),
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)),
