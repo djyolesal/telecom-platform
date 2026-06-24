@@ -97,8 +97,27 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     final repo = context.read<MaintenanceRepository>();
     final navigator = Navigator.of(context);
 
-    // Formulaire de clôture (observations + énergie si passive + photos si préventive).
-    // La feuille impose déjà ≥ kMinPhotosPreventive photos prises à la caméra.
+    // 0. Durée minimale 1h depuis le démarrage.
+    final debut = m.dateDebut;
+    if (debut == null) {
+      _snack('La maintenance doit d\'abord être démarrée.');
+      return;
+    }
+    final ecoule = DateTime.now().difference(debut).inMinutes;
+    if (ecoule < 60) {
+      _snack('Clôture possible après 1h de travail (encore ${60 - ecoule} min).');
+      return;
+    }
+
+    // 1. Vérifier la présence sur site AVANT de saisir la clôture
+    //    (inutile de remplir relevés/photos si on n'est pas sur place).
+    setState(() => _busy = true);
+    final check = await _verifyOnSite(m, 'la clôture');
+    if (mounted) setState(() => _busy = false);
+    if (!check.ok || !mounted) return;
+
+    // 2. Formulaire de clôture (observations + énergie si passive + photos si préventive).
+    //    La feuille impose déjà ≥ kMinPhotosPreventive photos prises à la caméra.
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -108,10 +127,6 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
     setState(() => _busy = true);
     try {
-      // Vérification "sur site" obligatoire avant toute clôture.
-      final check = await _verifyOnSite(m, 'la clôture');
-      if (!check.ok) return;
-
       // Photos (caméra) → copie dans un stockage persistant. L'upload vers MinIO
       // est DIFFÉRÉ au moteur de sync : immédiat si en ligne, sinon à la reconnexion.
       final photoFiles = (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];

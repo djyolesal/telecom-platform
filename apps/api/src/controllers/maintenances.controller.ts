@@ -17,6 +17,7 @@ const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
 const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
 const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
 const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
+const MIN_DUREE_CLOTURE_MIN = 60; // durée minimale (min) entre démarrage et clôture
 // Rayon (m) toléré autour des coordonnées du site pour démarrer/clôturer sur place.
 const GEOFENCE_RADIUS_M = Number(process.env.GEOFENCE_RADIUS_M ?? 20);
 
@@ -250,6 +251,16 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
     if (!existing) throw new AppError('Maintenance introuvable', 404);
     if (existing.statut === 'TERMINEE') throw new AppError('Maintenance déjà terminée', 409);
 
+    // Une personne ne peut avoir qu'UNE seule maintenance en cours.
+    const technicienId = existing.technicienId ?? req.user!.id;
+    const dejaEnCours = await prisma.maintenance.findFirst({
+      where: { statut: 'EN_COURS', technicienId, id: { not: existing.id } },
+      select: { id: true },
+    });
+    if (dejaEnCours) {
+      throw new AppError('Vous avez déjà une maintenance en cours. Clôturez-la avant d\'en démarrer une autre.', 409);
+    }
+
     // Tout ticket doit être DÉMARRÉ sur le site.
     assertOnSite(existing.site, latitude, longitude, 'le démarrage');
 
@@ -284,6 +295,16 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       include: { site: { select: { id: true, powerConfig: true, latitude: true, longitude: true, code: true } } },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+
+    // Une maintenance doit avoir été démarrée et durer au moins 1h avant clôture.
+    if (!existing.dateDebut) throw new AppError('La maintenance doit être démarrée avant clôture.', 409);
+    const ecouleMin = differenceInMinutes(new Date(), existing.dateDebut);
+    if (ecouleMin < MIN_DUREE_CLOTURE_MIN) {
+      throw new AppError(
+        `Une maintenance doit durer au moins 1h avant clôture (démarrée il y a ${ecouleMin} min).`,
+        422
+      );
+    }
 
     // Tout ticket doit être CLÔTURÉ sur le site.
     assertOnSite(existing.site, latitude, longitude, 'la clôture');
