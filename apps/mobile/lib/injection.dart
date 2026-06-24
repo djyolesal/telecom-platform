@@ -6,6 +6,7 @@ import 'core/storage/secure_storage.dart';
 import 'core/sync/sync_service.dart';
 import 'core/services/upload_service.dart';
 import 'core/services/fcm_service.dart';
+import 'core/config/app_config.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/sites/data/site_repository.dart';
 import 'features/maintenance/data/maintenance_repository.dart';
@@ -23,6 +24,7 @@ class Injection {
   late final DioClient dioClient;
   late final SyncService syncService;
   late final UploadService uploadService;
+  late final ConfigService configService;
 
   late final AuthRepository authRepository;
   late final SiteRepository siteRepository;
@@ -42,6 +44,7 @@ class Injection {
     networkInfo = NetworkInfo();
     dioClient = DioClient(secureStorage, onSessionExpired: () => onSessionExpired?.call());
     uploadService = UploadService(dioClient);
+    configService = ConfigService(dioClient);
     syncService = SyncService(database, dioClient, networkInfo, uploadService)..start();
 
     authRepository = AuthRepository(dioClient, secureStorage);

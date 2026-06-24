@@ -45,6 +45,10 @@ const envSchema = z.object({
   // Divers
   APP_URL: z.string().default('http://localhost:3000'),
   CORS_ORIGIN: z.string().default('*'),
+
+  // Règles terrain (configurables)
+  MIN_DUREE_CLOTURE_MIN: z.coerce.number().default(60), // durée min (min) avant clôture
+  GEOFENCE_RADIUS_M: z.coerce.number().default(20),     // rayon (m) « sur site »
 });
 
 const parsed = envSchema.safeParse(process.env);

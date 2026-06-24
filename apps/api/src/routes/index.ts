@@ -17,6 +17,7 @@ import * as uploadCtrl from '../controllers/upload.controller';
 import * as prestatairesCtrl from '../controllers/prestataires.controller';
 import * as lotsCtrl from '../controllers/lots.controller';
 import * as tachesCtrl from '../controllers/taches.controller';
+import * as configCtrl from '../controllers/config.controller';
 import { uploadMiddleware, uploadSpreadsheet } from '../middlewares/upload';
 
 export const router = Router();
@@ -41,6 +42,9 @@ router.get('/sites/geojson', sitesCtrl.getSitesGeoJSON);
 router.get('/sites/export/xlsx', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
+
+// ── Config applicative (règles terrain exposées aux apps) ──
+router.get('/config', configCtrl.getAppConfig);
 
 // ── Tâches préventives contractuelles ─────────────────────
 router.get('/taches-preventives', tachesCtrl.getCatalogue);

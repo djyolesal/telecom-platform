@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/services/location_service.dart';
@@ -15,7 +16,6 @@ import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 
 const kMinPhotosPreventive = 6;
-const kGeofenceRadiusM = 20.0; // rayon toléré autour du site (aligné serveur)
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
@@ -33,6 +33,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   void initState() {
     super.initState();
     _future = context.read<MaintenanceRepository>().getMaintenance(widget.id);
+    // Aligne les seuils (durée min, rayon géofence) sur la config serveur.
+    context.read<ConfigService>().load();
   }
 
   void _reload() => setState(() {
@@ -54,9 +56,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         return (ok: false, lat: null, lng: null);
       }
       final dist = LocationService.distanceMeters(pos.lat, pos.lng, m.siteLatitude!, m.siteLongitude!);
-      if (dist > kGeofenceRadiusM) {
+      if (dist > AppConfig.geofenceRadiusM) {
         await _siteDialog('Vous n\'êtes pas sur le site',
-            'Vous êtes à ${dist.round()} m du site ${m.siteNom ?? m.siteCode ?? ''}.\nRapprochez-vous à moins de ${kGeofenceRadiusM.round()} m pour $action.');
+            'Vous êtes à ${dist.round()} m du site ${m.siteNom ?? m.siteCode ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
         return (ok: false, lat: null, lng: null);
       }
     }
@@ -104,8 +106,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       return;
     }
     final ecoule = DateTime.now().difference(debut).inMinutes;
-    if (ecoule < 60) {
-      _snack('Clôture possible après 1h de travail (encore ${60 - ecoule} min).');
+    if (ecoule < AppConfig.minDureeClotureMin) {
+      _snack('Clôture possible après ${AppConfig.minDureeClotureMin} min de travail (encore ${AppConfig.minDureeClotureMin - ecoule} min).');
       return;
     }
 

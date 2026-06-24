@@ -26,8 +26,11 @@ class _TelecomAppState extends State<TelecomApp> {
     widget.di.onSessionExpired = () => _authCubit.logout();
     _router = createRouter(_authCubit);
 
-    // Initialise les notifications push une fois l'app prête.
-    WidgetsBinding.instance.addPostFrameCallback((_) => widget.di.fcmService.init());
+    // Initialise les notifications push + charge la config terrain une fois l'app prête.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.di.fcmService.init();
+      widget.di.configService.load();
+    });
   }
 
   @override
@@ -50,6 +53,7 @@ class _TelecomAppState extends State<TelecomApp> {
         RepositoryProvider.value(value: di.dashboardRepository),
         RepositoryProvider.value(value: di.uploadService),
         RepositoryProvider.value(value: di.syncService),
+        RepositoryProvider.value(value: di.configService),
       ],
       child: BlocProvider.value(
         value: _authCubit,

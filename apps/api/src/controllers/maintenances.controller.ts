@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
+import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
@@ -17,9 +18,9 @@ const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
 const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
 const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
 const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
-const MIN_DUREE_CLOTURE_MIN = 60; // durée minimale (min) entre démarrage et clôture
-// Rayon (m) toléré autour des coordonnées du site pour démarrer/clôturer sur place.
-const GEOFENCE_RADIUS_M = Number(process.env.GEOFENCE_RADIUS_M ?? 20);
+// Configurables via variables d'environnement (cf. config/env.ts).
+const MIN_DUREE_CLOTURE_MIN = env.MIN_DUREE_CLOTURE_MIN; // durée minimale (min) entre démarrage et clôture
+const GEOFENCE_RADIUS_M = env.GEOFENCE_RADIUS_M;          // rayon (m) toléré autour du site
 
 const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
 
