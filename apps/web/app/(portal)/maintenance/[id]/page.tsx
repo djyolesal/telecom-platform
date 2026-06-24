@@ -2,16 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle2, FileText, Zap, Image as ImageIcon, X, ZoomIn, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { FileText, X, ZoomIn, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
-import { Button } from '@/components/shared/Button';
 import { StatutMaintBadge } from '@/components/shared/Badge';
-import { Field, Input, Textarea } from '@/components/shared/Form';
-import { TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT, PASSIVE_CATEGORIES, energySourcesForConfig } from '@/lib/constants';
+import { TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT, PASSIVE_CATEGORIES } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -23,37 +21,13 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-type Energie = { volumeGasoilLitres?: string; heuresFonctGE?: string; indexCompteur?: string; consommationKwh?: string; puissanceKva?: string };
-
 export default function MaintenanceDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
-  const [observations, setObservations] = useState('');
-  const [energie, setEnergie] = useState<Energie>({});
-  const [photos, setPhotos] = useState<File[]>([]);
   const [lightbox, setLightbox] = useState<number | null>(null);
-  const setE = (k: keyof Energie, v: string) => setEnergie((p) => ({ ...p, [k]: v }));
 
   const { data: m, isLoading, isError } = useQuery({
     queryKey: ['maintenance', id],
     queryFn: () => api.get(`/maintenances/${id}`).then((r) => r.data.data),
-  });
-
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['maintenance', id] });
-  const start = useMutation({ mutationFn: () => api.post(`/maintenances/${id}/start`), onSuccess: refresh });
-  const close = useMutation({
-    mutationFn: async () => {
-      const uploaded: { url: string; key: string }[] = [];
-      for (const f of photos) {
-        const form = new FormData();
-        form.append('folder', 'photos');
-        form.append('file', f);
-        const r = await api.post('/upload/image', form);
-        if (r.data?.data) uploaded.push(r.data.data);
-      }
-      return api.post(`/maintenances/${id}/close`, { observations, energie, photos: uploaded });
-    },
-    onSuccess: () => { setPhotos([]); refresh(); },
   });
 
   const photoList: { id: string; url: string }[] = m?.photos ?? [];
@@ -73,19 +47,6 @@ export default function MaintenanceDetailPage() {
   if (isError || !m) return <ErrorState message="Maintenance introuvable" />;
 
   const isPassive = PASSIVE_CATEGORIES.includes(m.categorie);
-  const isPreventive = m.type === 'PREVENTIVE';
-  const MIN_PHOTOS = 6;
-  const sources = isPassive ? energySourcesForConfig(m.site?.powerConfig) : [];
-  const hasGe = sources.includes('GE');
-  const hasCeet = sources.includes('CEET');
-  const hasSolaire = sources.includes('SOLAIRE');
-
-  // Champs requis présents ?
-  const energyComplete =
-    (!hasGe || (!!energie.volumeGasoilLitres && !!energie.heuresFonctGE)) &&
-    (!hasCeet || !!energie.indexCompteur) &&
-    (!hasSolaire || !!energie.puissanceKva);
-  const photosComplete = !isPreventive || photos.length >= MIN_PHOTOS;
 
   return (
     <div>
@@ -95,7 +56,7 @@ export default function MaintenanceDetailPage() {
         backHref="/maintenance"
         actions={
           <>
-            {m.statut === 'PLANIFIEE' && <Button icon={Play} loading={start.isPending} onClick={() => start.mutate()}>Démarrer</Button>}
+            {/* Démarrage et clôture retirés du web : l'exécution se fait sur site (mobile, GPS + photos). */}
             <button type="button" onClick={() => downloadFile(`/maintenances/${id}/pdf`, `maintenance-${id}.pdf`, true)} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <FileText size={15} /> PDF
             </button>
@@ -126,73 +87,6 @@ export default function MaintenanceDetailPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-5">
               <h3 className="font-semibold text-gray-700 text-sm mb-2">Description</h3>
               <p className="text-sm text-gray-600">{m.description}</p>
-            </div>
-          )}
-
-          {/* ── Clôture ── */}
-          {m.statut === 'EN_COURS' && (
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <h3 className="font-semibold text-gray-700 text-sm mb-3">Clôture</h3>
-
-              {isPassive && sources.length > 0 && (
-                <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/50 p-3">
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-blue-800 mb-2">
-                    <Zap size={13} /> Relevés énergie obligatoires (config {m.site?.powerConfig})
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {hasGe && (
-                      <>
-                        <Field label="Volume gasoil (L) *"><Input type="number" step="0.01" value={energie.volumeGasoilLitres ?? ''} onChange={(e) => setE('volumeGasoilLitres', e.target.value)} /></Field>
-                        <Field label="Heures fonct. GE *"><Input type="number" step="0.1" value={energie.heuresFonctGE ?? ''} onChange={(e) => setE('heuresFonctGE', e.target.value)} /></Field>
-                      </>
-                    )}
-                    {hasCeet && (
-                      <>
-                        <Field label="Index compteur CEET *"><Input type="number" step="0.01" value={energie.indexCompteur ?? ''} onChange={(e) => setE('indexCompteur', e.target.value)} /></Field>
-                        <Field label="Consommation (kWh)"><Input type="number" step="0.01" value={energie.consommationKwh ?? ''} onChange={(e) => setE('consommationKwh', e.target.value)} /></Field>
-                      </>
-                    )}
-                    {hasSolaire && (
-                      <Field label="Puissance solaire (kVA) *"><Input type="number" step="0.01" value={energie.puissanceKva ?? ''} onChange={(e) => setE('puissanceKva', e.target.value)} /></Field>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {isPreventive && (
-                <div className={`mb-4 rounded-lg border p-3 ${photosComplete ? 'border-green-100 bg-green-50/50' : 'border-orange-100 bg-orange-50/50'}`}>
-                  <p className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${photosComplete ? 'text-green-800' : 'text-orange-900'}`}>
-                    <ImageIcon size={13} /> Photos {photos.length}/{MIN_PHOTOS} (carte GE, compteur CEET, activités) — obligatoire
-                  </p>
-                  {photos.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {photos.map((f, i) => (
-                        <div key={i} className="relative">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={URL.createObjectURL(f)} alt="" className="h-16 w-16 rounded object-cover" />
-                          <button type="button" onClick={() => setPhotos(photos.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 rounded-full bg-white shadow">
-                            <X size={14} className="text-red-500" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" capture="environment" multiple
-                    onChange={(e) => { setPhotos([...photos, ...Array.from(e.target.files ?? [])]); e.target.value = ''; }}
-                    className="text-xs" />
-                  <p className="mt-1 text-[11px] text-gray-500">Sur mobile : ouvre la caméra pour une prise sur site.</p>
-                </div>
-              )}
-
-              <Field label="Observations">
-                <Textarea value={observations} onChange={(e) => setObservations(e.target.value)} placeholder="Travaux réalisés, constats…" />
-              </Field>
-              {close.isError && <p className="mt-2 text-xs text-red-500">Erreur : vérifiez les paramètres énergie et photos requis.</p>}
-              <div className="mt-3 flex justify-end">
-                <Button icon={CheckCircle2} loading={close.isPending} disabled={(isPassive && !energyComplete) || !photosComplete} onClick={() => close.mutate()}>
-                  Clôturer la maintenance
-                </Button>
-              </div>
             </div>
           )}
 
