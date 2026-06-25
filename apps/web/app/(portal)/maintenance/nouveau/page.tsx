@@ -23,7 +23,7 @@ export default function NouvelleMaintenancePage() {
 
   const { data: sites } = useQuery({
     queryKey: ['sites-select'],
-    queryFn: () => api.get('/sites', { params: { limit: 1000 } }).then((r) => r.data.data),
+    queryFn: () => api.get('/sites', { params: { all: true } }).then((r) => r.data.data),
   });
   const { data: techs } = useQuery({
     queryKey: ['techs-select'],
@@ -36,7 +36,7 @@ export default function NouvelleMaintenancePage() {
     enabled: !!form.siteId,
   });
 
-  const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} — ${s.nom}` }));
+  const siteOptions = (sites ?? []).map((s: { id: string; nom: string }) => ({ value: s.id, label: s.nom }));
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
   const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: t.libelle }));
 

@@ -75,6 +75,13 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
       { code: { contains: search, mode: 'insensitive' } },
     ];
 
+    // Mode « tous » (sélecteurs, liste mobile) : pas de pagination (le paginateur
+    // plafonne à 200, ce qui tronquerait les sites au-delà).
+    if ((req.query.all as string) === 'true') {
+      const sites = await prisma.site.findMany({ where, orderBy: { nom: 'asc' }, take: 2000 });
+      return res.json({ success: true, data: sites });
+    }
+
     const { data, meta } = await paginate(
       prisma.site,
       { where, orderBy: { [sort]: 'asc' } },

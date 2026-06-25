@@ -7,6 +7,7 @@ import { Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Select, Textarea } from '@/components/shared/Form';
+import { SearchableSelect } from '@/components/shared/SearchableSelect';
 import { Button } from '@/components/shared/Button';
 import { TYPES_INCIDENT, SEVERITES } from '@/lib/constants';
 
@@ -19,17 +20,20 @@ export default function NouvelIncidentPage() {
 
   const { data: sites } = useQuery({
     queryKey: ['sites-select'],
-    queryFn: () => api.get('/sites', { params: { limit: 1000 } }).then((r) => r.data.data),
+    queryFn: () => api.get('/sites', { params: { all: true } }).then((r) => r.data.data),
   });
-  const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} — ${s.nom}` }));
+  const siteOptions = (sites ?? []).map((s: { id: string; nom: string }) => ({ value: s.id, label: s.nom }));
 
   const mutation = useMutation({
-    mutationFn: () => api.post('/incidents', { siteId: form.siteId, type: form.type, severite: form.severite, description: form.description }),
+    mutationFn: () => {
+      if (!form.siteId) throw new Error('Sélectionnez un site.');
+      return api.post('/incidents', { siteId: form.siteId, type: form.type, severite: form.severite, description: form.description });
+    },
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['incidents'] });
       router.push(`/incidents/${r.data.data.id}`);
     },
-    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur lors de la déclaration'),
+    onError: (e: { response?: { data?: { error?: string } }; message?: string }) => setError(e.response?.data?.error || e.message || 'Erreur lors de la déclaration'),
   });
 
   return (
@@ -39,7 +43,7 @@ export default function NouvelIncidentPage() {
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{error}</div>}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Site" required className="md:col-span-2">
-            <Select value={form.siteId} onChange={(e) => set('siteId', e.target.value)} required options={siteOptions} placeholder="Sélectionner un site…" />
+            <SearchableSelect value={form.siteId} onChange={(v) => set('siteId', v)} options={siteOptions} placeholder="Rechercher / sélectionner un site…" />
           </Field>
           <Field label="Type" required>
             <Select value={form.type} onChange={(e) => set('type', e.target.value)} options={TYPES_INCIDENT} />

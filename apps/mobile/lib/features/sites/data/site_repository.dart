@@ -18,7 +18,7 @@ class SiteRepository {
       try {
         final sites = await _client.request(
           (dio) => dio.get('/sites', queryParameters: {
-            'limit': 1000,
+            'all': 'true', // tous les sites (sans plafond de pagination)
             if (search != null && search.isNotEmpty) 'search': search,
             if (region != null && region.isNotEmpty) 'region': region,
           }),

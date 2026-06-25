@@ -63,7 +63,7 @@ class _SitePickerState extends State<SitePicker> {
             errorText: field.errorText,
           ),
           child: Text(
-            _selected != null ? '${_selected!.code} — ${_selected!.nom}' : (_sites.isEmpty ? 'Chargement…' : 'Rechercher un site…'),
+            _selected != null ? _selected!.nom : (_sites.isEmpty ? 'Chargement…' : 'Rechercher un site…'),
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: _selected != null ? null : Colors.grey.shade500),
           ),
@@ -129,7 +129,7 @@ class _SiteSearchSheetState extends State<_SiteSearchSheet> {
                         final s = filtered[i];
                         return ListTile(
                           title: Text(s.nom, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text('${s.code} · ${s.region}'),
+                          subtitle: Text(s.region),
                           onTap: () => Navigator.pop(context, s),
                         );
                       },
