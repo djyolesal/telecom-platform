@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../features/sites/data/site_model.dart';
 import '../../features/sites/data/site_repository.dart';
 
-/// Sélecteur de site (chargé depuis le cache/API) pour les formulaires terrain.
+/// Sélecteur de site avec recherche (liste chargée depuis le cache/API).
 class SitePicker extends StatefulWidget {
   final String? initialSiteId;
   final ValueChanged<String?> onChanged;
@@ -14,38 +14,130 @@ class SitePicker extends StatefulWidget {
 }
 
 class _SitePickerState extends State<SitePicker> {
-  late Future<List<Site>> _future;
+  List<Site> _sites = [];
+  Site? _selected;
   String? _value;
 
   @override
   void initState() {
     super.initState();
     _value = widget.initialSiteId;
-    _future = context.read<SiteRepository>().getSites();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final sites = await context.read<SiteRepository>().getSites();
+    if (!mounted) return;
+    Site? sel;
+    for (final s in sites) {
+      if (s.id == _value) { sel = s; break; }
+    }
+    setState(() { _sites = sites; _selected = sel; });
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Site>>(
-      future: _future,
-      builder: (context, snap) {
-        final sites = snap.data ?? [];
-        // Évite l'assertion Dropdown : la valeur doit exister dans les items.
-        final value = sites.any((s) => s.id == _value) ? _value : null;
-        return DropdownButtonFormField<String>(
-          initialValue: value,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Site *', prefixIcon: Icon(Icons.cell_tower)),
-          items: sites
-              .map((s) => DropdownMenuItem(value: s.id, child: Text('${s.code} — ${s.nom}', overflow: TextOverflow.ellipsis)))
-              .toList(),
-          validator: (v) => v == null ? 'Site requis' : null,
-          onChanged: (v) {
-            setState(() => _value = v);
-            widget.onChanged(v);
-          },
-        );
-      },
+    return FormField<String>(
+      initialValue: _value,
+      validator: (v) => (v == null || v.isEmpty) ? 'Site requis' : null,
+      builder: (field) => InkWell(
+        onTap: _sites.isEmpty
+            ? null
+            : () async {
+                final picked = await showModalBottomSheet<Site>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => _SiteSearchSheet(sites: _sites),
+                );
+                if (picked != null) {
+                  setState(() { _selected = picked; _value = picked.id; });
+                  field.didChange(picked.id);
+                  widget.onChanged(picked.id);
+                }
+              },
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Site *',
+            prefixIcon: const Icon(Icons.cell_tower),
+            suffixIcon: const Icon(Icons.search),
+            errorText: field.errorText,
+          ),
+          child: Text(
+            _selected != null ? '${_selected!.code} — ${_selected!.nom}' : (_sites.isEmpty ? 'Chargement…' : 'Rechercher un site…'),
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: _selected != null ? null : Colors.grey.shade500),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Feuille de recherche : champ texte + liste filtrée (code/nom/région).
+class _SiteSearchSheet extends StatefulWidget {
+  final List<Site> sites;
+  const _SiteSearchSheet({required this.sites});
+
+  @override
+  State<_SiteSearchSheet> createState() => _SiteSearchSheetState();
+}
+
+class _SiteSearchSheetState extends State<_SiteSearchSheet> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _q.trim().toLowerCase();
+    final filtered = q.isEmpty
+        ? widget.sites
+        : widget.sites
+            .where((s) =>
+                s.nom.toLowerCase().contains(q) ||
+                s.code.toLowerCase().contains(q) ||
+                s.region.toLowerCase().contains(q))
+            .toList();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Rechercher un site (nom, code, région)…',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (v) => setState(() => _q = v),
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const Center(child: Text('Aucun résultat'))
+                  : ListView.separated(
+                      controller: scrollController,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final s = filtered[i];
+                        return ListTile(
+                          title: Text(s.nom, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text('${s.code} · ${s.region}'),
+                          onTap: () => Navigator.pop(context, s),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

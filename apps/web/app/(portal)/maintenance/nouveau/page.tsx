@@ -7,6 +7,7 @@ import { Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select, Textarea } from '@/components/shared/Form';
+import { SearchableSelect } from '@/components/shared/SearchableSelect';
 import { Button } from '@/components/shared/Button';
 
 interface TacheContractuelle { key: string; libelle: string; categorie: string; frequenceLabel: string; }
@@ -44,6 +45,7 @@ export default function NouvelleMaintenancePage() {
 
   const mutation = useMutation({
     mutationFn: () => {
+      if (!form.siteId) throw new Error('Sélectionnez un site.');
       const tache = (taches ?? []).find((t) => t.key === form.tacheKey);
       if (!tache) throw new Error('Tâche introuvable');
       if (new Date(form.datePlanifiee).getTime() < Date.now() - 60000) {
@@ -71,7 +73,7 @@ export default function NouvelleMaintenancePage() {
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{error}</div>}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Site" required className="md:col-span-2">
-            <Select value={form.siteId} onChange={(e) => { set('siteId', e.target.value); set('tacheKey', ''); }} required options={siteOptions} placeholder="Sélectionner un site…" />
+            <SearchableSelect value={form.siteId} onChange={(v) => { set('siteId', v); set('tacheKey', ''); }} options={siteOptions} placeholder="Rechercher / sélectionner un site…" />
           </Field>
           <Field label="Tâche contractuelle" required className="md:col-span-2">
             <Select
