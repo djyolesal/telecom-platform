@@ -144,7 +144,8 @@ export async function getConsoEnergie(req: Request, res: Response, next: NextFun
     });
 
     const totalKwh = releves.reduce((s, r) => s + Number(r.consommationKwh ?? 0), 0);
-    const totalGasoil = releves.reduce((s, r) => s + Number(r.volumeGasoilLitres ?? 0), 0);
+    // Gasoil CONSOMMÉ (et non le niveau de cuve volumeGasoilLitres).
+    const totalGasoil = releves.reduce((s, r) => s + Number(r.gasoilConsommeLitres ?? 0), 0);
     const totalHeuresGE = releves.reduce((s, r) => s + Number(r.heuresFonctGE ?? 0), 0);
     const coutTotal = releves.reduce((s, r) => s + Number(r.coutEstime ?? 0), 0);
 
@@ -157,7 +158,8 @@ export async function getConsoEnergie(req: Request, res: Response, next: NextFun
         releves: releves.map((r) => ({
           date: r.dateReleve, site: r.site?.code, source: r.source,
           consommationKwh: r.consommationKwh != null ? Number(r.consommationKwh) : null,
-          volumeGasoilLitres: r.volumeGasoilLitres != null ? Number(r.volumeGasoilLitres) : null,
+          gasoilConsommeLitres: r.gasoilConsommeLitres != null ? Number(r.gasoilConsommeLitres) : null,
+          heuresFonctGE: r.heuresFonctGE != null ? Number(r.heuresFonctGE) : null,
         })),
       },
     });

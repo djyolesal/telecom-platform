@@ -95,12 +95,23 @@ export default function MaintenanceDetailPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-5">
               <h3 className="font-semibold text-gray-700 text-sm mb-2">Relevés énergie</h3>
               <ul className="space-y-1 text-sm text-gray-600">
-                {m.releves.map((r: { id: string; source: string; volumeGasoilLitres?: number; heuresFonctGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number }) => (
-                  <li key={r.id} className="flex justify-between">
+                {m.releves.map((r: { id: string; source: string; volumeGasoilLitres?: number; gasoilConsommeLitres?: number; indexHeuresGE?: number; heuresFonctGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number }) => (
+                  <li key={r.id} className="flex justify-between gap-4">
                     <span className="font-medium text-gray-700">{r.source}</span>
-                    <span className="text-gray-500">
-                      {r.source === 'GE' && `${fmtNumber(r.volumeGasoilLitres)} L · ${fmtNumber(r.heuresFonctGE)} h`}
-                      {r.source === 'CEET' && `index ${fmtNumber(r.indexCompteur)}${r.consommationKwh != null ? ` · ${fmtNumber(r.consommationKwh)} kWh` : ''}`}
+                    <span className="text-gray-500 text-right">
+                      {r.source === 'GE' && (
+                        <>
+                          {r.gasoilConsommeLitres != null ? `${fmtNumber(r.gasoilConsommeLitres)} L consommés` : '— L consommés'}
+                          {r.heuresFonctGE != null ? ` · ${fmtNumber(r.heuresFonctGE)} h` : ''}
+                          {` · cuve ${fmtNumber(r.volumeGasoilLitres)} L`}
+                        </>
+                      )}
+                      {r.source === 'CEET' && (
+                        <>
+                          {r.consommationKwh != null ? `${fmtNumber(r.consommationKwh)} kWh` : '— kWh'}
+                          {` · index ${fmtNumber(r.indexCompteur)}`}
+                        </>
+                      )}
                       {r.source === 'SOLAIRE' && `${fmtNumber(r.puissanceKva)} kVA`}
                     </span>
                   </li>

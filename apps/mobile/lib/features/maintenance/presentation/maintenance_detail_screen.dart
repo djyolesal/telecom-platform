@@ -284,7 +284,6 @@ class _CloseSheetState extends State<_CloseSheet> {
   final _gasoil = TextEditingController();
   final _heures = TextEditingController();
   final _index = TextEditingController();
-  final _kwh = TextEditingController();
   final _puissance = TextEditingController();
   final _picker = ImagePicker();
   final List<XFile> _photos = [];
@@ -292,7 +291,7 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   @override
   void dispose() {
-    for (final c in [_obs, _gasoil, _heures, _index, _kwh, _puissance]) {
+    for (final c in [_obs, _gasoil, _heures, _index, _puissance]) {
       c.dispose();
     }
     super.dispose();
@@ -331,19 +330,18 @@ class _CloseSheetState extends State<_CloseSheet> {
 
     if (sources.contains('GE')) {
       if (_num(_gasoil) == null || _num(_heures) == null) {
-        setState(() => _error = 'Renseignez le volume gasoil et les heures de fonctionnement GE.');
+        setState(() => _error = 'Renseignez le volume gasoil dans la cuve et l\'index horaire GE.');
         return;
       }
-      energie['volumeGasoilLitres'] = _num(_gasoil);
-      energie['heuresFonctGE'] = _num(_heures);
+      energie['volumeGasoilLitres'] = _num(_gasoil); // niveau actuel de la cuve
+      energie['indexHeuresGE'] = _num(_heures);       // index horaire (cumulé) lu sur la carte GE
     }
     if (sources.contains('CEET')) {
       if (_num(_index) == null) {
         setState(() => _error = "Renseignez l'index compteur CEET.");
         return;
       }
-      energie['indexCompteur'] = _num(_index);
-      if (_num(_kwh) != null) energie['consommationKwh'] = _num(_kwh);
+      energie['indexCompteur'] = _num(_index); // index cumulé ; la conso kWh est calculée côté serveur
     }
     if (sources.contains('SOLAIRE')) {
       if (_num(_puissance) == null) {
@@ -384,15 +382,13 @@ class _CloseSheetState extends State<_CloseSheet> {
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue.shade800)),
                     const SizedBox(height: 10),
                     if (sources.contains('GE')) ...[
-                      TextField(controller: _gasoil, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Volume gasoil (L) *')),
+                      TextField(controller: _gasoil, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Volume gasoil dans la cuve (L) *')),
                       const SizedBox(height: 10),
-                      TextField(controller: _heures, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Heures fonctionnement GE *')),
+                      TextField(controller: _heures, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index horaire GE (carte GE) *')),
                       const SizedBox(height: 10),
                     ],
                     if (sources.contains('CEET')) ...[
                       TextField(controller: _index, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index compteur CEET *')),
-                      const SizedBox(height: 10),
-                      TextField(controller: _kwh, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Consommation (kWh)')),
                       const SizedBox(height: 10),
                     ],
                     if (sources.contains('SOLAIRE'))

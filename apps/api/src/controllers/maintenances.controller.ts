@@ -339,8 +339,8 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     if (passive && sources.length) {
       const missing: string[] = [];
       if (sources.includes('GE')) {
-        if (num(e.volumeGasoilLitres) == null) missing.push('volume gasoil');
-        if (num(e.heuresFonctGE) == null) missing.push('heures de fonctionnement GE');
+        if (num(e.volumeGasoilLitres) == null) missing.push('volume gasoil dans la cuve');
+        if (num(e.indexHeuresGE) == null) missing.push('index horaire GE');
       }
       if (sources.includes('CEET') && num(e.indexCompteur) == null) missing.push('index compteur CEET');
       if (sources.includes('SOLAIRE') && num(e.puissanceKva) == null) missing.push('puissance solaire');
@@ -376,7 +376,11 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations, signaturePath },
     });
 
-    // Création des relevés énergie liés à la maintenance (un par source présente)
+    // Création des relevés énergie liés à la maintenance (un par source présente).
+    // Les consommations sont CALCULÉES par différence avec le relevé précédent du site :
+    //  - kWh CEET      = index compteur actuel − index précédent ;
+    //  - heures GE     = index horaire actuel − index précédent ;
+    //  - gasoil GE     = niveau cuve précédent + dépotages depuis − niveau actuel.
     if (passive && sources.length) {
       for (const source of sources) {
         const data: Prisma.ReleveEnergieUncheckedCreateInput = {
@@ -386,16 +390,41 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
           technicienId: existing.technicienId ?? req.user!.id,
           maintenanceId: existing.id,
         };
+        // Relevé précédent du site pour cette source (hors celui de cette clôture).
+        const prev = await prisma.releveEnergie.findFirst({
+          where: { siteId: existing.siteId, source, maintenanceId: { not: existing.id } },
+          orderBy: { dateReleve: 'desc' },
+        });
+
         if (source === 'GE') {
-          const vol = num(e.volumeGasoilLitres);
-          data.volumeGasoilLitres = vol;
-          data.heuresFonctGE = num(e.heuresFonctGE);
-          data.coutEstime = vol != null ? Math.round(vol * GE_PARAMS.prixLitreFCFA) : null;
+          const tank = num(e.volumeGasoilLitres);   // niveau actuel de la cuve
+          const hIndex = num(e.indexHeuresGE);        // index horaire actuel
+          data.volumeGasoilLitres = tank;
+          data.indexHeuresGE = hIndex;
+          // Heures de fonctionnement = Δ index horaire.
+          if (prev?.indexHeuresGE != null && hIndex != null) {
+            data.heuresFonctGE = Math.max(0, hIndex - Number(prev.indexHeuresGE));
+          }
+          // Gasoil consommé = niveau précédent + dépotages effectués depuis − niveau actuel.
+          if (prev?.volumeGasoilLitres != null && tank != null) {
+            const depots = await prisma.depotage.aggregate({
+              where: { siteId: existing.siteId, dateDepotage: { gt: prev.dateReleve, lte: dateFin } },
+              _sum: { volumeLitres: true },
+            });
+            const ajout = Number(depots._sum.volumeLitres ?? 0);
+            const conso = Math.max(0, Number(prev.volumeGasoilLitres) + ajout - tank);
+            data.gasoilConsommeLitres = conso;
+            data.coutEstime = Math.round(conso * GE_PARAMS.prixLitreFCFA);
+          }
         } else if (source === 'CEET') {
-          const kwh = num(e.consommationKwh);
-          data.indexCompteur = num(e.indexCompteur);
-          data.consommationKwh = kwh;
-          data.coutEstime = kwh != null ? Math.round(kwh * TARIF_CEET_FCFA) : null;
+          const index = num(e.indexCompteur);
+          data.indexCompteur = index;
+          // Consommation = Δ index compteur.
+          if (prev?.indexCompteur != null && index != null) {
+            const kwh = Math.max(0, index - Number(prev.indexCompteur));
+            data.consommationKwh = kwh;
+            data.coutEstime = Math.round(kwh * TARIF_CEET_FCFA);
+          }
         } else if (source === 'SOLAIRE') {
           data.puissanceKva = num(e.puissanceKva);
         }
