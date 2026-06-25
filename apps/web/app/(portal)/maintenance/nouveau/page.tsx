@@ -37,12 +37,18 @@ export default function NouvelleMaintenancePage() {
 
   const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} — ${s.nom}` }));
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
-  const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: `${t.libelle} (${t.frequenceLabel})` }));
+  const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: t.libelle }));
+
+  // Borne minimale du sélecteur de date (maintenant, en heure locale, format datetime-local).
+  const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
   const mutation = useMutation({
     mutationFn: () => {
       const tache = (taches ?? []).find((t) => t.key === form.tacheKey);
       if (!tache) throw new Error('Tâche introuvable');
+      if (new Date(form.datePlanifiee).getTime() < Date.now() - 60000) {
+        throw new Error('La date planifiée doit être postérieure ou égale à maintenant.');
+      }
       return api.post('/maintenances', {
         siteId: form.siteId, type: 'PREVENTIVE',
         categorie: tache.categorie, equipement: tache.libelle, tachePreventiveKey: tache.key,
@@ -55,7 +61,7 @@ export default function NouvelleMaintenancePage() {
       queryClient.invalidateQueries({ queryKey: ['maintenances'] });
       router.push(`/maintenance/${r.data.data.id}`);
     },
-    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur lors de la création'),
+    onError: (e: { response?: { data?: { error?: string } }; message?: string }) => setError(e.response?.data?.error || e.message || 'Erreur lors de la création'),
   });
 
   return (
@@ -78,7 +84,7 @@ export default function NouvelleMaintenancePage() {
             />
           </Field>
           <Field label="Date planifiée" required>
-            <Input type="datetime-local" value={form.datePlanifiee} onChange={(e) => set('datePlanifiee', e.target.value)} required />
+            <Input type="datetime-local" min={nowLocal} value={form.datePlanifiee} onChange={(e) => set('datePlanifiee', e.target.value)} required />
           </Field>
           <Field label="Technicien" className="md:col-span-2">
             <Select value={form.technicienId} onChange={(e) => set('technicienId', e.target.value)} options={techOptions} placeholder="(par défaut : moi)" />

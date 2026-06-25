@@ -196,6 +196,12 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
 export async function createMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
     const { pieces, ...data } = req.body;
+    // La date planifiée ne peut pas être dans le passé (tolérance 60s).
+    const dp = new Date(data.datePlanifiee);
+    if (Number.isNaN(dp.getTime())) throw new AppError('Date planifiée invalide.', 422);
+    if (dp.getTime() < Date.now() - 60_000) {
+      throw new AppError('La date planifiée doit être postérieure ou égale à maintenant.', 422);
+    }
     // Détermine automatiquement le prestataire responsable (site → lot → attribution).
     // Une tâche contractuelle est toujours passive → on résout sur le périmètre passif,
     // quelle que soit la catégorie (ex. AUTRE pour pylône/terre/désherbage…).

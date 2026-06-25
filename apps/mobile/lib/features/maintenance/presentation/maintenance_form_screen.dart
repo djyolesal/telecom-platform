@@ -58,11 +58,14 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final init = _datePlanifiee.isBefore(today) ? today : _datePlanifiee;
     final d = await showDatePicker(
       context: context,
-      initialDate: _datePlanifiee,
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: init,
+      firstDate: today, // pas de date passée
+      lastDate: now.add(const Duration(days: 365)),
     );
     if (d != null) setState(() => _datePlanifiee = d);
   }
@@ -83,6 +86,9 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
     setState(() => _saving = true);
     try {
       final pos = await LocationService().currentPosition();
+      // La date planifiée ne doit pas être dans le passé (au cas où on choisit aujourd'hui).
+      final now = DateTime.now();
+      final datePlanifiee = _datePlanifiee.isBefore(now) ? now : _datePlanifiee;
       final res = await repo.create(
         siteId: _siteId!,
         type: 'PREVENTIVE',
@@ -90,7 +96,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         equipement: tache.libelle,
         tachePreventiveKey: tache.key,
         description: _description.text.trim(),
-        datePlanifiee: _datePlanifiee,
+        datePlanifiee: datePlanifiee,
         latitude: pos?.lat,
         longitude: pos?.lng,
       );
@@ -130,7 +136,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                     : null,
               ),
               items: _taches
-                  .map((t) => DropdownMenuItem(value: t.key, child: Text('${t.libelle} (${t.frequenceLabel})', overflow: TextOverflow.ellipsis)))
+                  .map((t) => DropdownMenuItem(value: t.key, child: Text(t.libelle, overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: _siteId == null ? null : (v) => setState(() => _tacheKey = v),
               validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
