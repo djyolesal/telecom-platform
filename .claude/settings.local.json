@@ -62,7 +62,9 @@
       "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{r\\\\.siteCode \\\\?\\\\? '—'\\\\}/\\\\\\\\\\\\${r.siteNom ?? r.siteCode ?? '—'}/\" lib/features/energie/presentation/releve_list_screen.dart)",
       "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{d\\\\.siteCode \\\\?\\\\? '—'\\\\}/\\\\\\\\\\\\${d.siteNom ?? d.siteCode ?? '—'}/\" lib/features/carburant/presentation/depotage_list_screen.dart)",
       "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? '—'\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? '—'}/\" lib/features/incidents/presentation/incidents_list_screen.dart)",
-      "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? ''\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? ''}/\" lib/features/incidents/presentation/incident_detail_screen.dart)"
+      "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? ''\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? ''}/\" lib/features/incidents/presentation/incident_detail_screen.dart)",
+      "Bash(grep -nA3 \"^backup:\" Makefile)",
+      "Bash(make -n reset-sites)"
     ]
   }
 }

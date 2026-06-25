@@ -1,4 +1,4 @@
-.PHONY: help install start stop restart logs backup restore update status migrate ssl clean
+.PHONY: help install start stop restart logs backup restore reset-sites update status migrate ssl clean
 
 help:
 	@echo ""
@@ -17,6 +17,7 @@ help:
 	@echo "  make migrate     Appliquer migrations Prisma"
 	@echo "  make backup      Backup BDD maintenant"
 	@echo "  make restore     Restaurer un backup"
+	@echo "  make reset-sites Vider sites + données liées (sauvegarde auto)"
 	@echo "  make update      Mettre à jour l'application"
 	@echo "  make ssl         Renouveler certificats SSL"
 	@echo "  make clean       Nettoyer images/conteneurs inutilisés"
@@ -102,6 +103,21 @@ backup:
 	@find /opt/telecom/backups -name "*.sql.gz" -mtime +30 -delete
 	@echo "=== Backups disponibles ==="
 	@ls -lh /opt/telecom/backups/*.sql.gz 2>/dev/null || echo "(aucun)"
+
+reset-sites:
+	@echo "⚠️  RESET COMPLET DES SITES"
+	@echo "    Supprime DÉFINITIVEMENT : sites + maintenances + pièces + relevés énergie + dépotages + incidents + photos."
+	@echo "    (lots, prestataires, utilisateurs sont conservés)"
+	@read -p "Tapez 'RESET' pour confirmer : " CONF; \
+	if [ "$$CONF" != "RESET" ]; then echo "❌ Annulé."; exit 1; fi; \
+	echo "=== Sauvegarde préalable ==="; \
+	$(MAKE) backup || { echo "❌ Sauvegarde échouée — purge annulée."; exit 1; }; \
+	echo "=== Purge des tables ==="; \
+	docker compose exec -T postgres psql \
+		-U $$(grep POSTGRES_USER .env | cut -d= -f2) \
+		-d $$(grep POSTGRES_DB .env | cut -d= -f2) \
+		-c "TRUNCATE TABLE photos, pieces_rechange, releves_energie, depotages, maintenances, incidents, sites RESTART IDENTITY CASCADE;"; \
+	echo "✅ Sites et données liées vidés. Importez la nouvelle liste : Sites → Importer."
 
 restore:
 	@echo "=== Backups disponibles ==="
