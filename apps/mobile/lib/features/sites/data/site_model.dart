@@ -13,7 +13,7 @@ class LotAttribution {
     return LotAttribution(
       scope: j['scope'] as String? ?? '',
       prestataireNom: p?['nom'] as String? ?? '—',
-      prestataireTel: p?['telephone'] as String?,
+      prestataireTel: (p?['contactTechnique'] ?? p?['contactCommercial']) as String?,
     );
   }
 }

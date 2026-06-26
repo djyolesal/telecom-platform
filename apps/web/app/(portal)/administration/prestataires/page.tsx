@@ -17,8 +17,6 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 interface Prestataire {
   id: string;
   nom: string;
-  contactNom?: string;
-  telephone?: string;
   email?: string;
   adresse?: string;
   rccm?: string;
@@ -34,7 +32,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
   const queryClient = useQueryClient();
   const editing = !!prestataire;
   const [form, setForm] = useState({
-    nom: prestataire?.nom ?? '', contactNom: prestataire?.contactNom ?? '', telephone: prestataire?.telephone ?? '', email: prestataire?.email ?? '',
+    nom: prestataire?.nom ?? '', email: prestataire?.email ?? '',
     adresse: prestataire?.adresse ?? '', rccm: prestataire?.rccm ?? '', nif: prestataire?.nif ?? '',
     contactCommercial: prestataire?.contactCommercial ?? '', contactTechnique: prestataire?.contactTechnique ?? '',
     logoPath: prestataire?.logoPath ?? '',
@@ -73,8 +71,6 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
         {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="grid grid-cols-2 gap-3">
           <Field label="Nom" required className="col-span-2"><Input value={form.nom} onChange={(e) => set('nom', e.target.value)} required /></Field>
-          <Field label="Contact"><Input value={form.contactNom} onChange={(e) => set('contactNom', e.target.value)} /></Field>
-          <Field label="Téléphone"><Input value={form.telephone} onChange={(e) => set('telephone', e.target.value)} /></Field>
           <Field label="Email" className="col-span-2"><Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} /></Field>
 
           <div className="col-span-2 mt-1 border-t border-gray-100 pt-2 text-xs font-semibold text-gray-500">Coordonnées (en-tête de la fiche de validation)</div>
@@ -127,8 +123,7 @@ export default function PrestatairesPage() {
 
   const columns: Column<Prestataire>[] = [
     { key: 'nom', header: 'Nom', render: (p) => <span className="font-medium text-gray-800">{p.nom}</span> },
-    { key: 'contactNom', header: 'Contact', render: (p) => p.contactNom || '—' },
-    { key: 'telephone', header: 'Téléphone', render: (p) => p.telephone || '—' },
+    { key: 'contacts', header: 'Contacts (com. / tech.)', render: (p) => `${p.contactCommercial || '—'} / ${p.contactTechnique || '—'}` },
     { key: 'email', header: 'Email', render: (p) => p.email || '—' },
     { key: 'lots', header: 'Lots attribués', align: 'center', render: (p) => p._count?.assignments ?? 0 },
     { key: 'isActive', header: 'Statut', render: (p) => <Badge className={p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>{p.isActive ? 'Actif' : 'Inactif'}</Badge> },

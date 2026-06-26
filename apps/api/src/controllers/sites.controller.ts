@@ -104,7 +104,7 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         lot: {
           include: {
             assignments: {
-              include: { prestataire: { select: { id: true, nom: true, telephone: true } } },
+              include: { prestataire: { select: { id: true, nom: true, contactCommercial: true, contactTechnique: true } } },
               orderBy: { scope: 'asc' },
             },
           },

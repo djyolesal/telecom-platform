@@ -26,7 +26,6 @@ export interface FichePrestataire {
   nif?: string | null;
   contactCommercial?: string | null;
   contactTechnique?: string | null;
-  telephone?: string | null;
 }
 
 export interface FicheClient {

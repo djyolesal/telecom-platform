@@ -175,7 +175,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
       include: {
         site: { include: { groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } } } },
         technicien: { select: { id: true, nom: true, prenom: true, telephone: true } },
-        prestataire: { select: { id: true, nom: true, telephone: true } },
+        prestataire: { select: { id: true, nom: true, contactCommercial: true, contactTechnique: true } },
         pieces: true,
         photos: true,
         releves: { include: { groupe: { select: { numero: true } } }, orderBy: { source: 'asc' } },

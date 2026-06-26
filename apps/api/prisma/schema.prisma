@@ -435,8 +435,6 @@ enum EquipeMaintenance {
 model Prestataire {
   id         String   @id @default(uuid())
   nom        String   @db.VarChar(120)
-  contactNom String?  @map("contact_nom") @db.VarChar(100)
-  telephone  String?  @db.VarChar(20)
   email      String?  @db.VarChar(100)
   // Coordonnées pour l'en-tête de la fiche de validation
   adresse           String?  @db.VarChar(200)

@@ -207,9 +207,8 @@ export async function getFicheValidation(req: Request, res: Response, next: Next
         adresse: presta.adresse,
         rccm: presta.rccm,
         nif: presta.nif,
-        contactCommercial: presta.contactCommercial ?? presta.telephone,
+        contactCommercial: presta.contactCommercial,
         contactTechnique: presta.contactTechnique,
-        telephone: presta.telephone,
       },
       client: {
         nom: client || process.env.CLIENT_NOM || 'Moov Africa Togo',
