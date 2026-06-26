@@ -50,6 +50,7 @@ router.get('/config', configCtrl.getAppConfig);
 router.get('/taches-preventives', tachesCtrl.getCatalogue);
 router.post('/taches-preventives/generer', rbac(['MANAGER', 'ADMIN']), tachesCtrl.genererPlanning);
 router.get('/rapports/echeancier-preventif', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), tachesCtrl.getEcheancier);
+router.get('/rapports/fiche-validation', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), tachesCtrl.getFicheValidation);
 router.post('/sites', rbac(['MANAGER','ADMIN']), sitesCtrl.createSite);
 router.get('/sites/:id', sitesCtrl.getSiteById);
 router.put('/sites/:id', rbac(['MANAGER','ADMIN']), sitesCtrl.updateSite);

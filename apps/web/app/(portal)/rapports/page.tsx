@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Fuel, Zap, Wrench, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock } from 'lucide-react';
+import { FileText, Fuel, Zap, Wrench, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock, FileSpreadsheet } from 'lucide-react';
 
 const RAPPORTS = [
   { href: '/rapports/mensuel', icon: CalendarRange, title: 'Rapport mensuel', desc: 'Synthèse PDF complète par mois, à consulter ou envoyer par email.' },
+  { href: '/rapports/fiche-validation', icon: FileSpreadsheet, title: 'Fiche de validation (prestataire)', desc: 'Export xlsx des travaux contractuels réalisés par prestataire et par mois, au format de validation.' },
   { href: '/rapports/echeancier-preventif', icon: CalendarClock, title: 'Échéancier préventif', desc: 'Tâches contractuelles dues / en retard par site et prestataire, et génération du planning.' },
   { href: '/rapports/conformite', icon: ClipboardCheck, title: 'Conformité maintenances', desc: 'Maintenances passives clôturées avec relevés énergie, par prestataire.' },
   { href: '/carburant/stock', icon: Fuel, title: 'Stock carburant', desc: 'État du stock et autonomie de chaque site.' },

@@ -5,6 +5,8 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
 import { genererPlanningPreventif } from '../services/planning.service';
+import { buildFicheValidationXlsx } from '../services/ficheValidation.service';
+import { setXlsxHeaders } from '../utils/excel';
 import {
   CONTRACTUAL_TASKS,
   TASK_BY_KEY,
@@ -142,6 +144,60 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
     lignes.sort((a, b) => ordre[a.statut as StatutEcheance] - ordre[b.statut as StatutEcheance]);
 
     res.json({ success: true, data: { resume: { aJour, enRetard, jamais, total: aJour + enRetard + jamais }, lignes } });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Fiche de validation mensuelle (xlsx) d'un prestataire : pour chaque tâche
+ * contractuelle, nb de sites concernés (éligibles) et nb réalisés dans le mois.
+ */
+export async function getFicheValidation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { prestataire_id, annee, mois, client } = req.query as Record<string, string>;
+    if (!prestataire_id) throw new AppError('prestataire_id requis.', 400);
+    const an = parseInt(annee) || new Date().getFullYear();
+    const mo = parseInt(mois);
+    if (!(mo >= 1 && mo <= 12)) throw new AppError('Mois invalide (1-12).', 422);
+
+    const presta = await prisma.prestataire.findUnique({ where: { id: prestataire_id } });
+    if (!presta) throw new AppError('Prestataire introuvable.', 404);
+
+    // Sites couverts par ce prestataire au périmètre passif.
+    const sites = await prisma.site.findMany({
+      where: { isActive: true, lot: { assignments: { some: { prestataireId: prestataire_id, scope: { in: SCOPES_PASSIFS } } } } },
+    });
+
+    // Exécutions TERMINÉES du mois → nb de sites distincts par tâche.
+    const monthStart = new Date(an, mo - 1, 1);
+    const monthEnd = new Date(an, mo, 1);
+    const done = await prisma.maintenance.findMany({
+      where: { prestataireId: prestataire_id, statut: 'TERMINEE', tachePreventiveKey: { not: null }, dateFin: { gte: monthStart, lt: monthEnd } },
+      select: { siteId: true, tachePreventiveKey: true },
+    });
+    const byKey = new Map<string, Set<string>>();
+    for (const m of done) {
+      if (!m.tachePreventiveKey) continue;
+      if (!byKey.has(m.tachePreventiveKey)) byKey.set(m.tachePreventiveKey, new Set());
+      byKey.get(m.tachePreventiveKey)!.add(m.siteId);
+    }
+    const realisesParKey: Record<string, number> = {};
+    for (const [k, set] of byKey) realisesParKey[k] = set.size;
+
+    const zone = [...new Set(sites.map((s) => s.region))].join(', ') || '—';
+    const buf = await buildFicheValidationXlsx({
+      prestataireNom: presta.nom,
+      client: client || 'Moov Africa Togo',
+      zone,
+      nbSites: sites.length,
+      annee: an,
+      mois: mo,
+      sites: sites as unknown as SiteEligibilite[],
+      realisesParKey,
+    });
+
+    const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');
+    setXlsxHeaders(res, `fiche-validation-${safeNom}-${String(mo).padStart(2, '0')}-${an}.xlsx`);
+    res.send(buf);
   } catch (err) { next(err); }
 }
 

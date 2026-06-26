@@ -64,7 +64,8 @@
       "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? '—'\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? '—'}/\" lib/features/incidents/presentation/incidents_list_screen.dart)",
       "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? ''\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? ''}/\" lib/features/incidents/presentation/incident_detail_screen.dart)",
       "Bash(grep -nA3 \"^backup:\" Makefile)",
-      "Bash(make -n reset-sites)"
+      "Bash(make -n reset-sites)",
+      "Bash(node ./_readxlsx.js)"
     ]
   }
 }
