@@ -53,6 +53,7 @@ router.get('/rapports/echeancier-preventif', rbac(['SUPERVISEUR', 'MANAGER', 'AD
 router.post('/sites', rbac(['MANAGER','ADMIN']), sitesCtrl.createSite);
 router.get('/sites/:id', sitesCtrl.getSiteById);
 router.put('/sites/:id', rbac(['MANAGER','ADMIN']), sitesCtrl.updateSite);
+router.put('/sites/:id/groupes', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceSiteGroupes);
 router.delete('/sites/:id', rbac(['ADMIN']), sitesCtrl.deleteSite);
 router.get('/sites/:id/taches-preventives', tachesCtrl.getTachesForSite);
 router.get('/sites/:id/stock', sitesCtrl.getSiteStock);

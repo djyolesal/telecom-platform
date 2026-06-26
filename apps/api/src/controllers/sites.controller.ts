@@ -28,6 +28,8 @@ const IMPORT_COLUMNS = [
   { key: 'cuveVolumeLitres', header: 'cuveVolumeLitres' },
   { key: 'formeCuve', header: 'formeCuve' },
   { key: 'cuveDimensions', header: 'cuveDimensions' },
+  { key: 'puissanceGE2', header: 'puissanceGE2' },
+  { key: 'statutGE2', header: 'statutGE2' },
 ];
 
 // Normalise un en-tête : minuscules, sans accents ni séparateurs.
@@ -53,6 +55,8 @@ const HEADER_ALIASES: Record<string, string> = {
   cuvevolumelitres: 'cuveVolumeLitres', volumecuve: 'cuveVolumeLitres', volumegasoil: 'cuveVolumeLitres', capacitecuve: 'cuveVolumeLitres',
   formecuve: 'formeCuve', forme: 'formeCuve',
   cuvedimensions: 'cuveDimensions', dimensionscuve: 'cuveDimensions', dimensions: 'cuveDimensions',
+  puissancege2: 'puissanceGE2', puissgege2: 'puissanceGE2', kvage2: 'puissanceGE2',
+  statutge2: 'statutGE2',
 };
 
 /**
@@ -105,6 +109,7 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
             },
           },
         },
+        groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
       },
     });
     if (!site) throw new AppError('Site introuvable', 404);
@@ -115,6 +120,12 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
 export async function createSite(req: Request, res: Response, next: NextFunction) {
   try {
     const site = await prisma.site.create({ data: req.body });
+    // Crée automatiquement le GE n°1 si le site a un GE (cohérence avec la table dédiée).
+    if (site.statutGE !== 'PAS_DE_GE') {
+      await prisma.groupeElectrogene.create({
+        data: { siteId: site.id, numero: 1, puissanceKva: site.puissanceGEkva, statut: site.statutGE, isActive: true },
+      });
+    }
     await auditLog(req.user!.id, 'CREATE', 'sites', site.id, req.body, req);
     await cacheService.invalidate('sites:geojson');
     res.status(201).json({ success: true, data: site });
@@ -129,6 +140,60 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
     await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { before: site, after: req.body }, req);
     await cacheService.invalidate('sites:geojson');
     res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Remplace la liste des groupes électrogènes d'un site (upsert par numéro,
+ * désactivation des GE retirés — sans suppression pour préserver l'historique
+ * des relevés). Synchronise le « GE principal » du site (statut/puissance) sur
+ * le GE #1, utilisé par le calcul de stock et les listes.
+ */
+export async function replaceSiteGroupes(req: Request, res: Response, next: NextFunction) {
+  try {
+    const siteId = req.params.id;
+    const site = await prisma.site.findUnique({ where: { id: siteId }, select: { id: true } });
+    if (!site) throw new AppError('Site introuvable', 404);
+
+    const groupes = (Array.isArray(req.body) ? req.body : req.body?.groupes) as
+      | Array<{ numero: number; puissanceKva?: number; statut?: string }>
+      | undefined;
+    if (!Array.isArray(groupes)) throw new AppError('Liste de groupes électrogènes attendue.', 422);
+
+    const STATUTS = Object.values(StatutGE) as string[];
+    const numeros: number[] = [];
+    for (const g of groupes) {
+      const numero = Number(g.numero);
+      if (!Number.isInteger(numero) || numero < 1) throw new AppError('Numéro de GE invalide.', 422);
+      if (numeros.includes(numero)) throw new AppError(`Numéro de GE en double : ${numero}.`, 422);
+      numeros.push(numero);
+      const statut = (g.statut && STATUTS.includes(g.statut) ? g.statut : 'GE_SECOURS') as StatutGE;
+      const puissanceKva = Number(g.puissanceKva) || 0;
+      await prisma.groupeElectrogene.upsert({
+        where: { siteId_numero: { siteId, numero } },
+        create: { siteId, numero, puissanceKva, statut, isActive: true },
+        update: { puissanceKva, statut, isActive: true },
+      });
+    }
+    // GE retirés → désactivés (historique préservé).
+    await prisma.groupeElectrogene.updateMany({
+      where: { siteId, isActive: true, numero: { notIn: numeros } },
+      data: { isActive: false },
+    });
+
+    // Synchronise le GE principal du site (compat stock/listes/filtres).
+    const principal = groupes.find((g) => Number(g.numero) === 1) ?? groupes[0];
+    await prisma.site.update({
+      where: { id: siteId },
+      data: principal
+        ? { statutGE: ((principal.statut as StatutGE) ?? 'GE_SECOURS'), puissanceGEkva: Number(principal.puissanceKva) || 0 }
+        : { statutGE: 'PAS_DE_GE', puissanceGEkva: 0 },
+    });
+
+    await auditLog(req.user!.id, 'UPDATE', 'sites', siteId, { groupes }, req);
+    await cacheService.invalidate('sites:geojson');
+    const data = await prisma.groupeElectrogene.findMany({ where: { siteId, isActive: true }, orderBy: { numero: 'asc' } });
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 
@@ -153,6 +218,7 @@ export async function sitesImportTemplate(_req: Request, res: Response, next: Ne
         powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: 100, lot: 'LOT-01',
         typePylone: 'GREENFIELD', hasClimatiseur: 'oui', hasExtincteurs: 'oui',
         cuveVolumeLitres: 2000, formeCuve: 'CYLINDRE_COUCHE', cuveDimensions: '2m x 1m x 1m',
+        puissanceGE2: '', statutGE2: '', // remplir pour un 2e GE (ex: 100 / GE_SECOURS)
       },
     ]);
     setXlsxHeaders(res, 'modele_import_sites.xlsx');
@@ -273,12 +339,39 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
         };
 
         const existing = await prisma.site.findUnique({ where: { code } });
+        let siteId: string;
         if (existing) {
-          await prisma.site.update({ where: { code }, data });
+          const upd = await prisma.site.update({ where: { code }, data });
+          siteId = upd.id;
           results.updated++;
         } else {
-          await prisma.site.create({ data: { ...data, code } });
+          const cre = await prisma.site.create({ data: { ...data, code } });
+          siteId = cre.id;
           results.created++;
+        }
+        // Synchronise le GE n°1 depuis statut/puissance (table dédiée).
+        if (data.statutGE !== 'PAS_DE_GE') {
+          await prisma.groupeElectrogene.upsert({
+            where: { siteId_numero: { siteId, numero: 1 } },
+            create: { siteId, numero: 1, puissanceKva: data.puissanceGEkva, statut: data.statutGE, isActive: true },
+            update: { puissanceKva: data.puissanceGEkva, statut: data.statutGE, isActive: true },
+          });
+        } else {
+          await prisma.groupeElectrogene.updateMany({ where: { siteId, numero: 1 }, data: { isActive: false } });
+        }
+        // GE n°2 optionnel (colonnes puissanceGE2 / statutGE2).
+        const statutGE2raw = cellText(row, 'statutGE2');
+        const puissGE2 = numOrNull(cellText(row, 'puissanceGE2'));
+        if (statutGE2raw || puissGE2 != null) {
+          const statutGE2 = statutGE2raw || 'GE_SECOURS';
+          if (!STATUT.includes(statutGE2)) throw new Error(`statutGE2 invalide « ${statutGE2} » (attendu : ${STATUT.join(', ')})`);
+          await prisma.groupeElectrogene.upsert({
+            where: { siteId_numero: { siteId, numero: 2 } },
+            create: { siteId, numero: 2, puissanceKva: puissGE2 ?? 0, statut: statutGE2 as StatutGE, isActive: true },
+            update: { puissanceKva: puissGE2 ?? 0, statut: statutGE2 as StatutGE, isActive: true },
+          });
+        } else {
+          await prisma.groupeElectrogene.updateMany({ where: { siteId, numero: 2 }, data: { isActive: false } });
         }
       } catch (e) {
         results.errors.push({ ligne: r, code, message: e instanceof Error ? e.message : 'Erreur inconnue' });

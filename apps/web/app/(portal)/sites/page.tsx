@@ -158,8 +158,8 @@ function ImportSitesModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="mb-3 text-sm text-gray-600">
-          Fichier <b>.xlsx</b> avec les colonnes : <code className="text-xs">code, nom, region, ville, adresse, latitude, longitude, powerConfig, statutGE, puissanceGEkva, lot</code>.
-          L&apos;import met à jour les sites existants (par <b>code</b>) et crée les nouveaux. La colonne <b>lot</b> (code du lot) rattache le site à son lot — et donc au prestataire via les attributions.
+          Fichier <b>.xlsx</b> avec les colonnes : <code className="text-xs">code, nom, region, ville, adresse, latitude, longitude, powerConfig, statutGE, puissanceGEkva, lot, typePylone, climatiseur, extincteurs, cuveVolumeLitres, formeCuve, cuveDimensions, puissanceGE2, statutGE2</code>.
+          L&apos;import met à jour les sites existants (par <b>code</b>) et crée les nouveaux. La colonne <b>lot</b> (code du lot) rattache le site au prestataire. Renseignez <b>puissanceGE2</b> / <b>statutGE2</b> pour un 2ᵉ groupe électrogène (le GE n°1 = <code className="text-xs">statutGE/puissanceGEkva</code>).
         </p>
 
         <button

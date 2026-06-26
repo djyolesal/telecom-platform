@@ -287,11 +287,21 @@ class _CloseSheetState extends State<_CloseSheet> {
   final _puissance = TextEditingController();
   final _picker = ImagePicker();
   final List<XFile> _photos = [];
+  // Un contrôleur d'index horaire par GE du site (cuve partagée → un seul _gasoil).
+  final Map<String, TextEditingController> _geCtrls = {};
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    for (final g in widget.maintenance.siteGroupes) {
+      _geCtrls[g.id] = TextEditingController();
+    }
+  }
+
+  @override
   void dispose() {
-    for (final c in [_obs, _gasoil, _heures, _index, _puissance]) {
+    for (final c in [_obs, _gasoil, _heures, _index, _puissance, ..._geCtrls.values]) {
       c.dispose();
     }
     super.dispose();
@@ -329,12 +339,30 @@ class _CloseSheetState extends State<_CloseSheet> {
     }
 
     if (sources.contains('GE')) {
-      if (_num(_gasoil) == null || _num(_heures) == null) {
-        setState(() => _error = 'Renseignez le volume gasoil dans la cuve et l\'index horaire GE.');
+      if (_num(_gasoil) == null) {
+        setState(() => _error = 'Renseignez le volume gasoil dans la cuve.');
         return;
       }
-      energie['volumeGasoilLitres'] = _num(_gasoil); // niveau actuel de la cuve
-      energie['indexHeuresGE'] = _num(_heures);       // index horaire (cumulé) lu sur la carte GE
+      energie['volumeGasoilLitres'] = _num(_gasoil); // niveau actuel de la cuve (partagée)
+      final groupes = widget.maintenance.siteGroupes;
+      if (groupes.isNotEmpty) {
+        final geHours = <String, dynamic>{};
+        for (final g in groupes) {
+          final v = _num(_geCtrls[g.id]!);
+          if (v == null) {
+            setState(() => _error = 'Renseignez l\'index horaire du GE n°${g.numero}.');
+            return;
+          }
+          geHours[g.id] = v;
+        }
+        energie['geHours'] = geHours; // index horaire par GE
+      } else {
+        if (_num(_heures) == null) {
+          setState(() => _error = 'Renseignez l\'index horaire GE.');
+          return;
+        }
+        energie['indexHeuresGE'] = _num(_heures);
+      }
     }
     if (sources.contains('CEET')) {
       if (_num(_index) == null) {
@@ -384,8 +412,19 @@ class _CloseSheetState extends State<_CloseSheet> {
                     if (sources.contains('GE')) ...[
                       TextField(controller: _gasoil, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Volume gasoil dans la cuve (L) *')),
                       const SizedBox(height: 10),
-                      TextField(controller: _heures, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index horaire GE (carte GE) *')),
-                      const SizedBox(height: 10),
+                      if (m.siteGroupes.isNotEmpty)
+                        ...m.siteGroupes.map((g) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: TextField(
+                                controller: _geCtrls[g.id],
+                                keyboardType: numKb,
+                                decoration: InputDecoration(labelText: 'Index horaire GE n°${g.numero} (carte GE) *'),
+                              ),
+                            ))
+                      else ...[
+                        TextField(controller: _heures, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index horaire GE (carte GE) *')),
+                        const SizedBox(height: 10),
+                      ],
                     ],
                     if (sources.contains('CEET')) ...[
                       TextField(controller: _index, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index compteur CEET *')),

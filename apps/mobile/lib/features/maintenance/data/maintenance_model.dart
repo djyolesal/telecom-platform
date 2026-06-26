@@ -1,3 +1,12 @@
+/// Groupe électrogène d'un site (pour la saisie des index horaires par GE).
+class GroupeGE {
+  final String id;
+  final int numero;
+  const GroupeGE({required this.id, required this.numero});
+  factory GroupeGE.fromJson(Map<String, dynamic> j) =>
+      GroupeGE(id: j['id'] as String, numero: (j['numero'] as num?)?.toInt() ?? 1);
+}
+
 /// Maintenance (préventive/curative).
 class Maintenance {
   final String id;
@@ -18,6 +27,7 @@ class Maintenance {
   final double? siteLongitude;
   final String? technicien;
   final String? prestataire;
+  final List<GroupeGE> siteGroupes;
   final List<String> photoUrls;
   final int photoCount;
 
@@ -40,6 +50,7 @@ class Maintenance {
     this.siteLongitude,
     this.technicien,
     this.prestataire,
+    this.siteGroupes = const [],
     this.photoUrls = const [],
     this.photoCount = 0,
   });
@@ -52,6 +63,10 @@ class Maintenance {
     final site = j['site'] as Map<String, dynamic>?;
     final tech = j['technicien'] as Map<String, dynamic>?;
     final presta = j['prestataire'] as Map<String, dynamic>?;
+    final groupes = (site?['groupes'] as List?)
+            ?.map((g) => GroupeGE.fromJson(g as Map<String, dynamic>))
+            .toList() ??
+        const <GroupeGE>[];
     final photos = (j['photos'] as List?)
             ?.map((p) => (p as Map)['url']?.toString())
             .whereType<String>()
@@ -77,6 +92,7 @@ class Maintenance {
       siteLongitude: site?['longitude'] == null ? null : double.tryParse(site!['longitude'].toString()),
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
       prestataire: presta?['nom'] as String?,
+      siteGroupes: groupes,
       photoUrls: photos,
       // Liste : compteur via _count.photos ; détail : longueur du tableau photos.
       photoCount: (j['_count'] as Map?)?['photos'] as int? ?? photos.length,

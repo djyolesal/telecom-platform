@@ -175,12 +175,33 @@ model Site {
   depotages    Depotage[]
   releves      ReleveEnergie[]
   incidents    Incident[]
+  groupes      GroupeElectrogene[]
 
   @@index([region])
   @@index([statutGE])
   @@index([powerConfig])
   @@index([lotId])
   @@map("sites")
+}
+
+// Groupe électrogène d'un site. Un site peut en avoir plusieurs (1, 2, 3…).
+// Chaque GE a son propre compteur horaire ; la cuve à gasoil est partagée au niveau du site.
+model GroupeElectrogene {
+  id           String   @id @default(uuid())
+  siteId       String   @map("site_id")
+  numero       Int      // 1, 2, 3…
+  puissanceKva Decimal  @default(0) @map("puissance_kva") @db.Decimal(6, 2)
+  statut       StatutGE @default(GE_SECOURS)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  site    Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  releves ReleveEnergie[]
+
+  @@unique([siteId, numero])
+  @@index([siteId])
+  @@map("groupes_electrogenes")
 }
 
 model Maintenance {
@@ -295,20 +316,23 @@ model ReleveEnergie {
   coutEstime         Decimal?      @map("cout_estime") @db.Decimal(12, 0)
   technicienId       String?       @map("technicien_id")
   maintenanceId      String?       @map("maintenance_id")
+  groupeId           String?       @map("groupe_id")
   observations       String?
   latitude           Decimal?      @db.Decimal(10, 8)
   longitude          Decimal?      @db.Decimal(11, 8)
   isSynced           Boolean       @default(true) @map("is_synced")
   createdAt          DateTime      @default(now()) @map("created_at")
 
-  site        Site         @relation(fields: [siteId], references: [id])
-  technicien  User?        @relation(fields: [technicienId], references: [id])
-  maintenance Maintenance? @relation(fields: [maintenanceId], references: [id])
+  site        Site               @relation(fields: [siteId], references: [id])
+  technicien  User?              @relation(fields: [technicienId], references: [id])
+  maintenance Maintenance?       @relation(fields: [maintenanceId], references: [id])
+  groupe      GroupeElectrogene? @relation(fields: [groupeId], references: [id])
 
   @@index([siteId])
   @@index([dateReleve])
   @@index([source])
   @@index([maintenanceId])
+  @@index([groupeId])
   @@map("releves_energie")
 }
 

@@ -173,7 +173,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
     const maintenance = await prisma.maintenance.findUnique({
       where: { id: req.params.id },
       include: {
-        site: true,
+        site: { include: { groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } } } },
         technicien: { select: { id: true, nom: true, prenom: true, telephone: true } },
         prestataire: { select: { id: true, nom: true, telephone: true } },
         pieces: true,
@@ -299,7 +299,14 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     };
     const existing = await prisma.maintenance.findUnique({
       where: { id: req.params.id },
-      include: { site: { select: { id: true, powerConfig: true, latitude: true, longitude: true, code: true } } },
+      include: {
+        site: {
+          select: {
+            id: true, powerConfig: true, latitude: true, longitude: true, code: true,
+            groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
+          },
+        },
+      },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
 
@@ -340,7 +347,15 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       const missing: string[] = [];
       if (sources.includes('GE')) {
         if (num(e.volumeGasoilLitres) == null) missing.push('volume gasoil dans la cuve');
-        if (num(e.indexHeuresGE) == null) missing.push('index horaire GE');
+        const geHours = (e.geHours ?? {}) as Record<string, unknown>;
+        const groupes = existing.site.groupes ?? [];
+        if (groupes.length) {
+          for (const g of groupes) {
+            if (num(geHours[g.id]) == null) missing.push(`index horaire GE n°${g.numero}`);
+          }
+        } else if (num(e.indexHeuresGE) == null) {
+          missing.push('index horaire GE');
+        }
       }
       if (sources.includes('CEET') && num(e.indexCompteur) == null) missing.push('index compteur CEET');
       if (sources.includes('SOLAIRE') && num(e.puissanceKva) == null) missing.push('puissance solaire');
@@ -382,53 +397,82 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     //  - heures GE     = index horaire actuel − index précédent ;
     //  - gasoil GE     = niveau cuve précédent + dépotages depuis − niveau actuel.
     if (passive && sources.length) {
-      for (const source of sources) {
-        const data: Prisma.ReleveEnergieUncheckedCreateInput = {
-          siteId: existing.siteId,
-          dateReleve: dateFin,
-          source,
-          technicienId: existing.technicienId ?? req.user!.id,
-          maintenanceId: existing.id,
-        };
-        // Relevé précédent du site pour cette source (hors celui de cette clôture).
-        const prev = await prisma.releveEnergie.findFirst({
-          where: { siteId: existing.siteId, source, maintenanceId: { not: existing.id } },
-          orderBy: { dateReleve: 'desc' },
-        });
+      const techId = existing.technicienId ?? req.user!.id;
 
+      for (const source of sources) {
         if (source === 'GE') {
-          const tank = num(e.volumeGasoilLitres);   // niveau actuel de la cuve
-          const hIndex = num(e.indexHeuresGE);        // index horaire actuel
-          data.volumeGasoilLitres = tank;
-          data.indexHeuresGE = hIndex;
-          // Heures de fonctionnement = Δ index horaire.
-          if (prev?.indexHeuresGE != null && hIndex != null) {
-            data.heuresFonctGE = Math.max(0, hIndex - Number(prev.indexHeuresGE));
-          }
-          // Gasoil consommé = niveau précédent + dépotages effectués depuis − niveau actuel.
-          if (prev?.volumeGasoilLitres != null && tank != null) {
+          // Cuve PARTAGÉE : un niveau + une conso gasoil calculés une seule fois,
+          // rattachés au 1er relevé GE. Heures calculées PAR GE (compteurs distincts).
+          const tank = num(e.volumeGasoilLitres);
+          const geHours = (e.geHours ?? {}) as Record<string, unknown>;
+          const groupes = existing.site.groupes ?? [];
+
+          // Gasoil consommé (partagé) = dernier niveau cuve + dépotages depuis − niveau actuel.
+          let gasoilConso: number | null = null;
+          let gasoilCost: number | null = null;
+          const prevTank = await prisma.releveEnergie.findFirst({
+            where: { siteId: existing.siteId, source: 'GE', volumeGasoilLitres: { not: null }, maintenanceId: { not: existing.id } },
+            orderBy: { dateReleve: 'desc' },
+          });
+          if (prevTank?.volumeGasoilLitres != null && tank != null) {
             const depots = await prisma.depotage.aggregate({
-              where: { siteId: existing.siteId, dateDepotage: { gt: prev.dateReleve, lte: dateFin } },
+              where: { siteId: existing.siteId, dateDepotage: { gt: prevTank.dateReleve, lte: dateFin } },
               _sum: { volumeLitres: true },
             });
             const ajout = Number(depots._sum.volumeLitres ?? 0);
-            const conso = Math.max(0, Number(prev.volumeGasoilLitres) + ajout - tank);
-            data.gasoilConsommeLitres = conso;
-            data.coutEstime = Math.round(conso * GE_PARAMS.prixLitreFCFA);
+            gasoilConso = Math.max(0, Number(prevTank.volumeGasoilLitres) + ajout - tank);
+            gasoilCost = Math.round(gasoilConso * GE_PARAMS.prixLitreFCFA);
+          }
+
+          // Un relevé par GE (ou un seul si aucun GE configuré).
+          const cibles: ({ id: string; numero: number } | null)[] = groupes.length ? groupes : [null];
+          let first = true;
+          for (const g of cibles) {
+            const hIndex = g ? num(geHours[g.id]) : num(e.indexHeuresGE);
+            const prevGe = await prisma.releveEnergie.findFirst({
+              where: { siteId: existing.siteId, source: 'GE', maintenanceId: { not: existing.id }, ...(g ? { groupeId: g.id } : {}) },
+              orderBy: { dateReleve: 'desc' },
+            });
+            const data: Prisma.ReleveEnergieUncheckedCreateInput = {
+              siteId: existing.siteId, dateReleve: dateFin, source: 'GE',
+              technicienId: techId, maintenanceId: existing.id,
+              groupeId: g?.id, indexHeuresGE: hIndex,
+            };
+            if (prevGe?.indexHeuresGE != null && hIndex != null) {
+              data.heuresFonctGE = Math.max(0, hIndex - Number(prevGe.indexHeuresGE));
+            }
+            if (first) {
+              data.volumeGasoilLitres = tank;
+              data.gasoilConsommeLitres = gasoilConso;
+              data.coutEstime = gasoilCost;
+              first = false;
+            }
+            await prisma.releveEnergie.create({ data });
           }
         } else if (source === 'CEET') {
           const index = num(e.indexCompteur);
-          data.indexCompteur = index;
-          // Consommation = Δ index compteur.
+          const prev = await prisma.releveEnergie.findFirst({
+            where: { siteId: existing.siteId, source: 'CEET', maintenanceId: { not: existing.id } },
+            orderBy: { dateReleve: 'desc' },
+          });
+          const data: Prisma.ReleveEnergieUncheckedCreateInput = {
+            siteId: existing.siteId, dateReleve: dateFin, source: 'CEET',
+            technicienId: techId, maintenanceId: existing.id, indexCompteur: index,
+          };
           if (prev?.indexCompteur != null && index != null) {
             const kwh = Math.max(0, index - Number(prev.indexCompteur));
             data.consommationKwh = kwh;
             data.coutEstime = Math.round(kwh * TARIF_CEET_FCFA);
           }
+          await prisma.releveEnergie.create({ data });
         } else if (source === 'SOLAIRE') {
-          data.puissanceKva = num(e.puissanceKva);
+          await prisma.releveEnergie.create({
+            data: {
+              siteId: existing.siteId, dateReleve: dateFin, source: 'SOLAIRE',
+              technicienId: techId, maintenanceId: existing.id, puissanceKva: num(e.puissanceKva),
+            },
+          });
         }
-        await prisma.releveEnergie.create({ data });
       }
     }
 

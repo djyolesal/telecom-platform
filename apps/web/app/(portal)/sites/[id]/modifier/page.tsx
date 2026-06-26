@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save } from 'lucide-react';
+import { Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select } from '@/components/shared/Form';
@@ -23,6 +23,8 @@ export default function ModifierSitePage() {
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
   });
   const [error, setError] = useState('');
+  // Groupes électrogènes supplémentaires (GE n°2, 3…). Le GE n°1 = champs statut/puissance ci-dessus.
+  const [extraGEs, setExtraGEs] = useState<{ puissanceKva: string; statut: string }[]>([]);
 
   const { data: site, isLoading, isError } = useQuery({
     queryKey: ['site', id],
@@ -56,13 +58,18 @@ export default function ModifierSitePage() {
       formeCuve: site.formeCuve ?? '',
       cuveDimensions: site.cuveDimensions ?? '',
     });
+    const extras = (site.groupes ?? [])
+      .filter((g: { numero: number }) => g.numero > 1)
+      .sort((a: { numero: number }, b: { numero: number }) => a.numero - b.numero)
+      .map((g: { puissanceKva: number; statut: string }) => ({ puissanceKva: String(g.puissanceKva ?? 0), statut: g.statut ?? 'GE_SECOURS' }));
+    setExtraGEs(extras);
   }, [site]);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.put(`/sites/${id}`, {
+    mutationFn: async () => {
+      await api.put(`/sites/${id}`, {
         code: form.code, nom: form.nom, region: form.region, ville: form.ville || null,
         adresse: form.adresse || null, powerConfig: form.powerConfig, statutGE: form.statutGE,
         puissanceGEkva: Number(form.puissanceGEkva) || 0,
@@ -75,7 +82,15 @@ export default function ModifierSitePage() {
         cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null,
         formeCuve: form.formeCuve || null,
         cuveDimensions: form.cuveDimensions || null,
-      }),
+      });
+      // Synchronise la liste des GE : n°1 = champs ci-dessus, n°2+ = liste supplémentaire.
+      const groupes: { numero: number; puissanceKva: number; statut: string }[] = [];
+      if (form.statutGE !== 'PAS_DE_GE') {
+        groupes.push({ numero: 1, puissanceKva: Number(form.puissanceGEkva) || 0, statut: form.statutGE });
+      }
+      extraGEs.forEach((g, i) => groupes.push({ numero: i + 2, puissanceKva: Number(g.puissanceKva) || 0, statut: g.statut }));
+      await api.put(`/sites/${id}/groupes`, { groupes });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site', id] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
@@ -111,10 +126,10 @@ export default function ModifierSitePage() {
           <Field label="Configuration énergie" required>
             <Select value={form.powerConfig} onChange={(e) => set('powerConfig', e.target.value)} options={POWER_CONFIGS} />
           </Field>
-          <Field label="Statut GE" required>
+          <Field label="Statut GE n°1" required>
             <Select value={form.statutGE} onChange={(e) => set('statutGE', e.target.value)} options={STATUTS_GE} />
           </Field>
-          <Field label="Puissance GE (kVA)">
+          <Field label="Puissance GE n°1 (kVA)">
             <Input type="number" step="0.01" value={form.puissanceGEkva} onChange={(e) => set('puissanceGEkva', e.target.value)} />
           </Field>
           <Field label="Lot (rattachement / prestataire)">
@@ -149,6 +164,31 @@ export default function ModifierSitePage() {
           <Field label="Dimensions de la cuve">
             <Input value={form.cuveDimensions} onChange={(e) => set('cuveDimensions', e.target.value)} placeholder="ex: 2m × 1m × 1m" />
           </Field>
+
+          <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-700">Groupes électrogènes supplémentaires</span>
+              <button type="button" onClick={() => setExtraGEs((g) => [...g, { puissanceKva: '0', statut: 'GE_SECOURS' }])} className="text-sm font-medium text-[#2471A3] hover:underline">+ Ajouter un GE</button>
+            </div>
+            {extraGEs.length === 0 ? (
+              <p className="text-xs text-gray-400">Le GE n°1 est défini ci-dessus. Ajoutez un GE n°2, 3… pour les sites multi-générateurs (cuve partagée).</p>
+            ) : (
+              <div className="space-y-2">
+                {extraGEs.map((g, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <span className="pb-2 text-xs font-medium text-gray-500 w-12">n°{i + 2}</span>
+                    <Field label="Statut" className="flex-1">
+                      <Select value={g.statut} onChange={(e) => setExtraGEs((arr) => arr.map((x, j) => j === i ? { ...x, statut: e.target.value } : x))} options={STATUTS_GE} />
+                    </Field>
+                    <Field label="Puissance (kVA)" className="flex-1">
+                      <Input type="number" step="0.01" value={g.puissanceKva} onChange={(e) => setExtraGEs((arr) => arr.map((x, j) => j === i ? { ...x, puissanceKva: e.target.value } : x))} />
+                    </Field>
+                    <button type="button" onClick={() => setExtraGEs((arr) => arr.filter((_, j) => j !== i))} className="pb-2 text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="md:col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => router.back()}>Annuler</Button>

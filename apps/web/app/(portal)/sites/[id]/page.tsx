@@ -128,6 +128,18 @@ export default function SiteDetailPage() {
           <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '—'} />
           <InfoRow label="Dimensions cuve" value={site.cuveDimensions || '—'} />
         </div>
+        {site.groupes?.length > 0 && (
+          <div className="mt-3 border-t border-gray-50 pt-3">
+            <p className="mb-1.5 text-xs font-medium text-gray-500">Groupes électrogènes ({site.groupes.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {site.groupes.map((g: { id: string; numero: number; puissanceKva: number; statut: string }) => (
+                <span key={g.id} className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-1 text-xs text-gray-700 ring-1 ring-inset ring-gray-100">
+                  <b>GE n°{g.numero}</b> · {Number(g.puissanceKva).toFixed(0)} kVA · {STATUTS_GE.find((s) => s.value === g.statut)?.label ?? g.statut}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {taches && taches.length > 0 && (
