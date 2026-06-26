@@ -5,8 +5,21 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
 import { genererPlanningPreventif } from '../services/planning.service';
-import { buildFicheValidationXlsx } from '../services/ficheValidation.service';
+import { buildFicheValidationXlsx, FicheLogo } from '../services/ficheValidation.service';
+import { getObjectBuffer } from '../services/storage.service';
 import { setXlsxHeaders } from '../utils/excel';
+
+/** Charge un logo (objet MinIO) et déduit son extension pour ExcelJS. */
+async function loadLogo(key?: string | null): Promise<FicheLogo | null> {
+  if (!key) return null;
+  try {
+    const buffer = await getObjectBuffer(key);
+    const ext: FicheLogo['extension'] = /\.png$/i.test(key) ? 'png' : /\.gif$/i.test(key) ? 'gif' : 'jpeg';
+    return { buffer, extension: ext };
+  } catch {
+    return null;
+  }
+}
 import {
   CONTRACTUAL_TASKS,
   TASK_BY_KEY,
@@ -184,15 +197,32 @@ export async function getFicheValidation(req: Request, res: Response, next: Next
     for (const [k, set] of byKey) realisesParKey[k] = set.size;
 
     const zone = [...new Set(sites.map((s) => s.region))].join(', ') || '—';
+    const [prestataireLogo, clientLogo] = await Promise.all([
+      loadLogo(presta.logoPath),
+      loadLogo(process.env.CLIENT_LOGO_KEY),
+    ]);
     const buf = await buildFicheValidationXlsx({
-      prestataireNom: presta.nom,
-      client: client || 'Moov Africa Togo',
+      prestataire: {
+        nom: presta.nom,
+        adresse: presta.adresse,
+        rccm: presta.rccm,
+        nif: presta.nif,
+        contactCommercial: presta.contactCommercial ?? presta.telephone,
+        contactTechnique: presta.contactTechnique,
+        telephone: presta.telephone,
+      },
+      client: {
+        nom: client || process.env.CLIENT_NOM || 'Moov Africa Togo',
+        adresse: (process.env.CLIENT_ADRESSE || 'Bld de la paix|BP 14511 LOME - TOGO').split('|'),
+      },
       zone,
       nbSites: sites.length,
       annee: an,
       mois: mo,
       sites: sites as unknown as SiteEligibilite[],
       realisesParKey,
+      prestataireLogo,
+      clientLogo,
     });
 
     const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');

@@ -65,7 +65,9 @@
       "Bash(perl -0pi -e \"s/\\\\\\\\\\\\$\\\\{inc\\\\.siteCode \\\\?\\\\? ''\\\\}/\\\\\\\\\\\\${inc.siteNom ?? inc.siteCode ?? ''}/\" lib/features/incidents/presentation/incident_detail_screen.dart)",
       "Bash(grep -nA3 \"^backup:\" Makefile)",
       "Bash(make -n reset-sites)",
-      "Bash(node ./_readxlsx.js)"
+      "Bash(node ./_readxlsx.js)",
+      "Bash(sed -i '' 's/const { nom, contactNom, telephone, email, adresse, rccm, nif, contactCommercial, contactTechnique } = req.body;/const { nom, contactNom, telephone, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } = req.body;/; s/data: { nom, contactNom, telephone, email, adresse, rccm, nif, contactCommercial, contactTechnique }/data: { nom, contactNom, telephone, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath }/' src/controllers/prestataires.controller.ts)",
+      "Bash(sed -i '' 's/const { nom, contactNom, telephone, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique } = req.body;/const { nom, contactNom, telephone, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } = req.body;/; s/data: { nom, contactNom, telephone, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique }/data: { nom, contactNom, telephone, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath }/' src/controllers/prestataires.controller.ts)"
     ]
   }
 }

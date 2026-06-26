@@ -42,6 +42,14 @@ export async function deleteObject(key: string): Promise<void> {
   await minioClient.removeObject(MINIO_BUCKET, key);
 }
 
+/** Récupère le contenu d'un objet MinIO sous forme de Buffer (ex: logo à embarquer dans un xlsx). */
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const stream = await minioClient.getObject(MINIO_BUCKET, key);
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks);
+}
+
 function mimeExt(mime: string): string {
   const map: Record<string, string> = {
     'image/jpeg': '.jpg',

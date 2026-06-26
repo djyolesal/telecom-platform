@@ -41,9 +41,9 @@ export async function getPrestataireById(req: Request, res: Response, next: Next
 
 export async function createPrestataire(req: Request, res: Response, next: NextFunction) {
   try {
-    const { nom, contactNom, telephone, email } = req.body;
+    const { nom, contactNom, telephone, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } = req.body;
     if (!nom) throw new AppError('Le nom est requis', 400);
-    const prestataire = await prisma.prestataire.create({ data: { nom, contactNom, telephone, email } });
+    const prestataire = await prisma.prestataire.create({ data: { nom, contactNom, telephone, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } });
     await auditLog(req.user!.id, 'CREATE', 'prestataires', prestataire.id, { nom }, req);
     res.status(201).json({ success: true, data: prestataire });
   } catch (err) { next(err); }
@@ -53,10 +53,10 @@ export async function updatePrestataire(req: Request, res: Response, next: NextF
   try {
     const existing = await prisma.prestataire.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Prestataire introuvable', 404);
-    const { nom, contactNom, telephone, email, isActive } = req.body;
+    const { nom, contactNom, telephone, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } = req.body;
     const updated = await prisma.prestataire.update({
       where: { id: req.params.id },
-      data: { nom, contactNom, telephone, email, isActive },
+      data: { nom, contactNom, telephone, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath },
     });
     await auditLog(req.user!.id, 'UPDATE', 'prestataires', existing.id, req.body, req);
     res.json({ success: true, data: updated });

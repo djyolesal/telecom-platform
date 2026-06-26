@@ -19,9 +19,29 @@ const FICHE_ROWS: { numero: number; description: string; key: string; freq6: num
 
 const MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
+export interface FichePrestataire {
+  nom: string;
+  adresse?: string | null;
+  rccm?: string | null;
+  nif?: string | null;
+  contactCommercial?: string | null;
+  contactTechnique?: string | null;
+  telephone?: string | null;
+}
+
+export interface FicheClient {
+  nom: string;
+  adresse: string[]; // lignes d'adresse
+}
+
+export interface FicheLogo {
+  buffer: Buffer;
+  extension: 'png' | 'jpeg' | 'gif';
+}
+
 export interface FicheValidationData {
-  prestataireNom: string;
-  client: string;
+  prestataire: FichePrestataire;
+  client: FicheClient;
   zone: string;
   nbSites: number;
   annee: number;
@@ -29,6 +49,8 @@ export interface FicheValidationData {
   sites: SiteEligibilite[];
   // Exécutions du mois : nb de sites distincts réalisés par clé de tâche.
   realisesParKey: Record<string, number>;
+  prestataireLogo?: FicheLogo | null;
+  clientLogo?: FicheLogo | null;
 }
 
 export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<Buffer> {
@@ -44,11 +66,34 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
   const thin = { style: 'thin' as const };
   const border = { top: thin, left: thin, bottom: thin, right: thin };
 
-  // ── En-tête ──
-  ws.getCell('B7').value = d.prestataireNom;
+  // ── Logos (lignes 1-5 : gauche = prestataire, droite = client) ──
+  ws.getRow(1).height = 18; ws.getRow(2).height = 18; ws.getRow(3).height = 18; ws.getRow(4).height = 18; ws.getRow(5).height = 18;
+  if (d.prestataireLogo) {
+    const imgId = wb.addImage({ buffer: d.prestataireLogo.buffer as unknown as ExcelJS.Buffer, extension: d.prestataireLogo.extension });
+    ws.addImage(imgId, { tl: { col: 1, row: 0 }, ext: { width: 150, height: 70 } });
+  }
+  if (d.clientLogo) {
+    const imgId = wb.addImage({ buffer: d.clientLogo.buffer as unknown as ExcelJS.Buffer, extension: d.clientLogo.extension });
+    ws.addImage(imgId, { tl: { col: 7, row: 0 }, ext: { width: 150, height: 70 } });
+  }
+
+  // ── En-tête prestataire (gauche) ──
+  const p = d.prestataire;
+  ws.getCell('B7').value = p.nom;
   ws.getCell('B7').font = { bold: true, size: 12 };
+  if (p.adresse) ws.getCell('B8').value = p.adresse;
+  if (p.rccm) ws.getCell('B9').value = `RCCM : ${p.rccm}`;
+  if (p.nif) ws.getCell('B10').value = `NIF : ${p.nif}`;
+  if (p.contactCommercial) ws.getCell('B11').value = `Contact Commercial : ${p.contactCommercial}`;
+  if (p.contactTechnique) ws.getCell('B12').value = `Contact Technique : ${p.contactTechnique}`;
+
+  // ── Bloc client (droite) ──
   ws.getCell('H7').value = `Lomé, le ${String(lastDay).padStart(2, '0')}/${String(d.mois).padStart(2, '0')}/${d.annee}`;
-  ws.getCell('B11').value = `Client : ${d.client}`;
+  ws.getCell('H9').value = `Client : ${d.client.nom}`;
+  ws.getCell('H9').font = { bold: true };
+  d.client.adresse.slice(0, 3).forEach((line, i) => { ws.getCell(`H${10 + i}`).value = line; });
+
+  // ── Zone / sites / période ──
   ws.getCell('B16').value = `Zone : ${d.zone}`;
   ws.getCell('B16').font = { bold: true };
   ws.getCell('B17').value = `Nombre de sites : ${d.nbSites}`;
@@ -57,11 +102,12 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
   // ── Titre ──
   ws.mergeCells('B20:I20');
   const title = ws.getCell('B20');
-  title.value = `TRAVAUX DE MAINTENANCE DES SITES ${d.client.toUpperCase()} : MOIS DE ${moisLabel.toUpperCase()} ${d.annee}`;
+  title.value = `TRAVAUX DE MAINTENANCE DES SITES ${d.client.nom.toUpperCase()} : MOIS DE ${moisLabel.toUpperCase()} ${d.annee}`;
   title.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
   title.alignment = { horizontal: 'center', vertical: 'middle' };
   title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B3F6B' } };
   ws.getRow(20).height = 24;
+  for (let c = 2; c <= 9; c++) ws.getRow(20).getCell(c).border = border;
 
   // ── Section ──
   ws.mergeCells('B22:I22');
@@ -70,6 +116,7 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
   sec.font = { bold: true };
   sec.alignment = { horizontal: 'center' };
   sec.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F0' } };
+  for (let c = 2; c <= 9; c++) ws.getRow(22).getCell(c).border = border;
 
   // ── En-tête tableau (ligne 23) ──
   const head = ws.getRow(23);
@@ -112,9 +159,9 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
 
   // ── Signatures ──
   r += 2;
-  ws.getCell(`B${r}`).value = `Pour ${d.prestataireNom}`;
+  ws.getCell(`B${r}`).value = `Pour ${p.nom}`;
   ws.getCell(`B${r}`).font = { bold: true };
-  ws.getCell(`H${r}`).value = `Pour ${d.client}`;
+  ws.getCell(`H${r}`).value = `Pour ${d.client.nom}`;
   ws.getCell(`H${r}`).font = { bold: true };
   ws.getCell(`B${r + 1}`).value = 'Nom :';
   ws.getCell(`H${r + 1}`).value = 'Nom :';
