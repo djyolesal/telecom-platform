@@ -178,7 +178,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
         prestataire: { select: { id: true, nom: true, telephone: true } },
         pieces: true,
         photos: true,
-        releves: true,
+        releves: { include: { groupe: { select: { numero: true } } }, orderBy: { source: 'asc' } },
         incident: { select: { id: true, type: true, severite: true } },
       },
     });

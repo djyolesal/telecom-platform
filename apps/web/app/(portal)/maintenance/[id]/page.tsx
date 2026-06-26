@@ -91,34 +91,57 @@ export default function MaintenanceDetailPage() {
           )}
 
           {/* ── Relevés énergie capturés ── */}
-          {m.releves?.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <h3 className="font-semibold text-gray-700 text-sm mb-2">Relevés énergie</h3>
-              <ul className="space-y-1 text-sm text-gray-600">
-                {m.releves.map((r: { id: string; source: string; volumeGasoilLitres?: number; gasoilConsommeLitres?: number; indexHeuresGE?: number; heuresFonctGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number }) => (
-                  <li key={r.id} className="flex justify-between gap-4">
-                    <span className="font-medium text-gray-700">{r.source}</span>
-                    <span className="text-gray-500 text-right">
-                      {r.source === 'GE' && (
-                        <>
-                          {r.gasoilConsommeLitres != null ? `${fmtNumber(r.gasoilConsommeLitres)} L consommés` : '— L consommés'}
-                          {r.heuresFonctGE != null ? ` · ${fmtNumber(r.heuresFonctGE)} h` : ''}
-                          {` · cuve ${fmtNumber(r.volumeGasoilLitres)} L`}
-                        </>
-                      )}
-                      {r.source === 'CEET' && (
-                        <>
-                          {r.consommationKwh != null ? `${fmtNumber(r.consommationKwh)} kWh` : '— kWh'}
-                          {` · index ${fmtNumber(r.indexCompteur)}`}
-                        </>
-                      )}
-                      {r.source === 'SOLAIRE' && `${fmtNumber(r.puissanceKva)} kVA`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {m.releves?.length > 0 && (() => {
+            type R = { id: string; source: string; volumeGasoilLitres?: number; gasoilConsommeLitres?: number; heuresFonctGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number; groupe?: { numero: number } };
+            const releves: R[] = m.releves;
+            const ge = releves.filter((r) => r.source === 'GE').sort((a, b) => (a.groupe?.numero ?? 0) - (b.groupe?.numero ?? 0));
+            const autres = releves.filter((r) => r.source !== 'GE');
+            const gasoilRow = ge.find((r) => r.gasoilConsommeLitres != null) ?? ge.find((r) => r.volumeGasoilLitres != null);
+            const totalHeures = ge.reduce((s, r) => s + Number(r.heuresFonctGE ?? 0), 0);
+            const hasHeures = ge.some((r) => r.heuresFonctGE != null);
+            return (
+              <div className="bg-white rounded-xl border border-gray-100 p-5">
+                <h3 className="font-semibold text-gray-700 text-sm mb-2">Relevés énergie</h3>
+                <ul className="space-y-1 text-sm text-gray-600">
+                  {gasoilRow && (
+                    <li className="flex justify-between gap-4">
+                      <span className="font-medium text-gray-700">Gasoil consommé</span>
+                      <span className="text-gray-500 text-right">
+                        {gasoilRow.gasoilConsommeLitres != null ? `${fmtNumber(gasoilRow.gasoilConsommeLitres)} L` : '—'}
+                        {gasoilRow.volumeGasoilLitres != null ? ` · cuve ${fmtNumber(gasoilRow.volumeGasoilLitres)} L` : ''}
+                      </span>
+                    </li>
+                  )}
+                  {ge.map((r) => (
+                    <li key={r.id} className="flex justify-between gap-4">
+                      <span className="font-medium text-gray-700">Heures de fonctionnement GE{r.groupe?.numero ?? ''}</span>
+                      <span className="text-gray-500 text-right">{r.heuresFonctGE != null ? `${fmtNumber(r.heuresFonctGE)} h` : '—'}</span>
+                    </li>
+                  ))}
+                  {ge.length > 1 && hasHeures && (
+                    <li className="flex justify-between gap-4 border-t border-gray-50 pt-1">
+                      <span className="font-semibold text-gray-700">Total heures GE</span>
+                      <span className="font-semibold text-gray-700 text-right">{fmtNumber(totalHeures)} h</span>
+                    </li>
+                  )}
+                  {autres.map((r) => (
+                    <li key={r.id} className="flex justify-between gap-4">
+                      <span className="font-medium text-gray-700">{r.source}</span>
+                      <span className="text-gray-500 text-right">
+                        {r.source === 'CEET' && (
+                          <>
+                            {r.consommationKwh != null ? `${fmtNumber(r.consommationKwh)} kWh` : '— kWh'}
+                            {` · index ${fmtNumber(r.indexCompteur)}`}
+                          </>
+                        )}
+                        {r.source === 'SOLAIRE' && `${fmtNumber(r.puissanceKva)} kVA`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
 
           {m.photos?.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 p-5">
