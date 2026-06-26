@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet } from 'lucide-react';
+import { FileSpreadsheet, Archive } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -19,6 +19,7 @@ const MOIS = [
 export default function FicheValidationPage() {
   const now = new Date();
   const [prestataireId, setPrestataireId] = useState('');
+  const [lotId, setLotId] = useState('');
   const [annee, setAnnee] = useState(String(now.getFullYear()));
   const [mois, setMois] = useState(String(now.getMonth() + 1));
   const [busy, setBusy] = useState(false);
@@ -30,6 +31,22 @@ export default function FicheValidationPage() {
   });
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
+  // Lots passifs attribués au prestataire sélectionné.
+  const { data: prestaDetail } = useQuery({
+    queryKey: ['prestataire-lots', prestataireId],
+    queryFn: () => api.get(`/prestataires/${prestataireId}`).then((r) => r.data.data),
+    enabled: !!prestataireId,
+  });
+  const lotOptions = [
+    ...new Map(
+      (prestaDetail?.assignments ?? [])
+        .filter((a: { scope: string; lot?: { id: string } }) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
+        .map((a: { lot: { id: string; code: string; nom: string } }) => [a.lot.id, { value: a.lot.id, label: `${a.lot.code} — ${a.lot.nom}` }]),
+    ).values(),
+  ] as { value: string; label: string }[];
+
+  const [busyAll, setBusyAll] = useState(false);
+
   const download = async () => {
     if (!prestataireId) { setError('Sélectionnez un prestataire.'); return; }
     setError('');
@@ -37,11 +54,24 @@ export default function FicheValidationPage() {
     try {
       const presta = (prestataires ?? []).find((p: { id: string; nom: string }) => p.id === prestataireId);
       const nom = (presta?.nom ?? 'prestataire').replace(/[^a-z0-9]+/gi, '_');
-      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}`, `fiche-validation-${nom}-${mois}-${annee}.xlsx`);
+      const lotPart = lotId ? `&lot_id=${lotId}` : '';
+      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}`, `fiche-validation-${nom}-${mois}-${annee}.xlsx`);
     } catch {
       setError('Échec du téléchargement. Vérifiez le prestataire et la période.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const downloadAll = async () => {
+    setError('');
+    setBusyAll(true);
+    try {
+      await downloadFile(`/rapports/fiches-validation/batch?annee=${annee}&mois=${mois}`, `fiches-validation-${mois}-${annee}.zip`);
+    } catch {
+      setError('Échec de la génération groupée.');
+    } finally {
+      setBusyAll(false);
     }
   };
 
@@ -52,7 +82,10 @@ export default function FicheValidationPage() {
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field label="Prestataire" required className="md:col-span-3">
-            <Select value={prestataireId} onChange={(e) => setPrestataireId(e.target.value)} options={prestataireOptions} placeholder="Sélectionner un prestataire…" />
+            <Select value={prestataireId} onChange={(e) => { setPrestataireId(e.target.value); setLotId(''); }} options={prestataireOptions} placeholder="Sélectionner un prestataire…" />
+          </Field>
+          <Field label="Lot / zone" className="md:col-span-3">
+            <Select value={lotId} onChange={(e) => setLotId(e.target.value)} disabled={!prestataireId} options={lotOptions} placeholder={prestataireId ? 'Tous les lots du prestataire' : 'Choisissez d’abord un prestataire'} />
           </Field>
           <Field label="Mois" required>
             <Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS} />
@@ -61,7 +94,8 @@ export default function FicheValidationPage() {
             <Input type="number" value={annee} onChange={(e) => setAnnee(e.target.value)} />
           </Field>
         </div>
-        <div className="mt-5 flex justify-end">
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" icon={Archive} loading={busyAll} onClick={downloadAll}>Générer toutes les fiches du mois (.zip)</Button>
           <Button icon={FileSpreadsheet} loading={busy} onClick={download}>Télécharger la fiche (.xlsx)</Button>
         </div>
         <p className="mt-3 text-xs text-gray-500">
