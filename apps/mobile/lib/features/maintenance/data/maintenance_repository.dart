@@ -11,7 +11,7 @@ class MaintenanceRepository {
 
   MaintenanceRepository(this._client, this._network, this._sync);
 
-  Future<List<Maintenance>> getMaintenances({String? statut, String? type, String? search}) async {
+  Future<List<Maintenance>> getMaintenances({String? statut, String? type, String? search, String? siteId}) async {
     if (!await _network.isConnected) return [];
     return _client.request(
       (dio) => dio.get('/maintenances', queryParameters: {
@@ -19,6 +19,7 @@ class MaintenanceRepository {
         if (statut != null && statut.isNotEmpty) 'statut': statut,
         if (type != null && type.isNotEmpty) 'type': type,
         if (search != null && search.isNotEmpty) 'search': search,
+        if (siteId != null && siteId.isNotEmpty) 'site_id': siteId,
       }),
       (data) => (data['data'] as List).map((e) => Maintenance.fromJson(e as Map<String, dynamic>)).toList(),
     );

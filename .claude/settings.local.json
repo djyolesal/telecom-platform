@@ -71,7 +71,9 @@
       "Bash(sed -i '' 's/const { nom, contactNom, telephone, email, adresse/const { nom, email, adresse/g; s/data: { nom, contactNom, telephone, email, adresse/data: { nom, email, adresse/g' src/controllers/prestataires.controller.ts)",
       "Bash(sed -i '' 's/const { nom, contactNom, telephone, email, isActive, adresse/const { nom, email, isActive, adresse/g; s/data: { nom, contactNom, telephone, email, isActive, adresse/data: { nom, email, isActive, adresse/g' src/controllers/prestataires.controller.ts)",
       "Bash(grep -iE \"^archiver$|^jszip$|^adm-zip$|^yazl$\")",
-      "Bash(node -e \"console.log\\(require\\('jszip/package.json'\\).version\\)\")"
+      "Bash(node -e \"console.log\\(require\\('jszip/package.json'\\).version\\)\")",
+      "Bash(sed -i '' 's/Navigator.pop\\(sheetCtx\\);\\\\n *GoRouter.of\\(context\\).push/XX/' lib/features/maintenance/presentation/maintenance_list_screen.dart)",
+      "Bash(perl -0pi -e 's/GoRouter\\\\.of\\\\\\(context\\\\\\)\\\\.push/router.push/g' lib/features/maintenance/presentation/maintenance_list_screen.dart)"
     ]
   }
 }

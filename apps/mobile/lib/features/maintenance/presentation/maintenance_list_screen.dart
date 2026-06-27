@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/bloc/list_cubit.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
+import '../../sites/data/site_model.dart';
+import '../../sites/data/site_repository.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 
@@ -69,6 +73,104 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
     context.read<ListCubit<Maintenance>>().run(() => repo.getMaintenances(search: _query));
   }
 
+  /// Planifier intelligent : détecte si le technicien est SUR un site (GPS),
+  /// pré-remplit ce site et propose ses maintenances planifiées ; sinon ouvre
+  /// le formulaire vierge.
+  Future<void> _onPlanifier(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final siteRepo = context.read<SiteRepository>();
+    messenger.showSnackBar(const SnackBar(content: Text('Localisation en cours…'), duration: Duration(seconds: 1)));
+    final pos = await LocationService().freshPosition();
+    final sites = await siteRepo.getSites();
+    Site? onSite;
+    double best = double.infinity;
+    if (pos != null) {
+      for (final s in sites) {
+        if (s.latitude == null || s.longitude == null) continue;
+        final d = LocationService.distanceMeters(pos.lat, pos.lng, s.latitude!, s.longitude!);
+        if (d <= AppConfig.geofenceRadiusM && d < best) {
+          best = d;
+          onSite = s;
+        }
+      }
+    }
+    if (!context.mounted) return;
+    if (onSite != null) {
+      await _showOnSiteSheet(context, onSite);
+    } else {
+      await router.push('/maintenance/nouveau');
+    }
+    if (context.mounted) _reload(context);
+  }
+
+  Future<void> _showOnSiteSheet(BuildContext context, Site site) async {
+    final repo = context.read<MaintenanceRepository>();
+    final router = GoRouter.of(context);
+    final planifiees = await repo.getMaintenances(statut: 'PLANIFIEE', siteId: site.id);
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.location_on, color: Colors.green),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Vous êtes sur le site\n${site.nom}', style: const TextStyle(fontWeight: FontWeight.bold))),
+              ]),
+              const SizedBox(height: 12),
+              if (planifiees.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text('Aucune maintenance planifiée pour ce site.', style: TextStyle(color: Colors.grey.shade600)),
+                )
+              else ...[
+                Text('Maintenances planifiées (${planifiees.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: planifiees
+                        .map((m) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.build_circle_outlined),
+                              title: Text(m.equipement),
+                              subtitle: Text(fmtDate(m.datePlanifiee)),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.pop(sheetCtx);
+                                router.push('/maintenance/${m.id}');
+                              },
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ],
+              const Divider(),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetCtx);
+                    router.push('/maintenance/nouveau?siteId=${site.id}');
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Planifier une nouvelle tâche ici'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,11 +203,8 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await context.push('/maintenance/nouveau');
-          if (context.mounted) _reload(context);
-        },
-        icon: const Icon(Icons.add),
+        onPressed: () => _onPlanifier(context),
+        icon: const Icon(Icons.add_location_alt),
         label: const Text('Planifier'),
       ),
       body: BlocBuilder<ListCubit<Maintenance>, ListState<Maintenance>>(
