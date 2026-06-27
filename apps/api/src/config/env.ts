@@ -49,6 +49,7 @@ const envSchema = z.object({
   // Règles terrain (configurables)
   MIN_DUREE_CLOTURE_MIN: z.coerce.number().default(60), // durée min (min) avant clôture
   GEOFENCE_RADIUS_M: z.coerce.number().default(20),     // rayon (m) « sur site »
+  SEUIL_ECART_GASOIL_PCT: z.coerce.number().default(25), // tolérance (%) écart conso gasoil réelle vs attendue
 });
 
 const parsed = envSchema.safeParse(process.env);

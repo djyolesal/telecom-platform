@@ -21,6 +21,7 @@ const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenanc
 // Configurables via variables d'environnement (cf. config/env.ts).
 const MIN_DUREE_CLOTURE_MIN = env.MIN_DUREE_CLOTURE_MIN; // durée minimale (min) entre démarrage et clôture
 const GEOFENCE_RADIUS_M = env.GEOFENCE_RADIUS_M;          // rayon (m) toléré autour du site
+const SEUIL_ECART_GASOIL_PCT = env.SEUIL_ECART_GASOIL_PCT; // tolérance (%) écart conso gasoil réelle vs attendue
 
 const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
 
@@ -402,6 +403,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     //  - kWh CEET      = index compteur actuel − index précédent ;
     //  - heures GE     = index horaire actuel − index précédent ;
     //  - gasoil GE     = niveau cuve précédent + dépotages depuis − niveau actuel.
+    let analyseEnergie: string | null = null;
     if (passive && sources.length) {
       const techId = existing.technicienId ?? req.user!.id;
 
@@ -431,8 +433,10 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
           }
 
           // Un relevé par GE (ou un seul si aucun GE configuré).
-          const cibles: ({ id: string; numero: number } | null)[] = groupes.length ? groupes : [null];
+          const cibles = groupes.length ? groupes : [null];
           let first = true;
+          let expectedGasoil = 0; // litres attendus = Σ puissance × facteur charge × heures × conso spécifique
+          let hasHeures = false;
           for (const g of cibles) {
             const hIndex = g ? num(geHours[g.id]) : num(e.indexHeuresGE);
             const prevGe = await prisma.releveEnergie.findFirst({
@@ -445,7 +449,13 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
               groupeId: g?.id, indexHeuresGE: hIndex,
             };
             if (prevGe?.indexHeuresGE != null && hIndex != null) {
-              data.heuresFonctGE = Math.max(0, hIndex - Number(prevGe.indexHeuresGE));
+              const heures = Math.max(0, hIndex - Number(prevGe.indexHeuresGE));
+              data.heuresFonctGE = heures;
+              if (g && heures > 0) {
+                const facteur = g.statut === 'GE_PERMANENT' ? GE_PARAMS.facteurChargePermanent : GE_PARAMS.facteurChargeSecours;
+                expectedGasoil += Number(g.puissanceKva) * facteur * heures * GE_PARAMS.consoSpecificDieselLKwh;
+                hasHeures = true;
+              }
             }
             if (first) {
               data.volumeGasoilLitres = tank;
@@ -454,6 +464,25 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
               first = false;
             }
             await prisma.releveEnergie.create({ data });
+          }
+
+          // Analyse de cohérence : gasoil consommé (cuve) vs attendu (heures × puissance).
+          if (gasoilConso != null && hasHeures && expectedGasoil > 0) {
+            const exp = Math.round(expectedGasoil);
+            const act = Math.round(gasoilConso);
+            const ecart = (gasoilConso - expectedGasoil) / expectedGasoil;
+            const pct = Math.round(ecart * 100);
+            const signe = pct >= 0 ? '+' : '';
+            const seuil = SEUIL_ECART_GASOIL_PCT / 100;
+            if (Math.abs(ecart) <= seuil) {
+              analyseEnergie = `Cohérent : ${act} L consommés pour ~${exp} L attendus (écart ${signe}${pct}%) selon les heures GE et la puissance.`;
+            } else if (ecart > seuil) {
+              analyseEnergie = `⚠ Surconsommation : ${act} L consommés contre ~${exp} L attendus (${signe}${pct}%). À vérifier : fuite, vol de carburant, ou heures GE sous-déclarées.`;
+            } else {
+              analyseEnergie = `⚠ Sous-consommation : ${act} L consommés contre ~${exp} L attendus (${pct}%). À vérifier : heures GE surévaluées, ou dépotage non enregistré.`;
+            }
+          } else if (gasoilConso != null && !hasHeures) {
+            analyseEnergie = 'Analyse de cohérence indisponible : heures GE non calculables (relevé de référence / première visite).';
           }
         } else if (source === 'CEET') {
           const index = num(e.indexCompteur);
@@ -480,6 +509,14 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
           });
         }
       }
+    }
+
+    // Commentaire d'analyse de cohérence énergie (gasoil vs heures × puissance).
+    if (analyseEnergie) {
+      updated = await prisma.maintenance.update({
+        where: { id: req.params.id },
+        data: { analyseEnergie },
+      });
     }
 
     // Génération + stockage du rapport PDF

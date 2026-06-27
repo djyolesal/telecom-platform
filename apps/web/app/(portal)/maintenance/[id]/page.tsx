@@ -90,6 +90,14 @@ export default function MaintenanceDetailPage() {
             </div>
           )}
 
+          {/* ── Analyse de cohérence énergie (générée à la clôture) ── */}
+          {m.analyseEnergie && (
+            <div className={`rounded-xl border p-5 ${m.analyseEnergie.startsWith('⚠') ? 'border-orange-200 bg-orange-50/60' : 'border-green-100 bg-green-50/50'}`}>
+              <h3 className={`font-semibold text-sm mb-1 ${m.analyseEnergie.startsWith('⚠') ? 'text-orange-900' : 'text-green-800'}`}>Analyse de cohérence énergie</h3>
+              <p className="text-sm text-gray-700">{m.analyseEnergie}</p>
+            </div>
+          )}
+
           {/* ── Relevés énergie capturés ── */}
           {m.releves?.length > 0 && (() => {
             type R = { id: string; source: string; volumeGasoilLitres?: number; gasoilConsommeLitres?: number; heuresFonctGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number; groupe?: { numero: number } };

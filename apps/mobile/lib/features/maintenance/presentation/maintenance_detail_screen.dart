@@ -213,6 +213,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                 const SizedBox(height: 8),
                 Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(m.description!))),
               ],
+              if (m.analyseEnergie != null && m.analyseEnergie!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _AnalyseCard(texte: m.analyseEnergie!),
+              ],
               if (m.photoUrls.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Card(
@@ -249,6 +253,42 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
         ]),
       );
+}
+
+/// Carte « Analyse de cohérence énergie » générée à la clôture.
+/// Orange en cas d'anomalie (texte préfixé ⚠), vert sinon.
+class _AnalyseCard extends StatelessWidget {
+  final String texte;
+  const _AnalyseCard({required this.texte});
+
+  @override
+  Widget build(BuildContext context) {
+    final alerte = texte.startsWith('⚠');
+    final bg = alerte ? const Color(0xFFFFF7ED) : const Color(0xFFF0FDF4); // orange50 / green50
+    final border = alerte ? const Color(0xFFFED7AA) : const Color(0xFFBBF7D0);
+    final titre = alerte ? const Color(0xFF9A3412) : const Color(0xFF166534);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(alerte ? Icons.warning_amber_rounded : Icons.check_circle_outline, size: 16, color: titre),
+            const SizedBox(width: 6),
+            Text('Analyse de cohérence énergie', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: titre)),
+          ]),
+          const SizedBox(height: 6),
+          Text(texte.replaceFirst('⚠ ', ''), style: const TextStyle(fontSize: 13, color: Colors.black87)),
+        ],
+      ),
+    );
+  }
 }
 
 /// Sources d'énergie présentes selon la configuration du site (aligné sur l'API).

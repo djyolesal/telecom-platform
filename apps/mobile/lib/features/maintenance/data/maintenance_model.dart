@@ -27,6 +27,7 @@ class Maintenance {
   final double? siteLongitude;
   final String? technicien;
   final String? prestataire;
+  final String? analyseEnergie;
   final List<GroupeGE> siteGroupes;
   final List<String> photoUrls;
   final int photoCount;
@@ -50,6 +51,7 @@ class Maintenance {
     this.siteLongitude,
     this.technicien,
     this.prestataire,
+    this.analyseEnergie,
     this.siteGroupes = const [],
     this.photoUrls = const [],
     this.photoCount = 0,
@@ -92,6 +94,7 @@ class Maintenance {
       siteLongitude: site?['longitude'] == null ? null : double.tryParse(site!['longitude'].toString()),
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
       prestataire: presta?['nom'] as String?,
+      analyseEnergie: j['analyseEnergie'] as String?,
       siteGroupes: groupes,
       photoUrls: photos,
       // Liste : compteur via _count.photos ; détail : longueur du tableau photos.

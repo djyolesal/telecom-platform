@@ -73,7 +73,8 @@
       "Bash(grep -iE \"^archiver$|^jszip$|^adm-zip$|^yazl$\")",
       "Bash(node -e \"console.log\\(require\\('jszip/package.json'\\).version\\)\")",
       "Bash(sed -i '' 's/Navigator.pop\\(sheetCtx\\);\\\\n *GoRouter.of\\(context\\).push/XX/' lib/features/maintenance/presentation/maintenance_list_screen.dart)",
-      "Bash(perl -0pi -e 's/GoRouter\\\\.of\\\\\\(context\\\\\\)\\\\.push/router.push/g' lib/features/maintenance/presentation/maintenance_list_screen.dart)"
+      "Bash(perl -0pi -e 's/GoRouter\\\\.of\\\\\\(context\\\\\\)\\\\.push/router.push/g' lib/features/maintenance/presentation/maintenance_list_screen.dart)",
+      "Bash(flutter analyze *)"
     ]
   }
 }
