@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { Download } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
+import { Button } from '@/components/shared/Button';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
@@ -49,6 +52,7 @@ export default function BonsLivraisonPage() {
         title="Bons de livraison carburant"
         subtitle="Chargements de camions et plans de livraison"
         backHref="/carburant/commandes"
+        actions={<Button variant="secondary" icon={Download} onClick={() => downloadFile('/bons-livraison/export/xlsx', 'bons-livraison.xlsx')}>Excel</Button>}
       />
 
       {isLoading ? (

@@ -107,6 +107,7 @@ router.delete('/depotages/:id', rbac(['ADMIN']), depotagesCtrl.deleteDepotage);
 
 // ── Logistique carburant : bons de commande ───────────────────
 router.get('/bons-commande', carburantCtrl.getBonsCommande);
+router.get('/bons-commande/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsCommande);
 router.post('/bons-commande', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBonCommande);
 router.get('/bons-commande/:id', carburantCtrl.getBonCommandeById);
 router.put('/bons-commande/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.updateBonCommande);
@@ -114,10 +115,14 @@ router.delete('/bons-commande/:id', rbac(['ADMIN']), carburantCtrl.deleteBonComm
 
 // ── Logistique carburant : bons de livraison + plan ───────────
 router.get('/bons-livraison', carburantCtrl.getBonsLivraison);
+router.get('/bons-livraison/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsLivraison);
 router.post('/bons-livraison', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBonLivraison);
 router.get('/bons-livraison/:id', carburantCtrl.getBonLivraisonById);
 router.put('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.updateBonLivraison);
 router.delete('/bons-livraison/:id', rbac(['ADMIN']), carburantCtrl.deleteBonLivraison);
+
+// ── Rapport corrélation appro ↔ consommation énergie ──────────
+router.get('/rapports/correlation-carburant', carburantCtrl.getCorrelationCarburant);
 
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);

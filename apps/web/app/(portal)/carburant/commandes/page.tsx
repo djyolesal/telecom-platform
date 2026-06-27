@@ -3,14 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Download, GitCompare } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
-import { Button } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { Field, Input, Select, Textarea } from '@/components/shared/Form';
 import { fmtNumber } from '@/lib/utils';
 
@@ -116,7 +117,13 @@ export default function BonsCommandePage() {
         title="Bons de commande carburant"
         subtitle="Commandes trimestrielles et volumes mensuels"
         backHref="/carburant/stock"
-        actions={<Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de commande</Button>}
+        actions={
+          <div className="flex gap-2">
+            <ButtonLink href="/carburant/correlation" variant="secondary" icon={GitCompare}>Corrélation conso</ButtonLink>
+            <Button variant="secondary" icon={Download} onClick={() => downloadFile('/bons-commande/export/xlsx', 'bons-commande.xlsx')}>Excel</Button>
+            <Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de commande</Button>
+          </div>
+        }
       />
 
       {isLoading ? (

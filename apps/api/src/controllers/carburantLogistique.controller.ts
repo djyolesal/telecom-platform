@@ -4,6 +4,9 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
+import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+
+const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
 // Tolérance d'arrondi (litres) pour le contrôle « Σ lignes = volume chargé ».
 const TOLERANCE_L = 0.5;
@@ -397,6 +400,187 @@ export async function getLignesLivraisonForSite(req: Request, res: Response, nex
       },
     });
     res.json({ success: true, data: lignes });
+  } catch (err) { next(err); }
+}
+
+// ── EXPORTS EXCEL ─────────────────────────────────────────────
+
+export async function exportBonsCommande(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { annee, trimestre } = req.query as Record<string, string>;
+    const where: Prisma.BonCommandeWhereInput = {};
+    if (annee) where.annee = parseInt(annee);
+    if (trimestre) where.trimestre = parseInt(trimestre);
+
+    const rows = await prisma.bonCommande.findMany({
+      where,
+      orderBy: [{ annee: 'desc' }, { trimestre: 'desc' }],
+      include: { volumesMensuels: true, _count: { select: { bonsLivraison: true } } },
+    });
+
+    const buffer = await buildXlsx(
+      'Bons de commande',
+      [
+        { header: 'N° BC', key: 'numero', width: 18 },
+        { header: 'Année', key: 'annee', width: 8 },
+        { header: 'Trimestre', key: 'trimestre', width: 10 },
+        { header: 'N° client', key: 'client', width: 16 },
+        { header: 'Volume prévu (L)', key: 'volume', width: 16 },
+        { header: 'Bons de livraison', key: 'bl', width: 16 },
+        { header: 'Statut', key: 'statut', width: 12 },
+      ],
+      rows.map((b) => ({
+        numero: b.numero,
+        annee: b.annee,
+        trimestre: `T${b.trimestre}`,
+        client: b.numeroClient,
+        volume: b.volumesMensuels.reduce((s, v) => s + n(v.volumePrevuLitres), 0),
+        bl: b._count.bonsLivraison,
+        statut: b.statut,
+      }))
+    );
+    await auditLog(req.user!.id, 'EXPORT', 'bons_commande', undefined, { count: rows.length }, req);
+    setXlsxHeaders(res, 'bons-commande.xlsx');
+    res.send(buffer);
+  } catch (err) { next(err); }
+}
+
+export async function exportBonsLivraison(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { bon_commande_id, mois, annee } = req.query as Record<string, string>;
+    const where: Prisma.BonLivraisonWhereInput = {};
+    if (bon_commande_id) where.bonCommandeId = bon_commande_id;
+    if (mois) where.mois = parseInt(mois);
+    if (annee) where.annee = parseInt(annee);
+
+    // Une ligne du tableau = une ligne de plan (site) du bon de livraison.
+    const bls = await prisma.bonLivraison.findMany({
+      where,
+      orderBy: { dateChargement: 'desc' },
+      include: {
+        bonCommande: { select: { numero: true } },
+        lignes: { include: { site: { select: { code: true, nom: true, region: true } } } },
+      },
+    });
+
+    const rows: Record<string, unknown>[] = [];
+    for (const bl of bls) {
+      if (bl.lignes.length === 0) {
+        rows.push({ bl: bl.numeroBL, bc: bl.bonCommande?.numero ?? '', mois: MOIS[bl.mois], annee: bl.annee, camion: bl.immatriculation, charge: n(bl.volumeChargeLitres), site: '', region: '', prevu: '', livre: '', statut: bl.statut });
+        continue;
+      }
+      for (const l of bl.lignes) {
+        rows.push({
+          bl: bl.numeroBL,
+          bc: bl.bonCommande?.numero ?? '',
+          mois: MOIS[bl.mois],
+          annee: bl.annee,
+          camion: bl.immatriculation,
+          charge: n(bl.volumeChargeLitres),
+          site: l.site.code,
+          region: l.site.region,
+          prevu: n(l.volumePrevuLitres),
+          livre: l.volumeLivreLitres != null ? n(l.volumeLivreLitres) : '',
+          statut: l.statut,
+        });
+      }
+    }
+
+    const buffer = await buildXlsx(
+      'Bons de livraison',
+      [
+        { header: 'N° BL', key: 'bl', width: 16 },
+        { header: 'BC', key: 'bc', width: 16 },
+        { header: 'Mois', key: 'mois', width: 12 },
+        { header: 'Année', key: 'annee', width: 8 },
+        { header: 'Camion', key: 'camion', width: 14 },
+        { header: 'Volume chargé (L)', key: 'charge', width: 16 },
+        { header: 'Site', key: 'site', width: 14 },
+        { header: 'Région', key: 'region', width: 16 },
+        { header: 'Prévu site (L)', key: 'prevu', width: 14 },
+        { header: 'Livré site (L)', key: 'livre', width: 14 },
+        { header: 'Statut ligne', key: 'statut', width: 12 },
+      ],
+      rows
+    );
+    await auditLog(req.user!.id, 'EXPORT', 'bons_livraison', undefined, { count: bls.length }, req);
+    setXlsxHeaders(res, 'bons-livraison.xlsx');
+    res.send(buffer);
+  } catch (err) { next(err); }
+}
+
+// ── CORRÉLATION APPRO ↔ CONSOMMATION ÉNERGIE ──────────────────
+
+/**
+ * Compare, par site et sur une période, le carburant LIVRÉ (dépotages réels)
+ * à la consommation ÉNERGIE (gasoil brûlé par les GE, issu des relevés).
+ * Met en évidence les écarts anormaux (pertes / vol / heures sous-déclarées).
+ */
+export async function getCorrelationCarburant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { region, periode = '180' } = req.query as Record<string, string>;
+    const jours = parseInt(periode) || 180;
+    const since = new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
+    const siteFilter = region ? { region } : {};
+
+    const sites = await prisma.site.findMany({
+      where: { isActive: true, ...siteFilter },
+      select: { id: true, code: true, nom: true, region: true },
+      orderBy: { code: 'asc' },
+    });
+
+    const [depotages, releves] = await Promise.all([
+      prisma.depotage.groupBy({
+        by: ['siteId'],
+        where: { dateDepotage: { gte: since }, site: siteFilter },
+        _sum: { volumeLitres: true },
+      }),
+      prisma.releveEnergie.groupBy({
+        by: ['siteId'],
+        where: { dateReleve: { gte: since }, source: 'GE', site: siteFilter },
+        _sum: { gasoilConsommeLitres: true, heuresFonctGE: true, consommationKwh: true },
+      }),
+    ]);
+
+    const livreMap = new Map(depotages.map((d) => [d.siteId, n(d._sum.volumeLitres)]));
+    const consoMap = new Map(releves.map((r) => [r.siteId, r._sum]));
+
+    const lignes = sites.map((s) => {
+      const livre = livreMap.get(s.id) ?? 0;
+      const sums = consoMap.get(s.id);
+      const consomme = n(sums?.gasoilConsommeLitres);
+      const heuresGE = n(sums?.heuresFonctGE);
+      const kwh = n(sums?.consommationKwh);
+      const ecart = livre - consomme; // > 0 attendu (reste en cuve) ; << 0 anormal
+      // Anomalie si la conso dépasse nettement le livré (> 15 %) ou écart inverse marqué.
+      const ratio = consomme > 0 ? livre / consomme : null;
+      const anomalie = consomme > 0 && livre > 0 && ratio !== null && ratio < 0.85;
+      return {
+        siteId: s.id, code: s.code, nom: s.nom, region: s.region,
+        livreLitres: Math.round(livre),
+        consommeLitres: Math.round(consomme),
+        ecartLitres: Math.round(ecart),
+        heuresGE: Math.round(heuresGE),
+        consoKwh: Math.round(kwh),
+        ratio: ratio !== null ? Math.round(ratio * 100) / 100 : null,
+        anomalie,
+      };
+    });
+
+    const totaux = lignes.reduce(
+      (a, l) => ({ livre: a.livre + l.livreLitres, consomme: a.consomme + l.consommeLitres }),
+      { livre: 0, consomme: 0 }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        periodeJours: jours,
+        totaux: { livreLitres: totaux.livre, consommeLitres: totaux.consomme, ecartLitres: totaux.livre - totaux.consomme },
+        nbAnomalies: lignes.filter((l) => l.anomalie).length,
+        lignes,
+      },
+    });
   } catch (err) { next(err); }
 }
 
