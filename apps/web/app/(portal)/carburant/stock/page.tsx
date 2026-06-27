@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Fuel, AlertTriangle, Droplet, Banknote, History } from 'lucide-react';
+import { Fuel, AlertTriangle, Droplet, Banknote, History, Truck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -58,7 +58,12 @@ export default function StockCarburantPage() {
       <PageHeader
         title="Stock carburant"
         subtitle="Vue globale du parc et alertes d'autonomie"
-        actions={<ButtonLink href="/carburant/depotages" variant="secondary" icon={History}>Dépotages</ButtonLink>}
+        actions={
+          <div className="flex gap-2">
+            <ButtonLink href="/carburant/commandes" variant="secondary" icon={Truck}>Approvisionnement</ButtonLink>
+            <ButtonLink href="/carburant/depotages" variant="secondary" icon={History}>Dépotages</ButtonLink>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

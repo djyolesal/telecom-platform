@@ -37,3 +37,40 @@ class Depotage {
     );
   }
 }
+
+/// Ligne d'un plan de livraison prévue pour un site (chaîne BC → BL → plan).
+/// Permet au technicien de rattacher son dépotage à la livraison planifiée.
+class PlanLigne {
+  final String id;
+  final double volumePrevuLitres;
+  final double? volumeLivreLitres;
+  final String statut;
+  final String? numeroBL;
+  final String? immatriculation;
+  final DateTime? dateChargement;
+
+  const PlanLigne({
+    required this.id,
+    required this.volumePrevuLitres,
+    this.volumeLivreLitres,
+    required this.statut,
+    this.numeroBL,
+    this.immatriculation,
+    this.dateChargement,
+  });
+
+  double get restant => (volumePrevuLitres - (volumeLivreLitres ?? 0)).clamp(0, double.infinity);
+
+  factory PlanLigne.fromJson(Map<String, dynamic> j) {
+    final bl = j['bonLivraison'] as Map<String, dynamic>?;
+    return PlanLigne(
+      id: j['id'] as String,
+      volumePrevuLitres: Depotage._d(j['volumePrevuLitres']),
+      volumeLivreLitres: Depotage._dn(j['volumeLivreLitres']),
+      statut: j['statut'] as String? ?? 'PREVU',
+      numeroBL: bl?['numeroBL'] as String?,
+      immatriculation: bl?['immatriculation'] as String?,
+      dateChargement: DateTime.tryParse(bl?['dateChargement']?.toString() ?? ''),
+    );
+  }
+}

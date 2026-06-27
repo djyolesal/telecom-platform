@@ -170,12 +170,13 @@ model Site {
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
-  lot          Lot?            @relation(fields: [lotId], references: [id])
-  maintenances Maintenance[]
-  depotages    Depotage[]
-  releves      ReleveEnergie[]
-  incidents    Incident[]
-  groupes      GroupeElectrogene[]
+  lot             Lot?                @relation(fields: [lotId], references: [id])
+  maintenances    Maintenance[]
+  depotages       Depotage[]
+  releves         ReleveEnergie[]
+  incidents       Incident[]
+  groupes         GroupeElectrogene[]
+  lignesLivraison LigneLivraison[]
 
   @@index([region])
   @@index([statutGE])
@@ -292,13 +293,17 @@ model Depotage {
   latitude           Decimal? @db.Decimal(10, 8)
   longitude          Decimal? @db.Decimal(11, 8)
   isSynced           Boolean  @default(true) @map("is_synced")
+  // Rattachement à la ligne du plan de livraison (chaîne BC → BL → plan → site)
+  ligneLivraisonId   String?  @map("ligne_livraison_id")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  site       Site  @relation(fields: [siteId], references: [id])
-  technicien User? @relation("TechnicienDepotages", fields: [technicienId], references: [id])
+  site           Site            @relation(fields: [siteId], references: [id])
+  technicien     User?           @relation("TechnicienDepotages", fields: [technicienId], references: [id])
+  ligneLivraison LigneLivraison? @relation(fields: [ligneLivraisonId], references: [id])
 
   @@index([siteId])
   @@index([dateDepotage])
+  @@index([ligneLivraisonId])
   @@map("depotages")
 }
 
@@ -486,4 +491,105 @@ model LotAssignment {
   @@unique([lotId, prestataireId, scope])
   @@index([prestataireId])
   @@map("lot_assignments")
+}
+
+// ── Logistique carburant : Bon de commande → Bon de livraison → Plan de livraison → Sites ──
+
+enum StatutBonCommande {
+  OUVERT  // trimestre en cours d'exécution
+  CLOTURE // trimestre terminé
+  ANNULE
+}
+
+enum StatutBonLivraison {
+  PLANIFIE // camion à charger
+  CHARGE   // chargé, en distribution
+  LIVRE    // entièrement distribué
+  ANNULE
+}
+
+enum StatutLigneLivraison {
+  PREVU
+  PARTIEL
+  LIVRE
+  ANNULE
+}
+
+// Bon de commande trimestriel : référence principale, volumes répartis par mois.
+model BonCommande {
+  id           String            @id @default(uuid())
+  numero       String            @unique @db.VarChar(50) // identifiant unique du BC
+  annee        Int
+  trimestre    Int               // 1..4
+  numeroClient String            @map("numero_client") @db.VarChar(50) // constant
+  statut       StatutBonCommande @default(OUVERT)
+  observations String?
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  volumesMensuels VolumeMensuel[]
+  bonsLivraison   BonLivraison[]
+
+  @@index([annee, trimestre])
+  @@map("bons_commande")
+}
+
+// Volume prévu pour un mois du trimestre d'un bon de commande.
+model VolumeMensuel {
+  id                String  @id @default(uuid())
+  bonCommandeId     String  @map("bon_commande_id")
+  mois              Int     // 1..12
+  volumePrevuLitres Decimal @map("volume_prevu_litres") @db.Decimal(12, 2)
+
+  bonCommande BonCommande @relation(fields: [bonCommandeId], references: [id], onDelete: Cascade)
+
+  @@unique([bonCommandeId, mois])
+  @@index([bonCommandeId])
+  @@map("volumes_mensuels")
+}
+
+// Bon de livraison : un chargement réel de camion, exécutant le volume d'un mois.
+model BonLivraison {
+  id                 String             @id @default(uuid())
+  bonCommandeId      String             @map("bon_commande_id")
+  numeroBL           String             @unique @map("numero_bl") @db.VarChar(50) // unique par chargement
+  mois               Int                // mois exécuté (1..12)
+  annee              Int
+  immatriculation    String             @db.VarChar(30) // camion
+  volumeChargeLitres Decimal            @map("volume_charge_litres") @db.Decimal(12, 2)
+  numeroClient       String             @map("numero_client") @db.VarChar(50)
+  dateChargement     DateTime           @map("date_chargement")
+  dateTraitement     DateTime?          @map("date_traitement")
+  statut             StatutBonLivraison @default(PLANIFIE)
+  observations       String?
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  bonCommande BonCommande      @relation(fields: [bonCommandeId], references: [id])
+  lignes      LigneLivraison[]
+
+  @@index([bonCommandeId])
+  @@index([annee, mois])
+  @@map("bons_livraison")
+}
+
+// Ligne du plan de livraison d'un camion : un site et la quantité à y livrer.
+// Σ des volumes prévus des lignes = volume chargé du camion.
+model LigneLivraison {
+  id                String               @id @default(uuid())
+  bonLivraisonId    String               @map("bon_livraison_id")
+  siteId            String               @map("site_id")
+  volumePrevuLitres Decimal              @map("volume_prevu_litres") @db.Decimal(10, 2)
+  volumeLivreLitres Decimal?             @map("volume_livre_litres") @db.Decimal(10, 2)
+  statut            StatutLigneLivraison @default(PREVU)
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  bonLivraison BonLivraison @relation(fields: [bonLivraisonId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id])
+  depotages    Depotage[] // réceptions réelles rattachées à cette ligne
+
+  @@unique([bonLivraisonId, siteId])
+  @@index([bonLivraisonId])
+  @@index([siteId])
+  @@map("lignes_livraison")
 }

@@ -18,6 +18,7 @@ import * as prestatairesCtrl from '../controllers/prestataires.controller';
 import * as lotsCtrl from '../controllers/lots.controller';
 import * as tachesCtrl from '../controllers/taches.controller';
 import * as configCtrl from '../controllers/config.controller';
+import * as carburantCtrl from '../controllers/carburantLogistique.controller';
 import { uploadMiddleware, uploadSpreadsheet } from '../middlewares/upload';
 
 export const router = Router();
@@ -63,6 +64,7 @@ router.get('/sites/:id/maintenances', sitesCtrl.getSiteMaintenances);
 router.get('/sites/:id/depotages', sitesCtrl.getSiteDepotages);
 router.get('/sites/:id/releves', sitesCtrl.getSiteReleves);
 router.get('/sites/:id/incidents', sitesCtrl.getSiteIncidents);
+router.get('/sites/:id/lignes-livraison', carburantCtrl.getLignesLivraisonForSite);
 
 // ── Prestataires ──────────────────────────────────────────────
 router.get('/prestataires', prestatairesCtrl.getPrestataires);
@@ -102,6 +104,20 @@ router.post('/depotages', depotagesCtrl.createDepotage);
 router.get('/depotages/:id', depotagesCtrl.getDepotageById);
 router.put('/depotages/:id', depotagesCtrl.updateDepotage);
 router.delete('/depotages/:id', rbac(['ADMIN']), depotagesCtrl.deleteDepotage);
+
+// ── Logistique carburant : bons de commande ───────────────────
+router.get('/bons-commande', carburantCtrl.getBonsCommande);
+router.post('/bons-commande', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBonCommande);
+router.get('/bons-commande/:id', carburantCtrl.getBonCommandeById);
+router.put('/bons-commande/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.updateBonCommande);
+router.delete('/bons-commande/:id', rbac(['ADMIN']), carburantCtrl.deleteBonCommande);
+
+// ── Logistique carburant : bons de livraison + plan ───────────
+router.get('/bons-livraison', carburantCtrl.getBonsLivraison);
+router.post('/bons-livraison', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBonLivraison);
+router.get('/bons-livraison/:id', carburantCtrl.getBonLivraisonById);
+router.put('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.updateBonLivraison);
+router.delete('/bons-livraison/:id', rbac(['ADMIN']), carburantCtrl.deleteBonLivraison);
 
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);

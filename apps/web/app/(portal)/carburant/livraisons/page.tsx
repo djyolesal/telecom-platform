@@ -1,0 +1,68 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { DataTable, Column } from '@/components/shared/DataTable';
+import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
+import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
+import { Badge } from '@/components/shared/Badge';
+import { fmtNumber, fmtDate } from '@/lib/utils';
+
+const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+const BL_COLORS: Record<string, string> = { PLANIFIE: 'bg-amber-100 text-amber-700', CHARGE: 'bg-blue-100 text-blue-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
+
+interface BL {
+  id: string; numeroBL: string; mois: number; annee: number; immatriculation: string;
+  volumeChargeLitres: number; dateChargement: string; statut: string;
+  bonCommande?: { numero: string }; _count?: { lignes: number };
+}
+
+export default function BonsLivraisonPage() {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['bons-livraison', { page }],
+    queryFn: () => api.get('/bons-livraison', { params: { page, limit: 20 } }).then((r) => r.data),
+  });
+
+  const rows: BL[] = data?.data ?? [];
+  const meta: PaginationMeta | undefined = data?.meta;
+
+  const columns: Column<BL>[] = [
+    { key: 'numeroBL', header: 'N° BL', render: (b) => <span className="font-medium text-gray-800">{b.numeroBL}</span> },
+    { key: 'bc', header: 'BC', render: (b) => b.bonCommande?.numero ?? '—' },
+    { key: 'mois', header: 'Mois', render: (b) => `${MOIS[b.mois]} ${b.annee}` },
+    { key: 'camion', header: 'Camion', render: (b) => b.immatriculation },
+    { key: 'volume', header: 'Volume (L)', align: 'right', render: (b) => fmtNumber(Number(b.volumeChargeLitres)) },
+    { key: 'sites', header: 'Sites', align: 'center', render: (b) => b._count?.lignes ?? 0 },
+    { key: 'date', header: 'Chargement', render: (b) => fmtDate(b.dateChargement) },
+    { key: 'statut', header: 'Statut', render: (b) => <Badge className={BL_COLORS[b.statut] || ''}>{b.statut}</Badge> },
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        title="Bons de livraison carburant"
+        subtitle="Chargements de camions et plans de livraison"
+        backHref="/carburant/commandes"
+      />
+
+      {isLoading ? (
+        <TableSkeleton cols={8} />
+      ) : isError ? (
+        <ErrorState />
+      ) : rows.length === 0 ? (
+        <EmptyState title="Aucun bon de livraison" hint="Les bons de livraison se créent depuis un bon de commande." />
+      ) : (
+        <>
+          <DataTable columns={columns} data={rows} onRowClick={(b) => router.push(`/carburant/livraisons/${b.id}`)} />
+          <Pagination meta={meta} onChange={setPage} />
+        </>
+      )}
+    </div>
+  );
+}

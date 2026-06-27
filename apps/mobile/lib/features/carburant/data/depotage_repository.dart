@@ -18,6 +18,15 @@ class DepotageRepository {
     );
   }
 
+  /// Lignes de plan de livraison ouvertes (prévues/partielles) pour un site.
+  Future<List<PlanLigne>> getLignesLivraison(String siteId) async {
+    if (!await _network.isConnected) return [];
+    return _client.request(
+      (dio) => dio.get('/sites/$siteId/lignes-livraison'),
+      (data) => (data['data'] as List).map((e) => PlanLigne.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
   Future<SubmitResult> create({
     required String siteId,
     required double volumeLitres,
@@ -28,6 +37,7 @@ class DepotageRepository {
     String? observations,
     double? latitude,
     double? longitude,
+    String? ligneLivraisonId,
   }) {
     return _sync.submit(
       endpoint: '/depotages',
@@ -43,6 +53,7 @@ class DepotageRepository {
         if (observations != null && observations.isNotEmpty) 'observations': observations,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
+        if (ligneLivraisonId != null) 'ligneLivraisonId': ligneLivraisonId,
       },
     );
   }
