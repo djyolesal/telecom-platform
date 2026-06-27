@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -21,8 +22,34 @@ class MaintenanceListScreen extends StatelessWidget {
   }
 }
 
-class _MaintenanceView extends StatelessWidget {
+class _MaintenanceView extends StatefulWidget {
   const _MaintenanceView();
+
+  @override
+  State<_MaintenanceView> createState() => _MaintenanceViewState();
+}
+
+class _MaintenanceViewState extends State<_MaintenanceView> {
+  final _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  String _query = '';
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String v) {
+    setState(() {}); // rafraîchit l'icône d'effacement
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      _query = v.trim();
+      _reload(context);
+    });
+  }
 
   Color _statutColor(String s) {
     switch (s) {
@@ -39,13 +66,40 @@ class _MaintenanceView extends StatelessWidget {
 
   void _reload(BuildContext context) {
     final repo = context.read<MaintenanceRepository>();
-    context.read<ListCubit<Maintenance>>().run(() => repo.getMaintenances());
+    context.read<ListCubit<Maintenance>>().run(() => repo.getMaintenances(search: _query));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Maintenances')),
+      appBar: AppBar(
+        title: const Text('Maintenances'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: _onSearchChanged,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Rechercher (site, équipement)…',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () { _searchCtrl.clear(); _query = ''; _reload(context); setState(() {}); },
+                      )
+                    : null,
+                isDense: true,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await context.push('/maintenance/nouveau');

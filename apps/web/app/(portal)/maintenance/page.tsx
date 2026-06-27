@@ -14,6 +14,7 @@ import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/state
 import { ButtonLink } from '@/components/shared/Button';
 import { StatutMaintBadge } from '@/components/shared/Badge';
 import { TYPES_MAINTENANCE, STATUTS_MAINTENANCE, CATEGORIES_EQUIPEMENT } from '@/lib/constants';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import { fmtDateTime } from '@/lib/utils';
 
 interface Maintenance {
@@ -32,9 +33,11 @@ interface Maintenance {
 export default function MaintenancePage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
   const [type, setType] = useState('');
   const [statut, setStatut] = useState('');
   const [prestataireId, setPrestataireId] = useState('');
+  const debouncedSearch = useDebounce(search);
 
   const { data: prestataires } = useQuery({
     queryKey: ['prestataires-select'],
@@ -43,9 +46,9 @@ export default function MaintenancePage() {
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['maintenances', { page, type, statut, prestataireId }],
+    queryKey: ['maintenances', { page, debouncedSearch, type, statut, prestataireId }],
     queryFn: () =>
-      api.get('/maintenances', { params: { page, limit: 20, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined } }).then((r) => r.data),
+      api.get('/maintenances', { params: { page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined } }).then((r) => r.data),
   });
 
   const rows: Maintenance[] = data?.data ?? [];
@@ -95,6 +98,9 @@ export default function MaintenancePage() {
       />
 
       <FilterBar
+        search={search}
+        onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Rechercher (site, équipement)…"
         filters={[
           { key: 'type', label: 'Tous types', value: type, options: TYPES_MAINTENANCE, onChange: (v) => { setType(v); setPage(1); } },
           { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_MAINTENANCE, onChange: (v) => { setStatut(v); setPage(1); } },
