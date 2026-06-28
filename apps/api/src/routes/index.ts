@@ -127,6 +127,10 @@ router.delete('/bons-livraison/:id', rbac(['ADMIN']), carburantCtrl.deleteBonLiv
 // ── Rapport corrélation appro ↔ consommation énergie ──────────
 router.get('/rapports/correlation-carburant', carburantCtrl.getCorrelationCarburant);
 
+// ── Rapport suivi des manquants de livraison ──────────────────
+router.get('/rapports/manquants-livraison', carburantCtrl.getManquantsLivraison);
+router.get('/rapports/manquants-livraison/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportManquantsLivraison);
+
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);
 router.get('/releves/export/xlsx', rbac(['MANAGER','ADMIN']), relevesCtrl.exportReleves);

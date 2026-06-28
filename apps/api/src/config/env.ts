@@ -50,6 +50,7 @@ const envSchema = z.object({
   MIN_DUREE_CLOTURE_MIN: z.coerce.number().default(60), // durée min (min) avant clôture
   GEOFENCE_RADIUS_M: z.coerce.number().default(20),     // rayon (m) « sur site »
   SEUIL_ECART_GASOIL_PCT: z.coerce.number().default(25), // tolérance (%) écart conso gasoil réelle vs attendue
+  DELAI_MANQUANT_JOURS: z.coerce.number().default(7),    // délai (j) après chargement avant qu'un reste soit « en retard »
 });
 
 const parsed = envSchema.safeParse(process.env);

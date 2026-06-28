@@ -6,6 +6,7 @@ import { monthlyReportJob } from './monthly-report';
 import { dbBackupJob } from './db-backup';
 import { incidentEscalationJob } from './incident-escalation';
 import { preventivePlanJob } from './preventive-plan';
+import { manquantAlertJob } from './manquant-alert';
 
 export function setupCronJobs() {
   // ── Vérif stock carburant — tous les jours à 8h ─────────────
@@ -44,5 +45,11 @@ export function setupCronJobs() {
     try { await preventivePlanJob(); } catch (e) { logger.error('[CRON] preventivePlan error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 6 cron jobs planifiés (TZ: Africa/Lome)');
+  // ── Manquants de livraison — tous les jours à 9h ────────────
+  cron.schedule('0 9 * * *', async () => {
+    logger.info('[CRON] Vérification des manquants de livraison');
+    try { await manquantAlertJob(); } catch (e) { logger.error('[CRON] manquantAlert error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
+  logger.info('✅ 7 cron jobs planifiés (TZ: Africa/Lome)');
 }

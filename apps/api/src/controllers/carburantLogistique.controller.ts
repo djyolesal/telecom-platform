@@ -4,8 +4,9 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
-import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { buildXlsx, buildXlsxMulti, setXlsxHeaders } from '../utils/excel';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
+import { computeManquants } from '../services/manquants.service';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -496,6 +497,90 @@ export async function exportPlanLivraisonPdf(req: Request, res: Response, next: 
     });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="plan-${bl.numeroBL}.pdf"`);
+    res.send(buffer);
+  } catch (err) { next(err); }
+}
+
+// ── SUIVI DES MANQUANTS DE LIVRAISON ──────────────────────────
+
+function manquantsFilter(req: Request): { bonCommandeId?: string; mois?: number; annee?: number } {
+  const { bc_id, mois, annee } = req.query as Record<string, string>;
+  return {
+    bonCommandeId: bc_id || undefined,
+    mois: mois ? parseInt(mois) : undefined,
+    annee: annee ? parseInt(annee) : undefined,
+  };
+}
+
+export async function getManquantsLivraison(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await computeManquants(manquantsFilter(req));
+    // lignesEnRetard sert au job d'alerte ; on ne l'expose pas dans l'API.
+    const { lignesEnRetard: _omit, ...rest } = data;
+    res.json({ success: true, data: rest });
+  } catch (err) { next(err); }
+}
+
+export async function exportManquantsLivraison(req: Request, res: Response, next: NextFunction) {
+  try {
+    const m = await computeManquants(manquantsFilter(req));
+    const sheets = [
+      {
+        name: 'Par site',
+        columns: [
+          { header: 'Site', key: 'siteCode', width: 14 },
+          { header: 'Nom', key: 'siteNom', width: 24 },
+          { header: 'Région', key: 'region', width: 16 },
+          { header: 'Prévu (L)', key: 'prevu', width: 12 },
+          { header: 'Livré (L)', key: 'livre', width: 12 },
+          { header: 'Manquant (L)', key: 'manquant', width: 14 },
+          { header: 'Lignes en retard', key: 'nbEnRetard', width: 16 },
+        ],
+        rows: m.parSite as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Par camion',
+        columns: [
+          { header: 'N° BL', key: 'numeroBL', width: 16 },
+          { header: 'BC', key: 'bcNumero', width: 14 },
+          { header: 'Camion', key: 'immatriculation', width: 14 },
+          { header: 'Chargé (L)', key: 'charge', width: 12 },
+          { header: 'Distribué (L)', key: 'distribue', width: 14 },
+          { header: 'Manquant (L)', key: 'manquant', width: 14 },
+          { header: 'Sites manquants', key: 'nbSitesManquants', width: 16 },
+        ],
+        rows: m.parCamion as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Par mois',
+        columns: [
+          { header: 'BC', key: 'bcNumero', width: 14 },
+          { header: 'Année', key: 'annee', width: 8 },
+          { header: 'Mois', key: 'mois', width: 8 },
+          { header: 'Prévu (L)', key: 'prevu', width: 12 },
+          { header: 'Chargé (L)', key: 'charge', width: 12 },
+          { header: 'Livré (L)', key: 'livre', width: 12 },
+          { header: 'Manquant chargé (L)', key: 'manquantCharge', width: 18 },
+          { header: 'Manquant livré (L)', key: 'manquantLivre', width: 18 },
+        ],
+        rows: m.parMois as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Par bon de commande',
+        columns: [
+          { header: 'BC', key: 'numero', width: 16 },
+          { header: 'Année', key: 'annee', width: 8 },
+          { header: 'Trimestre', key: 'trimestre', width: 10 },
+          { header: 'Prévu (L)', key: 'prevu', width: 12 },
+          { header: 'Chargé (L)', key: 'charge', width: 12 },
+          { header: 'Livré (L)', key: 'livre', width: 12 },
+          { header: 'Manquant (L)', key: 'manquant', width: 14 },
+        ],
+        rows: m.parBc as unknown as Record<string, unknown>[],
+      },
+    ];
+    const buffer = await buildXlsxMulti(sheets);
+    setXlsxHeaders(res, 'manquants-livraison.xlsx');
     res.send(buffer);
   } catch (err) { next(err); }
 }
