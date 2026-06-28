@@ -27,4 +27,12 @@ describe('memo (cache TTL court)', () => {
     await expect(memo('e', 1000, fn)).rejects.toThrow('boom');
     expect(calls).toBe(2); // pas mis en cache après échec
   });
+
+  it('recalcule après expiration du TTL', async () => {
+    let n = 0;
+    const fn = () => Promise.resolve(++n);
+    expect(await memo('t', 5, fn)).toBe(1);
+    await new Promise((r) => setTimeout(r, 15));
+    expect(await memo('t', 5, fn)).toBe(2); // entrée périmée → recalcul
+  });
 });

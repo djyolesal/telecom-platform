@@ -1,4 +1,21 @@
-import { calculerStockSite } from './calculator';
+import { calculerStockSite, litresMoisGE } from './calculator';
+
+describe('litresMoisGE (conso mensuelle d’un GE)', () => {
+  it('permanent : kva × 0.75 × 720 × 0.25', () => {
+    expect(litresMoisGE(100, 'GE_PERMANENT')).toBeCloseTo(13500, 5);
+  });
+  it('secours : kva × 0.65 × 240 × 0.25', () => {
+    expect(litresMoisGE(100, 'GE_SECOURS')).toBeCloseTo(3900, 5);
+  });
+  it('0 si PAS_DE_GE ou puissance nulle', () => {
+    expect(litresMoisGE(100, 'PAS_DE_GE')).toBe(0);
+    expect(litresMoisGE(0, 'GE_PERMANENT')).toBe(0);
+  });
+  it('multi-GE : la somme reflète la puissance totale', () => {
+    const deux = litresMoisGE(100, 'GE_PERMANENT') + litresMoisGE(100, 'GE_PERMANENT');
+    expect(deux).toBeCloseTo(litresMoisGE(200, 'GE_PERMANENT'), 5);
+  });
+});
 
 const site = (statutGE: string, puissanceGEkva: number) => ({ statutGE, puissanceGEkva });
 

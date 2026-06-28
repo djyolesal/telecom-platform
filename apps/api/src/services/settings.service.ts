@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { GE_PARAMS } from '../utils/calculator';
+import { clearMemo } from '../utils/memo';
 import { logger } from '../utils/logger';
 
 /**
@@ -15,6 +16,7 @@ export async function loadSettings(): Promise<void> {
     const rows = await prisma.systemSettings.findMany();
     cache.clear();
     for (const r of rows) cache.set(r.key, r.value);
+    clearMemo(); // les seuils changent → purge les agrégats mémoïsés (effet immédiat)
     logger.info(`[settings] ${rows.length} paramètre(s) chargé(s) en cache`);
   } catch (e) {
     // BDD pas encore prête au boot → on garde les défauts, rechargé plus tard.

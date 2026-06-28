@@ -109,7 +109,9 @@ export async function generateSynthese(opts: { region?: string } = {}): Promise<
   }
 
   try {
-    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    // Timeout court + 1 seul retry : la synthèse est optionnelle, elle ne doit jamais
+    // bloquer la requête du manager plusieurs minutes (repli déterministe au-delà).
+    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, timeout: 20_000, maxRetries: 1 });
     const response = await client.messages.create({
       model: 'claude-opus-4-8',
       max_tokens: 1024,

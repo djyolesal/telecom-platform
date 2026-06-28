@@ -133,10 +133,10 @@ router.get('/rapports/anomalies-conso', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']
 router.get('/rapports/synthese-appro', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getSyntheseAppro);
 router.post('/bons-livraison/brouillon', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBrouillonLivraison);
 
-// ── Rapport suivi des manquants de livraison ──────────────────
-router.get('/rapports/manquants-livraison', carburantCtrl.getManquantsLivraison);
+// ── Rapport suivi des manquants de livraison (pilotage — pas les transporteurs) ──
+router.get('/rapports/manquants-livraison', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.getManquantsLivraison);
 router.get('/rapports/manquants-livraison/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportManquantsLivraison);
-router.get('/rapports/manquants-livraison/site/:id', carburantCtrl.getManquantsSite);
+router.get('/rapports/manquants-livraison/site/:id', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.getManquantsSite);
 
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);

@@ -313,6 +313,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         site: {
           select: {
             id: true, powerConfig: true, latitude: true, longitude: true, code: true,
+            puissanceGEkva: true, statutGE: true,
             groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
           },
         },
@@ -454,8 +455,11 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
             if (prevGe?.indexHeuresGE != null && hIndex != null) {
               const heures = Math.max(0, hIndex - Number(prevGe.indexHeuresGE));
               data.heuresFonctGE = heures;
-              if (g && heures > 0) {
-                expectedGasoil += expectedGasoilGE(Number(g.puissanceKva), g.statut, heures);
+              if (heures > 0) {
+                // GE modélisé → sa puissance/statut ; sinon repli sur les champs GE du site.
+                const kva = g ? Number(g.puissanceKva) : Number(existing.site.puissanceGEkva);
+                const statut = g ? g.statut : existing.site.statutGE;
+                expectedGasoil += expectedGasoilGE(kva, statut, heures);
                 hasHeures = true;
               }
             }

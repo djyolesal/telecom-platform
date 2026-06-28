@@ -1,6 +1,6 @@
 import { prisma } from '../config/database';
 import { env } from '../config/env';
-import { calculerStockSite } from '../utils/calculator';
+import { calculerStockSite, litresMoisGE } from '../utils/calculator';
 import { getNum, geParams } from './settings.service';
 import { memo } from '../utils/memo';
 
@@ -75,6 +75,7 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
     select: {
       id: true, code: true, nom: true, region: true, latitude: true, longitude: true,
       cuveVolumeLitres: true, powerConfig: true, statutGE: true, puissanceGEkva: true,
+      groupes: { where: { isActive: true }, select: { puissanceKva: true, statut: true } },
     },
   });
   if (!sites.length) return [];
@@ -93,27 +94,38 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
     parSite.set(r.siteId, arr);
   }
 
-  // Dépotages récents (pour rehausser le stock si postérieurs au dernier relevé).
+  // Dépotages récents, regroupés par site (rehausse le stock après le dernier relevé).
   const depots = await prisma.depotage.findMany({
     where: { siteId: { in: ids }, dateDepotage: { gte: fenetre } },
     select: { siteId: true, dateDepotage: true, volumeLitres: true },
   });
+  const depotsBySite = new Map<string, typeof depots>();
+  for (const d of depots) {
+    const arr = depotsBySite.get(d.siteId) ?? [];
+    arr.push(d);
+    depotsBySite.set(d.siteId, arr);
+  }
 
+  const gp = geParams();
   const out: SiteForecast[] = [];
   for (const site of sites) {
     const hist = parSite.get(site.id) ?? [];
     const dernier = hist.length ? hist[hist.length - 1] : null;
 
-    // Stock actuel = dernier niveau de cuve + dépotages postérieurs.
+    // Stock actuel = dernier niveau de cuve relevé + dépotages POSTÉRIEURS.
+    // Sans relevé, on part des dépotages de la fenêtre (meilleure estimation que 0).
     let stockActuel = dernier ? n(dernier.volumeGasoilLitres) : 0;
-    if (dernier) {
-      for (const d of depots) {
-        if (d.siteId === site.id && d.dateDepotage > dernier.dateReleve) stockActuel += n(d.volumeLitres);
-      }
+    // Vrai relevé de cuve (même 0 L) OU dépotage = donnée de niveau exploitable.
+    let aVuStock = dernier != null;
+    const seuilDate = dernier ? dernier.dateReleve : fenetre;
+    for (const d of (depotsBySite.get(site.id) ?? [])) {
+      if (d.dateDepotage > seuilDate) { stockActuel += n(d.volumeLitres); aVuStock = true; }
     }
 
-    // Consommation théorique (config GE, params éditables) — référence anomalie.
-    const consoTheoriqueJour = calculerStockSite(site, null, geParams()).litresMois / 30;
+    // Conso théorique = somme des GE actifs (multi-GE) ; sinon repli sur la puissance agrégée.
+    const consoTheoriqueJour = (site.groupes.length
+      ? site.groupes.reduce((s, g) => s + litresMoisGE(n(g.puissanceKva), g.statut, gp), 0)
+      : calculerStockSite(site, null, gp).litresMois) / 30;
 
     // Consommation journalière : historique pondéré (EWMA, récent = plus de poids)
     // + tendance par régression linéaire ; sinon repli théorique.
@@ -147,6 +159,9 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
     if (consoJour <= 0) consoJour = consoTheoriqueJour;
 
     if (consoJour <= 0) continue; // pas de GE / pas de conso → pas concerné
+    // Aucune donnée de niveau (jamais de relevé de cuve ni de dépotage) → stock inconnu,
+    // on ne peut pas prévoir. Un relevé mesurant 0 L, lui, reste classé (cuve vide réelle).
+    if (!aVuStock) continue;
 
     const autonomieJours = Math.round((stockActuel / consoJour) * 10) / 10;
     const dateRupture = now + autonomieJours * DAY;

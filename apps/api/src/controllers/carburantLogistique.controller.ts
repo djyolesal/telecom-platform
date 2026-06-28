@@ -10,6 +10,7 @@ import { computeManquants } from '../services/manquants.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
 import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
 import { getNum } from '../services/settings.service';
+import { clearMemo } from '../utils/memo';
 import { env } from '../config/env';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -20,10 +21,22 @@ async function userPrestataireId(userId: string): Promise<string | null> {
   return u?.prestataireId ?? null;
 }
 
+/**
+ * Cloisonnement transporteur : un TRANSPORTEUR n'accède qu'aux BL de SON prestataire.
+ * Refuse aussi le transporteur sans prestataire et les BL non affectés (évite le piège null === null).
+ */
+async function assertTransporteurAccess(req: Request, transporteurId: string | null): Promise<void> {
+  if (req.user!.role !== 'TRANSPORTEUR') return;
+  const pid = await userPrestataireId(req.user!.id);
+  if (!pid || transporteurId !== pid) throw new AppError('Accès refusé à ce bon de livraison', 403);
+}
+
 // Tolérance d'arrondi (litres) pour le contrôle « Σ lignes = volume chargé ».
 const TOLERANCE_L = 0.5;
+const MAX_LITRES = 10_000_000; // borne de sûreté (anti-pollution d'agrégats / overflow numeric)
 
-const n = (v: unknown): number => (v == null ? 0 : Number(v));
+// Number sûr : rejette NaN/Infinity (qui sinon franchissent les tests `<= 0`).
+const n = (v: unknown): number => { const x = v == null ? 0 : Number(v); return Number.isFinite(x) ? x : 0; };
 
 /** Normalise et valide les volumes mensuels d'un bon de commande. */
 function parseVolumes(raw: unknown): { mois: number; volumePrevuLitres: number }[] {
@@ -35,6 +48,7 @@ function parseVolumes(raw: unknown): { mois: number; volumePrevuLitres: number }
     const vol = n((v as any).volumePrevuLitres);
     if (mois < 1 || mois > 12) throw new AppError(`Mois invalide : ${mois}`, 400);
     if (seen.has(mois)) throw new AppError(`Mois ${mois} en double dans le bon de commande`, 400);
+    if (vol < 0 || vol > MAX_LITRES) throw new AppError('Volume mensuel hors limites', 400);
     seen.add(mois);
     out.push({ mois, volumePrevuLitres: vol });
   }
@@ -52,7 +66,7 @@ function parseLignes(raw: unknown): { siteId: string; volumePrevuLitres: number 
     if (!siteId) throw new AppError('Ligne de plan sans site', 400);
     if (seen.has(siteId)) throw new AppError('Un même site apparaît deux fois dans le plan', 400);
     seen.add(siteId);
-    if (vol <= 0) throw new AppError('Volume prévu d\'une ligne doit être > 0', 400);
+    if (vol <= 0 || vol > MAX_LITRES) throw new AppError('Volume prévu d\'une ligne hors limites (> 0)', 400);
     out.push({ siteId, volumePrevuLitres: vol });
   }
   return out;
@@ -137,6 +151,7 @@ export async function createBonCommande(req: Request, res: Response, next: NextF
       include: { volumesMensuels: { orderBy: { mois: 'asc' } } },
     });
     await auditLog(req.user!.id, 'CREATE', 'bons_commande', bc.id, req.body, req);
+    clearMemo();
     res.status(201).json({ success: true, data: bc });
   } catch (err) { next(mapKnownError(err, 'Un bon de commande avec ce numéro existe déjà')); }
 }
@@ -172,6 +187,7 @@ export async function updateBonCommande(req: Request, res: Response, next: NextF
       include: { volumesMensuels: { orderBy: { mois: 'asc' } } },
     });
     await auditLog(req.user!.id, 'UPDATE', 'bons_commande', bc.id, req.body, req);
+    clearMemo();
     res.json({ success: true, data: bc });
   } catch (err) { next(mapKnownError(err, 'Un bon de commande avec ce numéro existe déjà')); }
 }
@@ -187,6 +203,7 @@ export async function deleteBonCommande(req: Request, res: Response, next: NextF
       throw new AppError('Impossible de supprimer : des bons de livraison y sont rattachés', 409);
     await prisma.bonCommande.delete({ where: { id: existing.id } });
     await auditLog(req.user!.id, 'DELETE', 'bons_commande', existing.id, {}, req);
+    clearMemo();
     res.json({ success: true, message: 'Bon de commande supprimé' });
   } catch (err) { next(err); }
 }
@@ -241,10 +258,7 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
       },
     });
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
-    // Cloisonnement transporteur.
-    if (req.user!.role === 'TRANSPORTEUR' && bl.transporteurId !== (await userPrestataireId(req.user!.id))) {
-      throw new AppError('Accès refusé à ce bon de livraison', 403);
-    }
+    await assertTransporteurAccess(req, bl.transporteurId);
 
     // Écart prévu (plan) vs livré (dépotages réels) par ligne.
     const lignes = bl.lignes.map((l) => {
@@ -295,6 +309,7 @@ async function validatePlan(
         bonCommandeId,
         mois,
         statut: { not: 'ANNULE' },
+        isBrouillon: false, // un brouillon n'est pas un chargement réel
         ...(ignoreBlId ? { id: { not: ignoreBlId } } : {}),
       },
     });
@@ -356,6 +371,7 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
       include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
     });
     await auditLog(req.user!.id, 'CREATE', 'bons_livraison', bl.id, req.body, req);
+    clearMemo();
     res.status(201).json({ success: true, data: bl, warnings });
   } catch (err) { next(mapKnownError(err, 'Un bon de livraison avec ce numéro existe déjà')); }
 }
@@ -364,18 +380,16 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
   try {
     const existing = await prisma.bonLivraison.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Bon de livraison introuvable', 404);
-    // Un transporteur ne peut éditer que ses propres BL (et pas le plan).
+    // Un transporteur ne peut éditer que ses propres BL (et pas le plan, ni finaliser un brouillon).
     const isTransporteur = req.user!.role === 'TRANSPORTEUR';
-    if (isTransporteur && existing.transporteurId !== (await userPrestataireId(req.user!.id))) {
-      throw new AppError('Accès refusé à ce bon de livraison', 403);
-    }
+    await assertTransporteurAccess(req, existing.transporteurId);
     const { numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath, transporteurId } = req.body;
 
     const data: Prisma.BonLivraisonUpdateInput = {};
     if (numeroBL != null) {
       data.numeroBL = String(numeroBL).trim();
-      // Un vrai numéro (non « BR-… ») finalise le brouillon → réintégré aux agrégats.
-      if (!String(numeroBL).trim().startsWith('BR-')) data.isBrouillon = false;
+      // La finalisation d'un brouillon (vrai numéro) est réservée au manager/admin.
+      if (!String(numeroBL).trim().startsWith('BR-') && !isTransporteur) data.isBrouillon = false;
     }
     if (mois != null) {
       const m = Math.trunc(n(mois));
@@ -419,6 +433,7 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
       include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
     });
     await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, req.body, req);
+    clearMemo();
     res.json({ success: true, data: bl, warnings });
   } catch (err) { next(mapKnownError(err, 'Un bon de livraison avec ce numéro existe déjà')); }
 }
@@ -429,6 +444,7 @@ export async function deleteBonLivraison(req: Request, res: Response, next: Next
     if (!existing) throw new AppError('Bon de livraison introuvable', 404);
     await prisma.bonLivraison.delete({ where: { id: existing.id } });
     await auditLog(req.user!.id, 'DELETE', 'bons_livraison', existing.id, {}, req);
+    clearMemo();
     res.json({ success: true, message: 'Bon de livraison supprimé' });
   } catch (err) { next(err); }
 }
@@ -452,6 +468,7 @@ export async function setPlanLivraison(req: Request, res: Response, next: NextFu
       include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
     });
     await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { plan: lignes.length }, req);
+    clearMemo();
     res.json({ success: true, data: updated, warnings });
   } catch (err) { next(err); }
 }
@@ -472,6 +489,7 @@ export async function exportPlanLivraisonXlsx(req: Request, res: Response, next:
   try {
     const bl = await loadPlan(req.params.id);
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+    await assertTransporteurAccess(req, bl.transporteurId);
     const buffer = await buildXlsx(
       `Plan ${bl.numeroBL}`.slice(0, 28),
       [
@@ -491,6 +509,7 @@ export async function exportPlanLivraisonPdf(req: Request, res: Response, next: 
   try {
     const bl = await loadPlan(req.params.id);
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+    await assertTransporteurAccess(req, bl.transporteurId);
     const buffer = await generatePlanLivraisonPdf({
       numeroBL: bl.numeroBL,
       bcNumero: bl.bonCommande?.numero,
@@ -525,7 +544,7 @@ function manquantsFilter(req: Request): { bonCommandeId?: string; mois?: number;
 export async function getManquantsSite(req: Request, res: Response, next: NextFunction) {
   try {
     const f = manquantsFilter(req);
-    const blWhere: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' } };
+    const blWhere: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' }, isBrouillon: false };
     if (f.bonCommandeId) blWhere.bonCommandeId = f.bonCommandeId;
     if (f.mois) blWhere.mois = f.mois;
     if (f.annee) blWhere.annee = f.annee;
@@ -723,7 +742,8 @@ export async function createBrouillonLivraison(req: Request, res: Response, next
     if (!plan.length) throw new AppError('Aucun site dans la tournée', 400);
     const m = Math.trunc(n(mois)) || (new Date().getMonth() + 1);
     const volume = plan.reduce((s, l) => s + l.volumePrevuLitres, 0);
-    const ref = Date.now().toString(36).toUpperCase().slice(-6);
+    // Suffixe aléatoire en plus du timestamp → pas de collision sur la même milliseconde.
+    const ref = Date.now().toString(36).toUpperCase().slice(-6) + Math.random().toString(36).slice(2, 5).toUpperCase();
 
     const bl = await prisma.bonLivraison.create({
       data: {
@@ -743,6 +763,7 @@ export async function createBrouillonLivraison(req: Request, res: Response, next
       include: { lignes: true },
     });
     await auditLog(req.user!.id, 'CREATE', 'bons_livraison', bl.id, { brouillon: true, sites: plan.length }, req);
+    clearMemo();
     res.status(201).json({ success: true, data: bl });
   } catch (err) { next(mapKnownError(err, 'Conflit de numéro de bon de livraison')); }
 }
@@ -754,7 +775,7 @@ export async function getLignesLivraisonForSite(req: Request, res: Response, nex
       where: {
         siteId: req.params.id,
         statut: { in: ['PREVU', 'PARTIEL'] },
-        bonLivraison: { statut: { not: 'ANNULE' } },
+        bonLivraison: { statut: { not: 'ANNULE' }, isBrouillon: false }, // pas de dépotage sur un brouillon
       },
       orderBy: { createdAt: 'desc' },
       take: 20,

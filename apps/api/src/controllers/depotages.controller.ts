@@ -5,6 +5,7 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { clearMemo } from '../utils/memo';
 import { io } from '../server';
 
 /** Calcule coût total et stock après dépotage à partir des entrées. */
@@ -89,12 +90,40 @@ export async function getDepotageById(req: Request, res: Response, next: NextFun
 
 export async function createDepotage(req: Request, res: Response, next: NextFunction) {
   try {
-    const { coutTotal, stockApres } = computeDepotage(req.body);
+    // Liste blanche des champs acceptés (évite le mass-assignment : technicienId/isSynced/etc.).
+    const b = req.body as Record<string, unknown>;
+    const siteId = String(b.siteId ?? '');
+    if (!siteId) throw new AppError('Site requis', 400);
+    const ligneLivraisonId = b.ligneLivraisonId ? String(b.ligneLivraisonId) : null;
+
+    // Une ligne de plan ciblée doit appartenir AU MÊME site (anti-corruption croisée).
+    if (ligneLivraisonId) {
+      const ligne = await prisma.ligneLivraison.findUnique({ where: { id: ligneLivraisonId }, select: { siteId: true } });
+      if (!ligne) throw new AppError('Ligne de livraison introuvable', 404);
+      if (ligne.siteId !== siteId) throw new AppError('La ligne de plan ne correspond pas au site du dépotage', 400);
+    }
+
+    const { coutTotal, stockApres } = computeDepotage(b);
     const depotage = await prisma.depotage.create({
       data: {
-        ...req.body,
-        dateDepotage: req.body.dateDepotage ? new Date(req.body.dateDepotage) : new Date(),
-        technicienId: req.body.technicienId ?? req.user!.id,
+        siteId,
+        ligneLivraisonId,
+        dateDepotage: b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date(),
+        technicienId: req.user!.id, // toujours l'utilisateur courant, jamais le client
+        volumeLitres: Number(b.volumeLitres) || 0,
+        stockAvantLitres: b.stockAvantLitres != null ? Number(b.stockAvantLitres) : null,
+        fournisseur: b.fournisseur ? String(b.fournisseur) : null,
+        numeroBonLivraison: b.numeroBonLivraison ? String(b.numeroBonLivraison) : null,
+        prixLitre: b.prixLitre != null ? Number(b.prixLitre) : null,
+        observations: b.observations ? String(b.observations) : null,
+        latitude: b.latitude != null ? Number(b.latitude) : null,
+        longitude: b.longitude != null ? Number(b.longitude) : null,
+        nomChauffeur: b.nomChauffeur ? String(b.nomChauffeur) : null,
+        signatureChauffeurPath: b.signatureChauffeurPath ? String(b.signatureChauffeurPath) : null,
+        nomAgentSecurite: b.nomAgentSecurite ? String(b.nomAgentSecurite) : null,
+        signatureAgentSecuritePath: b.signatureAgentSecuritePath ? String(b.signatureAgentSecuritePath) : null,
+        signatureTechnicienPath: b.signatureTechnicienPath ? String(b.signatureTechnicienPath) : null,
+        bonLivraisonPath: b.bonLivraisonPath ? String(b.bonLivraisonPath) : null,
         coutTotal,
         stockApresLitres: stockApres,
       },
@@ -102,6 +131,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     });
 
     await syncLigneLivraison(depotage.ligneLivraisonId);
+    clearMemo(); // nouvelles données → invalide manquants/forecast mémoïsés
     await auditLog(req.user!.id, 'CREATE', 'depotages', depotage.id, req.body, req);
     io.of('/supervision').emit('stock:updated', {
       siteId: depotage.siteId,
@@ -130,6 +160,7 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
     // Re-synchronise la (ou les) ligne(s) de plan impactée(s).
     await syncLigneLivraison(existing.ligneLivraisonId);
     if (updated.ligneLivraisonId !== existing.ligneLivraisonId) await syncLigneLivraison(updated.ligneLivraisonId);
+    clearMemo();
     await auditLog(req.user!.id, 'UPDATE', 'depotages', existing.id, data, req);
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
@@ -141,6 +172,7 @@ export async function deleteDepotage(req: Request, res: Response, next: NextFunc
     if (!existing) throw new AppError('Dépotage introuvable', 404);
     await prisma.depotage.delete({ where: { id: req.params.id } });
     await syncLigneLivraison(existing.ligneLivraisonId);
+    clearMemo();
     await auditLog(req.user!.id, 'DELETE', 'depotages', existing.id, {}, req);
     res.json({ success: true, message: 'Dépotage supprimé' });
   } catch (err) { next(err); }

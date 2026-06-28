@@ -12,17 +12,28 @@ import { logger } from '../utils/logger';
 export async function stockAlertJob(): Promise<void> {
   const sites = await prisma.site.findMany({ where: { isActive: true } });
 
-  // Dernier volume gasoil relevé par site
+  // Dernier niveau de cuve relevé par site (+ date, pour rejouer les dépotages postérieurs)
   const releves = await prisma.releveEnergie.findMany({
     where: { source: 'GE', volumeGasoilLitres: { not: null } },
     orderBy: { dateReleve: 'desc' },
-    select: { siteId: true, volumeGasoilLitres: true },
+    select: { siteId: true, volumeGasoilLitres: true, dateReleve: true },
   });
   const stockMap = new Map<string, number>();
-  for (const r of releves) if (!stockMap.has(r.siteId)) stockMap.set(r.siteId, Number(r.volumeGasoilLitres));
+  const dateMap = new Map<string, Date>();
+  for (const r of releves) {
+    if (!stockMap.has(r.siteId)) { stockMap.set(r.siteId, Number(r.volumeGasoilLitres)); dateMap.set(r.siteId, r.dateReleve); }
+  }
+
+  // Dépotages postérieurs au dernier relevé → cuve réapprovisionnée (cohérent avec le forecast).
+  const depots = await prisma.depotage.findMany({ select: { siteId: true, dateDepotage: true, volumeLitres: true } });
+  const depotMap = new Map<string, number>();
+  for (const d of depots) {
+    const ref = dateMap.get(d.siteId);
+    if (ref && d.dateDepotage > ref) depotMap.set(d.siteId, (depotMap.get(d.siteId) ?? 0) + Number(d.volumeLitres));
+  }
 
   const alertes = sites
-    .map((site) => ({ site, stock: calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 }, geParams()) }))
+    .map((site) => ({ site, stock: calculerStockSite(site, { volumeGasoilLitres: (stockMap.get(site.id) ?? 0) + (depotMap.get(site.id) ?? 0) }, geParams()) }))
     .filter(({ stock }) => ['CRITIQUE', 'VIDE'].includes(stock.niveauAlerte));
 
   if (!alertes.length) {

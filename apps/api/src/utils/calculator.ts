@@ -43,6 +43,14 @@ function toNum(val: number | null | undefined | { toNumber(): number }): number 
   return Number(val);
 }
 
+/** Conso mensuelle théorique (litres) d'UN groupe électrogène, selon sa puissance et son statut. */
+export function litresMoisGE(kva: number, statut: string, params = GE_PARAMS): number {
+  if (statut === 'PAS_DE_GE' || !(kva > 0)) return 0;
+  const facteur = statut === 'GE_PERMANENT' ? params.facteurChargePermanent : params.facteurChargeSecours;
+  const heuresMois = statut === 'GE_PERMANENT' ? params.heuresMoisPermanent : params.heuresMoisSecours;
+  return kva * facteur * heuresMois * params.consoSpecificDieselLKwh;
+}
+
 export function calculerStockSite(
   site: SiteGE,
   dernierReleve: ReleveGE | null,

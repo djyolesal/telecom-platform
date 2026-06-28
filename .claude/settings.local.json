@@ -83,7 +83,17 @@
       "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, \\\\{ volumeGasoilLitres: volume \\\\}\\\\\\)/calculerStockSite\\(site, { volumeGasoilLitres: volume }, geParams\\(\\)\\)/g\" src/controllers/rapports.controller.ts)",
       "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, \\\\{ volumeGasoilLitres: stockMap.get\\\\\\(site.id\\\\\\) \\\\?\\\\? 0 \\\\}\\\\\\)/calculerStockSite\\(site, { volumeGasoilLitres: stockMap.get\\(site.id\\) ?? 0 }, geParams\\(\\)\\)/g\" src/controllers/rapports.controller.ts)",
       "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, \\\\{ volumeGasoilLitres: stockMap.get\\\\\\(site.id\\\\\\) \\\\?\\\\? 0 \\\\}\\\\\\)/calculerStockSite\\(site, { volumeGasoilLitres: stockMap.get\\(site.id\\) ?? 0 }, geParams\\(\\)\\)/g\" src/jobs/stock-alert.ts)",
-      "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, dernierReleve\\\\\\)/calculerStockSite\\(site, dernierReleve, geParams\\(\\)\\)/g\" src/controllers/sites.controller.ts)"
+      "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, dernierReleve\\\\\\)/calculerStockSite\\(site, dernierReleve, geParams\\(\\)\\)/g\" src/controllers/sites.controller.ts)",
+      "Bash(grep -rn \"manquants:\\\\${\" apps/api/src)",
+      "Bash(grep -rn \"forecast:\\\\${\" apps/api/src)",
+      "Bash(awk '/model Depotage/,/^}/' apps/api/prisma/schema.prisma)",
+      "Bash(node -e \"const pkg=require\\('./apps/api/node_modules/@anthropic-ai/sdk/package.json'\\); console.log\\('version', pkg.version\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(timeout 30 node -e ' *)",
+      "Bash(grep -n \"const blWhere: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' } }\\\\|_sum: { volumeChargeLitres: true }\\\\|bonLivraison: { statut: { not: 'ANNULE' } }\\\\|statut: { not: 'ANNULE' },\" src/controllers/carburantLogistique.controller.ts)",
+      "Bash(grep -n \"auditLog\\(req.user!.id, 'CREATE', 'bons_livraison'\\\\|auditLog\\(req.user!.id, 'UPDATE', 'bons_livraison'\\\\|auditLog\\(req.user!.id, 'DELETE', 'bons_livraison'\\\\|from '../utils/memo'\\\\|import { getNum }\" src/controllers/carburantLogistique.controller.ts)",
+      "Bash(perl -0pi -e \"s/\\(await auditLog\\\\\\(req\\\\.user!\\\\.id, '\\(?:CREATE|UPDATE|DELETE\\)', 'bons_livraison'[^\\\\n]*\\\\\\);\\)/\\\\1\\\\n    clearMemo\\(\\);/g\" src/controllers/carburantLogistique.controller.ts)",
+      "Bash(perl -0pi -e \"s/\\(await auditLog\\\\\\(req\\\\.user!\\\\.id, '\\(?:CREATE|UPDATE|DELETE\\)', 'bons_commande'[^\\\\n]*\\\\\\);\\)/\\\\1\\\\n    clearMemo\\(\\);/g\" src/controllers/carburantLogistique.controller.ts)"
     ]
   }
 }
