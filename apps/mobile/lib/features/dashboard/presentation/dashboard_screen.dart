@@ -111,12 +111,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _moduleGrid(BuildContext context) {
+    final role = context.select((AuthCubit c) => c.state.user?.role) ?? '';
     final modules = [
       (_M('Sites', Icons.cell_tower, '/sites', AppColors.brand)),
       (_M('Maintenance', Icons.build, '/maintenance', AppColors.brandLight)),
       (_M('Carburant', Icons.local_gas_station, '/carburant', AppColors.accent)),
       (_M('Énergie', Icons.bolt, '/energie', AppColors.brandLight)),
       (_M('Incidents', Icons.warning_amber, '/incidents', AppColors.critique)),
+      // Saisie d'un bon de livraison (transporteur / manager / admin).
+      if (role == 'TRANSPORTEUR' || role == 'MANAGER' || role == 'ADMIN')
+        (_M('Bon livraison', Icons.local_shipping, '/carburant/bon-livraison/nouveau', AppColors.brand)),
     ];
     return GridView.count(
       crossAxisCount: 3,

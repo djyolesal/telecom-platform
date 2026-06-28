@@ -5,8 +5,15 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { generatePlanLivraisonPdf } from '../services/pdf.service';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+/** Prestataire (transporteur) rattaché à l'utilisateur courant, le cas échéant. */
+async function userPrestataireId(userId: string): Promise<string | null> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { prestataireId: true } });
+  return u?.prestataireId ?? null;
+}
 
 // Tolérance d'arrondi (litres) pour le contrôle « Σ lignes = volume chargé ».
 const TOLERANCE_L = 0.5;
@@ -104,7 +111,7 @@ export async function getBonCommandeById(req: Request, res: Response, next: Next
 
 export async function createBonCommande(req: Request, res: Response, next: NextFunction) {
   try {
-    const { numero, annee, trimestre, numeroClient, observations, statut } = req.body;
+    const { numero, annee, trimestre, numeroClient, observations, statut, bcPdfPath } = req.body;
     if (!numero) throw new AppError('Numéro de bon de commande requis', 400);
     if (!numeroClient) throw new AppError('Numéro client requis', 400);
     const t = Math.trunc(n(trimestre));
@@ -118,6 +125,7 @@ export async function createBonCommande(req: Request, res: Response, next: NextF
         trimestre: t,
         numeroClient: String(numeroClient).trim(),
         statut: statut ?? undefined,
+        bcPdfPath: bcPdfPath ?? null,
         observations: observations ?? null,
         volumesMensuels: { create: volumes },
       },
@@ -189,6 +197,10 @@ export async function getBonsLivraison(req: Request, res: Response, next: NextFu
     if (mois) where.mois = parseInt(mois);
     if (annee) where.annee = parseInt(annee);
     if (statut) where.statut = statut as any;
+    // Un transporteur ne voit que ses propres bons de livraison.
+    if (req.user!.role === 'TRANSPORTEUR') {
+      where.transporteurId = (await userPrestataireId(req.user!.id)) ?? '__none__';
+    }
 
     const { data, meta } = await paginate(
       prisma.bonLivraison,
@@ -197,6 +209,7 @@ export async function getBonsLivraison(req: Request, res: Response, next: NextFu
         orderBy: { dateChargement: 'desc' },
         include: {
           bonCommande: { select: { numero: true } },
+          transporteur: { select: { nom: true } },
           _count: { select: { lignes: true } },
         },
       },
@@ -212,6 +225,7 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
       where: { id: req.params.id },
       include: {
         bonCommande: { select: { numero: true, annee: true, trimestre: true } },
+        transporteur: { select: { id: true, nom: true } },
         lignes: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -222,6 +236,10 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
       },
     });
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+    // Cloisonnement transporteur.
+    if (req.user!.role === 'TRANSPORTEUR' && bl.transporteurId !== (await userPrestataireId(req.user!.id))) {
+      throw new AppError('Accès refusé à ce bon de livraison', 403);
+    }
 
     // Écart prévu (plan) vs livré (dépotages réels) par ligne.
     const lignes = bl.lignes.map((l) => {
@@ -287,7 +305,7 @@ async function validatePlan(
 
 export async function createBonLivraison(req: Request, res: Response, next: NextFunction) {
   try {
-    const { bonCommandeId, numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut } = req.body;
+    const { bonCommandeId, numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath } = req.body;
     if (!bonCommandeId) throw new AppError('Bon de commande requis', 400);
     if (!numeroBL) throw new AppError('Numéro de bon de livraison requis', 400);
     if (!immatriculation) throw new AppError('Immatriculation du camion requise', 400);
@@ -295,17 +313,27 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     const bc = await prisma.bonCommande.findUnique({ where: { id: bonCommandeId } });
     if (!bc) throw new AppError('Bon de commande introuvable', 404);
 
+    // Transporteur : rattaché à son propre prestataire. Manager : peut désigner le transporteur.
+    let transporteurId: string | null;
+    if (req.user!.role === 'TRANSPORTEUR') {
+      transporteurId = await userPrestataireId(req.user!.id);
+      if (!transporteurId) throw new AppError('Votre compte n\'est rattaché à aucun transporteur', 403);
+    } else {
+      transporteurId = req.body.transporteurId ?? null;
+    }
+
     const m = Math.trunc(n(mois));
     if (m < 1 || m > 12) throw new AppError('Mois invalide (1..12)', 400);
     const volume = n(volumeChargeLitres);
     if (volume <= 0) throw new AppError('Volume chargé doit être > 0', 400);
+    // Le plan est optionnel à la création (le manager le génère/édite ensuite).
     const lignes = parseLignes(req.body.lignes);
-
     const { warnings } = await validatePlan(bonCommandeId, m, volume, lignes);
 
     const bl = await prisma.bonLivraison.create({
       data: {
         bonCommandeId,
+        transporteurId,
         numeroBL: String(numeroBL).trim(),
         mois: m,
         annee: Math.trunc(n(annee)) || bc.annee,
@@ -315,8 +343,10 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
         dateChargement: dateChargement ? new Date(dateChargement) : new Date(),
         dateTraitement: dateTraitement ? new Date(dateTraitement) : null,
         statut: statut ?? undefined,
+        blPdfPath: blPdfPath ?? null,
+        bordereauPdfPath: bordereauPdfPath ?? null,
         observations: observations ?? null,
-        lignes: { create: lignes },
+        ...(lignes.length ? { lignes: { create: lignes } } : {}),
       },
       include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
     });
@@ -329,7 +359,12 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
   try {
     const existing = await prisma.bonLivraison.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Bon de livraison introuvable', 404);
-    const { numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut } = req.body;
+    // Un transporteur ne peut éditer que ses propres BL (et pas le plan).
+    const isTransporteur = req.user!.role === 'TRANSPORTEUR';
+    if (isTransporteur && existing.transporteurId !== (await userPrestataireId(req.user!.id))) {
+      throw new AppError('Accès refusé à ce bon de livraison', 403);
+    }
+    const { numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath, transporteurId } = req.body;
 
     const data: Prisma.BonLivraisonUpdateInput = {};
     if (numeroBL != null) data.numeroBL = String(numeroBL).trim();
@@ -345,12 +380,17 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     if (dateTraitement !== undefined) data.dateTraitement = dateTraitement ? new Date(dateTraitement) : null;
     if (observations !== undefined) data.observations = observations;
     if (statut != null) data.statut = statut;
+    if (blPdfPath !== undefined) data.blPdfPath = blPdfPath;
+    if (bordereauPdfPath !== undefined) data.bordereauPdfPath = bordereauPdfPath;
+    if (transporteurId !== undefined && !isTransporteur) {
+      data.transporteur = transporteurId ? { connect: { id: transporteurId } } : { disconnect: true };
+    }
 
     let warnings: string[] = [];
     const effMois = data.mois != null ? (data.mois as number) : existing.mois;
     const effVolume = data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : n(existing.volumeChargeLitres);
 
-    if (req.body.lignes !== undefined) {
+    if (req.body.lignes !== undefined && !isTransporteur) {
       const lignes = parseLignes(req.body.lignes);
       ({ warnings } = await validatePlan(existing.bonCommandeId, effMois, effVolume, lignes, existing.id));
       await prisma.ligneLivraison.deleteMany({ where: { bonLivraisonId: existing.id } });
@@ -381,6 +421,82 @@ export async function deleteBonLivraison(req: Request, res: Response, next: Next
     await prisma.bonLivraison.delete({ where: { id: existing.id } });
     await auditLog(req.user!.id, 'DELETE', 'bons_livraison', existing.id, {}, req);
     res.json({ success: true, message: 'Bon de livraison supprimé' });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Génère / édite le plan de livraison d'un bon de livraison (réservé MANAGER/ADMIN).
+ * Remplace l'ensemble des lignes ; contrôle Σ lignes = volume chargé.
+ */
+export async function setPlanLivraison(req: Request, res: Response, next: NextFunction) {
+  try {
+    const bl = await prisma.bonLivraison.findUnique({ where: { id: req.params.id } });
+    if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+
+    const lignes = parseLignes(req.body.lignes);
+    const { warnings } = await validatePlan(bl.bonCommandeId, bl.mois, n(bl.volumeChargeLitres), lignes, bl.id);
+
+    await prisma.ligneLivraison.deleteMany({ where: { bonLivraisonId: bl.id } });
+    const updated = await prisma.bonLivraison.update({
+      where: { id: bl.id },
+      data: { lignes: { create: lignes } },
+      include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { plan: lignes.length }, req);
+    res.json({ success: true, data: updated, warnings });
+  } catch (err) { next(err); }
+}
+
+/** Charge un BL avec son plan détaillé (helper d'export). */
+async function loadPlan(id: string) {
+  return prisma.bonLivraison.findUnique({
+    where: { id },
+    include: {
+      bonCommande: { select: { numero: true } },
+      transporteur: { select: { nom: true } },
+      lignes: { orderBy: { createdAt: 'asc' }, include: { site: { select: { code: true, nom: true, region: true } } } },
+    },
+  });
+}
+
+export async function exportPlanLivraisonXlsx(req: Request, res: Response, next: NextFunction) {
+  try {
+    const bl = await loadPlan(req.params.id);
+    if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+    const buffer = await buildXlsx(
+      `Plan ${bl.numeroBL}`.slice(0, 28),
+      [
+        { header: 'Site', key: 'site', width: 14 },
+        { header: 'Nom', key: 'nom', width: 26 },
+        { header: 'Région', key: 'region', width: 16 },
+        { header: 'Volume prévu (L)', key: 'prevu', width: 16 },
+      ],
+      bl.lignes.map((l) => ({ site: l.site.code, nom: l.site.nom, region: l.site.region, prevu: n(l.volumePrevuLitres) }))
+    );
+    setXlsxHeaders(res, `plan-${bl.numeroBL}.xlsx`);
+    res.send(buffer);
+  } catch (err) { next(err); }
+}
+
+export async function exportPlanLivraisonPdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    const bl = await loadPlan(req.params.id);
+    if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+    const buffer = await generatePlanLivraisonPdf({
+      numeroBL: bl.numeroBL,
+      bcNumero: bl.bonCommande?.numero,
+      moisLabel: MOIS[bl.mois] ?? String(bl.mois),
+      annee: bl.annee,
+      immatriculation: bl.immatriculation,
+      transporteur: bl.transporteur?.nom,
+      numeroClient: bl.numeroClient,
+      volumeChargeLitres: n(bl.volumeChargeLitres),
+      dateChargement: bl.dateChargement,
+      lignes: bl.lignes.map((l) => ({ siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, volumePrevuLitres: n(l.volumePrevuLitres) })),
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="plan-${bl.numeroBL}.pdf"`);
+    res.send(buffer);
   } catch (err) { next(err); }
 }
 

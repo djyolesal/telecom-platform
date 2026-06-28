@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Trash2 } from 'lucide-react';
+import { Plus, X, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { TableSkeleton, ErrorState } from '@/components/shared/states';
@@ -17,37 +18,56 @@ const TOL = 0.5;
 const today = () => new Date().toISOString().slice(0, 10);
 const BL_COLORS: Record<string, string> = { PLANIFIE: 'bg-amber-100 text-amber-700', CHARGE: 'bg-blue-100 text-blue-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 
-interface SiteLite { id: string; code: string; nom: string }
+interface Transporteur { id: string; nom: string }
 interface Suivi { mois: number; prevu: number; livre: number; ecart: number; depassement: boolean }
 interface BL { id: string; numeroBL: string; mois: number; immatriculation: string; volumeChargeLitres: number; dateChargement: string; statut: string; _count?: { lignes: number } }
 interface BC {
-  id: string; numero: string; annee: number; trimestre: number; numeroClient: string; statut: string; observations?: string;
+  id: string; numero: string; annee: number; trimestre: number; numeroClient: string; statut: string; observations?: string; bcPdfPath?: string;
   volumesMensuels: { id: string; mois: number; volumePrevuLitres: number }[];
   bonsLivraison: BL[]; suivi: Suivi[];
 }
 
-interface Ligne { siteId: string; volume: string }
+// Upload d'un PDF → renvoie la clé de stockage.
+async function uploadPdf(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('folder', 'documents');
+  fd.append('file', file);
+  const r = await api.post('/upload/document', fd);
+  return r.data?.data?.key as string;
+}
 
 function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string })?.role ?? '';
+  const isManager = role === 'MANAGER' || role === 'ADMIN';
   const moisOpts = bc.volumesMensuels.map((v) => ({ value: String(v.mois), label: MOIS[v.mois] }));
   const [form, setForm] = useState({
     numeroBL: '', immatriculation: '', mois: String(bc.volumesMensuels[0]?.mois ?? new Date().getMonth() + 1),
-    volumeChargeLitres: '', dateChargement: today(), observations: '',
+    volumeChargeLitres: '', dateChargement: today(), transporteurId: '', observations: '',
   });
-  const [lignes, setLignes] = useState<Ligne[]>([{ siteId: '', volume: '' }]);
+  const [blPdfPath, setBlPdfPath] = useState('');
+  const [bordereauPdfPath, setBordereauPdfPath] = useState('');
+  const [uploading, setUploading] = useState('');
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const { data: sites = [] } = useQuery({
-    queryKey: ['sites-all'],
-    queryFn: () => api.get('/sites', { params: { all: true } }).then((r) => r.data.data as SiteLite[]),
+  // Liste des transporteurs (visible côté manager pour désigner le transporteur).
+  const { data: transporteurs = [] } = useQuery({
+    queryKey: ['transporteurs'],
+    queryFn: () => api.get('/prestataires', { params: { is_transporteur: true, is_active: true, limit: 100 } }).then((r) => r.data.data as Transporteur[]),
+    enabled: isManager,
   });
 
-  const sommeLignes = lignes.reduce((s, l) => s + (Number(l.volume) || 0), 0);
-  const charge = Number(form.volumeChargeLitres) || 0;
-  const coherent = lignes.every((l) => l.siteId && Number(l.volume) > 0) && Math.abs(sommeLignes - charge) <= TOL;
+  const doUpload = async (file: File, slot: 'bl' | 'bordereau') => {
+    setUploading(slot);
+    try {
+      const key = await uploadPdf(file);
+      if (slot === 'bl') setBlPdfPath(key); else setBordereauPdfPath(key);
+    } catch { setError('Échec de l’upload du PDF.'); }
+    finally { setUploading(''); }
+  };
 
   const mutation = useMutation({
     mutationFn: () => api.post('/bons-livraison', {
@@ -56,10 +76,12 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
       mois: parseInt(form.mois),
       annee: bc.annee,
       immatriculation: form.immatriculation,
-      volumeChargeLitres: charge,
+      volumeChargeLitres: Number(form.volumeChargeLitres) || 0,
       dateChargement: form.dateChargement,
+      transporteurId: isManager && form.transporteurId ? form.transporteurId : undefined,
+      blPdfPath: blPdfPath || undefined,
+      bordereauPdfPath: bordereauPdfPath || undefined,
       observations: form.observations || undefined,
-      lignes: lignes.filter((l) => l.siteId && Number(l.volume) > 0).map((l) => ({ siteId: l.siteId, volumePrevuLitres: Number(l.volume) })),
     }),
     onSuccess: (r: { data?: { warnings?: string[] } }) => {
       queryClient.invalidateQueries({ queryKey: ['bon-commande', bc.id] });
@@ -71,11 +93,12 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-800">Nouveau bon de livraison</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
         </div>
+        <p className="text-xs text-gray-500 mb-3">Renseignez le chargement et joignez les PDF. Le plan de livraison sera défini par le manager.</p>
         {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
         {warnings.length > 0 && (
           <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
@@ -91,37 +114,36 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             <Field label="Mois exécuté" required><Select value={form.mois} onChange={(e) => set('mois', e.target.value)} options={moisOpts} /></Field>
             <Field label="Date chargement" required><Input type="date" value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
             <Field label="Volume chargé (L)" required><Input type="number" value={form.volumeChargeLitres} onChange={(e) => set('volumeChargeLitres', e.target.value)} required placeholder="0" /></Field>
+            {isManager && (
+              <Field label="Transporteur">
+                <Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="—"
+                  options={transporteurs.map((t) => ({ value: t.id, label: t.nom }))} />
+              </Field>
+            )}
           </div>
 
-          <div className="rounded-lg border border-gray-200 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-gray-500">Plan de livraison (sites à approvisionner)</p>
-              <button type="button" onClick={() => setLignes((l) => [...l, { siteId: '', volume: '' }])} className="text-sm text-blue-600 flex items-center gap-1"><Plus size={14} /> Ajouter un site</button>
-            </div>
-            <div className="space-y-2">
-              {lignes.map((l, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <Select value={l.siteId} onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, siteId: e.target.value } : x))}
-                      placeholder="— Choisir un site —"
-                      options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
-                  </div>
-                  <div className="w-28"><Input type="number" value={l.volume} placeholder="L" onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, volume: e.target.value } : x))} /></div>
-                  <button type="button" onClick={() => setLignes((arr) => arr.filter((_, j) => j !== i))} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
-                </div>
-              ))}
-            </div>
-            <div className={`mt-3 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium ${coherent ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-              <span>Total plan : {fmtNumber(sommeLignes)} L</span>
-              <span>Chargé : {fmtNumber(charge)} L {coherent ? '✓' : `(écart ${fmtNumber(sommeLignes - charge)} L)`}</span>
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="PDF du bon de livraison">
+              <div className="flex items-center gap-2 text-xs">
+                <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, 'bl'); }} />
+                {uploading === 'bl' && <span className="text-gray-400">Envoi…</span>}
+                {blPdfPath && uploading !== 'bl' && <span className="text-green-600">✓</span>}
+              </div>
+            </Field>
+            <Field label="PDF du bordereau de chargement">
+              <div className="flex items-center gap-2 text-xs">
+                <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, 'bordereau'); }} />
+                {uploading === 'bordereau' && <span className="text-gray-400">Envoi…</span>}
+                {bordereauPdfPath && uploading !== 'bordereau' && <span className="text-green-600">✓</span>}
+              </div>
+            </Field>
           </div>
 
           <Field label="Observations"><Textarea value={form.observations} onChange={(e) => set('observations', e.target.value)} rows={2} /></Field>
           {warnings.length === 0 && (
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
-              <Button type="submit" loading={mutation.isPending} disabled={!coherent}>Créer</Button>
+              <Button type="submit" loading={mutation.isPending} disabled={!!uploading}>Créer</Button>
             </div>
           )}
         </form>
@@ -154,6 +176,13 @@ export default function BonCommandeDetailPage() {
         backHref="/carburant/commandes"
         actions={<Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de livraison</Button>}
       />
+
+      {data.bcPdfPath && (
+        <a href={`/storage/telecom-files/${data.bcPdfPath}`} target="_blank" rel="noopener noreferrer"
+          className="mb-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+          <FileText size={15} className="text-red-500" /> PDF de la commande
+        </a>
+      )}
 
       {/* Suivi prévu vs livré par mois */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 mb-4">

@@ -24,6 +24,7 @@ interface Prestataire {
   contactCommercial?: string;
   contactTechnique?: string;
   logoPath?: string;
+  isTransporteur?: boolean;
   isActive: boolean;
   _count?: { assignments: number };
 }
@@ -40,6 +41,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
   const [error, setError] = useState('');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [isTransporteur, setIsTransporteur] = useState(prestataire?.isTransporteur ?? false);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const uploadLogo = async (file: File) => {
@@ -54,7 +56,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
     finally { setUploading(false); }
   };
 
-  const payload = () => Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v || undefined]));
+  const payload = () => ({ ...Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v || undefined])), isTransporteur });
   const mutation = useMutation({
     mutationFn: () => editing ? api.put(`/prestataires/${prestataire!.id}`, payload()) : api.post('/prestataires', payload()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['prestataires'] }); onClose(); },
@@ -90,6 +92,11 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
               {uploading && <span className="text-xs text-gray-400">Envoi…</span>}
             </div>
           </Field>
+
+          <label className="col-span-2 flex items-center gap-2 mt-1 cursor-pointer text-sm text-gray-700">
+            <input type="checkbox" checked={isTransporteur} onChange={(e) => setIsTransporteur(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+            Prestataire transporteur (carburant) — peut saisir les bons de livraison
+          </label>
 
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>

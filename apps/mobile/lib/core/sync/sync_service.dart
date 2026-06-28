@@ -135,18 +135,24 @@ class SyncService {
         final a = (raw as Map).cast<String, dynamic>();
         final path = a['path'] as String;
         final kind = (a['kind'] as String?) ?? 'photo';
+        // `field` cible une clé arbitraire du corps (ex: signatureChauffeurPath,
+        // blPdfPath…). Sinon : 'photo' → tableau photos, 'signature' → signaturePath.
+        final field = a['field'] as String?;
+        final folder = (a['folder'] as String?) ?? (kind == 'signature' ? 'signatures' : 'photos');
         final file = File(path);
         if (!await file.exists()) continue; // fichier perdu → on ignore
         final up = await _upload.uploadImage(
           await file.readAsBytes(),
           path.split('/').last,
-          folder: kind == 'signature' ? 'signatures' : 'photos',
+          folder: folder,
         );
         if (up == null) {
           // upload impossible → réseau indisponible : on réessaiera (rien n'est supprimé)
           throw const NetworkException('Upload des pièces jointes impossible (hors-ligne)');
         }
-        if (kind == 'signature') {
+        if (field != null) {
+          body[field] = up.key;
+        } else if (kind == 'signature') {
           body['signaturePath'] = up.key;
         } else {
           photos.add(up.toJson());

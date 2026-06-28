@@ -6,9 +6,10 @@ import { auditLog } from '../services/audit.service';
 
 export async function getPrestataires(req: Request, res: Response, next: NextFunction) {
   try {
-    const { search, is_active, page = '1', limit = '20' } = req.query as Record<string, string>;
+    const { search, is_active, is_transporteur, page = '1', limit = '20' } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (is_active != null) where.isActive = is_active === 'true';
+    if (is_transporteur != null) where.isTransporteur = is_transporteur === 'true';
     if (search) where.OR = [
       { nom: { contains: search, mode: 'insensitive' } },
       { email: { contains: search, mode: 'insensitive' } },
@@ -41,9 +42,9 @@ export async function getPrestataireById(req: Request, res: Response, next: Next
 
 export async function createPrestataire(req: Request, res: Response, next: NextFunction) {
   try {
-    const { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } = req.body;
+    const { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur } = req.body;
     if (!nom) throw new AppError('Le nom est requis', 400);
-    const prestataire = await prisma.prestataire.create({ data: { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } });
+    const prestataire = await prisma.prestataire.create({ data: { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur: !!isTransporteur } });
     await auditLog(req.user!.id, 'CREATE', 'prestataires', prestataire.id, { nom }, req);
     res.status(201).json({ success: true, data: prestataire });
   } catch (err) { next(err); }
@@ -53,10 +54,10 @@ export async function updatePrestataire(req: Request, res: Response, next: NextF
   try {
     const existing = await prisma.prestataire.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Prestataire introuvable', 404);
-    const { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath } = req.body;
+    const { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur } = req.body;
     const updated = await prisma.prestataire.update({
       where: { id: req.params.id },
-      data: { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath },
+      data: { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, ...(isTransporteur !== undefined ? { isTransporteur: !!isTransporteur } : {}) },
     });
     await auditLog(req.user!.id, 'UPDATE', 'prestataires', existing.id, req.body, req);
     res.json({ success: true, data: updated });

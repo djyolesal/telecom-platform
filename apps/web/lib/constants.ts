@@ -42,6 +42,7 @@ export const ROLES = [
   { value: 'MANAGER', label: 'Manager' },
   { value: 'ADMIN', label: 'Administrateur' },
   { value: 'DIRECTION', label: 'Direction' },
+  { value: 'TRANSPORTEUR', label: 'Transporteur carburant' },
 ];
 
 export const TYPES_MAINTENANCE = [

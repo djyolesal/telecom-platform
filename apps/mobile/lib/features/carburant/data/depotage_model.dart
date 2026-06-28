@@ -38,6 +38,28 @@ class Depotage {
   }
 }
 
+/// Bon de commande (vue allégée pour le transporteur qui crée un BL).
+class BonCommandeLite {
+  final String id;
+  final String numero;
+  final int annee;
+  final int trimestre;
+  final List<int> mois; // mois disponibles (volumes prévus)
+
+  const BonCommandeLite({required this.id, required this.numero, required this.annee, required this.trimestre, required this.mois});
+
+  factory BonCommandeLite.fromJson(Map<String, dynamic> j) {
+    final vols = (j['volumesMensuels'] as List?) ?? const [];
+    return BonCommandeLite(
+      id: j['id'] as String,
+      numero: j['numero'] as String,
+      annee: (j['annee'] as num?)?.toInt() ?? 0,
+      trimestre: (j['trimestre'] as num?)?.toInt() ?? 0,
+      mois: vols.map((v) => (v['mois'] as num).toInt()).toList(),
+    );
+  }
+}
+
 /// Ligne d'un plan de livraison prévue pour un site (chaîne BC → BL → plan).
 /// Permet au technicien de rattacher son dépotage à la livraison planifiée.
 class PlanLigne {

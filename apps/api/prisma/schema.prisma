@@ -49,6 +49,7 @@ enum RoleUser {
   MANAGER
   ADMIN
   DIRECTION
+  TRANSPORTEUR
 }
 
 enum TypeMaintenance {
@@ -289,6 +290,12 @@ model Depotage {
   technicienId       String?  @map("technicien_id")
   signaturePath      String?  @map("signature_path")
   bonLivraisonPath   String?  @map("bon_livraison_path")
+  // Validation tripartite du dépotage (signatures sur site)
+  nomChauffeur                String? @map("nom_chauffeur") @db.VarChar(100)
+  signatureChauffeurPath      String? @map("signature_chauffeur_path")
+  nomAgentSecurite            String? @map("nom_agent_securite") @db.VarChar(100)
+  signatureAgentSecuritePath  String? @map("signature_agent_securite_path")
+  signatureTechnicienPath     String? @map("signature_technicien_path")
   observations       String?
   latitude           Decimal? @db.Decimal(10, 8)
   longitude          Decimal? @db.Decimal(11, 8)
@@ -449,13 +456,16 @@ model Prestataire {
   contactCommercial String?  @map("contact_commercial") @db.VarChar(60)
   contactTechnique  String?  @map("contact_technique") @db.VarChar(60)
   logoPath          String?  @map("logo_path")
+  // Prestataire de transport carburant (saisit les bons de livraison)
+  isTransporteur    Boolean  @default(false) @map("is_transporteur")
   isActive   Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  assignments  LotAssignment[]
-  users        User[]
-  maintenances Maintenance[]
+  assignments    LotAssignment[]
+  users          User[]
+  maintenances   Maintenance[]
+  bonsLivraison  BonLivraison[]
 
   @@map("prestataires")
 }
@@ -523,6 +533,7 @@ model BonCommande {
   trimestre    Int               // 1..4
   numeroClient String            @map("numero_client") @db.VarChar(50) // constant
   statut       StatutBonCommande @default(OUVERT)
+  bcPdfPath    String?           @map("bc_pdf_path") // PDF de la commande joint par le manager
   observations String?
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
@@ -552,6 +563,7 @@ model VolumeMensuel {
 model BonLivraison {
   id                 String             @id @default(uuid())
   bonCommandeId      String             @map("bon_commande_id")
+  transporteurId     String?            @map("transporteur_id") // prestataire transporteur
   numeroBL           String             @unique @map("numero_bl") @db.VarChar(50) // unique par chargement
   mois               Int                // mois exécuté (1..12)
   annee              Int
@@ -561,14 +573,18 @@ model BonLivraison {
   dateChargement     DateTime           @map("date_chargement")
   dateTraitement     DateTime?          @map("date_traitement")
   statut             StatutBonLivraison @default(PLANIFIE)
+  blPdfPath          String?            @map("bl_pdf_path")        // PDF du bon de livraison
+  bordereauPdfPath   String?            @map("bordereau_pdf_path") // PDF du bordereau de chargement
   observations       String?
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
   bonCommande BonCommande      @relation(fields: [bonCommandeId], references: [id])
+  transporteur Prestataire?    @relation(fields: [transporteurId], references: [id])
   lignes      LigneLivraison[]
 
   @@index([bonCommandeId])
+  @@index([transporteurId])
   @@index([annee, mois])
   @@map("bons_livraison")
 }

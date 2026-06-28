@@ -164,4 +164,68 @@ export async function generateMonthlyReportPdf(r: MonthlyReportData): Promise<Bu
   });
 }
 
-export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf };
+export interface PlanLivraisonPdfData {
+  numeroBL: string;
+  bcNumero?: string | null;
+  moisLabel: string;
+  annee: number;
+  immatriculation: string;
+  transporteur?: string | null;
+  numeroClient: string;
+  volumeChargeLitres: number;
+  dateChargement?: Date | null;
+  lignes: Array<{ siteCode: string; siteNom: string; region: string; volumePrevuLitres: number }>;
+}
+
+export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise<Buffer> {
+  return render((doc) => {
+    header(doc, 'Plan de livraison carburant', `BL ${p.numeroBL} — ${p.moisLabel} ${p.annee}`);
+
+    sectionTitle(doc, 'Chargement');
+    row(doc, 'N° bon de livraison', p.numeroBL);
+    row(doc, 'Bon de commande', p.bcNumero ?? '—');
+    row(doc, 'Transporteur', p.transporteur ?? '—');
+    row(doc, 'N° client', p.numeroClient);
+    row(doc, 'Camion', p.immatriculation);
+    row(doc, 'Volume chargé', `${Math.round(p.volumeChargeLitres)} L`);
+    row(doc, 'Date chargement', fmtDate(p.dateChargement));
+
+    sectionTitle(doc, `Sites à approvisionner (${p.lignes.length})`);
+
+    // En-tête du tableau
+    const cols = { site: 50, region: 250, vol: 460 };
+    const headerY = doc.y;
+    doc.fontSize(9).fillColor('#666');
+    doc.text('Site', cols.site, headerY);
+    doc.text('Région', cols.region, headerY);
+    doc.text('Prévu (L)', cols.vol, headerY, { width: 90, align: 'right' });
+    doc.moveTo(50, doc.y + 2).lineTo(doc.page.width - 50, doc.y + 2).strokeColor('#e0e0e0').stroke();
+    doc.moveDown(0.5);
+
+    let total = 0;
+    p.lignes.forEach((l) => {
+      total += l.volumePrevuLitres;
+      const y = doc.y;
+      doc.fontSize(9).fillColor('#111');
+      doc.text(`${l.siteCode} — ${l.siteNom}`, cols.site, y, { width: 190 });
+      doc.text(l.region, cols.region, y, { width: 190 });
+      doc.text(String(Math.round(l.volumePrevuLitres)), cols.vol, y, { width: 90, align: 'right' });
+      doc.moveDown(0.5);
+      if (doc.y > doc.page.height - 80) doc.addPage();
+    });
+
+    doc.moveTo(50, doc.y + 2).lineTo(doc.page.width - 50, doc.y + 2).strokeColor('#e0e0e0').stroke();
+    doc.moveDown(0.5);
+    const ty = doc.y;
+    doc.fontSize(10).fillColor(BRAND);
+    doc.text('TOTAL', cols.region, ty);
+    doc.text(`${Math.round(total)} L`, cols.vol, ty, { width: 90, align: 'right' });
+
+    doc.fontSize(8).fillColor('#999').text(
+      `Généré le ${fmtDate(new Date())} — TélécomOps`,
+      50, doc.page.height - 60, { align: 'center', width: doc.page.width - 100 }
+    );
+  });
+}
+
+export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf };

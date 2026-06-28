@@ -48,6 +48,7 @@ class _TelecomAppState extends State<TelecomApp> {
         RepositoryProvider.value(value: di.siteRepository),
         RepositoryProvider.value(value: di.maintenanceRepository),
         RepositoryProvider.value(value: di.depotageRepository),
+        RepositoryProvider.value(value: di.bonLivraisonRepository),
         RepositoryProvider.value(value: di.releveRepository),
         RepositoryProvider.value(value: di.incidentRepository),
         RepositoryProvider.value(value: di.dashboardRepository),

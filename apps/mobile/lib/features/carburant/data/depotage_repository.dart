@@ -38,7 +38,18 @@ class DepotageRepository {
     double? latitude,
     double? longitude,
     String? ligneLivraisonId,
+    // Validation tripartite : noms + chemins LOCAUX des signatures (uploadées par la sync).
+    String? nomChauffeur,
+    String? signatureChauffeurLocalPath,
+    String? nomAgentSecurite,
+    String? signatureAgentSecuriteLocalPath,
+    String? signatureTechnicienLocalPath,
   }) {
+    final attachments = <Map<String, String>>[
+      if (signatureChauffeurLocalPath != null) {'path': signatureChauffeurLocalPath, 'kind': 'signature', 'field': 'signatureChauffeurPath'},
+      if (signatureAgentSecuriteLocalPath != null) {'path': signatureAgentSecuriteLocalPath, 'kind': 'signature', 'field': 'signatureAgentSecuritePath'},
+      if (signatureTechnicienLocalPath != null) {'path': signatureTechnicienLocalPath, 'kind': 'signature', 'field': 'signatureTechnicienPath'},
+    ];
     return _sync.submit(
       endpoint: '/depotages',
       entityType: 'depotage',
@@ -54,7 +65,10 @@ class DepotageRepository {
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
         if (ligneLivraisonId != null) 'ligneLivraisonId': ligneLivraisonId,
+        if (nomChauffeur != null && nomChauffeur.isNotEmpty) 'nomChauffeur': nomChauffeur,
+        if (nomAgentSecurite != null && nomAgentSecurite.isNotEmpty) 'nomAgentSecurite': nomAgentSecurite,
       },
+      attachments: attachments,
     );
   }
 }

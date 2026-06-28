@@ -30,9 +30,23 @@ function CreateModal({ onClose }: { onClose: () => void }) {
   const annee = new Date().getFullYear();
   const [form, setForm] = useState({ numero: '', annee: String(annee), trimestre: '1', numeroClient: '', observations: '' });
   const [volumes, setVolumes] = useState<Record<number, string>>({});
+  const [bcPdfPath, setBcPdfPath] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const mois = moisDuTrimestre(parseInt(form.trimestre));
+
+  const uploadPdf = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('folder', 'documents');
+      fd.append('file', file);
+      const r = await api.post('/upload/document', fd);
+      if (r.data?.data) setBcPdfPath(r.data.data.key);
+    } catch { setError('Échec de l’upload du PDF.'); }
+    finally { setUploading(false); }
+  };
 
   const mutation = useMutation({
     mutationFn: () => api.post('/bons-commande', {
@@ -41,6 +55,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
       trimestre: parseInt(form.trimestre),
       numeroClient: form.numeroClient,
       observations: form.observations || undefined,
+      bcPdfPath: bcPdfPath || undefined,
       volumesMensuels: mois
         .filter((m) => volumes[m] && Number(volumes[m]) > 0)
         .map((m) => ({ mois: m, volumePrevuLitres: Number(volumes[m]) })),
@@ -78,6 +93,13 @@ function CreateModal({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           </div>
+          <Field label="PDF de la commande (BC)">
+            <div className="flex items-center gap-3">
+              <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPdf(f); }} className="text-xs" />
+              {uploading && <span className="text-xs text-gray-400">Envoi…</span>}
+              {bcPdfPath && !uploading && <span className="text-xs text-green-600">PDF joint ✓</span>}
+            </div>
+          </Field>
           <Field label="Observations"><Textarea value={form.observations} onChange={(e) => set('observations', e.target.value)} rows={2} /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
