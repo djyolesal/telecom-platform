@@ -7,6 +7,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { cacheService } from '../services/cache.service';
 import { calculerStockSite } from '../utils/calculator';
+import { geParams } from '../services/settings.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
@@ -433,7 +434,7 @@ export async function getSiteStock(req: Request, res: Response, next: NextFuncti
       orderBy: { dateReleve: 'desc' },
     });
 
-    const stock = calculerStockSite(site, dernierReleve);
+    const stock = calculerStockSite(site, dernierReleve, geParams());
     res.json({ success: true, data: stock });
   } catch (err) { next(err); }
 }

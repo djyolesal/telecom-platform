@@ -7,6 +7,7 @@ import { minioClient, MINIO_BUCKET } from '../config/minio';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { logger } from '../utils/logger';
+import { loadSettings, effectiveSettings } from '../services/settings.service';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
 export async function getSettings(_req: Request, res: Response, next: NextFunction) {
@@ -14,6 +15,11 @@ export async function getSettings(_req: Request, res: Response, next: NextFuncti
     const settings = await prisma.systemSettings.findMany({ orderBy: { key: 'asc' } });
     res.json({ success: true, data: settings });
   } catch (err) { next(err); }
+}
+
+/** Catalogue des seuils éditables avec leur valeur effective (défaut + surcharge BDD). */
+export function getEffectiveSettings(_req: Request, res: Response) {
+  res.json({ success: true, data: effectiveSettings() });
 }
 
 export async function updateSettings(req: Request, res: Response, next: NextFunction) {
@@ -32,6 +38,7 @@ export async function updateSettings(req: Request, res: Response, next: NextFunc
     );
 
     await auditLog(req.user!.id, 'UPDATE', 'system_settings', undefined, { keys: entries.map((e) => e.key) }, req);
+    await loadSettings(); // recharge le cache → effet immédiat sans redéploiement
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }

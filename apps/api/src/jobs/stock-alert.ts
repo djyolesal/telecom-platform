@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { calculerStockSite } from '../utils/calculator';
+import { geParams } from '../services/settings.service';
 import { notificationService } from '../services/notifications.service';
 import { logger } from '../utils/logger';
 
@@ -21,7 +22,7 @@ export async function stockAlertJob(): Promise<void> {
   for (const r of releves) if (!stockMap.has(r.siteId)) stockMap.set(r.siteId, Number(r.volumeGasoilLitres));
 
   const alertes = sites
-    .map((site) => ({ site, stock: calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 }) }))
+    .map((site) => ({ site, stock: calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 }, geParams()) }))
     .filter(({ stock }) => ['CRITIQUE', 'VIDE'].includes(stock.niveauAlerte));
 
   if (!alertes.length) {

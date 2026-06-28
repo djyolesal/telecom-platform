@@ -10,6 +10,8 @@ import { generateMaintenancePdf } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl } from '../services/storage.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { GE_PARAMS } from '../utils/calculator';
+import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
+import { getNum } from '../services/settings.service';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -19,9 +21,10 @@ const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
 const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
 const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
 // Configurables via variables d'environnement (cf. config/env.ts).
-const MIN_DUREE_CLOTURE_MIN = env.MIN_DUREE_CLOTURE_MIN; // durée minimale (min) entre démarrage et clôture
-const GEOFENCE_RADIUS_M = env.GEOFENCE_RADIUS_M;          // rayon (m) toléré autour du site
-const SEUIL_ECART_GASOIL_PCT = env.SEUIL_ECART_GASOIL_PCT; // tolérance (%) écart conso gasoil réelle vs attendue
+// Seuils éditables en base (SystemSettings) avec repli sur l'environnement.
+const minDureeClotureMin = () => getNum('maintenance.minDureeClotureMin', env.MIN_DUREE_CLOTURE_MIN);
+const geofenceRadiusM = () => getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M);
+const seuilEcartGasoilPct = () => getNum('maintenance.seuilEcartGasoilPct', env.SEUIL_ECART_GASOIL_PCT);
 
 const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
 
@@ -55,9 +58,9 @@ function assertOnSite(
     throw new AppError(`Position GPS requise : ${action} doit être effectué(e) sur le site.`, 422);
   }
   const dist = distanceMeters(lat, lng, Number(site.latitude), Number(site.longitude));
-  if (dist > GEOFENCE_RADIUS_M) {
+  if (dist > geofenceRadiusM()) {
     throw new AppError(
-      `Vous n'êtes pas sur le site ${site.code ?? ''} (à ${Math.round(dist)} m, max ${GEOFENCE_RADIUS_M} m). ${action} autorisé(e) uniquement sur place.`.trim(),
+      `Vous n'êtes pas sur le site ${site.code ?? ''} (à ${Math.round(dist)} m, max ${geofenceRadiusM()} m). ${action} autorisé(e) uniquement sur place.`.trim(),
       422
     );
   }
@@ -320,7 +323,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // Une maintenance doit avoir été démarrée et durer au moins 1h avant clôture.
     if (!existing.dateDebut) throw new AppError('La maintenance doit être démarrée avant clôture.', 409);
     const ecouleMin = differenceInMinutes(new Date(), existing.dateDebut);
-    if (ecouleMin < MIN_DUREE_CLOTURE_MIN) {
+    if (ecouleMin < minDureeClotureMin()) {
       throw new AppError(
         `Une maintenance doit durer au moins 1h avant clôture (démarrée il y a ${ecouleMin} min).`,
         422
@@ -452,8 +455,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
               const heures = Math.max(0, hIndex - Number(prevGe.indexHeuresGE));
               data.heuresFonctGE = heures;
               if (g && heures > 0) {
-                const facteur = g.statut === 'GE_PERMANENT' ? GE_PARAMS.facteurChargePermanent : GE_PARAMS.facteurChargeSecours;
-                expectedGasoil += Number(g.puissanceKva) * facteur * heures * GE_PARAMS.consoSpecificDieselLKwh;
+                expectedGasoil += expectedGasoilGE(Number(g.puissanceKva), g.statut, heures);
                 hasHeures = true;
               }
             }
@@ -467,23 +469,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
           }
 
           // Analyse de cohérence : gasoil consommé (cuve) vs attendu (heures × puissance).
-          if (gasoilConso != null && hasHeures && expectedGasoil > 0) {
-            const exp = Math.round(expectedGasoil);
-            const act = Math.round(gasoilConso);
-            const ecart = (gasoilConso - expectedGasoil) / expectedGasoil;
-            const pct = Math.round(ecart * 100);
-            const signe = pct >= 0 ? '+' : '';
-            const seuil = SEUIL_ECART_GASOIL_PCT / 100;
-            if (Math.abs(ecart) <= seuil) {
-              analyseEnergie = `Cohérent : ${act} L consommés pour ~${exp} L attendus (écart ${signe}${pct}%) selon les heures GE et la puissance.`;
-            } else if (ecart > seuil) {
-              analyseEnergie = `⚠ Surconsommation : ${act} L consommés contre ~${exp} L attendus (${signe}${pct}%). À vérifier : fuite, vol de carburant, ou heures GE sous-déclarées.`;
-            } else {
-              analyseEnergie = `⚠ Sous-consommation : ${act} L consommés contre ~${exp} L attendus (${pct}%). À vérifier : heures GE surévaluées, ou dépotage non enregistré.`;
-            }
-          } else if (gasoilConso != null && !hasHeures) {
-            analyseEnergie = 'Analyse de cohérence indisponible : heures GE non calculables (relevé de référence / première visite).';
-          }
+          analyseEnergie = analyseGasoilCoherence({ consomme: gasoilConso, attendu: expectedGasoil, hasHeures, seuilPct: seuilEcartGasoilPct() });
         } else if (source === 'CEET') {
           const index = num(e.indexCompteur);
           const prev = await prisma.releveEnergie.findFirst({

@@ -16,6 +16,7 @@ import { ensureBucket } from './config/minio';
 import { metricsMiddleware, metricsHandler } from './config/metrics';
 import { setupSocketIO } from './sockets';
 import { setupCronJobs } from './jobs/scheduler';
+import { loadSettings } from './services/settings.service';
 import { router } from './routes';
 import { errorHandler } from './middlewares/errorHandler';
 import { logger } from './utils/logger';
@@ -81,6 +82,9 @@ async function bootstrap() {
   try {
     await prisma.$connect();
     logger.info('✅ PostgreSQL connecté');
+
+    await loadSettings();
+    logger.info('✅ Paramètres système chargés');
 
     await redisClient.connect();
     logger.info('✅ Redis connecté');

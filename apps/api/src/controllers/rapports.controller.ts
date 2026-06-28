@@ -3,6 +3,7 @@ import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import { prisma } from '../config/database';
 import { auditLog } from '../services/audit.service';
 import { calculerStockSite } from '../utils/calculator';
+import { geParams } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
 import { sendEmail } from '../services/email.service';
@@ -38,7 +39,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     // Stock & autonomie par site
     const stocks = sites.map((site) => {
       const volume = stockMap.get(site.id) ?? 0;
-      return { site, stock: calculerStockSite(site, { volumeGasoilLitres: volume }) };
+      return { site, stock: calculerStockSite(site, { volumeGasoilLitres: volume }, geParams()) };
     });
 
     const stockTotalLitres = stocks.reduce((s, x) => s + x.stock.stockLitres, 0);
@@ -115,7 +116,7 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
     const stockMap = await dernierStockParSite();
 
     const data = sites.map((site) => {
-      const stock = calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 });
+      const stock = calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 }, geParams());
       return { siteId: site.id, code: site.code, nom: site.nom, region: site.region, statutGE: site.statutGE, ...stock };
     });
 

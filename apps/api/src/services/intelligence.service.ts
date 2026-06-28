@@ -3,6 +3,9 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { forecastSites, suggestTournees, SiteForecast } from './replenishment.service';
 import { computeManquants } from './manquants.service';
+import { getNum } from './settings.service';
+
+type ManquantsResult = Awaited<ReturnType<typeof computeManquants>>;
 
 export interface AnomalieConso {
   siteId: string; code: string; nom: string; region: string;
@@ -18,11 +21,12 @@ export interface AnomalieConso {
  * à la consommation théorique (config GE). Un écart fort signale fuite / vol /
  * heures sous- ou sur-déclarées. Croisé avec les manquants pour pondérer le risque.
  */
-export async function detectAnomalies(opts: { region?: string } = {}): Promise<AnomalieConso[]> {
-  const seuil = env.SEUIL_ECART_GASOIL_PCT / 100;
+export async function detectAnomalies(opts: { region?: string; sitesAll?: SiteForecast[]; manquants?: ManquantsResult } = {}): Promise<AnomalieConso[]> {
+  const seuil = getNum('maintenance.seuilEcartGasoilPct', env.SEUIL_ECART_GASOIL_PCT) / 100;
+  // Réutilise les calculs déjà faits par l'appelant si fournis (évite les scans redondants).
   const [sites, manquants] = await Promise.all([
-    forecastSites({ region: opts.region, all: true }),
-    computeManquants({ region: opts.region }),
+    opts.sitesAll ?? forecastSites({ region: opts.region, all: true }),
+    opts.manquants ?? computeManquants({ region: opts.region }),
   ]);
   const sitesManquants = new Set(manquants.lignesEnRetard.map((l) => l.siteCode));
 
@@ -89,13 +93,16 @@ function fallbackSynthese(b: ReturnType<typeof buildBriefing>): string {
  * configurée ; sinon un résumé déterministe équivalent.
  */
 export async function generateSynthese(opts: { region?: string } = {}): Promise<{ texte: string; source: 'claude' | 'deterministe' }> {
-  const [sites, anomalies, manquants] = await Promise.all([
-    forecastSites({ region: opts.region }),
-    detectAnomalies({ region: opts.region }),
+  // Calculs lourds mutualisés : forecast complet + manquants une seule fois.
+  const horizon = getNum('appro.horizonJours', env.APPRO_HORIZON_JOURS);
+  const [sitesAll, manquants] = await Promise.all([
+    forecastSites({ region: opts.region, all: true }),
     computeManquants({ region: opts.region }),
   ]);
-  const tournees = suggestTournees(sites);
-  const briefing = buildBriefing(sites, tournees, anomalies, manquants.totaux);
+  const due = sitesAll.filter((s) => s.autonomieJours != null && s.autonomieJours <= horizon);
+  const anomalies = await detectAnomalies({ region: opts.region, sitesAll, manquants });
+  const tournees = suggestTournees(due);
+  const briefing = buildBriefing(due, tournees, anomalies, manquants.totaux);
 
   if (!env.ANTHROPIC_API_KEY) {
     return { texte: fallbackSynthese(briefing), source: 'deterministe' };

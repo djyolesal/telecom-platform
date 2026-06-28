@@ -78,7 +78,12 @@
       "Bash(grep -rn \"SiteSelect\\\\|sites.*map.*option\\\\|/sites', { params\" app/ components)",
       "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/api && npx tsc --noEmit 2>&1 | head -8 && echo \"=== API OK ===\" && cd ../web && AUTH_SECRET=dummy NEXTAUTH_SECRET=dummy npx next build 2>&1 | grep -E \"Compiled successfully|Failed to compile|Type error|error TS\" | head)",
       "Skill(claude-api)",
-      "Skill(claude-api:*)"
+      "Skill(claude-api:*)",
+      "Bash(npx jest *)",
+      "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, \\\\{ volumeGasoilLitres: volume \\\\}\\\\\\)/calculerStockSite\\(site, { volumeGasoilLitres: volume }, geParams\\(\\)\\)/g\" src/controllers/rapports.controller.ts)",
+      "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, \\\\{ volumeGasoilLitres: stockMap.get\\\\\\(site.id\\\\\\) \\\\?\\\\? 0 \\\\}\\\\\\)/calculerStockSite\\(site, { volumeGasoilLitres: stockMap.get\\(site.id\\) ?? 0 }, geParams\\(\\)\\)/g\" src/controllers/rapports.controller.ts)",
+      "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, \\\\{ volumeGasoilLitres: stockMap.get\\\\\\(site.id\\\\\\) \\\\?\\\\? 0 \\\\}\\\\\\)/calculerStockSite\\(site, { volumeGasoilLitres: stockMap.get\\(site.id\\) ?? 0 }, geParams\\(\\)\\)/g\" src/jobs/stock-alert.ts)",
+      "Bash(perl -0pi -e \"s/calculerStockSite\\\\\\(site, dernierReleve\\\\\\)/calculerStockSite\\(site, dernierReleve, geParams\\(\\)\\)/g\" src/controllers/sites.controller.ts)"
     ]
   }
 }

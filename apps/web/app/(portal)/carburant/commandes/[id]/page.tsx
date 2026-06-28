@@ -20,7 +20,7 @@ const BL_COLORS: Record<string, string> = { PLANIFIE: 'bg-amber-100 text-amber-7
 
 interface Transporteur { id: string; nom: string }
 interface Suivi { mois: number; prevu: number; livre: number; ecart: number; depassement: boolean }
-interface BL { id: string; numeroBL: string; mois: number; immatriculation: string; volumeChargeLitres: number; dateChargement: string; statut: string; _count?: { lignes: number } }
+interface BL { id: string; numeroBL: string; mois: number; immatriculation: string; volumeChargeLitres: number; dateChargement: string; statut: string; isBrouillon?: boolean; _count?: { lignes: number } }
 interface BC {
   id: string; numero: string; annee: number; trimestre: number; numeroClient: string; statut: string; observations?: string; bcPdfPath?: string;
   volumesMensuels: { id: string; mois: number; volumePrevuLitres: number }[];
@@ -238,7 +238,7 @@ export default function BonCommandeDetailPage() {
             <tbody>
               {data.bonsLivraison.map((bl) => (
                 <tr key={bl.id} className="border-b last:border-0 cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/carburant/livraisons/${bl.id}`)}>
-                  <td className="py-2 font-medium text-gray-800">{bl.numeroBL}</td>
+                  <td className="py-2 font-medium text-gray-800">{bl.numeroBL}{bl.isBrouillon && <Badge className="bg-amber-100 text-amber-700 ml-1.5">brouillon</Badge>}</td>
                   <td>{MOIS[bl.mois]}</td>
                   <td>{bl.immatriculation}</td>
                   <td className="text-right">{fmtNumber(Number(bl.volumeChargeLitres))}</td>

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { env } from '../config/env';
+import { getNum } from '../services/settings.service';
 
 /**
  * Paramètres terrain exposés aux applications (mobile/web) pour garder les
@@ -9,8 +10,8 @@ export function getAppConfig(_req: Request, res: Response) {
   res.json({
     success: true,
     data: {
-      minDureeClotureMin: env.MIN_DUREE_CLOTURE_MIN,
-      geofenceRadiusM: env.GEOFENCE_RADIUS_M,
+      minDureeClotureMin: getNum('maintenance.minDureeClotureMin', env.MIN_DUREE_CLOTURE_MIN),
+      geofenceRadiusM: getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M),
       minPhotosPreventive: 6,
     },
   });

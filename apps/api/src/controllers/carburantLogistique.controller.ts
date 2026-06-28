@@ -9,6 +9,7 @@ import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
 import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
+import { getNum } from '../services/settings.service';
 import { env } from '../config/env';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -100,7 +101,7 @@ export async function getBonCommandeById(req: Request, res: Response, next: Next
     // Suivi commandé vs livré, par mois.
     const charge = new Map<number, number>();
     for (const bl of bc.bonsLivraison) {
-      if (bl.statut === 'ANNULE') continue;
+      if (bl.statut === 'ANNULE' || bl.isBrouillon) continue; // brouillon = pas un chargement réel
       charge.set(bl.mois, (charge.get(bl.mois) ?? 0) + n(bl.volumeChargeLitres));
     }
     const suivi = bc.volumesMensuels.map((vm) => {
@@ -371,7 +372,11 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     const { numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath, transporteurId } = req.body;
 
     const data: Prisma.BonLivraisonUpdateInput = {};
-    if (numeroBL != null) data.numeroBL = String(numeroBL).trim();
+    if (numeroBL != null) {
+      data.numeroBL = String(numeroBL).trim();
+      // Un vrai numéro (non « BR-… ») finalise le brouillon → réintégré aux agrégats.
+      if (!String(numeroBL).trim().startsWith('BR-')) data.isBrouillon = false;
+    }
     if (mois != null) {
       const m = Math.trunc(n(mois));
       if (m < 1 || m > 12) throw new AppError('Mois invalide (1..12)', 400);
@@ -539,7 +544,7 @@ export async function getManquantsSite(req: Request, res: Response, next: NextFu
     ]);
     if (!site) throw new AppError('Site introuvable', 404);
 
-    const seuilJours = env.DELAI_MANQUANT_JOURS;
+    const seuilJours = getNum('manquant.delaiJours', env.DELAI_MANQUANT_JOURS);
     const now = Date.now();
     const data = lignes.map((l) => {
       const prevu = n(l.volumePrevuLitres);
@@ -647,14 +652,22 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
 export async function getReapprovisionnement(req: Request, res: Response, next: NextFunction) {
   try {
     const { region, horizon } = req.query as Record<string, string>;
-    const sites = await forecastSites({ region: region || undefined, horizonJours: horizon ? parseInt(horizon) : undefined });
+    const horizonJours = horizon ? parseInt(horizon) : getNum('appro.horizonJours', env.APPRO_HORIZON_JOURS);
+    // forecast complet (mémoïsé) partagé avec la détection d'anomalies du même écran.
+    const sitesAll = await forecastSites({ region: region || undefined, all: true });
+    const sites = sitesAll.filter((s) => s.autonomieJours != null && s.autonomieJours <= horizonJours);
     const tournees = suggestTournees(sites);
     res.json({
       success: true,
       data: {
         sites,
         tournees,
-        params: { leadTimeJours: env.APPRO_LEAD_TIME_JOURS, securiteJours: env.APPRO_STOCK_SECURITE_JOURS, horizonJours: horizon ? parseInt(horizon) : env.APPRO_HORIZON_JOURS, capaciteCamion: env.CAMION_CAPACITE_LITRES },
+        params: {
+          leadTimeJours: getNum('appro.leadTimeJours', env.APPRO_LEAD_TIME_JOURS),
+          securiteJours: getNum('appro.securiteJours', env.APPRO_STOCK_SECURITE_JOURS),
+          horizonJours: horizon ? parseInt(horizon) : getNum('appro.horizonJours', env.APPRO_HORIZON_JOURS),
+          capaciteCamion: getNum('appro.camionCapaciteLitres', env.CAMION_CAPACITE_LITRES),
+        },
         totaux: {
           nbSites: sites.length,
           nbCritiques: sites.filter((s) => s.priorite === 'CRITIQUE').length,
@@ -716,6 +729,7 @@ export async function createBrouillonLivraison(req: Request, res: Response, next
       data: {
         bonCommandeId,
         numeroBL: `BR-${ref}`,                 // brouillon : à remplacer par le N° réel
+        isBrouillon: true,
         mois: m < 1 || m > 12 ? new Date().getMonth() + 1 : m,
         annee: Math.trunc(n(annee)) || bc.annee,
         immatriculation: 'À AFFECTER',

@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
+import { getNum } from './settings.service';
+import { memo } from '../utils/memo';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 const EPS = 0.5; // tolérance litres
@@ -34,14 +36,21 @@ export interface CamionCritique {
  * Un « manquant » = volume prévu − volume réellement dépoté. Une ligne est « en
  * retard » si elle reste non soldée au-delà de DELAI_MANQUANT_JOURS après chargement.
  */
-export async function computeManquants(filter: ManquantsFilter) {
-  const seuilJours = env.DELAI_MANQUANT_JOURS;
-  const minLitres = env.MANQUANT_MIN_LITRES;        // plancher anti-bruit
-  const critLitres = env.MANQUANT_CRITIQUE_LITRES;  // manquant site critique
-  const critCamion = env.MANQUANT_CAMION_CRITIQUE_LITRES;
+// Mémoïsé 60 s : déduplique les scans répétés et les requêtes concurrentes.
+export function computeManquants(filter: ManquantsFilter) {
+  const key = `manquants:${filter.bonCommandeId ?? '*'}:${filter.mois ?? '*'}:${filter.annee ?? '*'}:${filter.region ?? '*'}`;
+  return memo(key, 60_000, () => computeManquantsImpl(filter));
+}
+
+async function computeManquantsImpl(filter: ManquantsFilter) {
+  const seuilJours = getNum('manquant.delaiJours', env.DELAI_MANQUANT_JOURS);
+  const minLitres = getNum('manquant.minLitres', env.MANQUANT_MIN_LITRES);        // plancher anti-bruit
+  const critLitres = getNum('manquant.critiqueLitres', env.MANQUANT_CRITIQUE_LITRES); // manquant site critique
+  const critCamion = getNum('manquant.camionCritiqueLitres', env.MANQUANT_CAMION_CRITIQUE_LITRES);
   const now = Date.now();
 
-  const where: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' } };
+  // Les brouillons (non finalisés) ne représentent pas un chargement réel → exclus.
+  const where: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' }, isBrouillon: false };
   if (filter.bonCommandeId) where.bonCommandeId = filter.bonCommandeId;
   if (filter.mois) where.mois = filter.mois;
   if (filter.annee) where.annee = filter.annee;

@@ -575,6 +575,8 @@ model BonLivraison {
   statut             StatutBonLivraison @default(PLANIFIE)
   blPdfPath          String?            @map("bl_pdf_path")        // PDF du bon de livraison
   bordereauPdfPath   String?            @map("bordereau_pdf_path") // PDF du bordereau de chargement
+  // Brouillon généré par le réappro prédictif : exclu des agrégats (chargé/livré) jusqu'à finalisation.
+  isBrouillon        Boolean            @default(false) @map("is_brouillon")
   observations       String?
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")

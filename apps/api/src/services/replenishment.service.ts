@@ -1,6 +1,8 @@
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { calculerStockSite } from '../utils/calculator';
+import { getNum, geParams } from './settings.service';
+import { memo } from '../utils/memo';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 const DAY = 86_400_000;
@@ -56,9 +58,15 @@ function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): num
  * (historique des relevés, sinon théorique GE), prédit la date de rupture, et
  * recommande une date de livraison + une quantité (remplissage cuve).
  */
-export async function forecastSites(opts: { region?: string; horizonJours?: number; all?: boolean } = {}): Promise<SiteForecast[]> {
-  const horizon = opts.horizonJours ?? env.APPRO_HORIZON_JOURS;
-  const leadSec = env.APPRO_LEAD_TIME_JOURS + env.APPRO_STOCK_SECURITE_JOURS;
+// Mémoïsé 60 s : déduplique les scans répétés et les requêtes concurrentes d'un même chargement de page.
+export function forecastSites(opts: { region?: string; horizonJours?: number; all?: boolean } = {}): Promise<SiteForecast[]> {
+  const key = `forecast:${opts.region ?? '*'}:${opts.horizonJours ?? '*'}:${opts.all ? 'all' : 'due'}`;
+  return memo(key, 60_000, () => forecastSitesImpl(opts));
+}
+
+async function forecastSitesImpl(opts: { region?: string; horizonJours?: number; all?: boolean }): Promise<SiteForecast[]> {
+  const horizon = opts.horizonJours ?? getNum('appro.horizonJours', env.APPRO_HORIZON_JOURS);
+  const leadSec = getNum('appro.leadTimeJours', env.APPRO_LEAD_TIME_JOURS) + getNum('appro.securiteJours', env.APPRO_STOCK_SECURITE_JOURS);
   const now = Date.now();
   const fenetre = new Date(now - 120 * DAY); // historique de conso sur 120 j
 
@@ -104,8 +112,8 @@ export async function forecastSites(opts: { region?: string; horizonJours?: numb
       }
     }
 
-    // Consommation théorique (config GE) — référence pour la détection d'anomalie.
-    const consoTheoriqueJour = calculerStockSite(site, null).litresMois / 30;
+    // Consommation théorique (config GE, params éditables) — référence anomalie.
+    const consoTheoriqueJour = calculerStockSite(site, null, geParams()).litresMois / 30;
 
     // Consommation journalière : historique pondéré (EWMA, récent = plus de poids)
     // + tendance par régression linéaire ; sinon repli théorique.
@@ -187,7 +195,7 @@ export async function forecastSites(opts: { region?: string; horizonJours?: numb
  * camions (regroupement capacitaire par balayage angulaire « sweep ») et les
  * KILOMÈTRES (ordre intra-tournée par plus-proche-voisin puis amélioration 2-opt).
  */
-export function suggestTournees(forecasts: SiteForecast[], capacite = env.CAMION_CAPACITE_LITRES): Tournee[] {
+export function suggestTournees(forecasts: SiteForecast[], capacite = getNum('appro.camionCapaciteLitres', env.CAMION_CAPACITE_LITRES)): Tournee[] {
   const dus = forecasts.filter((f) => f.quantiteRecommandee > 0);
   const parRegion = new Map<string, SiteForecast[]>();
   for (const f of dus) {

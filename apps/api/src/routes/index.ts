@@ -177,6 +177,7 @@ router.post('/users/:id/reset-password', rbac(['ADMIN']), usersCtrl.resetUserPas
 
 // ── Administration ────────────────────────────────────────────
 router.get('/admin/settings', rbac(['ADMIN']), adminCtrl.getSettings);
+router.get('/admin/settings/effectifs', rbac(['ADMIN']), adminCtrl.getEffectiveSettings);
 router.put('/admin/settings', rbac(['ADMIN']), adminCtrl.updateSettings);
 router.get('/admin/audit', rbac(['ADMIN']), adminCtrl.getAuditLogs);
 router.get('/admin/health', rbac(['ADMIN']), adminCtrl.getSystemHealth);
