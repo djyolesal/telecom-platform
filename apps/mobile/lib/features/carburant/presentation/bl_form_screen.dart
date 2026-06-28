@@ -26,6 +26,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
   late Future<List<BonCommandeLite>> _bcsFuture;
   BonCommandeLite? _bc;
   int? _mois;
+  DateTime _dateChargement = DateTime.now();
   String? _blDoc;
   String? _bordereauDoc;
   bool _saving = false;
@@ -45,6 +46,19 @@ class _BlFormScreenState extends State<BlFormScreen> {
   }
 
   double? _num(TextEditingController c) => c.text.isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
+
+  String _fmtDate(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<void> _pickDate() async {
+    // Le camion charge avant la saisie : on n'autorise pas de date future.
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateChargement,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && mounted) setState(() => _dateChargement = picked);
+  }
 
   Future<void> _capture(String slot) async {
     final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 2000);
@@ -79,6 +93,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
         annee: _bc!.annee,
         immatriculation: _immat.text.trim(),
         volumeChargeLitres: _num(_volume) ?? 0,
+        dateChargement: _dateChargement,
         observations: _obs.text.trim(),
         blDocLocalPath: _blDoc,
         bordereauDocLocalPath: _bordereauDoc,
@@ -133,6 +148,20 @@ class _BlFormScreenState extends State<BlFormScreen> {
                   ),
                   const SizedBox(height: 14),
                 ],
+                InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Date de chargement du camion *', prefixIcon: Icon(Icons.event)),
+                  child: InkWell(
+                    onTap: _pickDate,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [Text(_fmtDate(_dateChargement)), const Icon(Icons.calendar_today, size: 18)],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 TextFormField(
                   controller: _numeroBL,
                   decoration: const InputDecoration(labelText: 'N° bon de livraison *', prefixIcon: Icon(Icons.confirmation_number)),

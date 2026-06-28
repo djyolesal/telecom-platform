@@ -112,7 +112,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             <Field label="N° bon de livraison" required><Input value={form.numeroBL} onChange={(e) => set('numeroBL', e.target.value)} required placeholder="BL-00123" /></Field>
             <Field label="Immatriculation camion" required><Input value={form.immatriculation} onChange={(e) => set('immatriculation', e.target.value)} required placeholder="TG-1234-AB" /></Field>
             <Field label="Mois exécuté" required><Select value={form.mois} onChange={(e) => set('mois', e.target.value)} options={moisOpts} /></Field>
-            <Field label="Date chargement" required><Input type="date" value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
+            <Field label="Date chargement" required><Input type="date" max={today()} value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
             <Field label="Volume chargé (L)" required><Input type="number" value={form.volumeChargeLitres} onChange={(e) => set('volumeChargeLitres', e.target.value)} required placeholder="0" /></Field>
             {isManager && (
               <Field label="Transporteur">
