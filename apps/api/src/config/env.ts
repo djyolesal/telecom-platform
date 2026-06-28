@@ -54,6 +54,13 @@ const envSchema = z.object({
   MANQUANT_MIN_LITRES: z.coerce.number().default(50),    // plancher anti-bruit : en-deçà, on n'alerte pas
   MANQUANT_CRITIQUE_LITRES: z.coerce.number().default(800),       // manquant site critique → alerte immédiate + escalade
   MANQUANT_CAMION_CRITIQUE_LITRES: z.coerce.number().default(500), // écart chargé−distribué d'un camion → alerte immédiate
+  // Réapprovisionnement prédictif
+  APPRO_LEAD_TIME_JOURS: z.coerce.number().default(3),       // délai entre décision d'appro et livraison effective
+  APPRO_STOCK_SECURITE_JOURS: z.coerce.number().default(3),  // marge de sécurité (jours de conso) avant rupture
+  APPRO_HORIZON_JOURS: z.coerce.number().default(14),        // fenêtre de planification
+  CAMION_CAPACITE_LITRES: z.coerce.number().default(10000),  // capacité d'un camion pour le découpage en tournées
+  // Synthèse en langage naturel (optionnelle) — activée si une clé API Claude est fournie
+  ANTHROPIC_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

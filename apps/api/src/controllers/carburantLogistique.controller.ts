@@ -7,6 +7,8 @@ import { auditLog } from '../services/audit.service';
 import { buildXlsx, buildXlsxMulti, setXlsxHeaders } from '../utils/excel';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
+import { forecastSites, suggestTournees } from '../services/replenishment.service';
+import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
 import { env } from '../config/env';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -638,6 +640,97 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
     setXlsxHeaders(res, 'manquants-livraison.xlsx');
     res.send(buffer);
   } catch (err) { next(err); }
+}
+
+// ── RÉAPPROVISIONNEMENT PRÉDICTIF ─────────────────────────────
+
+export async function getReapprovisionnement(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { region, horizon } = req.query as Record<string, string>;
+    const sites = await forecastSites({ region: region || undefined, horizonJours: horizon ? parseInt(horizon) : undefined });
+    const tournees = suggestTournees(sites);
+    res.json({
+      success: true,
+      data: {
+        sites,
+        tournees,
+        params: { leadTimeJours: env.APPRO_LEAD_TIME_JOURS, securiteJours: env.APPRO_STOCK_SECURITE_JOURS, horizonJours: horizon ? parseInt(horizon) : env.APPRO_HORIZON_JOURS, capaciteCamion: env.CAMION_CAPACITE_LITRES },
+        totaux: {
+          nbSites: sites.length,
+          nbCritiques: sites.filter((s) => s.priorite === 'CRITIQUE').length,
+          volumeRecommande: sites.reduce((s, x) => s + x.quantiteRecommandee, 0),
+          nbTournees: tournees.length,
+          totalKm: Math.round(tournees.reduce((s, x) => s + x.distanceKm, 0) * 10) / 10,
+          tauxRemplissageMoyen: tournees.length ? Math.round(tournees.reduce((s, x) => s + x.tauxRemplissage, 0) / tournees.length) : 0,
+        },
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+export async function getAnomaliesConso(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { region } = req.query as Record<string, string>;
+    const anomalies = await detectAnomalies({ region: region || undefined });
+    res.json({
+      success: true,
+      data: {
+        anomalies,
+        totaux: {
+          nb: anomalies.length,
+          nbElevees: anomalies.filter((a) => a.severite === 'ELEVEE').length,
+          nbSurconso: anomalies.filter((a) => a.type === 'SURCONSOMMATION').length,
+        },
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+export async function getSyntheseAppro(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { region } = req.query as Record<string, string>;
+    const synthese = await generateSynthese({ region: region || undefined });
+    res.json({ success: true, data: synthese });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Crée un BON DE LIVRAISON BROUILLON (statut PLANIFIE) à partir d'une tournée
+ * suggérée : entête à compléter (numéro/camion auto-générés), plan pré-rempli.
+ * Le manager finalise l'entête puis le transporteur prend le relais.
+ */
+export async function createBrouillonLivraison(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { bonCommandeId, mois, annee, lignes } = req.body;
+    if (!bonCommandeId) throw new AppError('Bon de commande requis', 400);
+    const bc = await prisma.bonCommande.findUnique({ where: { id: bonCommandeId } });
+    if (!bc) throw new AppError('Bon de commande introuvable', 404);
+
+    const plan = parseLignes(lignes);
+    if (!plan.length) throw new AppError('Aucun site dans la tournée', 400);
+    const m = Math.trunc(n(mois)) || (new Date().getMonth() + 1);
+    const volume = plan.reduce((s, l) => s + l.volumePrevuLitres, 0);
+    const ref = Date.now().toString(36).toUpperCase().slice(-6);
+
+    const bl = await prisma.bonLivraison.create({
+      data: {
+        bonCommandeId,
+        numeroBL: `BR-${ref}`,                 // brouillon : à remplacer par le N° réel
+        mois: m < 1 || m > 12 ? new Date().getMonth() + 1 : m,
+        annee: Math.trunc(n(annee)) || bc.annee,
+        immatriculation: 'À AFFECTER',
+        volumeChargeLitres: volume,
+        numeroClient: bc.numeroClient,
+        dateChargement: new Date(),
+        statut: 'PLANIFIE',
+        observations: 'Brouillon généré par le réapprovisionnement prédictif',
+        lignes: { create: plan },
+      },
+      include: { lignes: true },
+    });
+    await auditLog(req.user!.id, 'CREATE', 'bons_livraison', bl.id, { brouillon: true, sites: plan.length }, req);
+    res.status(201).json({ success: true, data: bl });
+  } catch (err) { next(mapKnownError(err, 'Conflit de numéro de bon de livraison')); }
 }
 
 /** Lignes de plan de livraison ouvertes pour un site (consommé par le mobile au dépotage). */

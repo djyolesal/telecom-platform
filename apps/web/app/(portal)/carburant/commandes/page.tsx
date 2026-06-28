@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Download, GitCompare, AlertTriangle } from 'lucide-react';
+import { Plus, X, Download, GitCompare, AlertTriangle, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -141,6 +141,7 @@ export default function BonsCommandePage() {
         backHref="/carburant/stock"
         actions={
           <div className="flex gap-2">
+            <ButtonLink href="/carburant/reapprovisionnement" variant="secondary" icon={Sparkles}>Réappro prédictif</ButtonLink>
             <ButtonLink href="/carburant/manquants" variant="secondary" icon={AlertTriangle}>Manquants</ButtonLink>
             <ButtonLink href="/carburant/correlation" variant="secondary" icon={GitCompare}>Corrélation conso</ButtonLink>
             <Button variant="secondary" icon={Download} onClick={() => downloadFile('/bons-commande/export/xlsx', 'bons-commande.xlsx')}>Excel</Button>

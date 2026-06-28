@@ -127,12 +127,72 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
   );
 }
 
+interface Transporteur { id: string; nom: string }
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// Édition de l'entête du BL (manager) — sert à finaliser un brouillon.
+function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({
+    numeroBL: bl.numeroBL.startsWith('BR-') ? '' : bl.numeroBL,
+    immatriculation: bl.immatriculation === 'À AFFECTER' ? '' : bl.immatriculation,
+    volumeChargeLitres: String(Math.round(Number(bl.volumeChargeLitres))),
+    dateChargement: bl.dateChargement ? bl.dateChargement.slice(0, 10) : todayStr(),
+    transporteurId: bl.transporteur?.id ?? '',
+    statut: bl.statut,
+  });
+  const [error, setError] = useState('');
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const { data: transporteurs = [] } = useQuery({
+    queryKey: ['transporteurs'],
+    queryFn: () => api.get('/prestataires', { params: { is_transporteur: true, is_active: true, limit: 100 } }).then((r) => r.data.data as Transporteur[]),
+  });
+
+  const mutation = useMutation({
+    mutationFn: () => api.put(`/bons-livraison/${bl.id}`, {
+      numeroBL: form.numeroBL, immatriculation: form.immatriculation,
+      volumeChargeLitres: Number(form.volumeChargeLitres) || 0,
+      dateChargement: form.dateChargement,
+      transporteurId: form.transporteurId || null,
+      statut: form.statut,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['bon-livraison', bl.id] }); onClose(); },
+    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur'),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-800">Entête du bon de livraison</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
+        </div>
+        {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+        <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="grid grid-cols-2 gap-3">
+          <Field label="N° bon de livraison" required><Input value={form.numeroBL} onChange={(e) => set('numeroBL', e.target.value)} required placeholder="BL-00123" /></Field>
+          <Field label="Immatriculation" required><Input value={form.immatriculation} onChange={(e) => set('immatriculation', e.target.value)} required placeholder="TG-1234-AB" /></Field>
+          <Field label="Volume chargé (L)" required><Input type="number" value={form.volumeChargeLitres} onChange={(e) => set('volumeChargeLitres', e.target.value)} required /></Field>
+          <Field label="Date chargement" required><Input type="date" max={todayStr()} value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
+          <Field label="Transporteur"><Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="—" options={transporteurs.map((tr) => ({ value: tr.id, label: tr.nom }))} /></Field>
+          <Field label="Statut"><Select value={form.statut} onChange={(e) => set('statut', e.target.value)} options={['PLANIFIE', 'CHARGE', 'LIVRE', 'ANNULE'].map((s) => ({ value: s, label: s }))} /></Field>
+          <div className="col-span-2 flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
+            <Button type="submit" loading={mutation.isPending}>Enregistrer</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function BonLivraisonDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role ?? '';
   const isManager = role === 'MANAGER' || role === 'ADMIN';
   const [showPlan, setShowPlan] = useState(false);
+  const [showHeader, setShowHeader] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bon-livraison', id],
@@ -155,10 +215,17 @@ export default function BonLivraisonDetailPage() {
           <div className="flex items-center gap-2">
             {hasPlan && <Button variant="secondary" icon={Download} onClick={() => downloadFile(`/bons-livraison/${data.id}/plan.xlsx`, `plan-${data.numeroBL}.xlsx`)}>Excel</Button>}
             {hasPlan && <Button variant="secondary" icon={FileText} onClick={() => downloadFile(`/bons-livraison/${data.id}/plan.pdf`, `plan-${data.numeroBL}.pdf`)}>PDF</Button>}
+            {isManager && <Button variant="secondary" icon={Pencil} onClick={() => setShowHeader(true)}>Entête</Button>}
             {isManager && <Button icon={hasPlan ? Pencil : Plus} onClick={() => setShowPlan(true)}>{hasPlan ? 'Éditer le plan' : 'Générer le plan'}</Button>}
           </div>
         }
       />
+
+      {data.numeroBL.startsWith('BR-') && (
+        <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+          Brouillon généré par le réapprovisionnement prédictif — finalisez l’entête (N° BL réel, camion, transporteur) puis ajustez le plan si besoin.
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl border border-gray-100 p-5">
@@ -233,6 +300,7 @@ export default function BonLivraisonDetailPage() {
       )}
 
       {showPlan && <EditPlanModal bl={data} onClose={() => setShowPlan(false)} />}
+      {showHeader && <EditHeaderModal bl={data} onClose={() => setShowHeader(false)} />}
     </div>
   );
 }

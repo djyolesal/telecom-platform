@@ -18,6 +18,7 @@
     "seed": "node dist-seed/seed.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
     "@prisma/client": "^5.18.0",
     "bcrypt": "^5.1.1",
     "bull": "^4.16.0",
