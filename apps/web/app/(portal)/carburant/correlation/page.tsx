@@ -42,6 +42,7 @@ export default function CorrelationCarburantPage() {
 
   const columns: Column<Ligne>[] = [
     { key: 'code', header: 'Site', render: (l) => <span className="font-medium text-gray-800">{l.code}</span> },
+    { key: 'nom', header: 'Nom', render: (l) => <span className="text-gray-600">{l.nom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'livre', header: 'Livré (L)', align: 'right', render: (l) => fmtNumber(l.livreLitres) },
     { key: 'consomme', header: 'Consommé GE (L)', align: 'right', render: (l) => fmtNumber(l.consommeLitres) },
