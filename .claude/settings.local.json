@@ -93,7 +93,8 @@
       "Bash(grep -n \"const blWhere: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' } }\\\\|_sum: { volumeChargeLitres: true }\\\\|bonLivraison: { statut: { not: 'ANNULE' } }\\\\|statut: { not: 'ANNULE' },\" src/controllers/carburantLogistique.controller.ts)",
       "Bash(grep -n \"auditLog\\(req.user!.id, 'CREATE', 'bons_livraison'\\\\|auditLog\\(req.user!.id, 'UPDATE', 'bons_livraison'\\\\|auditLog\\(req.user!.id, 'DELETE', 'bons_livraison'\\\\|from '../utils/memo'\\\\|import { getNum }\" src/controllers/carburantLogistique.controller.ts)",
       "Bash(perl -0pi -e \"s/\\(await auditLog\\\\\\(req\\\\.user!\\\\.id, '\\(?:CREATE|UPDATE|DELETE\\)', 'bons_livraison'[^\\\\n]*\\\\\\);\\)/\\\\1\\\\n    clearMemo\\(\\);/g\" src/controllers/carburantLogistique.controller.ts)",
-      "Bash(perl -0pi -e \"s/\\(await auditLog\\\\\\(req\\\\.user!\\\\.id, '\\(?:CREATE|UPDATE|DELETE\\)', 'bons_commande'[^\\\\n]*\\\\\\);\\)/\\\\1\\\\n    clearMemo\\(\\);/g\" src/controllers/carburantLogistique.controller.ts)"
+      "Bash(perl -0pi -e \"s/\\(await auditLog\\\\\\(req\\\\.user!\\\\.id, '\\(?:CREATE|UPDATE|DELETE\\)', 'bons_commande'[^\\\\n]*\\\\\\);\\)/\\\\1\\\\n    clearMemo\\(\\);/g\" src/controllers/carburantLogistique.controller.ts)",
+      "Bash(xargs -I{} sed -n '{},+16p' docker-compose.yml)"
     ]
   }
 }

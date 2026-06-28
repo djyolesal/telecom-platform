@@ -47,6 +47,10 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
+      # Next.js standalone écoute sur $HOSTNAME (Docker le fixe à l'ID du conteneur) :
+      # on force 0.0.0.0 pour que le healthcheck (localhost) et nginx joignent web.
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
       NEXT_PUBLIC_API_URL: https://${DOMAIN}/api/v1
       NEXT_PUBLIC_WS_URL: wss://${DOMAIN}
       NEXTAUTH_URL: https://${DOMAIN}

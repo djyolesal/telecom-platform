@@ -17,6 +17,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js standalone écoute sur $HOSTNAME — Docker le fixe à l'ID du conteneur,
+# ce qui empêche l'écoute sur loopback (healthcheck KO) et nginx de joindre web.
+# On force l'écoute sur toutes les interfaces.
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
 RUN apk add --no-cache curl
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
