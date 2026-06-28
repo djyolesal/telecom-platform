@@ -7,6 +7,7 @@ import { auditLog } from '../services/audit.service';
 import { buildXlsx, buildXlsxMulti, setXlsxHeaders } from '../utils/excel';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
+import { env } from '../config/env';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -503,13 +504,67 @@ export async function exportPlanLivraisonPdf(req: Request, res: Response, next: 
 
 // ── SUIVI DES MANQUANTS DE LIVRAISON ──────────────────────────
 
-function manquantsFilter(req: Request): { bonCommandeId?: string; mois?: number; annee?: number } {
-  const { bc_id, mois, annee } = req.query as Record<string, string>;
+function manquantsFilter(req: Request): { bonCommandeId?: string; mois?: number; annee?: number; region?: string } {
+  const { bc_id, mois, annee, region } = req.query as Record<string, string>;
   return {
     bonCommandeId: bc_id || undefined,
     mois: mois ? parseInt(mois) : undefined,
     annee: annee ? parseInt(annee) : undefined,
+    region: region || undefined,
   };
+}
+
+/** Détail des lignes de plan d'un site : quels BL l'ont laissé à découvert. */
+export async function getManquantsSite(req: Request, res: Response, next: NextFunction) {
+  try {
+    const f = manquantsFilter(req);
+    const blWhere: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' } };
+    if (f.bonCommandeId) blWhere.bonCommandeId = f.bonCommandeId;
+    if (f.mois) blWhere.mois = f.mois;
+    if (f.annee) blWhere.annee = f.annee;
+    if (!f.bonCommandeId && !f.annee) blWhere.annee = new Date().getFullYear();
+
+    const [site, lignes] = await Promise.all([
+      prisma.site.findUnique({ where: { id: req.params.id }, select: { code: true, nom: true, region: true } }),
+      prisma.ligneLivraison.findMany({
+        where: { siteId: req.params.id, bonLivraison: blWhere },
+        include: {
+          bonLivraison: { select: { id: true, numeroBL: true, mois: true, annee: true, dateChargement: true, immatriculation: true, bonCommande: { select: { numero: true } }, transporteur: { select: { nom: true } } } },
+          depotages: { select: { volumeLitres: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    if (!site) throw new AppError('Site introuvable', 404);
+
+    const seuilJours = env.DELAI_MANQUANT_JOURS;
+    const now = Date.now();
+    const data = lignes.map((l) => {
+      const prevu = n(l.volumePrevuLitres);
+      const livre = l.depotages.reduce((s, d) => s + n(d.volumeLitres), 0);
+      const manquant = Math.max(0, prevu - livre);
+      const jours = Math.floor((now - l.bonLivraison.dateChargement.getTime()) / 86_400_000);
+      return {
+        ligneId: l.id,
+        blId: l.bonLivraison.id,
+        numeroBL: l.bonLivraison.numeroBL,
+        bcNumero: l.bonLivraison.bonCommande.numero,
+        transporteur: l.bonLivraison.transporteur?.nom ?? null,
+        immatriculation: l.bonLivraison.immatriculation,
+        mois: l.bonLivraison.mois,
+        annee: l.bonLivraison.annee,
+        dateChargement: l.bonLivraison.dateChargement,
+        jours,
+        prevu: Math.round(prevu),
+        livre: Math.round(livre),
+        manquant: Math.round(manquant),
+        statut: l.statut,
+        enRetard: manquant > 0.5 && jours > seuilJours,
+      };
+    });
+
+    res.json({ success: true, data: { site, lignes: data } });
+  } catch (err) { next(err); }
 }
 
 export async function getManquantsLivraison(req: Request, res: Response, next: NextFunction) {

@@ -75,7 +75,8 @@
       "Bash(sed -i '' 's/Navigator.pop\\(sheetCtx\\);\\\\n *GoRouter.of\\(context\\).push/XX/' lib/features/maintenance/presentation/maintenance_list_screen.dart)",
       "Bash(perl -0pi -e 's/GoRouter\\\\.of\\\\\\(context\\\\\\)\\\\.push/router.push/g' lib/features/maintenance/presentation/maintenance_list_screen.dart)",
       "Bash(flutter analyze *)",
-      "Bash(grep -rn \"SiteSelect\\\\|sites.*map.*option\\\\|/sites', { params\" app/ components)"
+      "Bash(grep -rn \"SiteSelect\\\\|sites.*map.*option\\\\|/sites', { params\" app/ components)",
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/api && npx tsc --noEmit 2>&1 | head -8 && echo \"=== API OK ===\" && cd ../web && AUTH_SECRET=dummy NEXTAUTH_SECRET=dummy npx next build 2>&1 | grep -E \"Compiled successfully|Failed to compile|Type error|error TS\" | head)"
     ]
   }
 }

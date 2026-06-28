@@ -13,11 +13,13 @@ export function DataTable<T>({
   data,
   onRowClick,
   rowKey,
+  rowClassName,
 }: {
   columns: Column<T>[];
   data: T[];
   onRowClick?: (row: T) => void;
   rowKey?: (row: T, i: number) => string;
+  rowClassName?: (row: T) => string | undefined;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white">
@@ -45,7 +47,8 @@ export function DataTable<T>({
               onClick={() => onRowClick?.(row)}
               className={cn(
                 'border-b border-gray-50 last:border-0',
-                onRowClick && 'cursor-pointer hover:bg-gray-50'
+                onRowClick && 'cursor-pointer hover:bg-gray-50',
+                rowClassName?.(row)
               )}
             >
               {columns.map((c) => (

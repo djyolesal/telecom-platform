@@ -130,6 +130,7 @@ router.get('/rapports/correlation-carburant', carburantCtrl.getCorrelationCarbur
 // ── Rapport suivi des manquants de livraison ──────────────────
 router.get('/rapports/manquants-livraison', carburantCtrl.getManquantsLivraison);
 router.get('/rapports/manquants-livraison/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportManquantsLivraison);
+router.get('/rapports/manquants-livraison/site/:id', carburantCtrl.getManquantsSite);
 
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);

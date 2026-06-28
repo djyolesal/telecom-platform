@@ -2,33 +2,55 @@ import { computeManquants } from '../services/manquants.service';
 import { notificationService } from '../services/notifications.service';
 import { logger } from '../utils/logger';
 
+const L = (v: number) => `${v.toLocaleString('fr-FR')} L`;
+
 /**
- * Détecte les manquants de livraison persistants (lignes non soldées au-delà du
- * délai) et notifie les managers. S'appuie sur le même calcul que le rapport.
+ * Alerte sur les manquants de livraison, pondérée par la QUANTITÉ :
+ *  - manquants ≥ plancher non soldés au-delà du délai → alerte « en retard » ;
+ *  - manquants ≥ seuil critique → alerte immédiate (sans attendre le délai) ;
+ *  - camions dont l'écart chargé−distribué dépasse le seuil → signal perte/vol.
+ * Les criticals (site ou camion) sont en plus escaladés aux administrateurs.
  */
 export async function manquantAlertJob(): Promise<void> {
-  const m = await computeManquants({}); // année courante par défaut
-  const enRetard = m.lignesEnRetard;
+  const m = await computeManquants({}); // national, année courante
+  const lignes = m.lignesEnRetard;
+  const camions = m.camionsCritiques;
 
-  if (!enRetard.length) {
-    logger.info('[manquant-alert] Aucun manquant persistant');
+  if (!lignes.length && !camions.length) {
+    logger.info('[manquant-alert] Aucun manquant à signaler');
     return;
   }
 
-  // Tri par manquant décroissant, top 10 dans le corps.
-  const top = [...enRetard].sort((a, b) => b.manquant - a.manquant).slice(0, 10);
-  const totalLitres = Math.round(enRetard.reduce((s, l) => s + l.manquant, 0));
-  const body = top
-    .map((l) => `${l.siteCode} — ${l.manquant} L (BL ${l.numeroBL}, ${l.jours} j)`)
-    .join('\n')
-    .slice(0, 1000);
+  const critsLignes = lignes.filter((l) => l.critique).sort((a, b) => b.manquant - a.manquant);
+  const retardLignes = lignes.filter((l) => !l.critique).sort((a, b) => b.manquant - a.manquant);
+  const camionsTri = [...camions].sort((a, b) => b.manquant - a.manquant);
+  const totalLitres = Math.round(lignes.reduce((s, l) => s + l.manquant, 0));
 
-  await notificationService.sendToRole('MANAGER', {
-    type: 'MANQUANT_LIVRAISON',
-    title: `🚚 ${enRetard.length} manquant(s) de livraison — ${totalLitres} L`,
-    body,
-    data: { kind: 'manquant_livraison', count: enRetard.length, totalLitres },
-  });
+  const sections: string[] = [];
+  if (critsLignes.length) {
+    sections.push('🔴 Critiques :\n' + critsLignes.slice(0, 5).map((l) => `${l.siteCode} — ${L(l.manquant)} (BL ${l.numeroBL})`).join('\n'));
+  }
+  if (camionsTri.length) {
+    sections.push('🚛 Camions (chargé non distribué) :\n' + camionsTri.slice(0, 5).map((c) => `${c.numeroBL} ${c.immatriculation} — ${L(c.manquant)}`).join('\n'));
+  }
+  if (retardLignes.length) {
+    sections.push('🟠 En retard :\n' + retardLignes.slice(0, 5).map((l) => `${l.siteCode} — ${L(l.manquant)} (${l.jours} j)`).join('\n'));
+  }
+  const body = sections.join('\n\n').slice(0, 1500);
 
-  logger.info(`[manquant-alert] ${enRetard.length} manquants signalés aux managers (${totalLitres} L)`);
+  const nbCrit = critsLignes.length + camionsTri.length;
+  const title = `🚚 ${lignes.length} manquant(s)${nbCrit ? ` · ${nbCrit} critique(s)` : ''} — ${L(totalLitres)}`;
+  const payload = { type: 'MANQUANT_LIVRAISON', title, body, data: { kind: 'manquant_livraison', total: lignes.length, critiques: nbCrit, totalLitres } };
+
+  await notificationService.sendToRole('MANAGER', payload);
+
+  // Escalade : tout manquant critique (site ou camion) remonte aux administrateurs.
+  if (nbCrit > 0) {
+    await notificationService.sendToRole('ADMIN', {
+      ...payload,
+      title: `🔴 ${nbCrit} manquant(s) critique(s) carburant — ${L(totalLitres)}`,
+    });
+  }
+
+  logger.info(`[manquant-alert] ${lignes.length} manquants (${nbCrit} critiques, ${camionsTri.length} camions) signalés`);
 }

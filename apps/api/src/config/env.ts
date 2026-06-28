@@ -51,6 +51,9 @@ const envSchema = z.object({
   GEOFENCE_RADIUS_M: z.coerce.number().default(20),     // rayon (m) « sur site »
   SEUIL_ECART_GASOIL_PCT: z.coerce.number().default(25), // tolérance (%) écart conso gasoil réelle vs attendue
   DELAI_MANQUANT_JOURS: z.coerce.number().default(7),    // délai (j) après chargement avant qu'un reste soit « en retard »
+  MANQUANT_MIN_LITRES: z.coerce.number().default(50),    // plancher anti-bruit : en-deçà, on n'alerte pas
+  MANQUANT_CRITIQUE_LITRES: z.coerce.number().default(800),       // manquant site critique → alerte immédiate + escalade
+  MANQUANT_CAMION_CRITIQUE_LITRES: z.coerce.number().default(500), // écart chargé−distribué d'un camion → alerte immédiate
 });
 
 const parsed = envSchema.safeParse(process.env);

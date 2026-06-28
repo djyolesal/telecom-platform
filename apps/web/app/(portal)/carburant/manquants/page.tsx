@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Download, AlertTriangle, MapPin, Truck, Calendar } from 'lucide-react';
+import { Download, AlertTriangle, MapPin, Truck, Calendar, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -13,18 +13,20 @@ import { Loading, EmptyState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Select } from '@/components/shared/Form';
-import { fmtNumber } from '@/lib/utils';
+import { regionOptions } from '@/lib/constants';
+import { fmtNumber, fmtDate } from '@/lib/utils';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
-interface ParSite { siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; nbEnRetard: number }
-interface ParCamion { blId: string; numeroBL: string; bcNumero: string; mois: number; immatriculation: string; transporteur?: string; charge: number; distribue: number; manquant: number; nbSitesManquants: number; jours: number }
+interface ParSite { siteId: string; siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; nbEnRetard: number; nbCritiques: number }
+interface SiteLigne { ligneId: string; blId: string; numeroBL: string; bcNumero: string; transporteur?: string; immatriculation: string; mois: number; annee: number; dateChargement: string; jours: number; prevu: number; livre: number; manquant: number; statut: string; enRetard: boolean }
+interface ParCamion { blId: string; numeroBL: string; bcNumero: string; mois: number; immatriculation: string; transporteur?: string; charge: number; distribue: number; manquant: number; nbSitesManquants: number; jours: number; enRetard: boolean; critique: boolean }
 interface ParMois { bcNumero: string; annee: number; mois: number; prevu: number; charge: number; livre: number; manquantCharge: number; manquantLivre: number }
 interface ParBc { bcId: string; numero: string; annee: number; trimestre: number; prevu: number; charge: number; livre: number; manquant: number }
 interface ManquantsData {
   seuilJours: number;
   parSite: ParSite[]; parCamion: ParCamion[]; parMois: ParMois[]; parBc: ParBc[];
-  totaux: { manquantSitesLitres: number; nbSitesManquants: number; nbSitesEnRetard: number; nbCamionsEcart: number; manquantMensuelLitres: number; nbLignesEnRetard: number };
+  totaux: { manquantSitesLitres: number; nbSitesManquants: number; nbSitesEnRetard: number; nbCamionsEcart: number; manquantMensuelLitres: number; nbLignesEnRetard: number; nbLignesCritiques: number; nbCamionsCritiques: number };
 }
 interface BCOption { id: string; numero: string }
 
@@ -36,12 +38,70 @@ const TABS = [
 ] as const;
 
 const mq = (v: number) => <span className={v > 0 ? 'font-semibold text-red-600' : 'text-gray-400'}>{v > 0 ? fmtNumber(v) : '—'}</span>;
+const LIGNE_COLORS: Record<string, string> = { PREVU: 'bg-gray-100 text-gray-600', PARTIEL: 'bg-amber-100 text-amber-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
+
+// Drill-down : quels BL ont laissé ce site à découvert.
+function SiteDrillModal({ site, bcId, mois, onClose }: { site: ParSite; bcId: string; mois: string; onClose: () => void }) {
+  const router = useRouter();
+  const { data, isLoading } = useQuery({
+    queryKey: ['manquants-site', site.siteId, bcId, mois],
+    queryFn: () => api.get(`/rapports/manquants-livraison/site/${site.siteId}`, { params: { bc_id: bcId || undefined, mois: mois || undefined } }).then((r) => r.data.data as { lignes: SiteLigne[] }),
+  });
+  const lignes = data?.lignes ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-bold text-gray-800">{site.siteCode} — {site.siteNom}</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">{site.region} · livraisons planifiées pour ce site</p>
+        {isLoading ? (
+          <p className="text-sm text-gray-400 py-6">Chargement…</p>
+        ) : lignes.length === 0 ? (
+          <p className="text-sm text-gray-400 py-6">Aucune ligne de plan pour ce site sur la période.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-500 text-xs border-b">
+                <th className="text-left py-2">N° BL</th>
+                <th className="text-left">Camion</th>
+                <th className="text-left">Chargé le</th>
+                <th className="text-right">Prévu</th>
+                <th className="text-right">Livré</th>
+                <th className="text-right">Manquant</th>
+                <th className="text-left">Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lignes.map((l) => (
+                <tr key={l.ligneId} className="border-b last:border-0 cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/carburant/livraisons/${l.blId}`)}>
+                  <td className="py-2 font-medium text-gray-800">{l.numeroBL}</td>
+                  <td className="text-gray-600">{l.immatriculation}</td>
+                  <td className="text-gray-600">{fmtDate(l.dateChargement)}{l.enRetard && <span className="ml-1 text-red-600">· {l.jours}j</span>}</td>
+                  <td className="text-right">{fmtNumber(l.prevu)}</td>
+                  <td className="text-right">{l.livre > 0 ? fmtNumber(l.livre) : '—'}</td>
+                  <td className="text-right">{mq(l.manquant)}</td>
+                  <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{l.statut}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ManquantsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<'site' | 'camion' | 'mois' | 'bc'>('site');
   const [bcId, setBcId] = useState('');
   const [mois, setMois] = useState('');
+  const [region, setRegion] = useState('');
+  const [enRetardOnly, setEnRetardOnly] = useState(false);
+  const [drillSite, setDrillSite] = useState<ParSite | null>(null);
 
   const { data: bcs = [] } = useQuery({
     queryKey: ['bcs-options'],
@@ -49,13 +109,19 @@ export default function ManquantsPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['manquants', bcId, mois],
-    queryFn: () => api.get('/rapports/manquants-livraison', { params: { bc_id: bcId || undefined, mois: mois || undefined } }).then((r) => r.data.data as ManquantsData),
+    queryKey: ['manquants', bcId, mois, region],
+    queryFn: () => api.get('/rapports/manquants-livraison', { params: { bc_id: bcId || undefined, mois: mois || undefined, region: region || undefined } }).then((r) => r.data.data as ManquantsData),
   });
 
   if (isLoading) return <Loading />;
   const t = data?.totaux;
-  const params = new URLSearchParams({ ...(bcId ? { bc_id: bcId } : {}), ...(mois ? { mois } : {}) }).toString();
+  const params = new URLSearchParams({ ...(bcId ? { bc_id: bcId } : {}), ...(mois ? { mois } : {}), ...(region ? { region } : {}) }).toString();
+
+  // « En retard seulement » : ne s'applique qu'aux niveaux où le retard est défini (site, camion).
+  const sites = (data?.parSite ?? []).filter((s) => !enRetardOnly || s.nbEnRetard > 0);
+  const camions = (data?.parCamion ?? []).filter((c) => !enRetardOnly || c.enRetard);
+  // La région ne s'applique qu'au niveau site (un camion/commande traverse plusieurs régions).
+  const regionNationaleNote = region && tab !== 'site';
 
   const colsSite: Column<ParSite>[] = [
     { key: 'siteCode', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.siteCode}</span> },
@@ -64,7 +130,7 @@ export default function ManquantsPage() {
     { key: 'prevu', header: 'Prévu (L)', align: 'right', render: (s) => fmtNumber(s.prevu) },
     { key: 'livre', header: 'Livré (L)', align: 'right', render: (s) => fmtNumber(s.livre) },
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (s) => mq(s.manquant) },
-    { key: 'nbEnRetard', header: 'En retard', align: 'center', render: (s) => s.nbEnRetard > 0 ? <Badge className="bg-red-100 text-red-700">{s.nbEnRetard}</Badge> : <span className="text-gray-300">—</span> },
+    { key: 'etat', header: 'État', align: 'center', render: (s) => s.nbCritiques > 0 ? <Badge className="bg-red-600 text-white">Critique</Badge> : s.nbEnRetard > 0 ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">—</span> },
   ];
   const colsCamion: Column<ParCamion>[] = [
     { key: 'numeroBL', header: 'N° BL', render: (c) => <span className="font-medium text-gray-800">{c.numeroBL}</span> },
@@ -74,7 +140,7 @@ export default function ManquantsPage() {
     { key: 'charge', header: 'Chargé (L)', align: 'right', render: (c) => fmtNumber(c.charge) },
     { key: 'distribue', header: 'Distribué (L)', align: 'right', render: (c) => fmtNumber(c.distribue) },
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (c) => mq(c.manquant) },
-    { key: 'jours', header: 'Ancienneté', align: 'center', render: (c) => `${c.jours} j` },
+    { key: 'etat', header: 'État', align: 'center', render: (c) => c.critique ? <Badge className="bg-red-600 text-white">Critique</Badge> : c.enRetard ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">{c.jours} j</span> },
   ];
   const colsMois: Column<ParMois>[] = [
     { key: 'bcNumero', header: 'BC' },
@@ -107,14 +173,25 @@ export default function ManquantsPage() {
         <StatCard title="Manquant total (sites)" value={`${fmtNumber(t?.manquantSitesLitres ?? 0)} L`} icon={AlertTriangle} color="bg-[#C0392B]" />
         <StatCard title="Sites manquants" value={String(t?.nbSitesManquants ?? 0)} icon={MapPin} color="bg-[#1B3F6B]" />
         <StatCard title="Camions avec écart" value={String(t?.nbCamionsEcart ?? 0)} icon={Truck} color="bg-[#2471A3]" />
-        <StatCard title="Lignes en retard" value={String(t?.nbLignesEnRetard ?? 0)} icon={AlertTriangle} color="bg-[#B9770E]" />
+        <StatCard title="Critiques (≥ seuil)" value={`${(t?.nbLignesCritiques ?? 0)} sites · ${(t?.nbCamionsCritiques ?? 0)} camions`} icon={AlertTriangle} color="bg-[#C0392B]" />
       </div>
 
       {/* Filtres */}
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="w-56"><Select value={bcId} onChange={(e) => setBcId(e.target.value)} placeholder="Tous les bons de commande" options={bcs.map((b) => ({ value: b.id, label: b.numero }))} /></div>
         <div className="w-40"><Select value={mois} onChange={(e) => setMois(e.target.value)} placeholder="Tous les mois" options={MOIS.slice(1).map((m, i) => ({ value: String(i + 1), label: m }))} /></div>
+        <div className="w-48"><Select value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Toutes régions (sites)" options={regionOptions} /></div>
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <input type="checkbox" checked={enRetardOnly} onChange={(e) => setEnRetardOnly(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+          En retard seulement
+        </label>
       </div>
+
+      {regionNationaleNote && (
+        <div className="mb-3 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
+          Vue nationale — le filtre région ne s’applique qu’à l’onglet « Par site » (un camion ou une commande traverse plusieurs régions).
+        </div>
+      )}
 
       {/* Onglets */}
       <div className="flex gap-1 border-b border-gray-200 mb-4">
@@ -126,10 +203,12 @@ export default function ManquantsPage() {
         ))}
       </div>
 
-      {tab === 'site' && (data?.parSite.length ? <DataTable columns={colsSite} data={data.parSite} /> : <EmptyState title="Aucun manquant par site" />)}
-      {tab === 'camion' && (data?.parCamion.length ? <DataTable columns={colsCamion} data={data.parCamion} onRowClick={(c) => router.push(`/carburant/livraisons/${c.blId}`)} /> : <EmptyState title="Aucun écart par camion" />)}
+      {tab === 'site' && (sites.length ? <DataTable columns={colsSite} data={sites} rowKey={(s) => s.siteId} rowClassName={(s) => s.nbCritiques > 0 ? 'bg-red-50' : undefined} onRowClick={(s) => setDrillSite(s)} /> : <EmptyState title="Aucun manquant par site" />)}
+      {tab === 'camion' && (camions.length ? <DataTable columns={colsCamion} data={camions} rowKey={(c) => c.blId} rowClassName={(c) => c.critique ? 'bg-red-50' : undefined} onRowClick={(c) => router.push(`/carburant/livraisons/${c.blId}`)} /> : <EmptyState title="Aucun écart par camion" />)}
       {tab === 'mois' && (data?.parMois.length ? <DataTable columns={colsMois} data={data.parMois} /> : <EmptyState title="Aucune donnée mensuelle" />)}
       {tab === 'bc' && (data?.parBc.length ? <DataTable columns={colsBc} data={data.parBc} onRowClick={(b) => router.push(`/carburant/commandes/${b.bcId}`)} /> : <EmptyState title="Aucune donnée par bon de commande" />)}
+
+      {drillSite && <SiteDrillModal site={drillSite} bcId={bcId} mois={mois} onClose={() => setDrillSite(null)} />}
     </div>
   );
 }

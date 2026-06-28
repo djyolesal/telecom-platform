@@ -20,6 +20,12 @@ export interface LigneEnRetard {
   numeroBL: string; bcNumero: string;
   dateChargement: Date; jours: number;
   prevu: number; livre: number; manquant: number;
+  critique: boolean; // manquant ≥ seuil critique → alerte immédiate
+}
+
+export interface CamionCritique {
+  numeroBL: string; bcNumero: string; immatriculation: string; transporteur: string | null;
+  charge: number; distribue: number; manquant: number; jours: number;
 }
 
 /**
@@ -30,6 +36,9 @@ export interface LigneEnRetard {
  */
 export async function computeManquants(filter: ManquantsFilter) {
   const seuilJours = env.DELAI_MANQUANT_JOURS;
+  const minLitres = env.MANQUANT_MIN_LITRES;        // plancher anti-bruit
+  const critLitres = env.MANQUANT_CRITIQUE_LITRES;  // manquant site critique
+  const critCamion = env.MANQUANT_CAMION_CRITIQUE_LITRES;
   const now = Date.now();
 
   const where: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' } };
@@ -63,10 +72,11 @@ export async function computeManquants(filter: ManquantsFilter) {
     volBc.set(v.bonCommandeId, (volBc.get(v.bonCommandeId) ?? 0) + n(v.volumePrevuLitres));
   }
 
-  type SiteAgg = { siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; nbLignes: number; nbEnRetard: number };
+  type SiteAgg = { siteId: string; siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; nbLignes: number; nbEnRetard: number; nbCritiques: number };
   const parSiteMap = new Map<string, SiteAgg>();
   const parCamion: Array<Record<string, unknown>> = [];
   const lignesEnRetard: LigneEnRetard[] = [];
+  const camionsCritiques: CamionCritique[] = [];
 
   type MoisAgg = { bcId: string; bcNumero: string; annee: number; mois: number; prevu: number; charge: number; livre: number };
   const parMoisMap = new Map<string, MoisAgg>();
@@ -84,14 +94,16 @@ export async function computeManquants(filter: ManquantsFilter) {
       const livre = l.depotages.reduce((s, d) => s + n(d.volumeLitres), 0);
       const manquant = Math.max(0, prevu - livre);
       blDistribue += livre;
-      const enRetard = manquant > EPS && enRetardDelai;
+      const critique = manquant >= critLitres;
+      // Alerte si manquant ≥ plancher ET (délai dépassé OU critique → immédiat).
+      const enRetard = manquant >= minLitres && (enRetardDelai || critique);
       if (manquant > EPS) blSitesManquants++;
 
       // Le niveau site honore le filtre régional (camion/mois/BC restent nationaux).
       const dansRegion = !filter.region || l.site.region === filter.region;
       if (dansRegion) {
-        const ps = parSiteMap.get(l.site.id) ?? { siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, prevu: 0, livre: 0, manquant: 0, nbLignes: 0, nbEnRetard: 0 };
-        ps.prevu += prevu; ps.livre += livre; ps.manquant += manquant; ps.nbLignes++; if (enRetard) ps.nbEnRetard++;
+        const ps = parSiteMap.get(l.site.id) ?? { siteId: l.site.id, siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, prevu: 0, livre: 0, manquant: 0, nbLignes: 0, nbEnRetard: 0, nbCritiques: 0 };
+        ps.prevu += prevu; ps.livre += livre; ps.manquant += manquant; ps.nbLignes++; if (enRetard) ps.nbEnRetard++; if (critique) ps.nbCritiques++;
         parSiteMap.set(l.site.id, ps);
       }
 
@@ -99,19 +111,30 @@ export async function computeManquants(filter: ManquantsFilter) {
         lignesEnRetard.push({
           siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region,
           numeroBL: bl.numeroBL, bcNumero: bl.bonCommande.numero,
-          dateChargement: bl.dateChargement, jours, prevu, livre, manquant,
+          dateChargement: bl.dateChargement, jours, prevu, livre, manquant, critique,
         });
       }
     }
 
     const charge = n(bl.volumeChargeLitres);
+    // Niveau camion : écart chargé − distribué supérieur au seuil critique (signal perte/vol).
+    const ecartCamion = Math.max(0, charge - blDistribue);
+    if (ecartCamion >= critCamion) {
+      camionsCritiques.push({
+        numeroBL: bl.numeroBL, bcNumero: bl.bonCommande.numero,
+        immatriculation: bl.immatriculation, transporteur: bl.transporteur?.nom ?? null,
+        charge: Math.round(charge), distribue: Math.round(blDistribue), manquant: Math.round(ecartCamion), jours,
+      });
+    }
     parCamion.push({
       blId: bl.id, numeroBL: bl.numeroBL, bcNumero: bl.bonCommande.numero,
       mois: bl.mois, annee: bl.annee, immatriculation: bl.immatriculation,
       transporteur: bl.transporteur?.nom ?? null,
       dateChargement: bl.dateChargement, jours,
       charge, distribue: blDistribue, manquant: Math.max(0, charge - blDistribue),
-      nbSites: bl.lignes.length, nbSitesManquants: blSitesManquants, enRetard: enRetardDelai && charge - blDistribue > EPS,
+      nbSites: bl.lignes.length, nbSitesManquants: blSitesManquants,
+      enRetard: enRetardDelai && charge - blDistribue > EPS,
+      critique: ecartCamion >= critCamion,
     });
 
     // Agrégat mensuel (par bon de commande + mois).
@@ -153,7 +176,9 @@ export async function computeManquants(filter: ManquantsFilter) {
     nbCamionsEcart: camions.length,
     manquantMensuelLitres: round(parMois.reduce((s, x) => s + x.manquantLivre, 0)),
     nbLignesEnRetard: lignesEnRetard.length,
+    nbLignesCritiques: lignesEnRetard.filter((l) => l.critique).length,
+    nbCamionsCritiques: camionsCritiques.length,
   };
 
-  return { seuilJours, parSite, parCamion: camions, parMois, parBc, totaux, lignesEnRetard };
+  return { seuilJours, parSite, parCamion: camions, parMois, parBc, totaux, lignesEnRetard, camionsCritiques };
 }
