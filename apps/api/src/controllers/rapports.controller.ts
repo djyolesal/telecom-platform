@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { auditLog } from '../services/audit.service';
 import { calculerStockSite } from '../utils/calculator';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
+import { computeManquants } from '../services/manquants.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 
@@ -223,12 +224,13 @@ export async function buildMonthlyData(annee: number, mois: number, region?: str
   const fin = endOfMonth(debut);
   const siteRegion = region ? { site: { region } } : {};
 
-  const [sitesActifs, incidents, maintenances, depotages, releves] = await Promise.all([
+  const [sitesActifs, incidents, maintenances, depotages, releves, manquants] = await Promise.all([
     prisma.site.count({ where: { isActive: true, ...(region ? { region } : {}) } }),
     prisma.incident.findMany({ where: { dateOuverture: { gte: debut, lte: fin }, ...siteRegion }, select: { statut: true, dureeCoupureMinutes: true, delaiInterventionMinutes: true } }),
     prisma.maintenance.findMany({ where: { datePlanifiee: { gte: debut, lte: fin }, ...siteRegion }, select: { type: true } }),
     prisma.depotage.findMany({ where: { dateDepotage: { gte: debut, lte: fin }, ...siteRegion }, select: { volumeLitres: true, coutTotal: true } }),
     prisma.releveEnergie.findMany({ where: { dateReleve: { gte: debut, lte: fin }, ...siteRegion }, select: { consommationKwh: true, coutEstime: true } }),
+    computeManquants({ annee, mois, region }),
   ]);
 
   const resolus = incidents.filter((i) => ['RESOLU', 'CLOS'].includes(i.statut));
@@ -255,6 +257,13 @@ export async function buildMonthlyData(annee: number, mois: number, region?: str
     energie: {
       consoTotaleKwh: Math.round(releves.reduce((s, r) => s + Number(r.consommationKwh ?? 0), 0)),
       coutEstimeFCFA: releves.reduce((s, r) => s + Number(r.coutEstime ?? 0), 0),
+    },
+    manquants: {
+      totalLitres: manquants.totaux.manquantSitesLitres,
+      nbSites: manquants.totaux.nbSitesManquants,
+      // Compteur camion seulement en national (non régionalisable).
+      nbCamionsEcart: region ? undefined : manquants.totaux.nbCamionsEcart,
+      topSites: manquants.parSite.slice(0, 5).map((s) => ({ code: s.siteCode, manquant: s.manquant })),
     },
   };
 }

@@ -117,6 +117,7 @@ export interface MonthlyReportData {
   maintenances: { total: number; preventives: number; curatives: number };
   carburant: { volumeDepoteLitres: number; coutTotalFCFA: number; nbDepotages: number };
   energie: { consoTotaleKwh: number; coutEstimeFCFA: number };
+  manquants?: { totalLitres: number; nbSites: number; nbCamionsEcart?: number; topSites: Array<{ code: string; manquant: number }> };
 }
 
 const MOIS = [
@@ -154,6 +155,17 @@ export async function generateMonthlyReportPdf(r: MonthlyReportData): Promise<Bu
     sectionTitle(doc, 'Énergie');
     row(doc, 'Consommation totale', `${r.energie.consoTotaleKwh.toLocaleString('fr-FR')} kWh`);
     row(doc, 'Coût estimé', `${r.energie.coutEstimeFCFA.toLocaleString('fr-FR')} FCFA`);
+
+    if (r.manquants) {
+      sectionTitle(doc, r.region ? `Manquants de livraison — ${r.region}` : 'Manquants de livraison');
+      row(doc, 'Volume manquant total', `${r.manquants.totalLitres.toLocaleString('fr-FR')} L`);
+      row(doc, 'Sites concernés', String(r.manquants.nbSites));
+      // Compteur camions : national uniquement (un camion traverse plusieurs régions).
+      if (r.manquants.nbCamionsEcart != null) row(doc, 'Camions avec écart', String(r.manquants.nbCamionsEcart));
+      if (r.manquants.topSites.length) {
+        row(doc, 'Principaux sites', r.manquants.topSites.map((s) => `${s.code} (${s.manquant.toLocaleString('fr-FR')} L)`).join(', '));
+      }
+    }
 
     doc.fontSize(8).fillColor('#999').text(
       `Généré automatiquement le ${fmtDate(new Date())} — TélécomOps`,

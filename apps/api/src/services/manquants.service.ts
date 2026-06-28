@@ -9,6 +9,10 @@ export interface ManquantsFilter {
   bonCommandeId?: string;
   mois?: number;
   annee?: number;
+  // Filtre régional : ne s'applique qu'à la maille SITE (seule proprement
+  // attribuable à une région). Les niveaux camion / mois / BC restent nationaux,
+  // car un camion ou une commande traversent plusieurs régions.
+  region?: string;
 }
 
 export interface LigneEnRetard {
@@ -83,11 +87,15 @@ export async function computeManquants(filter: ManquantsFilter) {
       const enRetard = manquant > EPS && enRetardDelai;
       if (manquant > EPS) blSitesManquants++;
 
-      const ps = parSiteMap.get(l.site.id) ?? { siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, prevu: 0, livre: 0, manquant: 0, nbLignes: 0, nbEnRetard: 0 };
-      ps.prevu += prevu; ps.livre += livre; ps.manquant += manquant; ps.nbLignes++; if (enRetard) ps.nbEnRetard++;
-      parSiteMap.set(l.site.id, ps);
+      // Le niveau site honore le filtre régional (camion/mois/BC restent nationaux).
+      const dansRegion = !filter.region || l.site.region === filter.region;
+      if (dansRegion) {
+        const ps = parSiteMap.get(l.site.id) ?? { siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, prevu: 0, livre: 0, manquant: 0, nbLignes: 0, nbEnRetard: 0 };
+        ps.prevu += prevu; ps.livre += livre; ps.manquant += manquant; ps.nbLignes++; if (enRetard) ps.nbEnRetard++;
+        parSiteMap.set(l.site.id, ps);
+      }
 
-      if (enRetard) {
+      if (enRetard && dansRegion) {
         lignesEnRetard.push({
           siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region,
           numeroBL: bl.numeroBL, bcNumero: bl.bonCommande.numero,
