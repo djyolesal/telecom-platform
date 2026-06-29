@@ -47,7 +47,10 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
                 <p className="text-gray-600">{f.properties.code}</p>
                 <p className="text-gray-500">{f.properties.region}</p>
                 <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
-                <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>
+                <div className="mt-1 flex flex-col gap-0.5">
+                  <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`} target="_blank" rel="noreferrer" className="text-[#0E7C6B] underline">🧭 Itinéraire →</a>
+                </div>
               </div>
             </Popup>
           </CircleMarker>

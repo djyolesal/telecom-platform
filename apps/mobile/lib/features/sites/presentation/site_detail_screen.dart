@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/maps_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
@@ -209,6 +210,8 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
+                  if (s.latitude != null && s.longitude != null)
+                    _action(context, Icons.navigation, 'Itinéraire', () => _navigateTo(s)),
                   _action(context, Icons.build, 'Maintenance', () => context.push('/maintenance/nouveau?siteId=${s.id}')),
                   _action(context, Icons.local_gas_station, 'Dépotage', () => context.push('/carburant/nouveau?siteId=${s.id}')),
                   _action(context, Icons.bolt, 'Relevé', () => context.push('/energie/nouveau?siteId=${s.id}')),
@@ -220,6 +223,16 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
         },
       ),
     );
+  }
+
+  /// Ouvre la navigation GPS native vers le site (Google/Apple Maps).
+  Future<void> _navigateTo(Site s) async {
+    final ok = await MapsLauncher.directionsTo(s.latitude!, s.longitude!);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir la navigation')),
+      );
+    }
   }
 
   Widget _row(String label, String value) => Padding(

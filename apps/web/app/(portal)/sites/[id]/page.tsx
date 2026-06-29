@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Fuel, Zap, Gauge, Pencil, Trash2, Building2 } from 'lucide-react';
+import { MapPin, Fuel, Zap, Gauge, Pencil, Trash2, Building2, Navigation } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -72,21 +72,29 @@ export default function SiteDetailPage() {
         subtitle={`${site.region}${site.ville ? ' · ' + site.ville : ''}`}
         backHref="/sites"
         actions={
-          (canEdit || isAdmin) && (
-            <>
-              {canEdit && <ButtonLink href={`/sites/${id}/modifier`} variant="secondary" icon={Pencil}>Modifier</ButtonLink>}
-              {isAdmin && (
-                <Button
-                  variant="secondary"
-                  icon={Trash2}
-                  loading={remove.isPending}
-                  onClick={() => { if (confirm(`Désactiver le site ${site.code} ? Il n'apparaîtra plus dans les listes.`)) remove.mutate(); }}
-                >
-                  Supprimer
-                </Button>
-              )}
-            </>
-          )
+          <>
+            {site.latitude != null && site.longitude != null && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${site.latitude},${site.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Navigation size={15} /> Itinéraire
+              </a>
+            )}
+            {canEdit && <ButtonLink href={`/sites/${id}/modifier`} variant="secondary" icon={Pencil}>Modifier</ButtonLink>}
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                icon={Trash2}
+                loading={remove.isPending}
+                onClick={() => { if (confirm(`Désactiver le site ${site.code} ? Il n'apparaîtra plus dans les listes.`)) remove.mutate(); }}
+              >
+                Supprimer
+              </Button>
+            )}
+          </>
         }
       />
 
