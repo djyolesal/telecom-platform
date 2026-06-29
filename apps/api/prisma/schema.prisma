@@ -271,6 +271,10 @@ model Photo {
   minioKey   String   @map("minio_key")
   createdAt  DateTime @default(now()) @map("created_at")
 
+  // Table polymorphe (entityType + entityId) : maintenance, dépotage…
+  // La contrainte FK DB vers maintenances a été retirée (migration 16) pour
+  // autoriser d'autres entités. Cette relation reste utile aux lectures côté
+  // maintenance (jointure sur entityId) — NE PAS recréer la contrainte FK.
   maintenance Maintenance? @relation(fields: [entityId], references: [id])
 
   @@index([entityType, entityId])

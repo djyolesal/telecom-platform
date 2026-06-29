@@ -210,43 +210,51 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       groupes,
     });
 
-    const depotage = await prisma.depotage.create({
-      data: {
-        siteId,
-        ligneLivraisonId,
-        dateDepotage: b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date(),
-        technicienId: req.user!.id, // toujours l'utilisateur courant, jamais le client
-        volumeLitres: volume,
-        stockAvantLitres: stockAvant,
-        fournisseur: b.fournisseur ? String(b.fournisseur) : null,
-        numeroBonLivraison: b.numeroBonLivraison ? String(b.numeroBonLivraison) : null,
-        prixLitre: b.prixLitre != null ? Number(b.prixLitre) : null,
-        observations: b.observations ? String(b.observations) : null,
-        latitude: b.latitude != null ? Number(b.latitude) : null,
-        longitude: b.longitude != null ? Number(b.longitude) : null,
-        nomChauffeur: b.nomChauffeur ? String(b.nomChauffeur) : null,
-        signatureChauffeurPath: b.signatureChauffeurPath ? String(b.signatureChauffeurPath) : null,
-        nomAgentSecurite: b.nomAgentSecurite ? String(b.nomAgentSecurite) : null,
-        signatureAgentSecuritePath: b.signatureAgentSecuritePath ? String(b.signatureAgentSecuritePath) : null,
-        signatureTechnicienPath: b.signatureTechnicienPath ? String(b.signatureTechnicienPath) : null,
-        bonLivraisonPath: b.bonLivraisonPath ? String(b.bonLivraisonPath) : null,
-        stockApresLitres: stockApres,
-        volumeAnnonceLitres: recon.volumeAnnonceLitres,
-        gasoilAttenduLitres: recon.gasoilAttenduLitres,
-        ecartConsoLitres: recon.ecartConsoLitres,
-        ecartLivraisonLitres: recon.ecartLivraisonLitres,
-        analyseDepotage: recon.analyseDepotage,
-        heuresGE: { create: heuresGE.map((h) => ({ groupeId: h.groupeId, indexHeuresGE: h.indexHeuresGE })) },
-      },
-      include: { site: { select: { code: true, nom: true } } },
-    });
+    const photosIn = (b.photos as { url?: string; key?: string }[] | undefined) ?? [];
 
-    // Photos des travaux de dépotage (uploadées par la sync → clés MinIO).
-    const photos = (b.photos as { url?: string; key?: string }[] | undefined) ?? [];
-    const photosData = photos
-      .filter((p) => p && p.key)
-      .map((p) => ({ entityType: 'depotage', entityId: depotage.id, url: p.url ?? '', minioKey: p.key! }));
-    if (photosData.length) await prisma.photo.createMany({ data: photosData });
+    // Dépotage + photos écrits de façon ATOMIQUE : si l'insertion des photos
+    // échoue, le dépotage est annulé (plus de « sauvé mais erreur 400 » →
+    // plus de doublons au réessai de la sync).
+    const depotage = await prisma.$transaction(async (tx) => {
+      const dep = await tx.depotage.create({
+        data: {
+          siteId,
+          ligneLivraisonId,
+          dateDepotage: b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date(),
+          technicienId: req.user!.id, // toujours l'utilisateur courant, jamais le client
+          volumeLitres: volume,
+          stockAvantLitres: stockAvant,
+          fournisseur: b.fournisseur ? String(b.fournisseur) : null,
+          numeroBonLivraison: b.numeroBonLivraison ? String(b.numeroBonLivraison) : null,
+          prixLitre: b.prixLitre != null ? Number(b.prixLitre) : null,
+          observations: b.observations ? String(b.observations) : null,
+          latitude: b.latitude != null ? Number(b.latitude) : null,
+          longitude: b.longitude != null ? Number(b.longitude) : null,
+          nomChauffeur: b.nomChauffeur ? String(b.nomChauffeur) : null,
+          signatureChauffeurPath: b.signatureChauffeurPath ? String(b.signatureChauffeurPath) : null,
+          nomAgentSecurite: b.nomAgentSecurite ? String(b.nomAgentSecurite) : null,
+          signatureAgentSecuritePath: b.signatureAgentSecuritePath ? String(b.signatureAgentSecuritePath) : null,
+          signatureTechnicienPath: b.signatureTechnicienPath ? String(b.signatureTechnicienPath) : null,
+          bonLivraisonPath: b.bonLivraisonPath ? String(b.bonLivraisonPath) : null,
+          stockApresLitres: stockApres,
+          volumeAnnonceLitres: recon.volumeAnnonceLitres,
+          gasoilAttenduLitres: recon.gasoilAttenduLitres,
+          ecartConsoLitres: recon.ecartConsoLitres,
+          ecartLivraisonLitres: recon.ecartLivraisonLitres,
+          analyseDepotage: recon.analyseDepotage,
+          heuresGE: { create: heuresGE.map((h) => ({ groupeId: h.groupeId, indexHeuresGE: h.indexHeuresGE })) },
+        },
+        include: { site: { select: { code: true, nom: true } } },
+      });
+
+      // Photos des travaux de dépotage (uploadées par la sync → clés MinIO).
+      const photosData = photosIn
+        .filter((p) => p && p.key)
+        .map((p) => ({ entityType: 'depotage', entityId: dep.id, url: p.url ?? '', minioKey: p.key! }));
+      if (photosData.length) await tx.photo.createMany({ data: photosData });
+
+      return dep;
+    });
 
     await syncLigneLivraison(depotage.ligneLivraisonId);
     clearMemo(); // nouvelles données → invalide manquants/forecast mémoïsés
