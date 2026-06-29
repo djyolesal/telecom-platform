@@ -5,10 +5,22 @@ import { useSession } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSocket } from '@/lib/socket';
 
+export interface StockUpdatedEvent {
+  depotageId: string;
+  siteId: string;
+  siteCode?: string;
+  siteNom?: string;
+  stockApresLitres?: number;
+  volumeLitres?: number;
+  ecartLivraisonLitres?: number | null;
+  photoUrl?: string | null;
+}
+
 export interface SupervisionEvents {
   onIncidentCreated?: (data: unknown) => void;
   onIncidentUpdated?: (data: unknown) => void;
   onStockAlert?: (data: unknown) => void;
+  onStockUpdated?: (data: StockUpdatedEvent) => void;
 }
 
 /**
@@ -31,7 +43,7 @@ export function useSupervisionSocket(handlers: SupervisionEvents = {}) {
     const onUpdated = (d: unknown) => { handlers.onIncidentUpdated?.(d); invalidate(['dashboard', 'incidents']); };
     const onResolved = () => invalidate(['dashboard', 'incidents']);
     const onStockAlert = (d: unknown) => { handlers.onStockAlert?.(d); invalidate(['dashboard', 'stock']); };
-    const onStockUpdated = () => invalidate(['dashboard', 'stock', 'sites-geojson']);
+    const onStockUpdated = (d: unknown) => { handlers.onStockUpdated?.(d as StockUpdatedEvent); invalidate(['dashboard', 'stock', 'sites-geojson', 'depotages']); };
 
     socket.on('incident:created', onCreated);
     socket.on('incident:updated', onUpdated);

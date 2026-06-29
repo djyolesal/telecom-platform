@@ -1,10 +1,38 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
-import { AlertTriangle, MapPin, Wrench, Fuel, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { AlertTriangle, MapPin, Wrench, Fuel, Zap, TrendingUp, TrendingDown, Minus, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useSupervisionSocket } from '@/lib/hooks/useSupervisionSocket';
+import { useSupervisionSocket, StockUpdatedEvent } from '@/lib/hooks/useSupervisionSocket';
+
+/** Vignette temps réel du dernier dépotage (photo + site + volume). */
+function LiveDepotageCard({ e, onClose }: { e: StockUpdatedEvent; onClose: () => void }) {
+  const router = useRouter();
+  return (
+    <div className="fixed bottom-4 right-4 z-50 w-72 rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-[#0E7C6B] text-white text-xs font-semibold">
+        <span className="inline-flex items-center gap-1"><Fuel size={13} /> Dépotage en direct</span>
+        <button onClick={onClose} className="hover:opacity-80"><X size={14} /></button>
+      </div>
+      <button onClick={() => router.push(`/carburant/${e.depotageId}`)} className="block w-full text-left hover:bg-gray-50">
+        {e.photoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={e.photoUrl} alt="Dépotage" className="h-32 w-full object-cover" />
+        )}
+        <div className="p-3">
+          <p className="text-sm font-semibold text-gray-800">{e.siteNom ?? e.siteCode ?? 'Site'}</p>
+          <p className="text-xs text-gray-500">
+            {Math.round(Number(e.volumeLitres ?? 0)).toLocaleString('fr-FR')} L livrés
+            {e.stockApresLitres != null ? ` · stock ${Math.round(Number(e.stockApresLitres)).toLocaleString('fr-FR')} L` : ''}
+          </p>
+        </div>
+      </button>
+    </div>
+  );
+}
 
 const COLORS = ['#1B3F6B', '#0E7C6B', '#2471A3', '#F39C12', '#C0392B'];
 
@@ -42,8 +70,14 @@ export default function DashboardPage() {
     refetchInterval: 60_000, // Refresh toutes les minutes
   });
 
-  // Écoute WebSocket pour mises à jour en temps réel
-  useSupervisionSocket();
+  // Écoute WebSocket pour mises à jour en temps réel + vignette dépotage.
+  const [live, setLive] = useState<StockUpdatedEvent | null>(null);
+  useSupervisionSocket({ onStockUpdated: (e) => setLive(e) });
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => setLive(null), 12_000);
+    return () => clearTimeout(t);
+  }, [live]);
 
   if (isLoading) return (
     <div className="space-y-6 animate-pulse">
@@ -71,6 +105,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {live && <LiveDepotageCard e={live} onClose={() => setLive(null)} />}
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         <KPICard title="Sites actifs" value={d.sitesActifs || '—'} icon={MapPin} color="bg-[#1B3F6B]" />

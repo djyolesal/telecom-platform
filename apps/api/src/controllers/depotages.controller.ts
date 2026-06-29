@@ -279,11 +279,16 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     await syncLigneLivraison(depotage.ligneLivraisonId);
     clearMemo(); // nouvelles données → invalide manquants/forecast mémoïsés
     await auditLog(req.user!.id, 'CREATE', 'depotages', depotage.id, req.body, req);
+    const firstPhotoKey = photosIn.find((p) => p && p.key)?.key;
     io.of('/supervision').emit('stock:updated', {
+      depotageId: depotage.id,
       siteId: depotage.siteId,
       siteCode: depotage.site?.code,
+      siteNom: depotage.site?.nom,
       stockApresLitres: stockApres,
       volumeLitres: Number(depotage.volumeLitres),
+      ecartLivraisonLitres: recon.ecartLivraisonLitres,
+      photoUrl: firstPhotoKey ? publicFileUrl(firstPhotoKey) : null,
     });
 
     res.status(201).json({ success: true, data: depotage });
