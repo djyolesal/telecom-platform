@@ -220,6 +220,17 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
 
     const photosIn = (b.photos as { url?: string; key?: string }[] | undefined) ?? [];
 
+    // Preuve obligatoire : un écart de livraison anormal (jauge vs annoncé)
+    // exige au moins une photo. Vérifié AVANT toute écriture → rien n'est créé
+    // si la preuve manque (le formulaire mobile bloque déjà en amont).
+    if (volumeAnnonce != null && volumeAnnonce > 0) {
+      const ecartPct = (Math.abs(volume - volumeAnnonce) / volumeAnnonce) * 100;
+      const seuilLiv = getNum('carburant.seuilEcartLivraisonPct', 5);
+      if (ecartPct > seuilLiv && photosIn.length === 0) {
+        throw new AppError(`Écart de livraison de ${Math.round(ecartPct)}% (seuil ${seuilLiv}%) : au moins une photo de preuve est requise.`, 422);
+      }
+    }
+
     // Dépotage + photos écrits de façon ATOMIQUE : si l'insertion des photos
     // échoue, le dépotage est annulé (plus de « sauvé mais erreur 400 » →
     // plus de doublons au réessai de la sync).

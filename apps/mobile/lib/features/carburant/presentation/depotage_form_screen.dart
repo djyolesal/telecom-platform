@@ -11,6 +11,10 @@ import '../../../core/widgets/site_picker.dart';
 import '../data/depotage_model.dart';
 import '../data/depotage_repository.dart';
 
+/// Seuil d'écart de livraison (%) au-delà duquel une photo de preuve est exigée.
+/// Aligné sur le réglage serveur `carburant.seuilEcartLivraisonPct` (défaut 5).
+const double _seuilEcartLivraisonPct = 5;
+
 class DepotageFormScreen extends StatefulWidget {
   final String? initialSiteId;
   final String? initialLigneId;
@@ -191,6 +195,19 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     if (_sigTechnicien == null) {
       messenger.showSnackBar(const SnackBar(content: Text('Votre signature (technicien) est requise'), backgroundColor: Colors.red));
       return;
+    }
+    // Preuve obligatoire : écart de livraison anormal (jauge vs annoncé) → ≥ 1 photo.
+    final annonce = _num(_volumeAnnonce);
+    final vol = _derivedVolume;
+    if (annonce != null && annonce > 0 && vol != null && _photos.isEmpty) {
+      final ecartPct = ((vol - annonce).abs() / annonce) * 100;
+      if (ecartPct > _seuilEcartLivraisonPct) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Écart de livraison ${ecartPct.round()}% : ajoutez au moins une photo de preuve.'),
+          backgroundColor: Colors.red,
+        ));
+        return;
+      }
     }
     final repo = context.read<DepotageRepository>();
     final router = GoRouter.of(context);

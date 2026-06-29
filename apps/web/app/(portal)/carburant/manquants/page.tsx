@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Download, AlertTriangle, MapPin, Truck, Calendar, X } from 'lucide-react';
+import { Download, AlertTriangle, MapPin, Truck, Calendar, Camera, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -56,7 +56,12 @@ function SiteDrillModal({ site, bcId, mois, onClose }: { site: ParSite; bcId: st
           <h2 className="text-lg font-bold text-gray-800">{site.siteCode} — {site.siteNom}</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
         </div>
-        <p className="text-xs text-gray-500 mb-4">{site.region} · livraisons planifiées pour ce site</p>
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-xs text-gray-500">{site.region} · livraisons planifiées pour ce site</p>
+          <button onClick={() => router.push(`/carburant/depotages?site_id=${site.siteId}`)} className="inline-flex items-center gap-1 text-xs text-blue-600 underline hover:no-underline">
+            <Camera size={13} /> Dépotages & photos
+          </button>
+        </div>
         {isLoading ? (
           <p className="text-sm text-gray-400 py-6">Chargement…</p>
         ) : lignes.length === 0 ? (

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Camera } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -25,15 +25,17 @@ interface Depotage {
   site?: { code: string; nom: string; region: string };
 }
 
-export default function DepotagesPage() {
+function DepotagesPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const siteId = searchParams.get('site_id') || undefined;
   const [page, setPage] = useState(1);
   const [fournisseur, setFournisseur] = useState('');
   const debounced = useDebounce(fournisseur);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['depotages', { page, debounced }],
-    queryFn: () => api.get('/depotages', { params: { page, limit: 20, fournisseur: debounced || undefined } }).then((r) => r.data),
+    queryKey: ['depotages', { page, debounced, siteId }],
+    queryFn: () => api.get('/depotages', { params: { page, limit: 20, fournisseur: debounced || undefined, site_id: siteId } }).then((r) => r.data),
   });
 
   const rows: Depotage[] = data?.data ?? [];
@@ -84,6 +86,13 @@ export default function DepotagesPage() {
 
       <FilterBar search={fournisseur} onSearch={(v) => { setFournisseur(v); setPage(1); }} searchPlaceholder="Rechercher un fournisseur…" />
 
+      {siteId && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-blue-700">
+          <span>Filtré sur le site sélectionné{rows[0]?.site ? ` (${rows[0].site.code})` : ''}.</span>
+          <button onClick={() => router.push('/carburant/depotages')} className="underline hover:no-underline">Voir tous les dépotages</button>
+        </div>
+      )}
+
       {isLoading ? (
         <TableSkeleton cols={7} />
       ) : isError ? (
@@ -97,5 +106,13 @@ export default function DepotagesPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function DepotagesPage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={7} />}>
+      <DepotagesPageInner />
+    </Suspense>
   );
 }
