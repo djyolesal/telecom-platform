@@ -174,7 +174,18 @@ class _DepotageViewState extends State<_DepotageView> {
                   leading: const CircleAvatar(child: Icon(Icons.local_gas_station, size: 20)),
                   title: Text('${d.siteNom ?? d.siteCode ?? '—'} · ${fmtLitres(d.volumeLitres)}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text('${fmtDate(d.dateDepotage)}${d.fournisseur != null ? ' · ${d.fournisseur}' : ''}'),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (d.photoCount > 0) ...[
+                        const Icon(Icons.photo_camera_outlined, size: 15, color: Colors.grey),
+                        const SizedBox(width: 2),
+                        Text('${d.photoCount}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        const SizedBox(width: 6),
+                      ],
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
                   onTap: () => context.push('/carburant/detail/${d.id}'),
                 );
               },

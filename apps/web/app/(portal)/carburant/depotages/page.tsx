@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { Download, Camera } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -21,6 +21,7 @@ interface Depotage {
   stockApresLitres?: number;
   ecartLivraisonLitres?: number | null;
   fournisseur?: string;
+  photoCount?: number;
   site?: { code: string; nom: string; region: string };
 }
 
@@ -55,6 +56,17 @@ export default function DepotagesPage() {
       },
     },
     { key: 'fournisseur', header: 'Fournisseur', render: (d) => d.fournisseur || '—' },
+    {
+      key: 'photoCount',
+      header: 'Photos',
+      align: 'center',
+      render: (d) =>
+        d.photoCount && d.photoCount > 0 ? (
+          <span className="inline-flex items-center gap-1 text-gray-600"><Camera size={14} /> {d.photoCount}</span>
+        ) : (
+          <span className="text-gray-300">—</span>
+        ),
+    },
   ];
 
   return (
@@ -73,7 +85,7 @@ export default function DepotagesPage() {
       <FilterBar search={fournisseur} onSearch={(v) => { setFournisseur(v); setPage(1); }} searchPlaceholder="Rechercher un fournisseur…" />
 
       {isLoading ? (
-        <TableSkeleton cols={6} />
+        <TableSkeleton cols={7} />
       ) : isError ? (
         <ErrorState />
       ) : rows.length === 0 ? (

@@ -148,7 +148,15 @@ export async function getDepotages(req: Request, res: Response, next: NextFuncti
       { page: parseInt(page), limit: parseInt(limit) }
     );
 
-    res.json({ success: true, data, meta });
+    // Nombre de photos par dépotage (table polymorphe → groupBy, pas de N+1).
+    const ids = (data as { id: string }[]).map((d) => d.id);
+    const counts = ids.length
+      ? await prisma.photo.groupBy({ by: ['entityId'], where: { entityType: 'depotage', entityId: { in: ids } }, _count: { _all: true } })
+      : [];
+    const countMap = new Map(counts.map((c) => [c.entityId, c._count._all]));
+    const enriched = (data as { id: string }[]).map((d) => ({ ...d, photoCount: countMap.get(d.id) ?? 0 }));
+
+    res.json({ success: true, data: enriched, meta });
   } catch (err) { next(err); }
 }
 

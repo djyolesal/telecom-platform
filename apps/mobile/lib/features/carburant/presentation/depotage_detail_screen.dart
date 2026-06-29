@@ -27,6 +27,13 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
     _future = repo.getById(widget.id);
   }
 
+  void _openViewer(List<String> urls, int index) {
+    Navigator.of(context).push(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _PhotoViewer(urls: urls, initial: index),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -86,13 +93,16 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: d.photoUrls
-                        .map((u) => ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(u, width: 96, height: 96, fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(width: 96, height: 96, color: Colors.grey.shade200, child: const Icon(Icons.broken_image, color: Colors.grey))),
-                            ))
-                        .toList(),
+                    children: d.photoUrls.asMap().entries.map((e) {
+                      return GestureDetector(
+                        onTap: () => _openViewer(d.photoUrls, e.key),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(e.value, width: 96, height: 96, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(width: 96, height: 96, color: Colors.grey.shade200, child: const Icon(Icons.broken_image, color: Colors.grey))),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ]),
             ],
@@ -140,6 +150,52 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
           Expanded(flex: 5, child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
           Expanded(flex: 4, child: Text('$signe${value.toStringAsFixed(0)} L', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: color))),
         ],
+      ),
+    );
+  }
+}
+
+/// Visionneuse plein écran : zoom (InteractiveViewer) + balayage (PageView).
+class _PhotoViewer extends StatefulWidget {
+  final List<String> urls;
+  final int initial;
+  const _PhotoViewer({required this.urls, required this.initial});
+
+  @override
+  State<_PhotoViewer> createState() => _PhotoViewerState();
+}
+
+class _PhotoViewerState extends State<_PhotoViewer> {
+  late final PageController _controller = PageController(initialPage: widget.initial);
+  late int _current = widget.initial;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text('${_current + 1} / ${widget.urls.length}'),
+      ),
+      body: PageView.builder(
+        controller: _controller,
+        itemCount: widget.urls.length,
+        onPageChanged: (i) => setState(() => _current = i),
+        itemBuilder: (_, i) => InteractiveViewer(
+          minScale: 1,
+          maxScale: 4,
+          child: Center(
+            child: Image.network(widget.urls[i], fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white54, size: 64)),
+          ),
+        ),
       ),
     );
   }

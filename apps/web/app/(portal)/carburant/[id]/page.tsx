@@ -1,9 +1,10 @@
 'use client';
 
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
+import { Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/shared/Button';
@@ -35,12 +36,43 @@ interface HeureGE {
 }
 interface Photo { id: string; url: string }
 
+/** Visionneuse plein écran avec navigation précédent/suivant + clavier. */
+function Lightbox({ photos, index, onClose, onNav }: { photos: Photo[]; index: number; onClose: () => void; onNav: (i: number) => void }) {
+  const prev = useCallback(() => onNav((index - 1 + photos.length) % photos.length), [index, photos.length, onNav]);
+  const next = useCallback(() => onNav((index + 1) % photos.length), [index, photos.length, onNav]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') prev();
+      if (e.key === 'ArrowRight') next();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, prev, next]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/80 hover:text-white"><X size={28} /></button>
+      {photos.length > 1 && (
+        <button onClick={(e) => { e.stopPropagation(); prev(); }} className="absolute left-4 p-2 text-white/80 hover:text-white"><ChevronLeft size={36} /></button>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={photos[index].url} alt="Travaux de dépotage" className="max-h-[90vh] max-w-[90vw] object-contain rounded" onClick={(e) => e.stopPropagation()} />
+      {photos.length > 1 && (
+        <button onClick={(e) => { e.stopPropagation(); next(); }} className="absolute right-4 p-2 text-white/80 hover:text-white"><ChevronRight size={36} /></button>
+      )}
+      <div className="absolute bottom-4 text-sm text-white/70">{index + 1} / {photos.length}</div>
+    </div>
+  );
+}
+
 export default function DepotageDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
+  const [lightbox, setLightbox] = useState<number | null>(null);
 
   const { data: d, isLoading, isError } = useQuery({
     queryKey: ['depotage', id],
@@ -122,14 +154,18 @@ export default function DepotageDetailPage() {
         <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Photos du dépotage ({photos.length})</h3>
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {photos.map((p) => (
-              <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-gray-100">
+            {photos.map((p, i) => (
+              <button key={p.id} type="button" onClick={() => setLightbox(i)} className="block aspect-square overflow-hidden rounded-lg border border-gray-100">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.url} alt="Travaux de dépotage" className="h-full w-full object-cover hover:opacity-90" />
-              </a>
+              </button>
             ))}
           </div>
         </div>
+      )}
+
+      {lightbox !== null && photos[lightbox] && (
+        <Lightbox photos={photos} index={lightbox} onClose={() => setLightbox(null)} onNav={setLightbox} />
       )}
     </div>
   );
