@@ -240,4 +240,119 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
   });
 }
 
-export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf };
+export interface DepotagePdfData {
+  id: string;
+  dateDepotage: Date;
+  site?: { code: string; nom: string; region: string } | null;
+  technicien?: { nom: string; prenom: string } | null;
+  volumeLitres: number;
+  stockAvantLitres?: number | null;
+  stockApresLitres?: number | null;
+  volumeAnnonceLitres?: number | null;
+  ecartLivraisonLitres?: number | null;
+  gasoilAttenduLitres?: number | null;
+  ecartConsoLitres?: number | null;
+  analyseDepotage?: string | null;
+  fournisseur?: string | null;
+  numeroBonLivraison?: string | null;
+  observations?: string | null;
+  heuresGE?: Array<{ numero?: number | null; puissanceKva?: number | null; statut?: string | null; indexHeuresGE: number }>;
+  signatures?: Array<{ label: string; nom?: string | null; image: Buffer | null }>;
+  photos?: Buffer[];
+}
+
+const L = (n?: number | null) => (n == null ? '—' : `${Math.round(Number(n)).toLocaleString('fr-FR')} L`);
+const SIGNED = (n?: number | null) => (n == null ? '—' : `${Number(n) > 0 ? '+' : ''}${Math.round(Number(n)).toLocaleString('fr-FR')} L`);
+
+export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
+  return render((doc) => {
+    header(doc, 'Bordereau de dépotage', `Réf. ${d.id.slice(0, 8).toUpperCase()} — ${fmtDate(d.dateDepotage)}`);
+
+    sectionTitle(doc, 'Site');
+    row(doc, 'Nom', d.site?.nom ?? '—');
+    row(doc, 'Code', d.site?.code ?? '—');
+    row(doc, 'Région', d.site?.region ?? '—');
+
+    sectionTitle(doc, 'Livraison');
+    row(doc, 'Volume livré (jauge)', L(d.volumeLitres));
+    row(doc, 'Stock avant', L(d.stockAvantLitres));
+    row(doc, 'Stock après', L(d.stockApresLitres));
+    row(doc, 'Volume annoncé (BL)', L(d.volumeAnnonceLitres));
+    row(doc, 'Fournisseur', d.fournisseur ?? '—');
+    row(doc, 'Bon de livraison', d.numeroBonLivraison ?? '—');
+    row(doc, 'Technicien', d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—');
+
+    if (d.volumeAnnonceLitres != null || d.ecartLivraisonLitres != null || d.ecartConsoLitres != null || d.analyseDepotage) {
+      sectionTitle(doc, 'Réconciliation');
+      row(doc, 'Écart livraison', SIGNED(d.ecartLivraisonLitres));
+      row(doc, 'Gasoil attendu', L(d.gasoilAttenduLitres));
+      row(doc, 'Écart conso', SIGNED(d.ecartConsoLitres));
+      if (d.analyseDepotage) {
+        doc.moveDown(0.3).fontSize(9).fillColor('#444').text(d.analyseDepotage, 50, doc.y, { width: doc.page.width - 100, align: 'justify' });
+        doc.moveDown(0.4).fillColor('black');
+      }
+    }
+
+    if (d.heuresGE?.length) {
+      sectionTitle(doc, 'Heures groupes électrogènes');
+      d.heuresGE.forEach((h) =>
+        row(
+          doc,
+          h.numero != null ? `GE n°${h.numero} · ${Math.round(Number(h.puissanceKva ?? 0))} kVA · ${h.statut === 'GE_PERMANENT' ? 'permanent' : 'secours'}` : 'GE',
+          `${Math.round(h.indexHeuresGE)} h`
+        )
+      );
+    }
+
+    if (d.observations) {
+      sectionTitle(doc, 'Observations');
+      doc.fontSize(10).fillColor('#111').text(d.observations, { align: 'justify' });
+    }
+
+    const sigs = (d.signatures ?? []).filter((s) => s.image);
+    if (sigs.length) {
+      sectionTitle(doc, 'Signatures');
+      if (doc.y > doc.page.height - 160) doc.addPage();
+      const startY = doc.y;
+      const colW = (doc.page.width - 100) / 3;
+      sigs.slice(0, 3).forEach((s, i) => {
+        const x = 50 + i * colW;
+        try {
+          doc.image(s.image as Buffer, x, startY, { fit: [colW - 10, 60], align: 'center' });
+        } catch {
+          /* signature illisible → on saute l'image */
+        }
+        doc.fontSize(8).fillColor('#666').text(`${s.label}${s.nom ? ` — ${s.nom}` : ''}`, x, startY + 64, { width: colW - 10 });
+      });
+      doc.y = startY + 90;
+    }
+
+    const photos = d.photos ?? [];
+    if (photos.length) {
+      sectionTitle(doc, `Photos du dépotage (${photos.length})`);
+      const colW = (doc.page.width - 100 - 20) / 3; // 3 colonnes, 10px de gouttière
+      let i = 0;
+      for (const buf of photos) {
+        const col = i % 3;
+        if (col === 0 && doc.y > doc.page.height - (colW + 40)) doc.addPage();
+        const x = 50 + col * (colW + 10);
+        const y = doc.y;
+        try {
+          doc.image(buf, x, y, { fit: [colW, colW], align: 'center' });
+        } catch {
+          /* photo illisible → on saute */
+        }
+        if (col === 2) doc.y = y + colW + 10;
+        i++;
+      }
+      if (photos.length % 3 !== 0) doc.moveDown(colW / 12);
+    }
+
+    doc.fontSize(8).fillColor('#999').text(
+      `Généré le ${fmtDate(new Date())} — TélécomOps`,
+      50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 }
+    );
+  });
+}
+
+export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf, generateDepotagePdf };

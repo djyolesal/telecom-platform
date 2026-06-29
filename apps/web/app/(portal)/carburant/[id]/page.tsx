@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, FileText, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
@@ -107,9 +108,12 @@ export default function DepotageDetailPage() {
         title={`Dépotage — ${d.site?.nom ?? d.site?.code ?? ''}`}
         subtitle={fmtDateTime(d.dateDepotage)}
         backHref="/carburant/depotages"
-        actions={isAdmin ? (
-          <Button variant="secondary" icon={Trash2} onClick={onDelete} loading={remove.isPending}>Supprimer</Button>
-        ) : undefined}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="secondary" icon={FileText} onClick={() => downloadFile(`/depotages/${id}/bordereau.pdf`, `bordereau-depotage-${id.slice(0, 8)}.pdf`)}>Bordereau PDF</Button>
+            {isAdmin && <Button variant="secondary" icon={Trash2} onClick={onDelete} loading={remove.isPending}>Supprimer</Button>}
+          </div>
+        }
       />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">

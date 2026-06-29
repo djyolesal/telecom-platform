@@ -8,7 +8,8 @@ import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { clearMemo } from '../utils/memo';
 import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../utils/energy';
 import { getNum } from '../services/settings.service';
-import { publicFileUrl } from '../services/storage.service';
+import { publicFileUrl, getObjectBuffer } from '../services/storage.service';
+import { generateDepotagePdf } from '../services/pdf.service';
 import { io } from '../server';
 
 /**
@@ -320,6 +321,65 @@ export async function deleteDepotage(req: Request, res: Response, next: NextFunc
     clearMemo();
     await auditLog(req.user!.id, 'DELETE', 'depotages', existing.id, {}, req);
     res.json({ success: true, message: 'Dépotage supprimé' });
+  } catch (err) { next(err); }
+}
+
+/** Bordereau PDF d'un dépotage : infos, écarts, heures GE, signatures et photos. */
+export async function exportDepotagePdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    const d = await prisma.depotage.findUnique({
+      where: { id: req.params.id },
+      include: {
+        site: { select: { code: true, nom: true, region: true } },
+        technicien: { select: { nom: true, prenom: true } },
+        heuresGE: { include: { groupe: { select: { numero: true, puissanceKva: true, statut: true } } } },
+      },
+    });
+    if (!d) throw new AppError('Dépotage introuvable', 404);
+
+    const photoRows = await prisma.photo.findMany({ where: { entityType: 'depotage', entityId: d.id }, orderBy: { createdAt: 'asc' } });
+
+    // Images depuis MinIO, tolérant aux échecs (clé manquante → on saute).
+    const fetchBuf = async (key?: string | null) => {
+      if (!key) return null;
+      try { return await getObjectBuffer(key); } catch { return null; }
+    };
+    const photos = (await Promise.all(photoRows.map((p) => fetchBuf(p.minioKey)))).filter((b): b is Buffer => b != null);
+    const signatures = [
+      { label: 'Chauffeur', nom: d.nomChauffeur, image: await fetchBuf(d.signatureChauffeurPath) },
+      { label: 'Agent sécurité', nom: d.nomAgentSecurite, image: await fetchBuf(d.signatureAgentSecuritePath) },
+      { label: 'Technicien', nom: d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : null, image: await fetchBuf(d.signatureTechnicienPath) },
+    ];
+
+    const buffer = await generateDepotagePdf({
+      id: d.id,
+      dateDepotage: d.dateDepotage,
+      site: d.site,
+      technicien: d.technicien,
+      volumeLitres: Number(d.volumeLitres),
+      stockAvantLitres: d.stockAvantLitres != null ? Number(d.stockAvantLitres) : null,
+      stockApresLitres: d.stockApresLitres != null ? Number(d.stockApresLitres) : null,
+      volumeAnnonceLitres: d.volumeAnnonceLitres != null ? Number(d.volumeAnnonceLitres) : null,
+      ecartLivraisonLitres: d.ecartLivraisonLitres != null ? Number(d.ecartLivraisonLitres) : null,
+      gasoilAttenduLitres: d.gasoilAttenduLitres != null ? Number(d.gasoilAttenduLitres) : null,
+      ecartConsoLitres: d.ecartConsoLitres != null ? Number(d.ecartConsoLitres) : null,
+      analyseDepotage: d.analyseDepotage,
+      fournisseur: d.fournisseur,
+      numeroBonLivraison: d.numeroBonLivraison,
+      observations: d.observations,
+      heuresGE: d.heuresGE.map((h) => ({
+        numero: h.groupe?.numero,
+        puissanceKva: h.groupe ? Number(h.groupe.puissanceKva) : null,
+        statut: h.groupe?.statut,
+        indexHeuresGE: Number(h.indexHeuresGE),
+      })),
+      signatures,
+      photos,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="bordereau-depotage-${d.id.slice(0, 8)}.pdf"`);
+    res.send(buffer);
   } catch (err) { next(err); }
 }
 

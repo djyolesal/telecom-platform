@@ -101,6 +101,7 @@ router.get('/maintenances/:id/pdf', maintenanceCtrl.getMaintenancePdf);
 router.get('/depotages', depotagesCtrl.getDepotages);
 router.get('/depotages/export/xlsx', rbac(['MANAGER','ADMIN']), depotagesCtrl.exportDepotages);
 router.post('/depotages', depotagesCtrl.createDepotage);
+router.get('/depotages/:id/bordereau.pdf', depotagesCtrl.exportDepotagePdf);
 router.get('/depotages/:id', depotagesCtrl.getDepotageById);
 router.put('/depotages/:id', depotagesCtrl.updateDepotage);
 router.delete('/depotages/:id', rbac(['ADMIN']), depotagesCtrl.deleteDepotage);
