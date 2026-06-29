@@ -35,6 +35,102 @@ class Depotage {
   }
 }
 
+/// Détail complet d'un dépotage (réconciliation, heures GE, photos).
+class DepotageDetail {
+  final String id;
+  final String? siteCode;
+  final String? siteNom;
+  final DateTime? dateDepotage;
+  final double volumeLitres;
+  final double? stockAvantLitres;
+  final double? stockApresLitres;
+  final double? volumeAnnonceLitres;
+  final double? ecartLivraisonLitres;
+  final double? gasoilAttenduLitres;
+  final double? ecartConsoLitres;
+  final String? analyseDepotage;
+  final String? fournisseur;
+  final String? numeroBonLivraison;
+  final String? observations;
+  final String? nomChauffeur;
+  final String? nomAgentSecurite;
+  final String? technicienNom;
+  final List<DepotageHeureGE> heuresGE;
+  final List<String> photoUrls;
+
+  const DepotageDetail({
+    required this.id,
+    this.siteCode,
+    this.siteNom,
+    this.dateDepotage,
+    required this.volumeLitres,
+    this.stockAvantLitres,
+    this.stockApresLitres,
+    this.volumeAnnonceLitres,
+    this.ecartLivraisonLitres,
+    this.gasoilAttenduLitres,
+    this.ecartConsoLitres,
+    this.analyseDepotage,
+    this.fournisseur,
+    this.numeroBonLivraison,
+    this.observations,
+    this.nomChauffeur,
+    this.nomAgentSecurite,
+    this.technicienNom,
+    this.heuresGE = const [],
+    this.photoUrls = const [],
+  });
+
+  factory DepotageDetail.fromJson(Map<String, dynamic> j) {
+    final site = j['site'] as Map<String, dynamic>?;
+    final tech = j['technicien'] as Map<String, dynamic>?;
+    final heures = (j['heuresGE'] as List?) ?? const [];
+    final photos = (j['photos'] as List?) ?? const [];
+    return DepotageDetail(
+      id: j['id'] as String,
+      siteCode: site?['code'] as String?,
+      siteNom: site?['nom'] as String?,
+      dateDepotage: DateTime.tryParse(j['dateDepotage']?.toString() ?? ''),
+      volumeLitres: Depotage._d(j['volumeLitres']),
+      stockAvantLitres: Depotage._dn(j['stockAvantLitres']),
+      stockApresLitres: Depotage._dn(j['stockApresLitres']),
+      volumeAnnonceLitres: Depotage._dn(j['volumeAnnonceLitres']),
+      ecartLivraisonLitres: Depotage._dn(j['ecartLivraisonLitres']),
+      gasoilAttenduLitres: Depotage._dn(j['gasoilAttenduLitres']),
+      ecartConsoLitres: Depotage._dn(j['ecartConsoLitres']),
+      analyseDepotage: j['analyseDepotage'] as String?,
+      fournisseur: j['fournisseur'] as String?,
+      numeroBonLivraison: j['numeroBonLivraison'] as String?,
+      observations: j['observations'] as String?,
+      nomChauffeur: j['nomChauffeur'] as String?,
+      nomAgentSecurite: j['nomAgentSecurite'] as String?,
+      technicienNom: tech == null ? null : '${tech['prenom'] ?? ''} ${tech['nom'] ?? ''}'.trim(),
+      heuresGE: heures.map((e) => DepotageHeureGE.fromJson(e as Map<String, dynamic>)).toList(),
+      photoUrls: photos.map((e) => (e as Map<String, dynamic>)['url'] as String?).whereType<String>().toList(),
+    );
+  }
+}
+
+/// Relevé d'index d'heures d'un GE rattaché à un dépotage.
+class DepotageHeureGE {
+  final double indexHeuresGE;
+  final int? numero;
+  final double? puissanceKva;
+  final String? statut;
+
+  const DepotageHeureGE({required this.indexHeuresGE, this.numero, this.puissanceKva, this.statut});
+
+  factory DepotageHeureGE.fromJson(Map<String, dynamic> j) {
+    final g = j['groupe'] as Map<String, dynamic>?;
+    return DepotageHeureGE(
+      indexHeuresGE: Depotage._d(j['indexHeuresGE']),
+      numero: (g?['numero'] as num?)?.toInt(),
+      puissanceKva: Depotage._dn(g?['puissanceKva']),
+      statut: g?['statut'] as String?,
+    );
+  }
+}
+
 /// Groupe électrogène actif d'un site (pour le relevé d'heures au dépotage).
 class GroupeGE {
   final String id;

@@ -27,6 +27,14 @@ class DepotageRepository {
     );
   }
 
+  /// Détail complet d'un dépotage (réconciliation, heures GE, photos).
+  Future<DepotageDetail> getById(String id) async {
+    return _client.request(
+      (dio) => dio.get('/depotages/$id'),
+      (data) => DepotageDetail.fromJson(data['data'] as Map<String, dynamic>),
+    );
+  }
+
   /// Groupes électrogènes actifs d'un site (via le détail site), pour relever
   /// l'index d'heures de chaque GE au dépotage (réconciliation conso).
   Future<List<GroupeGE>> getGroupes(String siteId) async {
