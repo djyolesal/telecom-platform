@@ -31,6 +31,8 @@ class Maintenance {
   final List<GroupeGE> siteGroupes;
   final List<String> photoUrls;
   final int photoCount;
+  /// Vrai si la clôture exige les relevés énergie (calculé par l'API selon la tâche).
+  final bool requiresEnergie;
 
   const Maintenance({
     required this.id,
@@ -55,6 +57,7 @@ class Maintenance {
     this.siteGroupes = const [],
     this.photoUrls = const [],
     this.photoCount = 0,
+    this.requiresEnergie = false,
   });
 
   /// Catégories considérées « passives » (relevés énergie requis à la clôture).
@@ -99,6 +102,8 @@ class Maintenance {
       photoUrls: photos,
       // Liste : compteur via _count.photos ; détail : longueur du tableau photos.
       photoCount: (j['_count'] as Map?)?['photos'] as int? ?? photos.length,
+      // Détail : fourni par l'API ; repli par catégorie si absent (liste).
+      requiresEnergie: (j['requiresEnergieReleve'] as bool?) ?? passiveCategories.contains(j['categorie'] as String),
     );
   }
 }

@@ -369,7 +369,7 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   void _submit() {
     final m = widget.maintenance;
-    final sources = m.isPassive ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+    final sources = m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
     final energie = <String, dynamic>{};
 
     // Photos obligatoires pour une maintenance préventive
@@ -425,7 +425,7 @@ class _CloseSheetState extends State<_CloseSheet> {
   @override
   Widget build(BuildContext context) {
     final m = widget.maintenance;
-    final sources = m.isPassive ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+    final sources = m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
     const numKb = TextInputType.numberWithOptions(decimal: true);
 
     return Padding(

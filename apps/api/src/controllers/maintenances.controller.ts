@@ -28,6 +28,20 @@ const seuilEcartGasoilPct = () => getNum('maintenance.seuilEcartGasoilPct', env.
 
 const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
 
+// Tâches contractuelles où la clôture exige UNIQUEMENT les photos (≥6) — pas de
+// relevé énergie : entretien pylône, contrôle de terre, désherbage, serrures,
+// entretien climatiseur, extincteurs.
+const TACHES_SANS_RELEVE = new Set(['entretien_pylone', 'controle_terre', 'desherbage', 'serrures', 'clim', 'extincteurs']);
+
+/**
+ * La clôture exige-t-elle les relevés énergie (selon la config du site) ?
+ * Oui pour toute maintenance passive, SAUF les tâches d'exclusion ci-dessus
+ * (où seules les photos comptent). Repli par catégorie pour les maintenances
+ * sans clé contractuelle (curatif / saisie manuelle) → comportement historique.
+ */
+const requiresEnergieReleve = (m: { categorie: string; tachePreventiveKey: string | null }): boolean =>
+  m.tachePreventiveKey ? !TACHES_SANS_RELEVE.has(m.tachePreventiveKey) : isPassiveCategorie(m.categorie);
+
 /** Distance en mètres entre deux points GPS (formule de haversine). */
 function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000; // rayon terrestre (m)
@@ -197,6 +211,8 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
     // robuste si l'IP/domaine (APP_URL) change après l'upload.
     const data = {
       ...maintenance,
+      // Indique au client si la clôture exige les relevés énergie (selon la tâche).
+      requiresEnergieReleve: requiresEnergieReleve(maintenance),
       photos: maintenance.photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
     };
     res.json({ success: true, data });
@@ -348,8 +364,9 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       }
     }
 
-    // Maintenance passive → relevés énergie obligatoires selon la config du site.
-    const passive = isPassiveCategorie(existing.categorie);
+    // Relevés énergie obligatoires selon la config du site, sauf tâches d'exclusion
+    // (pylône, terre, désherbage, serrures, climatiseur, extincteurs → photos seules).
+    const passive = requiresEnergieReleve(existing);
     const sources = passive ? sourcesForConfig(existing.site.powerConfig) : [];
     const e = energie ?? {};
     const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
