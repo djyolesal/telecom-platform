@@ -14,7 +14,6 @@ import '../../features/carburant/presentation/depotage_form_screen.dart';
 import '../../features/carburant/presentation/depotage_detail_screen.dart';
 import '../../features/carburant/presentation/bl_form_screen.dart';
 import '../../features/energie/presentation/releve_list_screen.dart';
-import '../../features/energie/presentation/releve_form_screen.dart';
 import '../../features/incidents/presentation/incidents_list_screen.dart';
 import '../../features/incidents/presentation/incident_form_screen.dart';
 import '../../features/incidents/presentation/incident_detail_screen.dart';
@@ -51,7 +50,6 @@ GoRouter createRouter(AuthCubit authCubit) {
 
       // Énergie
       GoRoute(path: '/energie', builder: (_, __) => const ReleveListScreen()),
-      GoRoute(path: '/energie/nouveau', builder: (_, s) => ReleveFormScreen(initialSiteId: s.uri.queryParameters['siteId'])),
 
       // Incidents (nouveau avant :id)
       GoRoute(path: '/incidents', builder: (_, __) => const IncidentsListScreen()),

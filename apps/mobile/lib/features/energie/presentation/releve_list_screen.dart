@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/bloc/list_cubit.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/constants/enums.dart';
@@ -33,21 +32,15 @@ class _ReleveView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Relevés énergie')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await context.push('/energie/nouveau');
-          if (context.mounted) _reload(context);
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Relevé'),
-      ),
       body: BlocBuilder<ListCubit<Releve>, ListState<Releve>>(
         builder: (context, state) {
           if (state.status == ResourceStatus.loading) return const LoadingView();
           if (state.status == ResourceStatus.failure) {
             return ErrorView(message: state.error ?? 'Erreur', onRetry: () => _reload(context));
           }
-          if (state.items.isEmpty) return const EmptyView(title: 'Aucun relevé');
+          if (state.items.isEmpty) {
+            return const EmptyView(title: 'Aucun relevé', hint: 'Les relevés sont enregistrés à la clôture des maintenances.');
+          }
           return RefreshIndicator(
             onRefresh: () async => _reload(context),
             child: ListView.separated(
