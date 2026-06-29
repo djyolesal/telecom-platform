@@ -26,21 +26,20 @@ const minDureeClotureMin = () => getNum('maintenance.minDureeClotureMin', env.MI
 const geofenceRadiusM = () => getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M);
 const seuilEcartGasoilPct = () => getNum('maintenance.seuilEcartGasoilPct', env.SEUIL_ECART_GASOIL_PCT);
 
-const isPassiveCategorie = (cat: string) => PASSIVE_CATS.includes(cat);
-
 // Tâches contractuelles où la clôture exige UNIQUEMENT les photos (≥6) — pas de
 // relevé énergie : entretien pylône, contrôle de terre, désherbage, serrures,
-// entretien climatiseur, extincteurs.
-const TACHES_SANS_RELEVE = new Set(['entretien_pylone', 'controle_terre', 'desherbage', 'serrures', 'clim', 'extincteurs']);
+// entretien climatiseur, extincteurs, dératisation.
+const TACHES_SANS_RELEVE = new Set(['entretien_pylone', 'controle_terre', 'desherbage', 'serrures', 'clim', 'extincteurs', 'deratisation']);
 
 /**
  * La clôture exige-t-elle les relevés énergie (selon la config du site) ?
- * Oui pour toute maintenance passive, SAUF les tâches d'exclusion ci-dessus
- * (où seules les photos comptent). Repli par catégorie pour les maintenances
- * sans clé contractuelle (curatif / saisie manuelle) → comportement historique.
+ * - Tâche contractuelle préventive : oui, SAUF les tâches d'exclusion ci-dessus
+ *   (où seules les photos comptent).
+ * - Sinon (curatif / saisie manuelle sans clé) : oui pour toutes, SAUF le
+ *   climatiseur.
  */
 const requiresEnergieReleve = (m: { categorie: string; tachePreventiveKey: string | null }): boolean =>
-  m.tachePreventiveKey ? !TACHES_SANS_RELEVE.has(m.tachePreventiveKey) : isPassiveCategorie(m.categorie);
+  m.tachePreventiveKey ? !TACHES_SANS_RELEVE.has(m.tachePreventiveKey) : m.categorie !== 'CLIMATISEUR';
 
 /** Distance en mètres entre deux points GPS (formule de haversine). */
 function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
