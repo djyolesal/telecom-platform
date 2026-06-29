@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Download, Power, KeyRound, X } from 'lucide-react';
+import { Plus, Download, Power, KeyRound, Pencil, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -84,12 +84,76 @@ function CreateModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function EditModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({
+    nom: user.nom,
+    prenom: user.prenom,
+    email: user.email,
+    role: user.role,
+    region: user.region ?? '',
+    prestataireId: user.prestataire?.id ?? '',
+    equipe: user.equipe ?? '',
+    password: '',
+  });
+  const [error, setError] = useState('');
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const { data: prestataires } = useQuery({
+    queryKey: ['prestataires-select'],
+    queryFn: () => api.get('/prestataires', { params: { is_active: true, limit: 200 } }).then((r) => r.data.data),
+  });
+  const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
+
+  const mutation = useMutation({
+    mutationFn: () => api.put(`/users/${user.id}`, {
+      nom: form.nom,
+      prenom: form.prenom,
+      email: form.email,
+      role: form.role,
+      region: form.region || null,
+      prestataireId: form.prestataireId || null,
+      equipe: form.equipe || null,
+      password: form.password || undefined, // vide = inchangé
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); onClose(); },
+    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur'),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-800">Modifier l’utilisateur</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
+        </div>
+        {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+        <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="grid grid-cols-2 gap-3">
+          <Field label="Prénom" required><Input value={form.prenom} onChange={(e) => set('prenom', e.target.value)} required /></Field>
+          <Field label="Nom" required><Input value={form.nom} onChange={(e) => set('nom', e.target.value)} required /></Field>
+          <Field label="Email" required className="col-span-2"><Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required /></Field>
+          <Field label="Rôle" required><Select value={form.role} onChange={(e) => set('role', e.target.value)} options={ROLES} /></Field>
+          <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="—" /></Field>
+          <Field label="Prestataire"><Select value={form.prestataireId} onChange={(e) => set('prestataireId', e.target.value)} options={prestataireOptions} placeholder="(interne)" /></Field>
+          <Field label="Équipe"><Select value={form.equipe} onChange={(e) => set('equipe', e.target.value)} options={EQUIPES} placeholder="—" /></Field>
+          <Field label="Nouveau mot de passe" className="col-span-2"><Input type="text" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="(laisser vide pour ne pas changer)" /></Field>
+          <div className="col-span-2 flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
+            <Button type="submit" loading={mutation.isPending}>Enregistrer</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function UtilisateursPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editUser, setEditUser] = useState<User | null>(null);
   const debounced = useDebounce(search);
 
   const { data, isLoading, isError } = useQuery({
@@ -117,6 +181,7 @@ export default function UtilisateursPage() {
     {
       key: 'actions', header: '', align: 'right', render: (u) => (
         <div className="flex justify-end gap-1">
+          <button onClick={() => setEditUser(u)} title="Modifier" className="p-1.5 rounded hover:bg-gray-100"><Pencil size={15} className="text-gray-500" /></button>
           <button onClick={() => toggle.mutate(u.id)} title={u.isActive ? 'Désactiver' : 'Activer'} className="p-1.5 rounded hover:bg-gray-100"><Power size={15} className={u.isActive ? 'text-green-600' : 'text-gray-400'} /></button>
           <button onClick={() => { if (confirm(`Réinitialiser le mot de passe de ${u.prenom} ${u.nom} ?`)) reset.mutate(u.id); }} title="Réinitialiser le mot de passe" className="p-1.5 rounded hover:bg-gray-100"><KeyRound size={15} className="text-gray-500" /></button>
         </div>
@@ -160,6 +225,7 @@ export default function UtilisateursPage() {
       )}
 
       {showModal && <CreateModal onClose={() => setShowModal(false)} />}
+      {editUser && <EditModal user={editUser} onClose={() => setEditUser(null)} />}
     </div>
   );
 }
