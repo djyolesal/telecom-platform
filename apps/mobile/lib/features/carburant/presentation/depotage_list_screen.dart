@@ -44,9 +44,19 @@ class _DepotageViewState extends State<_DepotageView> {
     final messenger = ScaffoldMessenger.of(context);
     final router = GoRouter.of(context);
     final siteRepo = context.read<SiteRepository>();
-    messenger.showSnackBar(const SnackBar(content: Text('Localisation en cours…'), duration: Duration(seconds: 1)));
+    // Indicateur persistant pendant le fix GPS (jusqu'à 12 s) : reste affiché
+    // tant que la position n'est pas résolue, puis on le masque.
+    messenger.showSnackBar(const SnackBar(
+      content: Row(children: [
+        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+        SizedBox(width: 12),
+        Text('Localisation en cours…'),
+      ]),
+      duration: Duration(seconds: 15),
+    ));
     final pos = await LocationService().freshPosition();
     final sites = await siteRepo.getSites();
+    messenger.hideCurrentSnackBar();
     Site? onSite;
     double best = double.infinity;
     if (pos != null) {
