@@ -7,7 +7,6 @@ class Depotage {
   final double volumeLitres;
   final double? stockApresLitres;
   final String? fournisseur;
-  final double? coutTotal;
 
   const Depotage({
     required this.id,
@@ -17,7 +16,6 @@ class Depotage {
     required this.volumeLitres,
     this.stockApresLitres,
     this.fournisseur,
-    this.coutTotal,
   });
 
   static double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
@@ -33,7 +31,6 @@ class Depotage {
       volumeLitres: _d(j['volumeLitres']),
       stockApresLitres: _dn(j['stockApresLitres']),
       fournisseur: j['fournisseur'] as String?,
-      coutTotal: _dn(j['coutTotal']),
     );
   }
 }

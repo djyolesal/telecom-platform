@@ -12,7 +12,7 @@ import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { useDebounce } from '@/lib/hooks/useDebounce';
-import { fmtNumber, fmtFCFA, fmtDate } from '@/lib/utils';
+import { fmtNumber, fmtDate } from '@/lib/utils';
 
 interface Depotage {
   id: string;
@@ -21,7 +21,6 @@ interface Depotage {
   stockApresLitres?: number;
   ecartLivraisonLitres?: number | null;
   fournisseur?: string;
-  coutTotal?: number;
   site?: { code: string; nom: string; region: string };
 }
 
@@ -56,7 +55,6 @@ export default function DepotagesPage() {
       },
     },
     { key: 'fournisseur', header: 'Fournisseur', render: (d) => d.fournisseur || '—' },
-    { key: 'coutTotal', header: 'Coût', align: 'right', render: (d) => (d.coutTotal != null ? fmtFCFA(Number(d.coutTotal)) : '—') },
   ];
 
   return (
@@ -75,7 +73,7 @@ export default function DepotagesPage() {
       <FilterBar search={fournisseur} onSearch={(v) => { setFournisseur(v); setPage(1); }} searchPlaceholder="Rechercher un fournisseur…" />
 
       {isLoading ? (
-        <TableSkeleton cols={7} />
+        <TableSkeleton cols={6} />
       ) : isError ? (
         <ErrorState />
       ) : rows.length === 0 ? (

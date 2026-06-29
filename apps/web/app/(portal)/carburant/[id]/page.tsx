@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
-import { fmtNumber, fmtFCFA, fmtDateTime } from '@/lib/utils';
+import { fmtNumber, fmtDateTime } from '@/lib/utils';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -58,8 +58,6 @@ export default function DepotageDetailPage() {
         <Row label="Stock après" value={d.stockApresLitres != null ? `${fmtNumber(Number(d.stockApresLitres))} L` : '—'} />
         <Row label="Fournisseur" value={d.fournisseur} />
         <Row label="Bon de livraison" value={d.numeroBonLivraison} />
-        <Row label="Prix / litre" value={d.prixLitre != null ? fmtFCFA(Number(d.prixLitre)) : '—'} />
-        <Row label="Coût total" value={d.coutTotal != null ? fmtFCFA(Number(d.coutTotal)) : '—'} />
         <Row label="Technicien" value={d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—'} />
         {d.observations && <Row label="Observations" value={d.observations} />}
       </div>

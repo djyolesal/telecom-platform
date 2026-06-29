@@ -12,7 +12,7 @@ import { publicFileUrl } from '../services/storage.service';
 import { io } from '../server';
 
 /**
- * Dérive volume livré, coût et stock après dépotage à partir des jauges.
+ * Dérive volume livré et stock après dépotage à partir des jauges.
  * Nouveau modèle : le terrain saisit la jauge AVANT et APRÈS → le volume livré est
  * déduit (stockApres − stockAvant). Repli (anciens clients) : volumeLitres direct.
  */
@@ -27,11 +27,9 @@ function deriveVolume(data: Record<string, any>) {
     volume = Number(data.volumeLitres) || 0; // repli ancien client
   }
 
-  const prix = data.prixLitre != null ? Number(data.prixLitre) : null;
-  const coutTotal = prix != null ? Math.round(volume * prix) : null;
   const stockApres = stockApresIn != null ? stockApresIn : stockAvant != null ? stockAvant + volume : null;
 
-  return { volume, stockAvant, stockApres, coutTotal };
+  return { volume, stockAvant, stockApres };
 }
 
 /** Heures GE valides rattachées à des groupes du site (anti-corruption croisée). */
@@ -193,7 +191,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       if (ligne.siteId !== siteId) throw new AppError('La ligne de plan ne correspond pas au site du dépotage', 400);
     }
 
-    const { volume, stockAvant, stockApres, coutTotal } = deriveVolume(b);
+    const { volume, stockAvant, stockApres } = deriveVolume(b);
 
     // GE actifs du site → validation des heures saisies + réconciliation conso.
     const groupes = await prisma.groupeElectrogene.findMany({
@@ -232,7 +230,6 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
         signatureAgentSecuritePath: b.signatureAgentSecuritePath ? String(b.signatureAgentSecuritePath) : null,
         signatureTechnicienPath: b.signatureTechnicienPath ? String(b.signatureTechnicienPath) : null,
         bonLivraisonPath: b.bonLivraisonPath ? String(b.bonLivraisonPath) : null,
-        coutTotal,
         stockApresLitres: stockApres,
         volumeAnnonceLitres: recon.volumeAnnonceLitres,
         gasoilAttenduLitres: recon.gasoilAttenduLitres,
@@ -270,13 +267,13 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
     const existing = await prisma.depotage.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Dépotage introuvable', 404);
 
-    const { site: _s, technicien: _t, heuresGE: _h, ...data } = req.body;
-    const { volume, stockApres, coutTotal } = deriveVolume({ ...existing, ...data });
+    const { site: _s, technicien: _t, heuresGE: _h, prixLitre: _p, coutTotal: _c, ...data } = req.body;
+    const { volume, stockApres } = deriveVolume({ ...existing, ...data });
     if (data.dateDepotage) data.dateDepotage = new Date(data.dateDepotage);
 
     const updated = await prisma.depotage.update({
       where: { id: req.params.id },
-      data: { ...data, volumeLitres: volume, coutTotal, stockApresLitres: stockApres },
+      data: { ...data, volumeLitres: volume, stockApresLitres: stockApres },
     });
     // Re-synchronise la (ou les) ligne(s) de plan impactée(s).
     await syncLigneLivraison(existing.ligneLivraisonId);
@@ -317,22 +314,22 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
       [
         { header: 'Site', key: 'site', width: 16 },
         { header: 'Date', key: 'date', width: 18 },
-        { header: 'Volume (L)', key: 'volume', width: 12 },
+        { header: 'Volume livré (L)', key: 'volume', width: 14 },
+        { header: 'Volume annoncé (L)', key: 'annonce', width: 16 },
+        { header: 'Écart livraison (L)', key: 'ecartLiv', width: 16 },
         { header: 'Stock après (L)', key: 'stockApres', width: 14 },
         { header: 'Fournisseur', key: 'fournisseur', width: 20 },
         { header: 'Bon livraison', key: 'bl', width: 18 },
-        { header: 'Prix/L', key: 'prix', width: 10 },
-        { header: 'Coût total', key: 'cout', width: 14 },
       ],
       rows.map((d) => ({
         site: d.site?.code ?? '',
         date: d.dateDepotage.toLocaleString('fr-FR'),
         volume: Number(d.volumeLitres),
+        annonce: d.volumeAnnonceLitres != null ? Number(d.volumeAnnonceLitres) : '',
+        ecartLiv: d.ecartLivraisonLitres != null ? Number(d.ecartLivraisonLitres) : '',
         stockApres: d.stockApresLitres != null ? Number(d.stockApresLitres) : '',
         fournisseur: d.fournisseur ?? '',
         bl: d.numeroBonLivraison ?? '',
-        prix: d.prixLitre != null ? Number(d.prixLitre) : '',
-        cout: d.coutTotal != null ? Number(d.coutTotal) : '',
       }))
     );
 

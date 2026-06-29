@@ -26,7 +26,6 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   final _volumeAnnonce = TextEditingController();
   final _fournisseur = TextEditingController();
   final _bon = TextEditingController();
-  final _prix = TextEditingController();
   final _obs = TextEditingController();
   final _nomChauffeur = TextEditingController();
   final _nomAgent = TextEditingController();
@@ -119,7 +118,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   void dispose() {
     _stockAvant.removeListener(_onStockChanged);
     _stockApres.removeListener(_onStockChanged);
-    for (final c in [_stockAvant, _stockApres, _volumeAnnonce, _fournisseur, _bon, _prix, _obs, _nomChauffeur, _nomAgent]) {
+    for (final c in [_stockAvant, _stockApres, _volumeAnnonce, _fournisseur, _bon, _obs, _nomChauffeur, _nomAgent]) {
       c.dispose();
     }
     for (final c in _geIndex.values) {
@@ -199,7 +198,6 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         volumeAnnonceLitres: _num(_volumeAnnonce),
         fournisseur: _fournisseur.text.trim(),
         numeroBonLivraison: _bon.text.trim(),
-        prixLitre: _num(_prix),
         observations: _obs.text.trim(),
         latitude: pos?.lat,
         longitude: pos?.lng,
@@ -293,8 +291,6 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             TextFormField(controller: _fournisseur, decoration: const InputDecoration(labelText: 'Fournisseur')),
             const SizedBox(height: 14),
             TextFormField(controller: _bon, decoration: const InputDecoration(labelText: 'N° bon de livraison')),
-            const SizedBox(height: 14),
-            TextFormField(controller: _prix, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Prix / litre (FCFA)')),
             const SizedBox(height: 14),
             TextFormField(controller: _obs, maxLines: 2, decoration: const InputDecoration(labelText: 'Observations')),
             const SizedBox(height: 20),
