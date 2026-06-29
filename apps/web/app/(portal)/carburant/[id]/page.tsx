@@ -1,9 +1,12 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { fmtNumber, fmtDateTime } from '@/lib/utils';
 
@@ -34,9 +37,23 @@ interface Photo { id: string; url: string }
 
 export default function DepotageDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
+
   const { data: d, isLoading, isError } = useQuery({
     queryKey: ['depotage', id],
     queryFn: () => api.get(`/depotages/${id}`).then((r) => r.data.data),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/depotages/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['depotages'] });
+      router.push('/carburant/depotages');
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => alert(e.response?.data?.error || 'Suppression impossible'),
   });
 
   if (isLoading) return <Loading />;
@@ -46,9 +63,22 @@ export default function DepotageDetailPage() {
   const photos: Photo[] = d.photos ?? [];
   const hasRecon = d.volumeAnnonceLitres != null || d.ecartLivraisonLitres != null || d.ecartConsoLitres != null || d.analyseDepotage;
 
+  const onDelete = () => {
+    if (confirm(`Supprimer définitivement ce dépotage (${fmtNumber(Number(d.volumeLitres))} L, ${fmtDateTime(d.dateDepotage)}) ?\nLe stock du site et la livraison planifiée seront recalculés.`)) {
+      remove.mutate();
+    }
+  };
+
   return (
     <div className="space-y-5">
-      <PageHeader title={`Dépotage — ${d.site?.nom ?? d.site?.code ?? ''}`} subtitle={fmtDateTime(d.dateDepotage)} backHref="/carburant/depotages" />
+      <PageHeader
+        title={`Dépotage — ${d.site?.nom ?? d.site?.code ?? ''}`}
+        subtitle={fmtDateTime(d.dateDepotage)}
+        backHref="/carburant/depotages"
+        actions={isAdmin ? (
+          <Button variant="secondary" icon={Trash2} onClick={onDelete} loading={remove.isPending}>Supprimer</Button>
+        ) : undefined}
+      />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
         <Row label="Site" value={d.site ? `${d.site.code} — ${d.site.nom}` : '—'} />
