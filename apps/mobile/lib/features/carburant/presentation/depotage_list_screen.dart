@@ -106,7 +106,7 @@ class _DepotageViewState extends State<_DepotageView> {
                   child: Text('Aucune livraison planifiée pour ce site.', style: TextStyle(color: Colors.grey.shade600)),
                 )
               else ...[
-                Text('Livraisons planifiées (${lignes.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text('Touchez une livraison à dépoter (${lignes.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Flexible(
                   child: ListView(
@@ -117,6 +117,12 @@ class _DepotageViewState extends State<_DepotageView> {
                               leading: const Icon(Icons.local_shipping_outlined),
                               title: Text('${l.numeroBL ?? 'BL'} · ${l.volumePrevuLitres.toStringAsFixed(0)} L prévus'),
                               subtitle: l.restant > 0 ? Text('Reste à livrer : ${l.restant.toStringAsFixed(0)} L') : const Text('Soldée'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.pop(sheetCtx);
+                                // Pré-rattache le dépotage à CETTE ligne → la livraison se solde.
+                                router.push('/carburant/nouveau?siteId=${site.id}&ligneId=${l.id}');
+                              },
                             ))
                         .toList(),
                   ),
@@ -125,13 +131,13 @@ class _DepotageViewState extends State<_DepotageView> {
               const Divider(),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
+                child: OutlinedButton.icon(
                   onPressed: () {
                     Navigator.pop(sheetCtx);
                     router.push('/carburant/nouveau?siteId=${site.id}');
                   },
                   icon: const Icon(Icons.add),
-                  label: const Text('Dépoter sur ce site'),
+                  label: const Text('Dépotage hors plan'),
                 ),
               ),
             ],

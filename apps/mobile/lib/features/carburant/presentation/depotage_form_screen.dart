@@ -13,7 +13,8 @@ import '../data/depotage_repository.dart';
 
 class DepotageFormScreen extends StatefulWidget {
   final String? initialSiteId;
-  const DepotageFormScreen({super.key, this.initialSiteId});
+  final String? initialLigneId;
+  const DepotageFormScreen({super.key, this.initialSiteId, this.initialLigneId});
 
   @override
   State<DepotageFormScreen> createState() => _DepotageFormScreenState();
@@ -90,6 +91,17 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         _groupes = results[1] as List<GroupeGE>;
         for (final g in _groupes) {
           _geIndex.putIfAbsent(g.id, () => TextEditingController());
+        }
+        // Pré-rattachement à la ligne planifiée choisie (bouton intelligent).
+        final wanted = widget.initialLigneId;
+        if (wanted != null && _ligneLivraisonId == null && _lignes.any((x) => x.id == wanted)) {
+          _ligneLivraisonId = wanted;
+          final l = _lignes.firstWhere((x) => x.id == wanted);
+          if (_volumeAnnonce.text.isEmpty) {
+            final v = l.restant > 0 ? l.restant : l.volumePrevuLitres;
+            _volumeAnnonce.text = v.toStringAsFixed(0);
+          }
+          if (_bon.text.isEmpty && l.numeroBL != null) _bon.text = l.numeroBL!;
         }
       });
     } catch (_) {

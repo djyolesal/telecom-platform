@@ -44,7 +44,7 @@ GoRouter createRouter(AuthCubit authCubit) {
 
       // Carburant
       GoRoute(path: '/carburant', builder: (_, __) => const DepotageListScreen()),
-      GoRoute(path: '/carburant/nouveau', builder: (_, s) => DepotageFormScreen(initialSiteId: s.uri.queryParameters['siteId'])),
+      GoRoute(path: '/carburant/nouveau', builder: (_, s) => DepotageFormScreen(initialSiteId: s.uri.queryParameters['siteId'], initialLigneId: s.uri.queryParameters['ligneId'])),
       GoRoute(path: '/carburant/bon-livraison/nouveau', builder: (_, __) => const BlFormScreen()),
 
       // Énergie
