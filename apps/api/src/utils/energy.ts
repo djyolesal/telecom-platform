@@ -41,3 +41,29 @@ export function analyseGasoilCoherence(opts: {
   }
   return `⚠ Sous-consommation : ${act} L consommés contre ~${exp} L attendus (${pct}%). À vérifier : heures GE surévaluées, ou dépotage non enregistré.`;
 }
+
+/**
+ * Compare le volume réellement entré en cuve (jauge après − avant) au volume annoncé
+ * sur le bordereau/BL et renvoie le commentaire, ou null si l'annoncé est inconnu.
+ * `seuilPct` = tolérance d'écart en pourcentage (ex. 5).
+ */
+export function analyseLivraison(opts: {
+  volumeReel: number;
+  volumeAnnonce: number | null;
+  seuilPct: number;
+}): string | null {
+  const { volumeReel, volumeAnnonce, seuilPct } = opts;
+  if (volumeAnnonce == null || !(volumeAnnonce > 0)) return null;
+  const reel = Math.round(volumeReel);
+  const ann = Math.round(volumeAnnonce);
+  const ecart = (volumeReel - volumeAnnonce) / volumeAnnonce;
+  const pct = Math.round(ecart * 100);
+  const signe = pct >= 0 ? '+' : '';
+  if (Math.abs(ecart) <= seuilPct / 100) {
+    return `Livraison conforme : ${reel} L mesurés en cuve pour ${ann} L annoncés (écart ${signe}${pct}%).`;
+  }
+  if (ecart < 0) {
+    return `⚠ Manquant livraison : ${reel} L réellement entrés en cuve contre ${ann} L annoncés (${pct}%). À vérifier : volume non livré, jauge erronée, ou siphonnage.`;
+  }
+  return `⚠ Surplus livraison : ${reel} L mesurés en cuve contre ${ann} L annoncés (${signe}${pct}%). À vérifier : jauge avant erronée ou stock résiduel sous-estimé.`;
+}

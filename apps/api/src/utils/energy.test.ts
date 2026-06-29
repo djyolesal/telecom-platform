@@ -1,4 +1,4 @@
-import { expectedGasoilGE, analyseGasoilCoherence } from './energy';
+import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from './energy';
 
 describe('expectedGasoilGE', () => {
   it('GE permanent : puissance × 0.75 × heures × 0.25', () => {
@@ -41,5 +41,28 @@ describe('analyseGasoilCoherence', () => {
     const r = analyseGasoilCoherence({ consomme: 100, attendu: 200, hasHeures: true, seuilPct });
     expect(r).toMatch(/Sous-consommation/);
     expect(r).toContain('-50%');
+  });
+});
+
+describe('analyseLivraison', () => {
+  const seuilPct = 5;
+  it('null si volume annoncé inconnu', () => {
+    expect(analyseLivraison({ volumeReel: 1000, volumeAnnonce: null, seuilPct })).toBeNull();
+    expect(analyseLivraison({ volumeReel: 1000, volumeAnnonce: 0, seuilPct })).toBeNull();
+  });
+  it('conforme dans la tolérance', () => {
+    const r = analyseLivraison({ volumeReel: 1020, volumeAnnonce: 1000, seuilPct });
+    expect(r).toMatch(/conforme/i);
+    expect(r).toContain('+2%');
+  });
+  it('manquant si volume réel < annoncé au-delà du seuil', () => {
+    const r = analyseLivraison({ volumeReel: 900, volumeAnnonce: 1000, seuilPct });
+    expect(r).toMatch(/Manquant/);
+    expect(r).toContain('-10%');
+  });
+  it('surplus si volume réel > annoncé au-delà du seuil', () => {
+    const r = analyseLivraison({ volumeReel: 1100, volumeAnnonce: 1000, seuilPct });
+    expect(r).toMatch(/Surplus/);
+    expect(r).toContain('+10%');
   });
 });

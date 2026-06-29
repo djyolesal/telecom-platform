@@ -19,6 +19,7 @@ interface Depotage {
   dateDepotage: string;
   volumeLitres: number;
   stockApresLitres?: number;
+  ecartLivraisonLitres?: number | null;
   fournisseur?: string;
   coutTotal?: number;
   site?: { code: string; nom: string; region: string };
@@ -43,6 +44,17 @@ export default function DepotagesPage() {
     { key: 'dateDepotage', header: 'Date', render: (d) => fmtDate(d.dateDepotage) },
     { key: 'volumeLitres', header: 'Volume (L)', align: 'right', render: (d) => fmtNumber(Number(d.volumeLitres)) },
     { key: 'stockApresLitres', header: 'Stock après (L)', align: 'right', render: (d) => (d.stockApresLitres != null ? fmtNumber(Number(d.stockApresLitres)) : '—') },
+    {
+      key: 'ecartLivraisonLitres',
+      header: 'Écart livr. (L)',
+      align: 'right',
+      render: (d) => {
+        if (d.ecartLivraisonLitres == null) return '—';
+        const v = Number(d.ecartLivraisonLitres);
+        const color = Math.abs(v) < 1 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : 'text-amber-600';
+        return <span className={color}>{`${v > 0 ? '+' : ''}${fmtNumber(v)}`}</span>;
+      },
+    },
     { key: 'fournisseur', header: 'Fournisseur', render: (d) => d.fournisseur || '—' },
     { key: 'coutTotal', header: 'Coût', align: 'right', render: (d) => (d.coutTotal != null ? fmtFCFA(Number(d.coutTotal)) : '—') },
   ];
@@ -63,7 +75,7 @@ export default function DepotagesPage() {
       <FilterBar search={fournisseur} onSearch={(v) => { setFournisseur(v); setPage(1); }} searchPlaceholder="Rechercher un fournisseur…" />
 
       {isLoading ? (
-        <TableSkeleton cols={6} />
+        <TableSkeleton cols={7} />
       ) : isError ? (
         <ErrorState />
       ) : rows.length === 0 ? (

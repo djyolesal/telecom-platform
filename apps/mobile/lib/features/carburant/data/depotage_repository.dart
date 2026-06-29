@@ -27,10 +27,25 @@ class DepotageRepository {
     );
   }
 
+  /// Groupes électrogènes actifs d'un site (via le détail site), pour relever
+  /// l'index d'heures de chaque GE au dépotage (réconciliation conso).
+  Future<List<GroupeGE>> getGroupes(String siteId) async {
+    if (!await _network.isConnected) return [];
+    return _client.request(
+      (dio) => dio.get('/sites/$siteId'),
+      (data) {
+        final list = (data['data']?['groupes'] as List?) ?? const [];
+        return list.map((e) => GroupeGE.fromJson(e as Map<String, dynamic>)).toList();
+      },
+    );
+  }
+
   Future<SubmitResult> create({
     required String siteId,
     required double volumeLitres,
     double? stockAvantLitres,
+    double? stockApresLitres,
+    double? volumeAnnonceLitres,
     String? fournisseur,
     String? numeroBonLivraison,
     double? prixLitre,
@@ -38,6 +53,10 @@ class DepotageRepository {
     double? latitude,
     double? longitude,
     String? ligneLivraisonId,
+    // Index d'heures relevé par GE : [{groupeId, indexHeuresGE}].
+    List<Map<String, dynamic>> heuresGE = const [],
+    // Photos des travaux de dépotage (chemins LOCAUX, uploadées par la sync).
+    List<String> photoPaths = const [],
     // Validation tripartite : noms + chemins LOCAUX des signatures (uploadées par la sync).
     String? nomChauffeur,
     String? signatureChauffeurLocalPath,
@@ -49,6 +68,7 @@ class DepotageRepository {
       if (signatureChauffeurLocalPath != null) {'path': signatureChauffeurLocalPath, 'kind': 'signature', 'field': 'signatureChauffeurPath'},
       if (signatureAgentSecuriteLocalPath != null) {'path': signatureAgentSecuriteLocalPath, 'kind': 'signature', 'field': 'signatureAgentSecuritePath'},
       if (signatureTechnicienLocalPath != null) {'path': signatureTechnicienLocalPath, 'kind': 'signature', 'field': 'signatureTechnicienPath'},
+      for (final p in photoPaths) {'path': p, 'kind': 'photo'},
     ];
     return _sync.submit(
       endpoint: '/depotages',
@@ -58,6 +78,8 @@ class DepotageRepository {
         'volumeLitres': volumeLitres,
         'dateDepotage': DateTime.now().toUtc().toIso8601String(),
         if (stockAvantLitres != null) 'stockAvantLitres': stockAvantLitres,
+        if (stockApresLitres != null) 'stockApresLitres': stockApresLitres,
+        if (volumeAnnonceLitres != null) 'volumeAnnonceLitres': volumeAnnonceLitres,
         if (fournisseur != null && fournisseur.isNotEmpty) 'fournisseur': fournisseur,
         if (numeroBonLivraison != null && numeroBonLivraison.isNotEmpty) 'numeroBonLivraison': numeroBonLivraison,
         if (prixLitre != null) 'prixLitre': prixLitre,
@@ -65,6 +87,7 @@ class DepotageRepository {
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
         if (ligneLivraisonId != null) 'ligneLivraisonId': ligneLivraisonId,
+        if (heuresGE.isNotEmpty) 'heuresGE': heuresGE,
         if (nomChauffeur != null && nomChauffeur.isNotEmpty) 'nomChauffeur': nomChauffeur,
         if (nomAgentSecurite != null && nomAgentSecurite.isNotEmpty) 'nomAgentSecurite': nomAgentSecurite,
       },

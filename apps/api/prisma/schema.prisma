@@ -198,8 +198,9 @@ model GroupeElectrogene {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  site    Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  releves ReleveEnergie[]
+  site          Site              @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  releves       ReleveEnergie[]
+  depotageHeures DepotageHeureGE[]
 
   @@unique([siteId, numero])
   @@index([siteId])
@@ -302,16 +303,38 @@ model Depotage {
   isSynced           Boolean  @default(true) @map("is_synced")
   // Rattachement à la ligne du plan de livraison (chaîne BC → BL → plan → site)
   ligneLivraisonId   String?  @map("ligne_livraison_id")
+  // Réconciliation carburant au dépotage
+  volumeAnnonceLitres  Decimal? @map("volume_annonce_litres") @db.Decimal(8, 2)  // déclaré au BL/bordereau
+  gasoilAttenduLitres  Decimal? @map("gasoil_attendu_litres") @db.Decimal(8, 2)  // conso attendue depuis le dépotage précédent
+  ecartConsoLitres     Decimal? @map("ecart_conso_litres") @db.Decimal(8, 2)     // baisse cuve réelle − attendue
+  ecartLivraisonLitres Decimal? @map("ecart_livraison_litres") @db.Decimal(8, 2) // volume jauge réel − annoncé
+  analyseDepotage      String?  @map("analyse_depotage")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  site           Site            @relation(fields: [siteId], references: [id])
-  technicien     User?           @relation("TechnicienDepotages", fields: [technicienId], references: [id])
-  ligneLivraison LigneLivraison? @relation(fields: [ligneLivraisonId], references: [id])
+  site           Site               @relation(fields: [siteId], references: [id])
+  technicien     User?              @relation("TechnicienDepotages", fields: [technicienId], references: [id])
+  ligneLivraison LigneLivraison?    @relation(fields: [ligneLivraisonId], references: [id])
+  heuresGE       DepotageHeureGE[]
 
   @@index([siteId])
   @@index([dateDepotage])
   @@index([ligneLivraisonId])
   @@map("depotages")
+}
+
+// Index horaire d'un GE relevé AU MOMENT du dépotage (un par GE actif).
+// Permet la réconciliation conso entre deux dépotages (heures × puissance).
+model DepotageHeureGE {
+  id            String  @id @default(uuid())
+  depotageId    String  @map("depotage_id")
+  groupeId      String? @map("groupe_id")
+  indexHeuresGE Decimal @map("index_heures_ge") @db.Decimal(10, 2)
+
+  depotage Depotage           @relation(fields: [depotageId], references: [id], onDelete: Cascade)
+  groupe   GroupeElectrogene? @relation(fields: [groupeId], references: [id])
+
+  @@index([depotageId])
+  @@map("depotage_heures_ge")
 }
 
 model ReleveEnergie {

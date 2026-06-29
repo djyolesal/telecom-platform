@@ -38,6 +38,23 @@ class Depotage {
   }
 }
 
+/// Groupe électrogène actif d'un site (pour le relevé d'heures au dépotage).
+class GroupeGE {
+  final String id;
+  final int numero;
+  final double puissanceKva;
+  final String statut;
+
+  const GroupeGE({required this.id, required this.numero, required this.puissanceKva, required this.statut});
+
+  factory GroupeGE.fromJson(Map<String, dynamic> j) => GroupeGE(
+        id: j['id'] as String,
+        numero: (j['numero'] as num?)?.toInt() ?? 0,
+        puissanceKva: Depotage._d(j['puissanceKva']),
+        statut: j['statut'] as String? ?? 'GE_SECOURS',
+      );
+}
+
 /// Bon de commande (vue allégée pour le transporteur qui crée un BL).
 class BonCommandeLite {
   final String id;

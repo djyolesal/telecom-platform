@@ -16,6 +16,22 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+/** Écart signé avec code couleur (vert ≈ 0, rouge négatif/manquant, ambre surplus). */
+function EcartRow({ label, value }: { label: string; value: number | null | undefined }) {
+  if (value == null) return <Row label={label} value="—" />;
+  const v = Number(value);
+  const color = Math.abs(v) < 1 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : 'text-amber-600';
+  const signe = v > 0 ? '+' : '';
+  return <Row label={label} value={<span className={color}>{`${signe}${fmtNumber(v)} L`}</span>} />;
+}
+
+interface HeureGE {
+  id: string;
+  indexHeuresGE: number;
+  groupe?: { numero: number; puissanceKva: number; statut: string };
+}
+interface Photo { id: string; url: string }
+
 export default function DepotageDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: d, isLoading, isError } = useQuery({
@@ -26,13 +42,18 @@ export default function DepotageDetailPage() {
   if (isLoading) return <Loading />;
   if (isError || !d) return <ErrorState message="Dépotage introuvable" />;
 
+  const heures: HeureGE[] = d.heuresGE ?? [];
+  const photos: Photo[] = d.photos ?? [];
+  const hasRecon = d.volumeAnnonceLitres != null || d.ecartLivraisonLitres != null || d.ecartConsoLitres != null || d.analyseDepotage;
+
   return (
-    <div>
-      <PageHeader title={`Dépotage — ${d.site?.nom ?? d.site?.code ?? ""}`} subtitle={fmtDateTime(d.dateDepotage)} backHref="/carburant/depotages" />
+    <div className="space-y-5">
+      <PageHeader title={`Dépotage — ${d.site?.nom ?? d.site?.code ?? ''}`} subtitle={fmtDateTime(d.dateDepotage)} backHref="/carburant/depotages" />
+
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
         <Row label="Site" value={d.site ? `${d.site.code} — ${d.site.nom}` : '—'} />
         <Row label="Date" value={fmtDateTime(d.dateDepotage)} />
-        <Row label="Volume livré" value={`${fmtNumber(Number(d.volumeLitres))} L`} />
+        <Row label="Volume livré (jauge)" value={`${fmtNumber(Number(d.volumeLitres))} L`} />
         <Row label="Stock avant" value={d.stockAvantLitres != null ? `${fmtNumber(Number(d.stockAvantLitres))} L` : '—'} />
         <Row label="Stock après" value={d.stockApresLitres != null ? `${fmtNumber(Number(d.stockApresLitres))} L` : '—'} />
         <Row label="Fournisseur" value={d.fournisseur} />
@@ -42,6 +63,46 @@ export default function DepotageDetailPage() {
         <Row label="Technicien" value={d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—'} />
         {d.observations && <Row label="Observations" value={d.observations} />}
       </div>
+
+      {hasRecon && (
+        <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Réconciliation carburant</h3>
+          <Row label="Volume annoncé (BL)" value={d.volumeAnnonceLitres != null ? `${fmtNumber(Number(d.volumeAnnonceLitres))} L` : '—'} />
+          <EcartRow label="Écart livraison (jauge − annoncé)" value={d.ecartLivraisonLitres} />
+          <Row label="Gasoil attendu (depuis dernier dépotage)" value={d.gasoilAttenduLitres != null ? `${fmtNumber(Number(d.gasoilAttenduLitres))} L` : '—'} />
+          <EcartRow label="Écart conso (réel − attendu)" value={d.ecartConsoLitres} />
+          {d.analyseDepotage && (
+            <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 whitespace-pre-line">{d.analyseDepotage}</div>
+          )}
+        </div>
+      )}
+
+      {heures.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Relevé heures groupes électrogènes</h3>
+          {heures.map((h) => (
+            <Row
+              key={h.id}
+              label={h.groupe ? `GE n°${h.groupe.numero} · ${fmtNumber(Number(h.groupe.puissanceKva))} kVA · ${h.groupe.statut === 'GE_PERMANENT' ? 'permanent' : 'secours'}` : 'GE'}
+              value={`${fmtNumber(Number(h.indexHeuresGE))} h`}
+            />
+          ))}
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Photos du dépotage ({photos.length})</h3>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {photos.map((p) => (
+              <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-gray-100">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.url} alt="Travaux de dépotage" className="h-full w-full object-cover hover:opacity-90" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

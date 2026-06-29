@@ -6,23 +6,100 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { clearMemo } from '../utils/memo';
+import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../utils/energy';
+import { getNum } from '../services/settings.service';
+import { publicFileUrl } from '../services/storage.service';
 import { io } from '../server';
 
-/** Calcule coût total et stock après dépotage à partir des entrées. */
-function computeDepotage(data: Record<string, any>) {
-  const volume = Number(data.volumeLitres) || 0;
-  const prix = data.prixLitre != null ? Number(data.prixLitre) : null;
+/**
+ * Dérive volume livré, coût et stock après dépotage à partir des jauges.
+ * Nouveau modèle : le terrain saisit la jauge AVANT et APRÈS → le volume livré est
+ * déduit (stockApres − stockAvant). Repli (anciens clients) : volumeLitres direct.
+ */
+function deriveVolume(data: Record<string, any>) {
   const stockAvant = data.stockAvantLitres != null ? Number(data.stockAvantLitres) : null;
+  const stockApresIn = data.stockApresLitres != null ? Number(data.stockApresLitres) : null;
 
-  const coutTotal = prix != null ? Math.round(volume * prix) : data.coutTotal ?? null;
-  const stockApres =
-    data.stockApresLitres != null
-      ? Number(data.stockApresLitres)
-      : stockAvant != null
-        ? stockAvant + volume
-        : null;
+  let volume: number;
+  if (stockAvant != null && stockApresIn != null) {
+    volume = Math.max(0, stockApresIn - stockAvant); // dérivé de la jauge
+  } else {
+    volume = Number(data.volumeLitres) || 0; // repli ancien client
+  }
 
-  return { coutTotal, stockApres };
+  const prix = data.prixLitre != null ? Number(data.prixLitre) : null;
+  const coutTotal = prix != null ? Math.round(volume * prix) : null;
+  const stockApres = stockApresIn != null ? stockApresIn : stockAvant != null ? stockAvant + volume : null;
+
+  return { volume, stockAvant, stockApres, coutTotal };
+}
+
+/** Heures GE valides rattachées à des groupes du site (anti-corruption croisée). */
+function parseHeuresGE(raw: unknown, siteGroupeIds: Set<string>) {
+  if (!Array.isArray(raw)) return [] as { groupeId: string; indexHeuresGE: number }[];
+  return raw
+    .map((h: any) => ({
+      groupeId: h?.groupeId != null ? String(h.groupeId) : '',
+      indexHeuresGE: Number(h?.indexHeuresGE),
+    }))
+    .filter((h) => h.groupeId && siteGroupeIds.has(h.groupeId) && Number.isFinite(h.indexHeuresGE) && h.indexHeuresGE >= 0);
+}
+
+/**
+ * Réconciliation carburant au dépotage : compare le volume jauge à l'annoncé (BL)
+ * et la baisse de cuve depuis le dépotage précédent au gasoil attendu (heures × kVA).
+ */
+async function reconcileDepotage(opts: {
+  siteId: string;
+  stockAvant: number | null;
+  volumeReel: number;
+  volumeAnnonce: number | null;
+  heuresGE: { groupeId: string; indexHeuresGE: number }[];
+  groupes: { id: string; puissanceKva: any; statut: string }[];
+}) {
+  const { siteId, stockAvant, volumeReel, volumeAnnonce, heuresGE, groupes } = opts;
+  const seuilLivPct = getNum('carburant.seuilEcartLivraisonPct', 5);
+  const seuilConsoPct = getNum('maintenance.seuilEcartGasoilPct', 25);
+
+  // Écart de livraison : jauge réelle vs annoncé (BL/bordereau).
+  const ecartLivraisonLitres = volumeAnnonce != null ? Math.round((volumeReel - volumeAnnonce) * 100) / 100 : null;
+  const analyseLiv = analyseLivraison({ volumeReel, volumeAnnonce, seuilPct: seuilLivPct });
+
+  // Écart de conso : baisse de cuve depuis le dépotage précédent vs gasoil attendu.
+  const prev = await prisma.depotage.findFirst({
+    where: { siteId, stockApresLitres: { not: null } },
+    orderBy: { dateDepotage: 'desc' },
+    include: { heuresGE: true },
+  });
+
+  let attendu = 0;
+  let hasHeures = false;
+  if (prev) {
+    for (const cur of heuresGE) {
+      const g = groupes.find((x) => x.id === cur.groupeId);
+      const prevH = prev.heuresGE.find((h) => h.groupeId === cur.groupeId);
+      if (!g || !prevH) continue;
+      const delta = cur.indexHeuresGE - Number(prevH.indexHeuresGE);
+      if (delta > 0) {
+        attendu += expectedGasoilGE(Number(g.puissanceKva), g.statut, delta);
+        hasHeures = true;
+      }
+    }
+  }
+
+  const consomme = prev && stockAvant != null ? Number(prev.stockApresLitres) - stockAvant : null;
+  const ecartConsoLitres = consomme != null && hasHeures ? Math.round((consomme - attendu) * 100) / 100 : null;
+  const analyseConso = analyseGasoilCoherence({ consomme, attendu, hasHeures, seuilPct: seuilConsoPct });
+
+  const analyseDepotage = [analyseLiv, analyseConso].filter(Boolean).join('\n') || null;
+
+  return {
+    volumeAnnonceLitres: volumeAnnonce,
+    gasoilAttenduLitres: hasHeures ? Math.round(attendu * 100) / 100 : null,
+    ecartConsoLitres,
+    ecartLivraisonLitres,
+    analyseDepotage,
+  };
 }
 
 /**
@@ -81,10 +158,23 @@ export async function getDepotageById(req: Request, res: Response, next: NextFun
   try {
     const depotage = await prisma.depotage.findUnique({
       where: { id: req.params.id },
-      include: { site: true, technicien: { select: { nom: true, prenom: true } } },
+      include: {
+        site: true,
+        technicien: { select: { nom: true, prenom: true } },
+        heuresGE: { include: { groupe: { select: { numero: true, puissanceKva: true, statut: true } } } },
+      },
     });
     if (!depotage) throw new AppError('Dépotage introuvable', 404);
-    res.json({ success: true, data: depotage });
+    // Photos rattachées (modèle générique entityType/entityId) → URL recalculée depuis MinIO.
+    const photos = await prisma.photo.findMany({
+      where: { entityType: 'depotage', entityId: depotage.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    const data = {
+      ...depotage,
+      photos: photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
+    };
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 
@@ -103,15 +193,33 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       if (ligne.siteId !== siteId) throw new AppError('La ligne de plan ne correspond pas au site du dépotage', 400);
     }
 
-    const { coutTotal, stockApres } = computeDepotage(b);
+    const { volume, stockAvant, stockApres, coutTotal } = deriveVolume(b);
+
+    // GE actifs du site → validation des heures saisies + réconciliation conso.
+    const groupes = await prisma.groupeElectrogene.findMany({
+      where: { siteId, isActive: true },
+      select: { id: true, puissanceKva: true, statut: true },
+    });
+    const heuresGE = parseHeuresGE(b.heuresGE, new Set(groupes.map((g) => g.id)));
+    const volumeAnnonce = b.volumeAnnonceLitres != null ? Number(b.volumeAnnonceLitres) : null;
+
+    const recon = await reconcileDepotage({
+      siteId,
+      stockAvant,
+      volumeReel: volume,
+      volumeAnnonce: Number.isFinite(volumeAnnonce as number) ? volumeAnnonce : null,
+      heuresGE,
+      groupes,
+    });
+
     const depotage = await prisma.depotage.create({
       data: {
         siteId,
         ligneLivraisonId,
         dateDepotage: b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date(),
         technicienId: req.user!.id, // toujours l'utilisateur courant, jamais le client
-        volumeLitres: Number(b.volumeLitres) || 0,
-        stockAvantLitres: b.stockAvantLitres != null ? Number(b.stockAvantLitres) : null,
+        volumeLitres: volume,
+        stockAvantLitres: stockAvant,
         fournisseur: b.fournisseur ? String(b.fournisseur) : null,
         numeroBonLivraison: b.numeroBonLivraison ? String(b.numeroBonLivraison) : null,
         prixLitre: b.prixLitre != null ? Number(b.prixLitre) : null,
@@ -126,9 +234,22 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
         bonLivraisonPath: b.bonLivraisonPath ? String(b.bonLivraisonPath) : null,
         coutTotal,
         stockApresLitres: stockApres,
+        volumeAnnonceLitres: recon.volumeAnnonceLitres,
+        gasoilAttenduLitres: recon.gasoilAttenduLitres,
+        ecartConsoLitres: recon.ecartConsoLitres,
+        ecartLivraisonLitres: recon.ecartLivraisonLitres,
+        analyseDepotage: recon.analyseDepotage,
+        heuresGE: { create: heuresGE.map((h) => ({ groupeId: h.groupeId, indexHeuresGE: h.indexHeuresGE })) },
       },
       include: { site: { select: { code: true, nom: true } } },
     });
+
+    // Photos des travaux de dépotage (uploadées par la sync → clés MinIO).
+    const photos = (b.photos as { url?: string; key?: string }[] | undefined) ?? [];
+    const photosData = photos
+      .filter((p) => p && p.key)
+      .map((p) => ({ entityType: 'depotage', entityId: depotage.id, url: p.url ?? '', minioKey: p.key! }));
+    if (photosData.length) await prisma.photo.createMany({ data: photosData });
 
     await syncLigneLivraison(depotage.ligneLivraisonId);
     clearMemo(); // nouvelles données → invalide manquants/forecast mémoïsés
@@ -149,13 +270,13 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
     const existing = await prisma.depotage.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Dépotage introuvable', 404);
 
-    const { site: _s, technicien: _t, ...data } = req.body;
-    const { coutTotal, stockApres } = computeDepotage({ ...existing, ...data });
+    const { site: _s, technicien: _t, heuresGE: _h, ...data } = req.body;
+    const { volume, stockApres, coutTotal } = deriveVolume({ ...existing, ...data });
     if (data.dateDepotage) data.dateDepotage = new Date(data.dateDepotage);
 
     const updated = await prisma.depotage.update({
       where: { id: req.params.id },
-      data: { ...data, coutTotal, stockApresLitres: stockApres },
+      data: { ...data, volumeLitres: volume, coutTotal, stockApresLitres: stockApres },
     });
     // Re-synchronise la (ou les) ligne(s) de plan impactée(s).
     await syncLigneLivraison(existing.ligneLivraisonId);
