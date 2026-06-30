@@ -9,6 +9,13 @@ const Map<String, String> kTypeMaintenance = {
   'CURATIVE': 'Curative',
 };
 
+const Map<String, String> kNatureTravaux = {
+  'ENTRETIEN': 'Entretien',
+  'INSTALLATION': 'Installation',
+  'DESINSTALLATION': 'Désinstallation',
+  'DEPLACEMENT': 'Déplacement',
+};
+
 const Map<String, String> kStatutMaintenance = {
   'PLANIFIEE': 'Planifiée',
   'EN_COURS': 'En cours',

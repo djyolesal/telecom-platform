@@ -198,6 +198,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(children: [
+                    if (m.natureTravaux != 'ENTRETIEN') _row('Nature', kNatureTravaux[m.natureTravaux] ?? m.natureTravaux),
                     _row('Type', kTypeMaintenance[m.type] ?? m.type),
                     _row('Catégorie', '${kCategorieEquipement[m.categorie] ?? m.categorie}${m.isPassive ? ' · passive' : ' · active'}'),
                     _row('Technicien', m.technicien ?? '—'),
@@ -292,6 +293,20 @@ class _AnalyseCard extends StatelessWidget {
 }
 
 /// Sources d'énergie présentes selon la configuration du site (aligné sur l'API).
+/// Verbe décrivant l'effet du mouvement sur l'actif à la clôture.
+String _mouvementVerbe(String nature) {
+  switch (nature) {
+    case 'INSTALLATION':
+      return 'posé sur ce site';
+    case 'DESINSTALLATION':
+      return 'déposé et renvoyé au dépôt';
+    case 'DEPLACEMENT':
+      return 'déplacé vers ce site';
+    default:
+      return 'mis à jour';
+  }
+}
+
 List<String> sourcesForConfig(String? config) {
   switch (config) {
     case 'CEET_GE':
@@ -438,6 +453,20 @@ class _CloseSheetState extends State<_CloseSheet> {
           children: [
             const Text('Clôturer la maintenance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
+            if (m.natureTravaux != 'ENTRETIEN') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+                child: Row(children: [
+                  Icon(Icons.swap_horiz, size: 18, color: Colors.green.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('À la clôture, l\'actif sera ${_mouvementVerbe(m.natureTravaux)}.',
+                      style: TextStyle(fontSize: 12, color: Colors.green.shade800))),
+                ]),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (sources.isNotEmpty) ...[
               Container(
                 width: double.infinity,

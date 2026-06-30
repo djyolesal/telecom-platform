@@ -14,6 +14,7 @@ class Maintenance {
   final String type;
   final String categorie;
   final String equipement;
+  final String natureTravaux; // ENTRETIEN / INSTALLATION / DESINSTALLATION / DEPLACEMENT
   final String? description;
   final String statut;
   final DateTime? datePlanifiee;
@@ -40,6 +41,7 @@ class Maintenance {
     required this.type,
     required this.categorie,
     required this.equipement,
+    this.natureTravaux = 'ENTRETIEN',
     this.description,
     required this.statut,
     this.datePlanifiee,
@@ -84,6 +86,7 @@ class Maintenance {
       type: j['type'] as String,
       categorie: j['categorie'] as String,
       equipement: j['equipement'] as String,
+      natureTravaux: j['natureTravaux'] as String? ?? 'ENTRETIEN',
       description: j['description'] as String?,
       statut: j['statut'] as String? ?? 'PLANIFIEE',
       datePlanifiee: DateTime.tryParse(j['datePlanifiee']?.toString() ?? ''),
