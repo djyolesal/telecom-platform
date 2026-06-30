@@ -282,20 +282,24 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       return dep;
     });
 
-    await syncLigneLivraison(depotage.ligneLivraisonId);
-    clearMemo(); // nouvelles données → invalide manquants/forecast mémoïsés
-    await auditLog(req.user!.id, 'CREATE', 'depotages', depotage.id, req.body, req);
-    const firstPhotoKey = photosIn.find((p) => p && p.key)?.key;
-    io.of('/supervision').emit('stock:updated', {
-      depotageId: depotage.id,
-      siteId: depotage.siteId,
-      siteCode: depotage.site?.code,
-      siteNom: depotage.site?.nom,
-      stockApresLitres: stockApres,
-      volumeLitres: Number(depotage.volumeLitres),
-      ecartLivraisonLitres: recon.ecartLivraisonLitres,
-      photoUrl: firstPhotoKey ? publicFileUrl(firstPhotoKey) : null,
-    });
+    // Post-commit (best-effort) : le dépotage EST déjà créé → un échec ici ne doit pas
+    // renvoyer 500 (sinon la sync mobile rejouerait et créerait un doublon).
+    try {
+      await syncLigneLivraison(depotage.ligneLivraisonId);
+      clearMemo(); // nouvelles données → invalide manquants/forecast mémoïsés
+      await auditLog(req.user!.id, 'CREATE', 'depotages', depotage.id, req.body, req);
+      const firstPhotoKey = photosIn.find((p) => p && p.key)?.key;
+      io.of('/supervision').emit('stock:updated', {
+        depotageId: depotage.id,
+        siteId: depotage.siteId,
+        siteCode: depotage.site?.code,
+        siteNom: depotage.site?.nom,
+        stockApresLitres: stockApres,
+        volumeLitres: Number(depotage.volumeLitres),
+        ecartLivraisonLitres: recon.ecartLivraisonLitres,
+        photoUrl: firstPhotoKey ? publicFileUrl(firstPhotoKey) : null,
+      });
+    } catch { /* la ligne sera resynchronisée au prochain dépotage ; pas de 500 ici */ }
 
     res.status(201).json({ success: true, data: depotage });
   } catch (err) { next(err); }

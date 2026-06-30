@@ -53,35 +53,33 @@ const equipToDTO = (e: {
 /** Liste du parc d'actifs (GE + équipements), filtrable par type / statut / site. */
 export async function listActifs(req: Request, res: Response, next: NextFunction) {
   try {
-    const { type, statut, site_id, en_stock } = req.query as Record<string, string>;
+    const { type, statut, site_id, en_stock, limit } = req.query as Record<string, string>;
     const siteSel = { select: { code: true, nom: true } };
     const out: ActifDTO[] = [];
+    const take = Math.min(Math.max(parseInt(limit || '200', 10) || 200, 1), 500); // borne anti-surcharge
+
+    // en_stock prime sur site_id (filtres mutuellement exclusifs : dépôt = sans site).
+    const siteClause = en_stock === 'true' ? { siteId: null } : site_id ? { siteId: site_id } : {};
+    const statutClause = statut ? { statutActif: statut as never } : {};
 
     const wantGE = !type || type === 'GE';
     const wantEquip = !type || type !== 'GE';
 
     if (wantGE) {
       const ges = await prisma.groupeElectrogene.findMany({
-        where: {
-          ...(statut ? { statutActif: statut as never } : {}),
-          ...(site_id ? { siteId: site_id } : {}),
-          ...(en_stock === 'true' ? { siteId: null } : {}),
-        },
+        where: { ...statutClause, ...siteClause },
         include: { site: siteSel },
         orderBy: { createdAt: 'desc' },
+        take,
       });
       out.push(...ges.map(geToDTO));
     }
     if (wantEquip) {
       const eqs = await prisma.equipementActif.findMany({
-        where: {
-          ...(type && type !== 'GE' ? { categorie: type as never } : {}),
-          ...(statut ? { statutActif: statut as never } : {}),
-          ...(site_id ? { siteId: site_id } : {}),
-          ...(en_stock === 'true' ? { siteId: null } : {}),
-        },
+        where: { ...(type && type !== 'GE' ? { categorie: type as never } : {}), ...statutClause, ...siteClause },
         include: { site: siteSel },
         orderBy: { createdAt: 'desc' },
+        take,
       });
       out.push(...eqs.map(equipToDTO));
     }
@@ -101,15 +99,17 @@ export async function getActif(req: Request, res: Response, next: NextFunction) 
       const g = await prisma.groupeElectrogene.findUnique({ where: { id }, include: { site: siteSel } });
       if (g) actif = geToDTO(g);
     } else {
+      // Le type de l'URL doit correspondre à la catégorie de l'équipement.
       const e = await prisma.equipementActif.findUnique({ where: { id }, include: { site: siteSel } });
-      if (e) actif = equipToDTO(e);
+      if (e && e.categorie === type) actif = equipToDTO(e);
     }
     if (!actif) throw new AppError('Actif introuvable', 404);
 
-    // Historique : maintenances de cycle de vie ciblant cet actif.
+    // Historique : maintenances de cycle de vie ciblant cet actif (borné).
     const mouvements = await prisma.maintenance.findMany({
       where: { actifId: id, natureTravaux: { not: 'ENTRETIEN' } },
       orderBy: [{ dateFin: 'desc' }, { datePlanifiee: 'desc' }],
+      take: 100,
       select: {
         id: true, natureTravaux: true, statut: true, datePlanifiee: true, dateFin: true,
         siteId: true, siteSourceId: true,
@@ -143,8 +143,9 @@ export async function createActif(req: Request, res: Response, next: NextFunctio
 
     let created;
     if (actifType === 'GE') {
-      // Numéro auto sur le site (ou 1 au dépôt).
-      let numero = 1;
+      // Au dépôt : numéro sentinel 0 (le vrai numéro est attribué à la pose).
+      // Sur un site : prochain numéro libre.
+      let numero = 0;
       if (siteId) {
         const agg = await prisma.groupeElectrogene.aggregate({ where: { siteId }, _max: { numero: true } });
         numero = (agg._max.numero ?? 0) + 1;

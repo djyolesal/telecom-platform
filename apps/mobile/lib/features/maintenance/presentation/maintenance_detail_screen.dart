@@ -453,6 +453,8 @@ class _CloseSheetState extends State<_CloseSheet> {
   Widget build(BuildContext context) {
     final m = widget.maintenance;
     final sources = m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+    // Photos requises : 6 pour une préventive, 2 pour un travail de cycle de vie.
+    final minPhotos = m.type == 'PREVENTIVE' ? kMinPhotosPreventive : (m.natureTravaux != 'ENTRETIEN' ? kMinPhotosMouvement : 0);
     const numKb = TextInputType.numberWithOptions(decimal: true);
 
     return Padding(
@@ -518,22 +520,22 @@ class _CloseSheetState extends State<_CloseSheet> {
               ),
               const SizedBox(height: 12),
             ],
-            if (m.type == 'PREVENTIVE') ...[
+            if (minPhotos > 0) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _photos.length >= kMinPhotosPreventive ? Colors.green.shade50 : Colors.orange.shade50,
+                  color: _photos.length >= minPhotos ? Colors.green.shade50 : Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Photos ${_photos.length}/$kMinPhotosPreventive (carte GE, compteur CEET, activités)',
+                    Text('Photos ${_photos.length}/$minPhotos (carte GE, compteur CEET, activités)',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: _photos.length >= kMinPhotosPreventive ? Colors.green.shade800 : Colors.orange.shade900)),
+                            color: _photos.length >= minPhotos ? Colors.green.shade800 : Colors.orange.shade900)),
                     Text('À prendre sur site avec la caméra — pas d\'import galerie',
                         style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                     const SizedBox(height: 8),

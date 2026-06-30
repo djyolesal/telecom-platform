@@ -105,8 +105,10 @@ class Maintenance {
       photoUrls: photos,
       // Liste : compteur via _count.photos ; détail : longueur du tableau photos.
       photoCount: (j['_count'] as Map?)?['photos'] as int? ?? photos.length,
-      // Détail : fourni par l'API ; repli par catégorie si absent (liste).
-      requiresEnergie: (j['requiresEnergieReleve'] as bool?) ?? passiveCategories.contains(j['categorie'] as String),
+      // Détail : fourni par l'API ; repli aligné sur la règle serveur si absent (liste) :
+      // jamais de relevé pour un travail de cycle de vie.
+      requiresEnergie: (j['requiresEnergieReleve'] as bool?) ??
+          ((j['natureTravaux'] as String? ?? 'ENTRETIEN') == 'ENTRETIEN' && passiveCategories.contains(j['categorie'] as String)),
     );
   }
 }

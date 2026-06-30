@@ -44,43 +44,52 @@ const requiresEnergieReleve = (m: { categorie: string; tachePreventiveKey: strin
   return m.tachePreventiveKey ? !TACHES_SANS_RELEVE.has(m.tachePreventiveKey) : m.categorie !== 'CLIMATISEUR';
 };
 
-/** Prochain numéro de GE libre sur un site (re-numérotation auto à l'installation). */
-async function nextNumeroGE(siteId: string): Promise<number> {
-  const agg = await prisma.groupeElectrogene.aggregate({ where: { siteId }, _max: { numero: true } });
-  return (agg._max.numero ?? 0) + 1;
-}
-
 /**
- * Applique le mouvement d'actif déclenché par la clôture d'un travail de cycle de vie :
- * INSTALLATION/DEPLACEMENT → l'actif est posé sur le site (destination = siteId, EN_SERVICE,
- * GE re-numéroté) ; DESINSTALLATION → l'actif est détaché (au dépôt, EN_STOCK).
+ * Applique le mouvement d'actif déclenché par la clôture d'un travail de cycle de vie,
+ * DANS la transaction de clôture (atomique avec le passage à TERMINEE). Valide l'existence,
+ * le type et l'état de l'actif avant de le déplacer ; lève une AppError sinon.
+ * INSTALLATION/DEPLACEMENT → posé sur le site (destination, EN_SERVICE, GE re-numéroté) ;
+ * DESINSTALLATION → détaché (au dépôt, EN_STOCK, numéro réinitialisé).
  */
-async function applyMouvementActif(m: {
-  natureTravaux: string;
-  actifType: string | null;
-  actifId: string | null;
-  siteId: string;
-}) {
-  if (m.natureTravaux === 'ENTRETIEN' || !m.actifType || !m.actifId) return;
+async function applyMouvementActif(
+  tx: Prisma.TransactionClient,
+  m: { natureTravaux: string; actifType: string | null; actifId: string | null; siteId: string; siteSourceId: string | null }
+) {
+  if (m.natureTravaux === 'ENTRETIEN') return;
+  if (!m.actifType || !m.actifId) throw new AppError('Actif manquant pour ce mouvement.', 422);
   const isGE = m.actifType === 'GE';
+
+  // Charge l'actif et valide son type + son état réel (peut avoir changé depuis la planif.).
+  const actif = isGE
+    ? await tx.groupeElectrogene.findUnique({ where: { id: m.actifId } })
+    : await tx.equipementActif.findUnique({ where: { id: m.actifId } });
+  if (!actif) throw new AppError("L'actif ciblé est introuvable.", 404);
+  if (!isGE && (actif as { categorie: string }).categorie !== m.actifType) {
+    throw new AppError("Le type de l'actif ne correspond pas à l'intervention.", 422);
+  }
+
   if (m.natureTravaux === 'DESINSTALLATION') {
+    if (actif.siteId == null) throw new AppError('Cet actif est déjà au dépôt (rien à désinstaller).', 409);
     const data = { siteId: null, statutActif: 'EN_STOCK' as const, isActive: false };
-    if (isGE) await prisma.groupeElectrogene.update({ where: { id: m.actifId }, data });
-    else await prisma.equipementActif.update({ where: { id: m.actifId }, data });
+    if (isGE) await tx.groupeElectrogene.update({ where: { id: m.actifId }, data: { ...data, numero: 0 } });
+    else await tx.equipementActif.update({ where: { id: m.actifId }, data });
     return;
   }
+  if (m.natureTravaux === 'INSTALLATION' && actif.siteId != null) {
+    throw new AppError('Cet actif est déjà installé (utilisez un déplacement).', 409);
+  }
+  if (m.natureTravaux === 'DEPLACEMENT') {
+    if (m.siteSourceId === m.siteId) throw new AppError("Le site d'origine et de destination sont identiques.", 422);
+    if (actif.siteId == null) throw new AppError('Cet actif est au dépôt (utilisez une installation).', 409);
+  }
+
   // INSTALLATION ou DEPLACEMENT → poser sur le site de destination (= siteId).
   if (isGE) {
-    const numero = await nextNumeroGE(m.siteId);
-    await prisma.groupeElectrogene.update({
-      where: { id: m.actifId },
-      data: { siteId: m.siteId, numero, statutActif: 'EN_SERVICE', isActive: true },
-    });
+    const agg = await tx.groupeElectrogene.aggregate({ where: { siteId: m.siteId }, _max: { numero: true } });
+    const numero = (agg._max.numero ?? 0) + 1; // collision éventuelle → retry P2002 au niveau transaction
+    await tx.groupeElectrogene.update({ where: { id: m.actifId }, data: { siteId: m.siteId, numero, statutActif: 'EN_SERVICE', isActive: true } });
   } else {
-    await prisma.equipementActif.update({
-      where: { id: m.actifId },
-      data: { siteId: m.siteId, statutActif: 'EN_SERVICE', isActive: true },
-    });
+    await tx.equipementActif.update({ where: { id: m.actifId }, data: { siteId: m.siteId, statutActif: 'EN_SERVICE', isActive: true } });
   }
 }
 
@@ -270,11 +279,31 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
     if (dp.getTime() < Date.now() - 60_000) {
       throw new AppError('La date planifiée doit être postérieure ou égale à maintenant.', 422);
     }
-    // Travail de cycle de vie : un actif cible est requis (+ site d'origine pour un déplacement).
+    // Travail de cycle de vie : actif cible requis, existant, du bon type et dans l'état attendu.
     const nature = data.natureTravaux ?? 'ENTRETIEN';
     if (nature !== 'ENTRETIEN') {
       if (!data.actifType || !data.actifId) throw new AppError('Ce travail doit cibler un actif (type + identifiant).', 422);
-      if (nature === 'DEPLACEMENT' && !data.siteSourceId) throw new AppError("Un déplacement doit préciser le site d'origine.", 422);
+      if (nature === 'DEPLACEMENT') {
+        if (!data.siteSourceId) throw new AppError("Un déplacement doit préciser le site d'origine.", 422);
+        if (data.siteSourceId === data.siteId) throw new AppError("Le site d'origine et de destination sont identiques.", 422);
+      }
+      const isGE = data.actifType === 'GE';
+      const actif = isGE
+        ? await prisma.groupeElectrogene.findUnique({ where: { id: data.actifId } })
+        : await prisma.equipementActif.findUnique({ where: { id: data.actifId } });
+      if (!actif) throw new AppError("L'actif ciblé est introuvable.", 404);
+      if (!isGE && (actif as { categorie: string }).categorie !== data.actifType) {
+        throw new AppError("Le type de l'actif ne correspond pas à l'intervention.", 422);
+      }
+      if (nature === 'INSTALLATION' && actif.siteId != null) throw new AppError('Cet actif est déjà installé (utilisez un déplacement).', 409);
+      if ((nature === 'DESINSTALLATION' || nature === 'DEPLACEMENT') && actif.siteId == null) {
+        throw new AppError('Cet actif est au dépôt (utilisez une installation).', 409);
+      }
+      // Anti double-booking : pas de second mouvement ouvert sur le même actif.
+      const open = await prisma.maintenance.findFirst({
+        where: { actifId: data.actifId, natureTravaux: { not: 'ENTRETIEN' }, statut: { in: ['PLANIFIEE', 'EN_COURS'] } },
+      });
+      if (open) throw new AppError('Un mouvement est déjà planifié ou en cours pour cet actif.', 409);
     }
     // Détermine automatiquement le prestataire responsable (site → lot → attribution).
     // Une tâche contractuelle est toujours passive → on résout sur le périmètre passif,
@@ -347,8 +376,17 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
       throw new AppError('Vous avez déjà une maintenance en cours. Clôturez-la avant d\'en démarrer une autre.', 409);
     }
 
-    // Tout ticket doit être DÉMARRÉ sur le site.
-    assertOnSite(existing.site, latitude, longitude, 'le démarrage');
+    // Tout ticket doit être DÉMARRÉ sur le site. Pour un DÉPLACEMENT, la dépose se
+    // fait sur le site SOURCE → on vérifie la présence là-bas (la pose/clôture, elle,
+    // est vérifiée sur la destination).
+    let startSite = existing.site;
+    if (existing.natureTravaux === 'DEPLACEMENT' && existing.siteSourceId) {
+      startSite = await prisma.site.findUnique({
+        where: { id: existing.siteSourceId },
+        select: { latitude: true, longitude: true, code: true },
+      }) ?? existing.site;
+    }
+    assertOnSite(startSite, latitude, longitude, 'le démarrage');
 
     const updated = await prisma.maintenance.update({
       where: { id: req.params.id },
@@ -389,6 +427,12 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+
+    // Seule une maintenance EN COURS peut être clôturée (anti re-clôture : sinon un
+    // retry réseau / double-tap / re-sync re-appliquerait mouvement, relevés et photos).
+    if (existing.statut !== 'EN_COURS') {
+      throw new AppError(`Cette maintenance ne peut pas être clôturée (statut : ${existing.statut}).`, 409);
+    }
 
     // Une maintenance doit avoir été démarrée et durer au moins 1h avant clôture.
     if (!existing.dateDebut) throw new AppError('La maintenance doit être démarrée avant clôture.', 409);
@@ -465,149 +509,147 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     const dateDebut = existing.dateDebut ?? dateFin;
     const dureeMinutes = Math.max(0, differenceInMinutes(dateFin, dateDebut));
 
-    if (pieces?.length) {
-      await prisma.pieceRechange.createMany({
-        data: pieces.map((p) => ({ ...p, maintenanceId: existing.id })) as unknown as Prisma.PieceRechangeCreateManyInput[],
-      });
-    }
-
-    // Photos prises sur place (carte GE, compteur CEET, activités)
-    if (photos?.length) {
-      await prisma.photo.createMany({
-        data: photos
-          .filter((p) => p && p.url && p.key)
-          .map((p) => ({ entityType: 'maintenance', entityId: existing.id, url: p.url, minioKey: p.key })),
-      });
-    }
-
-    let updated = await prisma.maintenance.update({
-      where: { id: req.params.id },
-      data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations, signaturePath },
-    });
-
-    // Création des relevés énergie liés à la maintenance (un par source présente).
-    // Les consommations sont CALCULÉES par différence avec le relevé précédent du site :
-    //  - kWh CEET      = index compteur actuel − index précédent ;
-    //  - heures GE     = index horaire actuel − index précédent ;
-    //  - gasoil GE     = niveau cuve précédent + dépotages depuis − niveau actuel.
-    let analyseEnergie: string | null = null;
-    if (passive && sources.length) {
-      const techId = existing.technicienId ?? req.user!.id;
-
-      for (const source of sources) {
-        if (source === 'GE') {
-          // Cuve PARTAGÉE : un niveau + une conso gasoil calculés une seule fois,
-          // rattachés au 1er relevé GE. Heures calculées PAR GE (compteurs distincts).
-          const tank = num(e.volumeGasoilLitres);
-          const geHours = (e.geHours ?? {}) as Record<string, unknown>;
-          const groupes = existing.site.groupes ?? [];
-
-          // Gasoil consommé (partagé) = dernier niveau cuve + dépotages depuis − niveau actuel.
-          let gasoilConso: number | null = null;
-          let gasoilCost: number | null = null;
-          const prevTank = await prisma.releveEnergie.findFirst({
-            where: { siteId: existing.siteId, source: 'GE', volumeGasoilLitres: { not: null }, maintenanceId: { not: existing.id } },
-            orderBy: { dateReleve: 'desc' },
-          });
-          if (prevTank?.volumeGasoilLitres != null && tank != null) {
-            const depots = await prisma.depotage.aggregate({
-              where: { siteId: existing.siteId, dateDepotage: { gt: prevTank.dateReleve, lte: dateFin } },
-              _sum: { volumeLitres: true },
-            });
-            const ajout = Number(depots._sum.volumeLitres ?? 0);
-            gasoilConso = Math.max(0, Number(prevTank.volumeGasoilLitres) + ajout - tank);
-            gasoilCost = Math.round(gasoilConso * GE_PARAMS.prixLitreFCFA);
-          }
-
-          // Un relevé par GE (ou un seul si aucun GE configuré).
-          const cibles = groupes.length ? groupes : [null];
-          let first = true;
-          let expectedGasoil = 0; // litres attendus = Σ puissance × facteur charge × heures × conso spécifique
-          let hasHeures = false;
-          for (const g of cibles) {
-            const hIndex = g ? num(geHours[g.id]) : num(e.indexHeuresGE);
-            const prevGe = await prisma.releveEnergie.findFirst({
-              where: { siteId: existing.siteId, source: 'GE', maintenanceId: { not: existing.id }, ...(g ? { groupeId: g.id } : {}) },
-              orderBy: { dateReleve: 'desc' },
-            });
-            const data: Prisma.ReleveEnergieUncheckedCreateInput = {
-              siteId: existing.siteId, dateReleve: dateFin, source: 'GE',
-              technicienId: techId, maintenanceId: existing.id,
-              groupeId: g?.id, indexHeuresGE: hIndex,
-            };
-            if (prevGe?.indexHeuresGE != null && hIndex != null) {
-              const heures = Math.max(0, hIndex - Number(prevGe.indexHeuresGE));
-              data.heuresFonctGE = heures;
-              if (heures > 0) {
-                // GE modélisé → sa puissance/statut ; sinon repli sur les champs GE du site.
-                const kva = g ? Number(g.puissanceKva) : Number(existing.site.puissanceGEkva);
-                const statut = g ? g.statut : existing.site.statutGE;
-                expectedGasoil += expectedGasoilGE(kva, statut, heures);
-                hasHeures = true;
-              }
-            }
-            if (first) {
-              data.volumeGasoilLitres = tank;
-              data.gasoilConsommeLitres = gasoilConso;
-              data.coutEstime = gasoilCost;
-              first = false;
-            }
-            await prisma.releveEnergie.create({ data });
-          }
-
-          // Analyse de cohérence : gasoil consommé (cuve) vs attendu (heures × puissance).
-          analyseEnergie = analyseGasoilCoherence({ consomme: gasoilConso, attendu: expectedGasoil, hasHeures, seuilPct: seuilEcartGasoilPct() });
-        } else if (source === 'CEET') {
-          const index = num(e.indexCompteur);
-          const prev = await prisma.releveEnergie.findFirst({
-            where: { siteId: existing.siteId, source: 'CEET', maintenanceId: { not: existing.id } },
-            orderBy: { dateReleve: 'desc' },
-          });
-          const data: Prisma.ReleveEnergieUncheckedCreateInput = {
-            siteId: existing.siteId, dateReleve: dateFin, source: 'CEET',
-            technicienId: techId, maintenanceId: existing.id, indexCompteur: index,
-          };
-          if (prev?.indexCompteur != null && index != null) {
-            const kwh = Math.max(0, index - Number(prev.indexCompteur));
-            data.consommationKwh = kwh;
-            data.coutEstime = Math.round(kwh * TARIF_CEET_FCFA);
-          }
-          await prisma.releveEnergie.create({ data });
-        } else if (source === 'SOLAIRE') {
-          await prisma.releveEnergie.create({
-            data: {
-              siteId: existing.siteId, dateReleve: dateFin, source: 'SOLAIRE',
-              technicienId: techId, maintenanceId: existing.id, puissanceKva: num(e.puissanceKva),
-            },
+    // Écritures ATOMIQUES : pièces, photos, passage TERMINEE, relevés énergie ET
+    // mouvement d'actif dans une seule transaction → tout réussit ou tout est annulé
+    // (plus de maintenance TERMINEE avec actif non déplacé). Retry sur collision de
+    // numéro GE (P2002), car nextNumeroGE est un read-then-write.
+    const runClose = () =>
+      prisma.$transaction(async (tx) => {
+        if (pieces?.length) {
+          await tx.pieceRechange.createMany({
+            data: pieces.map((p) => ({ ...p, maintenanceId: existing.id })) as unknown as Prisma.PieceRechangeCreateManyInput[],
           });
         }
+        // Photos prises sur place (carte GE, compteur CEET, activités)
+        if (photos?.length) {
+          await tx.photo.createMany({
+            data: photos
+              .filter((p) => p && p.url && p.key)
+              .map((p) => ({ entityType: 'maintenance', entityId: existing.id, url: p.url, minioKey: p.key })),
+          });
+        }
+
+        let m = await tx.maintenance.update({
+          where: { id: req.params.id },
+          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations, signaturePath },
+        });
+
+        // Relevés énergie (un par source), consommations calculées par différence.
+        let analyseEnergie: string | null = null;
+        if (passive && sources.length) {
+          const techId = existing.technicienId ?? req.user!.id;
+          for (const source of sources) {
+            if (source === 'GE') {
+              const tank = num(e.volumeGasoilLitres);
+              const geHours = (e.geHours ?? {}) as Record<string, unknown>;
+              const groupes = existing.site.groupes ?? [];
+              let gasoilConso: number | null = null;
+              let gasoilCost: number | null = null;
+              const prevTank = await tx.releveEnergie.findFirst({
+                where: { siteId: existing.siteId, source: 'GE', volumeGasoilLitres: { not: null }, maintenanceId: { not: existing.id } },
+                orderBy: { dateReleve: 'desc' },
+              });
+              if (prevTank?.volumeGasoilLitres != null && tank != null) {
+                const depots = await tx.depotage.aggregate({
+                  where: { siteId: existing.siteId, dateDepotage: { gt: prevTank.dateReleve, lte: dateFin } },
+                  _sum: { volumeLitres: true },
+                });
+                const ajout = Number(depots._sum.volumeLitres ?? 0);
+                gasoilConso = Math.max(0, Number(prevTank.volumeGasoilLitres) + ajout - tank);
+                gasoilCost = Math.round(gasoilConso * GE_PARAMS.prixLitreFCFA);
+              }
+              const cibles = groupes.length ? groupes : [null];
+              let first = true;
+              let expectedGasoil = 0;
+              let hasHeures = false;
+              for (const g of cibles) {
+                const hIndex = g ? num(geHours[g.id]) : num(e.indexHeuresGE);
+                const prevGe = await tx.releveEnergie.findFirst({
+                  where: { siteId: existing.siteId, source: 'GE', maintenanceId: { not: existing.id }, ...(g ? { groupeId: g.id } : {}) },
+                  orderBy: { dateReleve: 'desc' },
+                });
+                const data: Prisma.ReleveEnergieUncheckedCreateInput = {
+                  siteId: existing.siteId, dateReleve: dateFin, source: 'GE',
+                  technicienId: techId, maintenanceId: existing.id,
+                  groupeId: g?.id, indexHeuresGE: hIndex,
+                };
+                if (prevGe?.indexHeuresGE != null && hIndex != null) {
+                  const heures = Math.max(0, hIndex - Number(prevGe.indexHeuresGE));
+                  data.heuresFonctGE = heures;
+                  if (heures > 0) {
+                    const kva = g ? Number(g.puissanceKva) : Number(existing.site.puissanceGEkva);
+                    const statut = g ? g.statut : existing.site.statutGE;
+                    expectedGasoil += expectedGasoilGE(kva, statut, heures);
+                    hasHeures = true;
+                  }
+                }
+                if (first) {
+                  data.volumeGasoilLitres = tank;
+                  data.gasoilConsommeLitres = gasoilConso;
+                  data.coutEstime = gasoilCost;
+                  first = false;
+                }
+                await tx.releveEnergie.create({ data });
+              }
+              analyseEnergie = analyseGasoilCoherence({ consomme: gasoilConso, attendu: expectedGasoil, hasHeures, seuilPct: seuilEcartGasoilPct() });
+            } else if (source === 'CEET') {
+              const index = num(e.indexCompteur);
+              const prev = await tx.releveEnergie.findFirst({
+                where: { siteId: existing.siteId, source: 'CEET', maintenanceId: { not: existing.id } },
+                orderBy: { dateReleve: 'desc' },
+              });
+              const data: Prisma.ReleveEnergieUncheckedCreateInput = {
+                siteId: existing.siteId, dateReleve: dateFin, source: 'CEET',
+                technicienId: techId, maintenanceId: existing.id, indexCompteur: index,
+              };
+              if (prev?.indexCompteur != null && index != null) {
+                const kwh = Math.max(0, index - Number(prev.indexCompteur));
+                data.consommationKwh = kwh;
+                data.coutEstime = Math.round(kwh * TARIF_CEET_FCFA);
+              }
+              await tx.releveEnergie.create({ data });
+            } else if (source === 'SOLAIRE') {
+              await tx.releveEnergie.create({
+                data: {
+                  siteId: existing.siteId, dateReleve: dateFin, source: 'SOLAIRE',
+                  technicienId: techId, maintenanceId: existing.id, puissanceKva: num(e.puissanceKva),
+                },
+              });
+            }
+          }
+        }
+        if (analyseEnergie) {
+          m = await tx.maintenance.update({ where: { id: req.params.id }, data: { analyseEnergie } });
+        }
+
+        // Mouvement d'actif (pose/dépose/déplacement), atomique avec le passage TERMINEE.
+        await applyMouvementActif(tx, existing);
+        return m;
+      });
+
+    let updated;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try { updated = await runClose(); break; }
+      catch (err) {
+        if ((err as { code?: string }).code === 'P2002' && attempt < 3) continue; // collision numéro GE → retry
+        throw err;
       }
     }
+    if (!updated) throw new AppError('Échec de la clôture (réessayez).', 500);
 
-    // Commentaire d'analyse de cohérence énergie (gasoil vs heures × puissance).
-    if (analyseEnergie) {
-      updated = await prisma.maintenance.update({
+    // Rapport PDF : généré HORS transaction (I/O MinIO). Best-effort — la clôture est
+    // déjà validée, un échec PDF ne doit pas l'annuler.
+    try {
+      const full = await prisma.maintenance.findUnique({
         where: { id: req.params.id },
-        data: { analyseEnergie },
+        include: { site: true, technicien: { select: { nom: true, prenom: true } }, pieces: true },
       });
-    }
-
-    // Génération + stockage du rapport PDF
-    const full = await prisma.maintenance.findUnique({
-      where: { id: req.params.id },
-      include: { site: true, technicien: { select: { nom: true, prenom: true } }, pieces: true },
-    });
-    if (full) {
-      const pdf = await generateMaintenancePdf(full);
-      const stored = await uploadBuffer(pdf, `maintenance-${full.id}.pdf`, 'application/pdf', 'rapports');
-      updated = await prisma.maintenance.update({
-        where: { id: req.params.id },
-        data: { rapportPdfPath: stored.key },
-      });
-    }
-
-    // Travail de cycle de vie → applique le mouvement d'actif (pose/dépose/déplacement).
-    await applyMouvementActif(existing);
+      if (full) {
+        const pdf = await generateMaintenancePdf(full);
+        const stored = await uploadBuffer(pdf, `maintenance-${full.id}.pdf`, 'application/pdf', 'rapports');
+        updated = await prisma.maintenance.update({ where: { id: req.params.id }, data: { rapportPdfPath: stored.key } });
+      }
+    } catch { /* PDF non bloquant : la clôture reste valide */ }
 
     await auditLog(req.user!.id, 'CLOSE', 'maintenances', existing.id, { dureeMinutes }, req);
     res.json({ success: true, data: updated });
