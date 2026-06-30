@@ -5,6 +5,7 @@ class Releve {
   final String? siteNom;
   final DateTime? dateReleve;
   final String source;
+  final String? provenance;
   final double? consommationKwh;
   final double? volumeGasoilLitres;
   final double? heuresFonctGE;
@@ -15,6 +16,7 @@ class Releve {
     this.siteNom,
     this.dateReleve,
     required this.source,
+    this.provenance,
     this.consommationKwh,
     this.volumeGasoilLitres,
     this.heuresFonctGE,
@@ -30,6 +32,7 @@ class Releve {
       siteNom: site?['nom'] as String?,
       dateReleve: DateTime.tryParse(j['dateReleve']?.toString() ?? ''),
       source: j['source'] as String? ?? 'CEET',
+      provenance: j['provenance'] as String?,
       consommationKwh: _dn(j['consommationKwh']),
       volumeGasoilLitres: _dn(j['volumeGasoilLitres']),
       heuresFonctGE: _dn(j['heuresFonctGE']),
@@ -44,6 +47,7 @@ class ReleveDetail {
   final String? siteNom;
   final DateTime? dateReleve;
   final String source;
+  final String? provenance;
   final double? indexCompteur;
   final double? consommationKwh;
   final double? volumeGasoilLitres;
@@ -64,6 +68,7 @@ class ReleveDetail {
     this.siteNom,
     this.dateReleve,
     required this.source,
+    this.provenance,
     this.indexCompteur,
     this.consommationKwh,
     this.volumeGasoilLitres,
@@ -90,6 +95,7 @@ class ReleveDetail {
       siteNom: site?['nom'] as String?,
       dateReleve: DateTime.tryParse(j['dateReleve']?.toString() ?? ''),
       source: j['source'] as String? ?? 'CEET',
+      provenance: j['provenance'] as String?,
       indexCompteur: Releve._dn(j['indexCompteur']),
       consommationKwh: Releve._dn(j['consommationKwh']),
       volumeGasoilLitres: Releve._dn(j['volumeGasoilLitres']),

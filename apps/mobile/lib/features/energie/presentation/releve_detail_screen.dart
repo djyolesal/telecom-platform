@@ -45,6 +45,7 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
               _card('Relevé', [
                 _row('Site', r.siteNom ?? r.siteCode ?? '—'),
                 _row('Date', fmtDateTime(r.dateReleve)),
+                if (r.provenance != null && r.provenance!.isNotEmpty) _row('Provenance', r.provenance!),
                 _row('Source', r.source),
                 if (r.indexCompteur != null) _row('Index compteur', fmtNum(r.indexCompteur!)),
                 if (r.consommationKwh != null) _row('Consommation', '${fmtNum(r.consommationKwh!)} kWh'),

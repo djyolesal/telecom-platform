@@ -50,6 +50,7 @@ export default function ReleveDetailPage() {
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
         <Row label="Site" value={r.site ? `${r.site.code} — ${r.site.nom}` : '—'} />
         <Row label="Date" value={fmtDateTime(r.dateReleve)} />
+        {r.provenance && <Row label="Provenance" value={r.provenance} />}
         <Row label="Source" value={<Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{r.source}</Badge>} />
         {r.indexCompteur != null && <Row label="Index compteur" value={fmtNumber(Number(r.indexCompteur))} />}
         {r.consommationKwh != null && <Row label="Consommation" value={`${fmtNumber(Number(r.consommationKwh))} kWh`} />}

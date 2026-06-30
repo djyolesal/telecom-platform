@@ -19,16 +19,20 @@ interface Releve {
   id: string;
   dateReleve: string;
   source: string;
+  provenance?: string;
   consommationKwh?: number;
   volumeGasoilLitres?: number;
   heuresFonctGE?: number;
   site?: { code: string; nom: string };
 }
 
-const SOURCE_COLOR: Record<string, string> = {
-  CEET: 'bg-blue-100 text-blue-700',
-  GE: 'bg-orange-100 text-orange-700',
-  SOLAIRE: 'bg-green-100 text-green-700',
+const PROVENANCE_COLOR: Record<string, string> = {
+  Dépotage: 'bg-orange-100 text-orange-700',
+  Curative: 'bg-red-100 text-red-700',
+  Préventive: 'bg-blue-100 text-blue-700',
+  'Vidange GE': 'bg-amber-100 text-amber-700',
+  'TGBT/AVR': 'bg-indigo-100 text-indigo-700',
+  'Curage cuve': 'bg-cyan-100 text-cyan-700',
 };
 
 export default function RelevesPage() {
@@ -47,7 +51,7 @@ export default function RelevesPage() {
   const columns: Column<Releve>[] = [
     { key: 'site', header: 'Site', render: (r) => <span className="font-medium text-gray-800">{r.site?.nom ?? r.site?.code ?? "—"}</span> },
     { key: 'dateReleve', header: 'Date', render: (r) => fmtDate(r.dateReleve) },
-    { key: 'source', header: 'Source', render: (r) => <Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{r.source}</Badge> },
+    { key: 'provenance', header: 'Provenance', render: (r) => <Badge className={PROVENANCE_COLOR[r.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{r.provenance ?? '—'}</Badge> },
     { key: 'consommationKwh', header: 'Conso (kWh)', align: 'right', render: (r) => (r.consommationKwh != null ? fmtNumber(Number(r.consommationKwh)) : '—') },
     { key: 'volumeGasoilLitres', header: 'Gasoil (L)', align: 'right', render: (r) => (r.volumeGasoilLitres != null ? fmtNumber(Number(r.volumeGasoilLitres)) : '—') },
     { key: 'heuresFonctGE', header: 'Heures GE', align: 'right', render: (r) => (r.heuresFonctGE != null ? Number(r.heuresFonctGE) : '—') },

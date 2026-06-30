@@ -54,7 +54,7 @@ class _ReleveView extends StatelessWidget {
                     : '${fmtNum(r.consommationKwh)} kWh';
                 return ListTile(
                   leading: const CircleAvatar(child: Icon(Icons.bolt, size: 20)),
-                  title: Text('${r.siteNom ?? r.siteCode ?? '—'} · ${kSourceEnergie[r.source] ?? r.source}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text('${r.siteNom ?? r.siteCode ?? '—'} · ${r.provenance ?? kSourceEnergie[r.source] ?? r.source}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text('${fmtDate(r.dateReleve)} · $detail'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/energie/detail/${r.id}'),

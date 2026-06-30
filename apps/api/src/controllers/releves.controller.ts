@@ -7,6 +7,23 @@ import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { GE_PARAMS } from '../utils/calculator';
 
+// Libellé court de la tâche préventive d'origine (pour la « provenance » du relevé).
+const PROVENANCE_TACHE: Record<string, string> = {
+  depotage: 'Dépotage',
+  ge_production: 'Vidange GE',
+  ge_secours: 'Vidange GE',
+  curage_cuve: 'Curage cuve',
+  tgbt_avr_onduleur: 'TGBT/AVR',
+};
+
+/** Provenance d'un relevé : d'où vient-il (dépotage, curative, préventive…) ? */
+function provenanceReleve(m?: { type: string; tachePreventiveKey: string | null } | null): string {
+  if (!m) return 'Autonome';
+  if (m.type === 'CURATIVE') return 'Curative';
+  if (m.tachePreventiveKey && PROVENANCE_TACHE[m.tachePreventiveKey]) return PROVENANCE_TACHE[m.tachePreventiveKey];
+  return 'Préventive';
+}
+
 /** Estime le coût d'un relevé selon la source (gasoil pour GE, kWh CEET sinon). */
 function estimerCout(data: Record<string, any>): number | null {
   if (data.coutEstime != null) return Math.round(Number(data.coutEstime));
@@ -43,12 +60,17 @@ export async function getReleves(req: Request, res: Response, next: NextFunction
         include: {
           site: { select: { nom: true, code: true, region: true } },
           technicien: { select: { nom: true, prenom: true } },
+          maintenance: { select: { type: true, tachePreventiveKey: true } },
         },
       },
       { page: parseInt(page), limit: parseInt(limit) }
     );
 
-    res.json({ success: true, data, meta });
+    // Provenance (dépotage / curative / préventive…) déduite de la maintenance liée.
+    const enriched = (data as { maintenance?: { type: string; tachePreventiveKey: string | null } | null }[])
+      .map((r) => ({ ...r, provenance: provenanceReleve(r.maintenance) }));
+
+    res.json({ success: true, data: enriched, meta });
   } catch (err) { next(err); }
 }
 
@@ -60,11 +82,11 @@ export async function getReleveById(req: Request, res: Response, next: NextFunct
         site: true,
         technicien: { select: { nom: true, prenom: true } },
         groupe: { select: { numero: true, puissanceKva: true } },
-        maintenance: { select: { id: true, type: true, categorie: true, equipement: true, dateFin: true } },
+        maintenance: { select: { id: true, type: true, categorie: true, equipement: true, dateFin: true, tachePreventiveKey: true } },
       },
     });
     if (!releve) throw new AppError('Relevé introuvable', 404);
-    res.json({ success: true, data: releve });
+    res.json({ success: true, data: { ...releve, provenance: provenanceReleve(releve.maintenance) } });
   } catch (err) { next(err); }
 }
 
@@ -94,7 +116,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
     const rows = await prisma.releveEnergie.findMany({
       where,
       orderBy: { dateReleve: 'desc' },
-      include: { site: { select: { code: true } } },
+      include: { site: { select: { code: true } }, maintenance: { select: { type: true, tachePreventiveKey: true } } },
     });
 
     const buffer = await buildXlsx(
@@ -102,6 +124,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
       [
         { header: 'Site', key: 'site', width: 16 },
         { header: 'Date', key: 'date', width: 18 },
+        { header: 'Provenance', key: 'provenance', width: 14 },
         { header: 'Source', key: 'source', width: 10 },
         { header: 'Index compteur', key: 'index', width: 14 },
         { header: 'Conso (kWh)', key: 'kwh', width: 12 },
@@ -112,6 +135,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
       rows.map((r) => ({
         site: r.site?.code ?? '',
         date: r.dateReleve.toLocaleString('fr-FR'),
+        provenance: provenanceReleve(r.maintenance),
         source: r.source,
         index: r.indexCompteur != null ? Number(r.indexCompteur) : '',
         kwh: r.consommationKwh != null ? Number(r.consommationKwh) : '',
