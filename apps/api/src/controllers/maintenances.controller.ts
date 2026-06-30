@@ -38,8 +38,51 @@ const TACHES_SANS_RELEVE = new Set(['entretien_pylone', 'controle_terre', 'deshe
  * - Sinon (curatif / saisie manuelle sans clé) : oui pour toutes, SAUF le
  *   climatiseur.
  */
-const requiresEnergieReleve = (m: { categorie: string; tachePreventiveKey: string | null }): boolean =>
-  m.tachePreventiveKey ? !TACHES_SANS_RELEVE.has(m.tachePreventiveKey) : m.categorie !== 'CLIMATISEUR';
+const requiresEnergieReleve = (m: { categorie: string; tachePreventiveKey: string | null; natureTravaux?: string | null }): boolean => {
+  // Un travail de cycle de vie (pose/dépose/déplacement) n'exige pas de relevé énergie.
+  if (m.natureTravaux && m.natureTravaux !== 'ENTRETIEN') return false;
+  return m.tachePreventiveKey ? !TACHES_SANS_RELEVE.has(m.tachePreventiveKey) : m.categorie !== 'CLIMATISEUR';
+};
+
+/** Prochain numéro de GE libre sur un site (re-numérotation auto à l'installation). */
+async function nextNumeroGE(siteId: string): Promise<number> {
+  const agg = await prisma.groupeElectrogene.aggregate({ where: { siteId }, _max: { numero: true } });
+  return (agg._max.numero ?? 0) + 1;
+}
+
+/**
+ * Applique le mouvement d'actif déclenché par la clôture d'un travail de cycle de vie :
+ * INSTALLATION/DEPLACEMENT → l'actif est posé sur le site (destination = siteId, EN_SERVICE,
+ * GE re-numéroté) ; DESINSTALLATION → l'actif est détaché (au dépôt, EN_STOCK).
+ */
+async function applyMouvementActif(m: {
+  natureTravaux: string;
+  actifType: string | null;
+  actifId: string | null;
+  siteId: string;
+}) {
+  if (m.natureTravaux === 'ENTRETIEN' || !m.actifType || !m.actifId) return;
+  const isGE = m.actifType === 'GE';
+  if (m.natureTravaux === 'DESINSTALLATION') {
+    const data = { siteId: null, statutActif: 'EN_STOCK' as const, isActive: false };
+    if (isGE) await prisma.groupeElectrogene.update({ where: { id: m.actifId }, data });
+    else await prisma.equipementActif.update({ where: { id: m.actifId }, data });
+    return;
+  }
+  // INSTALLATION ou DEPLACEMENT → poser sur le site de destination (= siteId).
+  if (isGE) {
+    const numero = await nextNumeroGE(m.siteId);
+    await prisma.groupeElectrogene.update({
+      where: { id: m.actifId },
+      data: { siteId: m.siteId, numero, statutActif: 'EN_SERVICE', isActive: true },
+    });
+  } else {
+    await prisma.equipementActif.update({
+      where: { id: m.actifId },
+      data: { siteId: m.siteId, statutActif: 'EN_SERVICE', isActive: true },
+    });
+  }
+}
 
 /** Distance en mètres entre deux points GPS (formule de haversine). */
 function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -226,6 +269,12 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
     if (Number.isNaN(dp.getTime())) throw new AppError('Date planifiée invalide.', 422);
     if (dp.getTime() < Date.now() - 60_000) {
       throw new AppError('La date planifiée doit être postérieure ou égale à maintenant.', 422);
+    }
+    // Travail de cycle de vie : un actif cible est requis (+ site d'origine pour un déplacement).
+    const nature = data.natureTravaux ?? 'ENTRETIEN';
+    if (nature !== 'ENTRETIEN') {
+      if (!data.actifType || !data.actifId) throw new AppError('Ce travail doit cibler un actif (type + identifiant).', 422);
+      if (nature === 'DEPLACEMENT' && !data.siteSourceId) throw new AppError("Un déplacement doit préciser le site d'origine.", 422);
     }
     // Détermine automatiquement le prestataire responsable (site → lot → attribution).
     // Une tâche contractuelle est toujours passive → on résout sur le périmètre passif,
@@ -543,6 +592,9 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         data: { rapportPdfPath: stored.key },
       });
     }
+
+    // Travail de cycle de vie → applique le mouvement d'actif (pose/dépose/déplacement).
+    await applyMouvementActif(existing);
 
     await auditLog(req.user!.id, 'CLOSE', 'maintenances', existing.id, { dureeMinutes }, req);
     res.json({ success: true, data: updated });

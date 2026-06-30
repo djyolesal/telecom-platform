@@ -6,6 +6,7 @@ import { rbac } from '../middlewares/rbac';
 import * as authCtrl from '../controllers/auth.controller';
 import * as sitesCtrl from '../controllers/sites.controller';
 import * as maintenanceCtrl from '../controllers/maintenances.controller';
+import * as actifsCtrl from '../controllers/actifs.controller';
 import * as depotagesCtrl from '../controllers/depotages.controller';
 import * as relevesCtrl from '../controllers/releves.controller';
 import * as incidentsCtrl from '../controllers/incidents.controller';
@@ -96,6 +97,11 @@ router.delete('/maintenances/:id', rbac(['ADMIN']), maintenanceCtrl.deleteMainte
 router.post('/maintenances/:id/start', maintenanceCtrl.startMaintenance);
 router.post('/maintenances/:id/close', maintenanceCtrl.closeMaintenance);
 router.get('/maintenances/:id/pdf', maintenanceCtrl.getMaintenancePdf);
+
+// ── Actifs (parc GE / batteries / climatiseurs) ───────────────
+router.get('/actifs', actifsCtrl.listActifs);
+router.post('/actifs', rbac(['MANAGER','ADMIN']), actifsCtrl.createActif);
+router.get('/actifs/:type/:id', actifsCtrl.getActif);
 
 // ── Dépotages ─────────────────────────────────────────────────
 router.get('/depotages', depotagesCtrl.getDepotages);
