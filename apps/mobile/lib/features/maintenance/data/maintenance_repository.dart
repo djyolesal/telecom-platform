@@ -33,6 +33,19 @@ class MaintenanceRepository {
     );
   }
 
+  /// Actifs candidats pour un travail de cycle de vie (au dépôt pour une pose,
+  /// en service pour une dépose/déplacement).
+  Future<List<ActifLite>> getActifs({String? statut, bool enStock = false}) async {
+    if (!await _network.isConnected) return [];
+    return _client.request(
+      (dio) => dio.get('/actifs', queryParameters: {
+        if (statut != null && statut.isNotEmpty) 'statut': statut,
+        if (enStock) 'en_stock': 'true',
+      }),
+      (data) => (data['data'] as List).map((e) => ActifLite.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
   /// Création offline-first (mise en file si hors-ligne).
   Future<SubmitResult> create({
     required String siteId,
@@ -44,6 +57,10 @@ class MaintenanceRepository {
     double? latitude,
     double? longitude,
     String? tachePreventiveKey,
+    String? natureTravaux,
+    String? actifType,
+    String? actifId,
+    String? siteSourceId,
   }) {
     return _sync.submit(
       endpoint: '/maintenances',
@@ -54,6 +71,10 @@ class MaintenanceRepository {
         'categorie': categorie,
         'equipement': equipement,
         if (tachePreventiveKey != null) 'tachePreventiveKey': tachePreventiveKey,
+        if (natureTravaux != null && natureTravaux != 'ENTRETIEN') 'natureTravaux': natureTravaux,
+        if (actifType != null) 'actifType': actifType,
+        if (actifId != null) 'actifId': actifId,
+        if (siteSourceId != null) 'siteSourceId': siteSourceId,
         if (description != null && description.isNotEmpty) 'description': description,
         'datePlanifiee': datePlanifiee.toUtc().toIso8601String(),
         // NB : le modèle Maintenance n'a pas de latitude/longitude à la création

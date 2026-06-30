@@ -110,3 +110,29 @@ class Maintenance {
     );
   }
 }
+
+/// Actif (vue allégée) pour le choix lors d'un travail de cycle de vie.
+class ActifLite {
+  final String id;
+  final String actifType; // 'GE' | 'BATTERIE' | 'CLIMATISEUR'
+  final String categorie;
+  final String? libelle;
+  final String? siteId;
+  final String? siteCode;
+
+  const ActifLite({required this.id, required this.actifType, required this.categorie, this.libelle, this.siteId, this.siteCode});
+
+  factory ActifLite.fromJson(Map<String, dynamic> j) {
+    final site = j['site'] as Map<String, dynamic>?;
+    return ActifLite(
+      id: j['id'] as String,
+      actifType: j['actifType'] as String? ?? (j['categorie'] as String? ?? 'GE'),
+      categorie: j['categorie'] as String? ?? 'GE',
+      libelle: j['libelle'] as String?,
+      siteId: j['siteId'] as String?,
+      siteCode: site?['code'] as String?,
+    );
+  }
+
+  String get display => '${libelle ?? categorie}${siteCode != null ? ' — $siteCode' : ' — Dépôt'}';
+}
