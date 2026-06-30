@@ -100,7 +100,29 @@
       "Bash(echo \"exit=$?\")",
       "Bash(git commit -m ' *)",
       "Bash(grep -rn \"DepotageDetail\\\\|carburant/:id\\\\|carburant/detail\\\\|/carburant/\\\\${\" lib/)",
-      "Bash(flutter pub *)"
+      "Bash(flutter pub *)",
+      "Bash(grep -E \"^[0-9a-f]{7,}|PARTIEL|statut =\")",
+      "Bash(grep -rn '$transaction\\\\|Serializable\\\\|isolationLevel\\\\|advisory\\\\|FOR UPDATE\\\\|LOCK ' /Users/yohaness/Downloads/telecom-platform/apps/api/src/)",
+      "Bash(node -e \"const site_id='abc'; const en_stock='true'; const where={ ...\\(site_id ? { siteId: site_id } : {}\\), ...\\(en_stock === 'true' ? { siteId: null } : {}\\) }; console.log\\(JSON.stringify\\(where\\)\\);\")",
+      "Bash(grep -rn '$use\\\\|middleware\\\\|$extends' apps/api/src/config/database.ts apps/api/src/)",
+      "Bash(grep -i 'take\\\\|paginat\\\\|limit\\\\|middleware\\\\|$use')",
+      "Bash(sed -n '60,95p' apps/web/src/app/'\\(app\\)'/maintenances/[id]/page.tsx 2>/dev/null; echo \"=== controller ===\"; sed -n '415,430p' apps/api/src/maintenances/maintenances.controller.ts 2>/dev/null)",
+      "Bash(grep -rn '\\\\.site\\\\.delete\\\\|from\\(\"sites\"\\)\\\\|$executeRaw.*sites\\\\|DELETE.*sites' /Users/yohaness/Downloads/telecom-platform/apps)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show --stat HEAD)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD -- apps/api/src/controllers/maintenances.controller.ts)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD -- apps/api/src/controllers/actifs.controller.ts)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD -- apps/mobile/lib/features/maintenance/presentation/maintenance_detail_screen.dart apps/mobile/lib/features/maintenance/data/maintenance_model.dart apps/api/src/controllers/depotages.controller.ts)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD~1:apps/api/src/controllers/maintenances.controller.ts)",
+      "Bash(grep -rn 'transactionOptions\\\\|maxWait\\\\|timeout\\\\|$transaction' /Users/yohaness/Downloads/telecom-platform/apps/api/src/config/database.ts)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD -- apps/mobile/lib/features/maintenance/presentation/maintenance_detail_screen.dart apps/mobile/lib/features/maintenance/data/maintenance_model.dart)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD -- apps/mobile/lib/features/maintenance/data/maintenance_model.dart apps/mobile/lib/features/maintenance/presentation/maintenance_detail_screen.dart)",
+      "Bash(awk '/model ReleveEnergie/,/^}/' /Users/yohaness/Downloads/telecom-platform/apps/api/prisma/schema.prisma)",
+      "Bash(awk 'NR>=183 && NR<=260' apps/api/src/controllers/actifs.controller.ts)",
+      "Bash(grep -rn 'transactionOptions\\\\|$transaction' apps/api/src/config/ apps/api/src/controllers/maintenances.controller.ts)",
+      "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD --stat)",
+      "Bash(awk '/model Maintenance /,/^}/' apps/api/prisma/schema.prisma)",
+      "Bash(awk '/model ReleveEnergie/,/^}/' apps/api/prisma/schema.prisma)",
+      "Bash(grep -n '\\\\$AppConfig\\\\.' lib/features/maintenance/presentation/maintenance_detail_screen.dart)"
     ]
   }
 }
