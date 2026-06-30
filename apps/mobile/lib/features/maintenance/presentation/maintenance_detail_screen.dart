@@ -15,8 +15,6 @@ import '../../../core/widgets/signature_pad.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 
-const kMinPhotosPreventive = 6;
-const kMinPhotosMouvement = 2; // travail de cycle de vie d'un actif (preuve)
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
@@ -120,7 +118,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     if (!check.ok || !mounted) return;
 
     // 2. Formulaire de clôture (observations + énergie si passive + photos si préventive).
-    //    La feuille impose déjà ≥ kMinPhotosPreventive photos prises à la caméra.
+    //    La feuille impose déjà ≥ AppConfig.minPhotosPreventive photos prises à la caméra.
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -394,14 +392,14 @@ class _CloseSheetState extends State<_CloseSheet> {
     final energie = <String, dynamic>{};
 
     // Photos obligatoires pour une maintenance préventive
-    if (m.type == 'PREVENTIVE' && _photos.length < kMinPhotosPreventive) {
-      setState(() => _error = 'Au moins $kMinPhotosPreventive photos sont requises (${_photos.length} prise(s)).');
+    if (m.type == 'PREVENTIVE' && _photos.length < AppConfig.minPhotosPreventive) {
+      setState(() => _error = 'Au moins ${AppConfig.minPhotosPreventive} photos sont requises (${_photos.length} prise(s)).');
       return;
     }
     // Preuve obligatoire pour un travail de cycle de vie (photos ; la signature
     // est imposée juste après, à l'écran de signature).
-    if (m.natureTravaux != 'ENTRETIEN' && _photos.length < kMinPhotosMouvement) {
-      setState(() => _error = 'Au moins $kMinPhotosMouvement photos sont requises pour ce mouvement d\'actif (${_photos.length} prise(s)).');
+    if (m.natureTravaux != 'ENTRETIEN' && _photos.length < AppConfig.minPhotosMouvement) {
+      setState(() => _error = 'Au moins ${AppConfig.minPhotosMouvement} photos sont requises pour ce mouvement d\'actif (${_photos.length} prise(s)).');
       return;
     }
 
@@ -454,7 +452,7 @@ class _CloseSheetState extends State<_CloseSheet> {
     final m = widget.maintenance;
     final sources = m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
     // Photos requises : 6 pour une préventive, 2 pour un travail de cycle de vie.
-    final minPhotos = m.type == 'PREVENTIVE' ? kMinPhotosPreventive : (m.natureTravaux != 'ENTRETIEN' ? kMinPhotosMouvement : 0);
+    final minPhotos = m.type == 'PREVENTIVE' ? AppConfig.minPhotosPreventive : (m.natureTravaux != 'ENTRETIEN' ? AppConfig.minPhotosMouvement : 0);
     const numKb = TextInputType.numberWithOptions(decimal: true);
 
     return Padding(

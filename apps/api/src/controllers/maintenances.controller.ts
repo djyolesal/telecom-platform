@@ -625,7 +625,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         // Mouvement d'actif (pose/dépose/déplacement), atomique avec le passage TERMINEE.
         await applyMouvementActif(tx, existing);
         return m;
-      });
+      }, { timeout: 15000, maxWait: 5000 }); // marge pour les sites multi-GE / base lente (défaut 5s trop court)
 
     let updated;
     for (let attempt = 0; attempt < 4; attempt++) {

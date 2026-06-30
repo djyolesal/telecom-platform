@@ -10,6 +10,7 @@ import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../u
 import { getNum } from '../services/settings.service';
 import { publicFileUrl, getObjectBuffer } from '../services/storage.service';
 import { generateDepotagePdf } from '../services/pdf.service';
+import { logger } from '../utils/logger';
 import { io } from '../server';
 
 /**
@@ -284,9 +285,9 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
 
     // Post-commit (best-effort) : le dépotage EST déjà créé → un échec ici ne doit pas
     // renvoyer 500 (sinon la sync mobile rejouerait et créerait un doublon).
+    clearMemo(); // toujours : nouvelles données → invalide manquants/forecast (avant la sync, pour ne pas le sauter en cas d'échec)
     try {
       await syncLigneLivraison(depotage.ligneLivraisonId);
-      clearMemo(); // nouvelles données → invalide manquants/forecast mémoïsés
       await auditLog(req.user!.id, 'CREATE', 'depotages', depotage.id, req.body, req);
       const firstPhotoKey = photosIn.find((p) => p && p.key)?.key;
       io.of('/supervision').emit('stock:updated', {
@@ -299,7 +300,11 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
         ecartLivraisonLitres: recon.ecartLivraisonLitres,
         photoUrl: firstPhotoKey ? publicFileUrl(firstPhotoKey) : null,
       });
-    } catch { /* la ligne sera resynchronisée au prochain dépotage ; pas de 500 ici */ }
+    } catch (e) {
+      // Pas de 500 (le dépotage est créé) ; on trace pour exploitation (ligne de plan
+      // potentiellement non resynchronisée jusqu'au prochain dépotage).
+      logger.error(`Post-commit dépotage ${depotage.id} : sync ligne/emit échoué`, e);
+    }
 
     res.status(201).json({ success: true, data: depotage });
   } catch (err) { next(err); }

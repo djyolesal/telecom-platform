@@ -6,6 +6,7 @@ class AppConfig {
   static int minDureeClotureMin = 60;
   static double geofenceRadiusM = 20;
   static int minPhotosPreventive = 6;
+  static int minPhotosMouvement = 2;
 }
 
 /// Charge la configuration applicative depuis l'API et met à jour [AppConfig].
@@ -23,6 +24,7 @@ class ConfigService {
             AppConfig.minDureeClotureMin = (d['minDureeClotureMin'] as num?)?.toInt() ?? AppConfig.minDureeClotureMin;
             AppConfig.geofenceRadiusM = (d['geofenceRadiusM'] as num?)?.toDouble() ?? AppConfig.geofenceRadiusM;
             AppConfig.minPhotosPreventive = (d['minPhotosPreventive'] as num?)?.toInt() ?? AppConfig.minPhotosPreventive;
+            AppConfig.minPhotosMouvement = (d['minPhotosMouvement'] as num?)?.toInt() ?? AppConfig.minPhotosMouvement;
           }
         },
       );

@@ -13,6 +13,7 @@ export function getAppConfig(_req: Request, res: Response) {
       minDureeClotureMin: getNum('maintenance.minDureeClotureMin', env.MIN_DUREE_CLOTURE_MIN),
       geofenceRadiusM: getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M),
       minPhotosPreventive: 6,
+      minPhotosMouvement: getNum('maintenance.minPhotosMouvement', 2),
     },
   });
 }

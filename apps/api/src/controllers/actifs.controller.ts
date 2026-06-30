@@ -56,7 +56,9 @@ export async function listActifs(req: Request, res: Response, next: NextFunction
     const { type, statut, site_id, en_stock, limit } = req.query as Record<string, string>;
     const siteSel = { select: { code: true, nom: true } };
     const out: ActifDTO[] = [];
-    const take = Math.min(Math.max(parseInt(limit || '200', 10) || 200, 1), 500); // borne anti-surcharge
+    // Borne anti-surcharge large : couvre tout le parc réaliste pour ne pas tronquer
+    // silencieusement les sélecteurs d'actifs (qui chargent toute la liste filtrée).
+    const take = Math.min(Math.max(parseInt(limit || '2000', 10) || 2000, 1), 5000);
 
     // en_stock prime sur site_id (filtres mutuellement exclusifs : dépôt = sans site).
     const siteClause = en_stock === 'true' ? { siteId: null } : site_id ? { siteId: site_id } : {};
