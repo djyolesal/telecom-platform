@@ -103,7 +103,10 @@ async function reconcileDepotage(opts: {
 
 /**
  * Recalcule l'état d'une ligne de plan de livraison à partir des dépotages réels
- * qui lui sont rattachés (volume livré cumulé + statut PREVU/PARTIEL/LIVRE).
+ * qui lui sont rattachés. Règle métier : une livraison effectuée marque la ligne
+ * LIVRE même si le volume n'atteint pas le prévu — l'éventuel manquant
+ * (prévu − livré) reste comptabilisé par le rapport des manquants (calcul par
+ * volume, indépendant du statut).
  */
 async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
   if (!ligneLivraisonId) return;
@@ -113,8 +116,7 @@ async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
   });
   if (!ligne) return;
   const livre = ligne.depotages.reduce((s, d) => s + Number(d.volumeLitres), 0);
-  const prevu = Number(ligne.volumePrevuLitres);
-  const statut = livre <= 0 ? 'PREVU' : livre + 0.5 >= prevu ? 'LIVRE' : 'PARTIEL';
+  const statut = livre > 0 ? 'LIVRE' : 'PREVU';
   await prisma.ligneLivraison.update({
     where: { id: ligne.id },
     data: { volumeLivreLitres: livre, statut },
