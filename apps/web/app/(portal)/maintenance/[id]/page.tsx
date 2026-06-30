@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { FileText, X, ZoomIn, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { FileText, Trash2, X, ZoomIn, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { StatutMaintBadge } from '@/components/shared/Badge';
 import { TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT, PASSIVE_CATEGORIES } from '@/lib/constants';
@@ -23,11 +25,24 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function MaintenanceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
   const [lightbox, setLightbox] = useState<number | null>(null);
 
   const { data: m, isLoading, isError } = useQuery({
     queryKey: ['maintenance', id],
     queryFn: () => api.get(`/maintenances/${id}`).then((r) => r.data.data),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/maintenances/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maintenances'] });
+      router.push('/maintenance');
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => alert(e.response?.data?.error || 'Suppression impossible'),
   });
 
   const photoList: { id: string; url: string }[] = m?.photos ?? [];
@@ -60,6 +75,17 @@ export default function MaintenanceDetailPage() {
             <button type="button" onClick={() => downloadFile(`/maintenances/${id}/pdf`, `maintenance-${id}.pdf`, true)} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <FileText size={15} /> PDF
             </button>
+            {/* Suppression réservée à l'admin et aux plannings non encore exécutés. */}
+            {isAdmin && m.statut === 'PLANIFIEE' && (
+              <Button
+                variant="secondary"
+                icon={Trash2}
+                loading={remove.isPending}
+                onClick={() => { if (confirm('Supprimer ce planning de maintenance non exécuté ?')) remove.mutate(); }}
+              >
+                Supprimer
+              </Button>
+            )}
           </>
         }
       />

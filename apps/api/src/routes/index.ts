@@ -92,7 +92,7 @@ router.get('/maintenances/export/xlsx', rbac(['MANAGER','ADMIN']), maintenanceCt
 router.post('/maintenances', maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', maintenanceCtrl.updateMaintenance);
-router.delete('/maintenances/:id', rbac(['ADMIN','MANAGER']), maintenanceCtrl.deleteMaintenance);
+router.delete('/maintenances/:id', rbac(['ADMIN']), maintenanceCtrl.deleteMaintenance);
 router.post('/maintenances/:id/start', maintenanceCtrl.startMaintenance);
 router.post('/maintenances/:id/close', maintenanceCtrl.closeMaintenance);
 router.get('/maintenances/:id/pdf', maintenanceCtrl.getMaintenancePdf);

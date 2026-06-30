@@ -266,9 +266,14 @@ export async function deleteMaintenance(req: Request, res: Response, next: NextF
   try {
     const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+    // Seuls les plannings NON exécutés sont supprimables (préserve l'historique
+    // : une maintenance démarrée ou clôturée porte relevés, photos, signatures).
+    if (existing.statut !== 'PLANIFIEE') {
+      throw new AppError('Seule une maintenance encore planifiée (non démarrée) peut être supprimée.', 409);
+    }
     await prisma.maintenance.delete({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'DELETE', 'maintenances', existing.id, {}, req);
-    res.json({ success: true, message: 'Maintenance supprimée' });
+    res.json({ success: true, message: 'Maintenance planifiée supprimée' });
   } catch (err) { next(err); }
 }
 
