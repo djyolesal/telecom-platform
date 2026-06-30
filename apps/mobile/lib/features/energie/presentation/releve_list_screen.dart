@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/bloc/list_cubit.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/constants/enums.dart';
@@ -55,6 +56,8 @@ class _ReleveView extends StatelessWidget {
                   leading: const CircleAvatar(child: Icon(Icons.bolt, size: 20)),
                   title: Text('${r.siteNom ?? r.siteCode ?? '—'} · ${kSourceEnergie[r.source] ?? r.source}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text('${fmtDate(r.dateReleve)} · $detail'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/energie/detail/${r.id}'),
                 );
               },
             ),

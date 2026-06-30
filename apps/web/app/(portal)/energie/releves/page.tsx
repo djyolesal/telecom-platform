@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -31,6 +32,7 @@ const SOURCE_COLOR: Record<string, string> = {
 };
 
 export default function RelevesPage() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [source, setSource] = useState('');
 
@@ -75,7 +77,7 @@ export default function RelevesPage() {
         <EmptyState title="Aucun relevé" />
       ) : (
         <>
-          <DataTable columns={columns} data={rows} />
+          <DataTable columns={columns} data={rows} onRowClick={(r) => router.push(`/energie/releves/${r.id}`)} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}

@@ -18,6 +18,14 @@ class ReleveRepository {
     );
   }
 
+  /// Détail complet d'un relevé (avec la maintenance d'origine).
+  Future<ReleveDetail> getById(String id) async {
+    return _client.request(
+      (dio) => dio.get('/releves/$id'),
+      (data) => ReleveDetail.fromJson(data['data'] as Map<String, dynamic>),
+    );
+  }
+
   Future<SubmitResult> create({
     required String siteId,
     required String source,

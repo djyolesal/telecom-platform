@@ -56,7 +56,12 @@ export async function getReleveById(req: Request, res: Response, next: NextFunct
   try {
     const releve = await prisma.releveEnergie.findUnique({
       where: { id: req.params.id },
-      include: { site: true, technicien: { select: { nom: true, prenom: true } } },
+      include: {
+        site: true,
+        technicien: { select: { nom: true, prenom: true } },
+        groupe: { select: { numero: true, puissanceKva: true } },
+        maintenance: { select: { id: true, type: true, categorie: true, equipement: true, dateFin: true } },
+      },
     });
     if (!releve) throw new AppError('Relevé introuvable', 404);
     res.json({ success: true, data: releve });
