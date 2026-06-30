@@ -55,6 +55,7 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'ge.seuilFaibleLitres', label: 'Stock faible', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilFaibleLitres },
     { key: 'ge.prixLitreFCFA', label: 'Prix du litre gasoil', groupe: 'Carburant — stock', unite: 'FCFA', defaut: GE_PARAMS.prixLitreFCFA },
     { key: 'carburant.seuilEcartLivraisonPct', label: 'Tolérance écart livraison', groupe: 'Carburant — stock', unite: '%', defaut: 5 },
+    { key: 'carburant.seuilLivraisonMinPct', label: 'Livraison minimale (→ LIVRE)', groupe: 'Carburant — stock', unite: '%', defaut: 5 },
     // Carburant — manquants
     { key: 'manquant.delaiJours', label: 'Délai avant « en retard »', groupe: 'Carburant — manquants', unite: 'j', defaut: env.DELAI_MANQUANT_JOURS },
     { key: 'manquant.minLitres', label: 'Plancher anti-bruit', groupe: 'Carburant — manquants', unite: 'L', defaut: env.MANQUANT_MIN_LITRES },

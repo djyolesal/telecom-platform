@@ -103,10 +103,11 @@ async function reconcileDepotage(opts: {
 
 /**
  * Recalcule l'état d'une ligne de plan de livraison à partir des dépotages réels
- * qui lui sont rattachés. Règle métier : une livraison effectuée marque la ligne
- * LIVRE même si le volume n'atteint pas le prévu — l'éventuel manquant
- * (prévu − livré) reste comptabilisé par le rapport des manquants (calcul par
- * volume, indépendant du statut).
+ * qui lui sont rattachés. Règle métier : une livraison atteignant au moins
+ * `carburant.seuilLivraisonMinPct` % du prévu (défaut 5 %) marque la ligne LIVRE,
+ * même si le volume n'atteint pas le prévu — l'éventuel manquant (prévu − livré)
+ * reste comptabilisé par le rapport des manquants (calcul par volume, indépendant
+ * du statut). En deçà du seuil (goutte / jauge erronée), la ligne reste PREVU.
  */
 async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
   if (!ligneLivraisonId) return;
@@ -116,7 +117,10 @@ async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
   });
   if (!ligne) return;
   const livre = ligne.depotages.reduce((s, d) => s + Number(d.volumeLitres), 0);
-  const statut = livre > 0 ? 'LIVRE' : 'PREVU';
+  const prevu = Number(ligne.volumePrevuLitres);
+  const seuilPct = getNum('carburant.seuilLivraisonMinPct', 5);
+  const livreSuffisant = livre > 0 && (prevu <= 0 || livre >= (seuilPct / 100) * prevu);
+  const statut = livreSuffisant ? 'LIVRE' : 'PREVU';
   await prisma.ligneLivraison.update({
     where: { id: ligne.id },
     data: { volumeLivreLitres: livre, statut },
