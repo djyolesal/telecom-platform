@@ -50,6 +50,7 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'maintenance.minDureeClotureMin', label: 'Durée min. avant clôture', groupe: 'Maintenance', unite: 'min', defaut: env.MIN_DUREE_CLOTURE_MIN },
     { key: 'maintenance.geofenceRadiusM', label: 'Rayon « sur site »', groupe: 'Maintenance', unite: 'm', defaut: env.GEOFENCE_RADIUS_M },
     { key: 'maintenance.seuilEcartGasoilPct', label: 'Tolérance écart gasoil', groupe: 'Maintenance', unite: '%', defaut: env.SEUIL_ECART_GASOIL_PCT },
+    { key: 'maintenance.minPhotosMouvement', label: 'Photos min. mouvement d’actif', groupe: 'Maintenance', unite: 'photos', defaut: 2 },
     // Carburant — stock
     { key: 'ge.seuilCritiqueLitres', label: 'Stock critique', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilCritiqueLitres },
     { key: 'ge.seuilFaibleLitres', label: 'Stock faible', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilFaibleLitres },

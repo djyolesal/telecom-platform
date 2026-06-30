@@ -16,6 +16,7 @@ import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 
 const kMinPhotosPreventive = 6;
+const kMinPhotosMouvement = 2; // travail de cycle de vie d'un actif (preuve)
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
@@ -137,13 +138,18 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         photoPaths.add(await AttachmentStore.persistFile(f.path));
       }
 
-      // Signature optionnelle → persistée localement (uploadée par la sync elle aussi).
+      // Signature → persistée localement (uploadée par la sync). Obligatoire pour
+      // un travail de cycle de vie (preuve du mouvement d'actif), sinon optionnelle.
       String? signaturePath;
       final bytes = await navigator.push<dynamic>(
         MaterialPageRoute(builder: (_) => const SignaturePadScreen()),
       );
       if (bytes != null) {
         signaturePath = await AttachmentStore.persistBytes(bytes as Uint8List, 'signature-${widget.id}.png');
+      }
+      if (m.natureTravaux != 'ENTRETIEN' && signaturePath == null) {
+        if (mounted) { _snack('Signature requise pour valider ce mouvement d\'actif'); setState(() => _busy = false); }
+        return;
       }
 
       final res = await repo.close(
@@ -390,6 +396,12 @@ class _CloseSheetState extends State<_CloseSheet> {
     // Photos obligatoires pour une maintenance préventive
     if (m.type == 'PREVENTIVE' && _photos.length < kMinPhotosPreventive) {
       setState(() => _error = 'Au moins $kMinPhotosPreventive photos sont requises (${_photos.length} prise(s)).');
+      return;
+    }
+    // Preuve obligatoire pour un travail de cycle de vie (photos ; la signature
+    // est imposée juste après, à l'écran de signature).
+    if (m.natureTravaux != 'ENTRETIEN' && _photos.length < kMinPhotosMouvement) {
+      setState(() => _error = 'Au moins $kMinPhotosMouvement photos sont requises pour ce mouvement d\'actif (${_photos.length} prise(s)).');
       return;
     }
 

@@ -417,6 +417,19 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       }
     }
 
+    // Travail de cycle de vie (pose/dépose/déplacement) → preuve obligatoire : photos + signature.
+    if (existing.natureTravaux !== 'ENTRETIEN') {
+      const minPhotos = getNum('maintenance.minPhotosMouvement', 2);
+      const dejaPresentes = await prisma.photo.count({ where: { entityType: 'maintenance', entityId: existing.id } });
+      const totalPhotos = dejaPresentes + (photos?.length ?? 0);
+      if (totalPhotos < minPhotos) {
+        throw new AppError(`Au moins ${minPhotos} photos sont requises pour valider ce mouvement d'actif (${totalPhotos} fournie(s)).`, 422);
+      }
+      if (!signaturePath && !existing.signaturePath) {
+        throw new AppError("La signature du technicien est requise pour valider ce mouvement d'actif.", 422);
+      }
+    }
+
     // Relevés énergie obligatoires selon la config du site, sauf tâches d'exclusion
     // (pylône, terre, désherbage, serrures, climatiseur, extincteurs → photos seules).
     const passive = requiresEnergieReleve(existing);
