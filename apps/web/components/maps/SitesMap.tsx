@@ -18,8 +18,17 @@ export interface SiteFeature {
     powerConfig: string;
     puissanceGEkva: number;
     hasStock: boolean;
+    stockLitres?: number;
+    niveauStock?: string; // OK / FAIBLE / CRITIQUE / VIDE / NA
   };
 }
+
+const NIVEAU_STOCK: Record<string, { label: string; color: string }> = {
+  OK: { label: 'OK', color: '#0E7C6B' },
+  FAIBLE: { label: 'Faible', color: '#F59E0B' },
+  CRITIQUE: { label: 'Critique', color: '#DC2626' },
+  VIDE: { label: 'Vide', color: '#991B1B' },
+};
 
 const STATUT_COLOR: Record<string, string> = {
   GE_PERMANENT: '#0E7C6B',
@@ -143,6 +152,14 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
                 <p className="text-gray-600">{f.properties.code}</p>
                 <p className="text-gray-500">{f.properties.region}</p>
                 <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
+                {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (
+                  <p className="mt-0.5">
+                    Stock : {Math.round(f.properties.stockLitres ?? 0)} L ·{' '}
+                    <span style={{ color: NIVEAU_STOCK[f.properties.niveauStock]?.color ?? '#6B7280', fontWeight: 600 }}>
+                      {NIVEAU_STOCK[f.properties.niveauStock]?.label ?? f.properties.niveauStock}
+                    </span>
+                  </p>
+                )}
                 <div className="mt-1 flex flex-col gap-0.5">
                   <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`} target="_blank" rel="noreferrer" className="text-[#0E7C6B] underline">🧭 Itinéraire →</a>

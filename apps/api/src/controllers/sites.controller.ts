@@ -397,25 +397,33 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
       select: { id: true, nom: true, code: true, region: true, statutGE: true, powerConfig: true, puissanceGEkva: true, latitude: true, longitude: true },
     });
 
-    // Récupérer le dernier stock pour chaque site
-    const stocks = await prisma.releveEnergie.groupBy({
-      by: ['siteId'],
-      _max: { createdAt: true },
+    // Dernier niveau de cuve (relevé GE) par site → présence + niveau d'alerte stock.
+    const releves = await prisma.releveEnergie.findMany({
+      where: { source: 'GE', volumeGasoilLitres: { not: null } },
+      orderBy: { dateReleve: 'desc' },
+      select: { siteId: true, volumeGasoilLitres: true },
     });
-    const stockMap = new Map(stocks.map(s => [s.siteId, s]));
+    const stockMap = new Map<string, number>();
+    for (const r of releves) if (!stockMap.has(r.siteId)) stockMap.set(r.siteId, Number(r.volumeGasoilLitres));
+    const gp = geParams();
 
     const geojson = {
       type: 'FeatureCollection',
-      features: sites.map(site => ({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [Number(site.longitude), Number(site.latitude)] },
-        properties: {
-          id: site.id, nom: site.nom, code: site.code, region: site.region,
-          statutGE: site.statutGE, powerConfig: site.powerConfig,
-          puissanceGEkva: Number(site.puissanceGEkva),
-          hasStock: stockMap.has(site.id),
-        },
-      })),
+      features: sites.map(site => {
+        const stock = calculerStockSite(site, stockMap.has(site.id) ? { volumeGasoilLitres: stockMap.get(site.id)! } : null, gp);
+        return {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [Number(site.longitude), Number(site.latitude)] },
+          properties: {
+            id: site.id, nom: site.nom, code: site.code, region: site.region,
+            statutGE: site.statutGE, powerConfig: site.powerConfig,
+            puissanceGEkva: Number(site.puissanceGEkva),
+            hasStock: stockMap.has(site.id),
+            stockLitres: stock.stockLitres,
+            niveauStock: stock.niveauAlerte, // OK / FAIBLE / CRITIQUE / VIDE / NA
+          },
+        };
+      }),
     };
 
     await cacheService.set(cacheKey, geojson, 300); // 5 min

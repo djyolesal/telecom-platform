@@ -21,16 +21,17 @@ const STATUT_OPTIONS = [
   { value: 'GE_SECOURS', label: 'GE secours' },
   { value: 'PAS_DE_GE', label: 'Pas de GE' },
 ];
-const SUIVI_OPTIONS = [
-  { value: 'oui', label: 'Avec relevé énergie' },
-  { value: 'non', label: 'Sans relevé énergie' },
+const STOCK_OPTIONS = [
+  { value: 'critique', label: 'Stock critique / vide' },
+  { value: 'faible', label: 'Stock faible' },
+  { value: 'ok', label: 'Stock OK' },
 ];
 
 export default function CartePage() {
   useSupervisionSocket();
   const [region, setRegion] = useState('');
   const [statut, setStatut] = useState('');
-  const [suivi, setSuivi] = useState('');
+  const [stock, setStock] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['sites-geojson'],
@@ -50,11 +51,15 @@ export default function CartePage() {
       all.filter((f) => {
         if (region && f.properties.region !== region) return false;
         if (statut && f.properties.statutGE !== statut) return false;
-        if (suivi === 'oui' && !f.properties.hasStock) return false;
-        if (suivi === 'non' && f.properties.hasStock) return false;
+        if (stock) {
+          const n = f.properties.niveauStock;
+          if (stock === 'critique' && !(n === 'CRITIQUE' || n === 'VIDE')) return false;
+          if (stock === 'faible' && n !== 'FAIBLE') return false;
+          if (stock === 'ok' && n !== 'OK') return false;
+        }
         return true;
       }),
-    [all, region, statut, suivi]
+    [all, region, statut, stock]
   );
 
   return (
@@ -64,9 +69,9 @@ export default function CartePage() {
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="w-44"><Select value={region} onChange={(e) => setRegion(e.target.value)} options={regionOptions} placeholder="Toutes régions" /></div>
         <div className="w-40"><Select value={statut} onChange={(e) => setStatut(e.target.value)} options={STATUT_OPTIONS} placeholder="Tous statuts GE" /></div>
-        <div className="w-48"><Select value={suivi} onChange={(e) => setSuivi(e.target.value)} options={SUIVI_OPTIONS} placeholder="Suivi énergie" /></div>
-        {(region || statut || suivi) && (
-          <button onClick={() => { setRegion(''); setStatut(''); setSuivi(''); }} className="text-sm text-blue-600 underline hover:no-underline">Réinitialiser</button>
+        <div className="w-48"><Select value={stock} onChange={(e) => setStock(e.target.value)} options={STOCK_OPTIONS} placeholder="Niveau stock" /></div>
+        {(region || statut || stock) && (
+          <button onClick={() => { setRegion(''); setStatut(''); setStock(''); }} className="text-sm text-blue-600 underline hover:no-underline">Réinitialiser</button>
         )}
         <div className="ml-auto flex items-center gap-4 text-xs text-gray-500">
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> GE permanent</span>
