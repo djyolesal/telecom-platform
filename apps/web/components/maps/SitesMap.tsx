@@ -137,7 +137,11 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
       />
       {features.map((f) => {
         const [lng, lat] = f.geometry.coordinates;
-        const color = STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF';
+        const n = f.properties.niveauStock;
+        // Priorité au stock : rouge = critique/vide, orange = faible ; sinon couleur du statut GE.
+        const color = n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
+          : n === 'FAIBLE' ? '#F59E0B'
+          : (STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF');
         return (
           <CircleMarker
             key={f.properties.id}
