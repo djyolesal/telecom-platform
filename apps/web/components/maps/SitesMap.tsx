@@ -25,6 +25,9 @@ export interface SiteFeature {
     autonomieJours?: number | null;
     dateRupture?: string | null;
     tendance?: string | null;
+    heuresGEJour?: number | null;
+    dernierDepotageVol?: number | null;
+    dernierDepotageDate?: string | null;
   };
 }
 
@@ -189,8 +192,17 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
                           {f.properties.autonomieJours != null && <span> · autonomie {f.properties.autonomieJours} j</span>}
                         </p>
                       )}
+                      {f.properties.heuresGEJour != null && (
+                        <p className="text-gray-500">GE : ~{f.properties.heuresGEJour} h/jour</p>
+                      )}
                       {fmtDateCourt(f.properties.dateRupture) && (
                         <p className="text-gray-500">Rupture estimée : {fmtDateCourt(f.properties.dateRupture)}</p>
+                      )}
+                      {f.properties.dernierDepotageVol != null && (
+                        <p className="text-gray-500">
+                          Dernier dépotage : {Math.round(f.properties.dernierDepotageVol)} L
+                          {fmtDateCourt(f.properties.dernierDepotageDate) && ` · ${fmtDateCourt(f.properties.dernierDepotageDate)}`}
+                        </p>
                       )}
                     </div>
                   );

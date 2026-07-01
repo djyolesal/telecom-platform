@@ -51,6 +51,13 @@ export function litresMoisGE(kva: number, statut: string, params = GE_PARAMS): n
   return kva * facteur * heuresMois * params.consoSpecificDieselLKwh;
 }
 
+/** Débit gasoil (L) par HEURE de marche d'un GE = kVA × facteur de charge × conso spécifique. */
+export function litresParHeureGE(kva: number, statut: string, params = GE_PARAMS): number {
+  if (statut === 'PAS_DE_GE' || !(kva > 0)) return 0;
+  const facteur = statut === 'GE_PERMANENT' ? params.facteurChargePermanent : params.facteurChargeSecours;
+  return kva * facteur * params.consoSpecificDieselLKwh;
+}
+
 export function calculerStockSite(
   site: SiteGE,
   dernierReleve: ReleveGE | null,

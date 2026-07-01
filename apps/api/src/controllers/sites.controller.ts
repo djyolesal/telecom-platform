@@ -408,6 +408,18 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
     for (const r of releves) if (!stockMap.has(r.siteId)) stockMap.set(r.siteId, Number(r.volumeGasoilLitres));
     const gp = geParams();
 
+    // Dernier dépotage par site (volume + date).
+    const siteIds = sites.map((s) => s.id);
+    const lastDepots = siteIds.length
+      ? await prisma.depotage.findMany({
+          where: { siteId: { in: siteIds } },
+          orderBy: { dateDepotage: 'desc' },
+          distinct: ['siteId'],
+          select: { siteId: true, volumeLitres: true, dateDepotage: true },
+        })
+      : [];
+    const depotMap = new Map(lastDepots.map((d) => [d.siteId, d]));
+
     // Prévision par site (stock estimé à date, autonomie, rupture, tendance) — mémoïsée.
     const forecasts = await forecastSites({ all: true });
     const fcMap = new Map(forecasts.map((f) => [f.siteId, f]));
@@ -437,6 +449,10 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
             autonomieJours: fc?.autonomieJours ?? null,
             dateRupture: fc?.dateRupture ?? null,
             tendance: fc?.tendance ?? null,
+            heuresGEJour: fc?.heuresGEJour ?? null,
+            // Dernier dépotage.
+            dernierDepotageVol: depotMap.has(site.id) ? Number(depotMap.get(site.id)!.volumeLitres) : null,
+            dernierDepotageDate: depotMap.get(site.id)?.dateDepotage.toISOString() ?? null,
           },
         };
       }),

@@ -1,6 +1,6 @@
 import { prisma } from '../config/database';
 import { env } from '../config/env';
-import { calculerStockSite, litresMoisGE } from '../utils/calculator';
+import { calculerStockSite, litresMoisGE, litresParHeureGE } from '../utils/calculator';
 import { getNum, geParams } from './settings.service';
 import { memo } from '../utils/memo';
 
@@ -17,6 +17,7 @@ export interface SiteForecast {
   tendance: 'HAUSSE' | 'STABLE' | 'BAISSE';
   source: 'historique' | 'theorique';
   derniereMesure: string | null;    // date du dernier relevé de cuve (ISO), ou null
+  heuresGEJour: number | null;       // temps de marche estimé du GE (h/jour)
   autonomieJours: number | null;
   dateRupture: string | null;
   dateLivraisonCible: string | null;
@@ -167,6 +168,12 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
     const autonomieJours = Math.round((stockActuel / consoJour) * 10) / 10;
     const dateRupture = now + autonomieJours * DAY;
     const dateLivraison = dateRupture - leadSec * DAY;
+
+    // Temps de marche estimé du GE (h/jour) = conso journalière ÷ débit L/h en marche.
+    const litresParHeure = site.groupes.length
+      ? site.groupes.reduce((s, g) => s + litresParHeureGE(n(g.puissanceKva), g.statut, gp), 0)
+      : litresParHeureGE(n(site.puissanceGEkva), site.statutGE, gp);
+    const heuresGEJour = litresParHeure > 0 ? Math.round((consoJour / litresParHeure) * 10) / 10 : null;
     const joursAvantLivraison = Math.round(((dateLivraison - now) / DAY) * 10) / 10;
 
     // On ne retient que les sites dus dans l'horizon (sauf scan complet pour anomalies).
@@ -194,6 +201,7 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
       tendance,
       source,
       derniereMesure: dernier ? dernier.dateReleve.toISOString() : null,
+      heuresGEJour,
       autonomieJours,
       dateRupture: new Date(dateRupture).toISOString(),
       dateLivraisonCible: new Date(dateLivraison).toISOString(),
