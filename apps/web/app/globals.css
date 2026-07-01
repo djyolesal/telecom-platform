@@ -36,3 +36,10 @@ body {
   width: 100%;
   z-index: 0;
 }
+
+/* Surbrillance pulsée d'un site sélectionné sur la carte de supervision */
+@keyframes sitePulse {
+  0%   { stroke-width: 2;  stroke-opacity: 0.9; }
+  100% { stroke-width: 20; stroke-opacity: 0; }
+}
+.site-pulse { animation: sitePulse 1.2s ease-out infinite; }

@@ -30,7 +30,7 @@ const STATUT_COLOR: Record<string, string> = {
 type MarkerMap = Record<string, L.CircleMarker | null>;
 
 /** Barre de recherche superposée à la carte : centre/zoome sur le site choisi. */
-function SearchControl({ features, markers }: { features: SiteFeature[]; markers: React.MutableRefObject<MarkerMap> }) {
+function SearchControl({ features, markers, onSelect }: { features: SiteFeature[]; markers: React.MutableRefObject<MarkerMap>; onSelect: (id: string) => void }) {
   const map = useMap();
   const [q, setQ] = useState('');
   const boxRef = useRef<HTMLDivElement>(null);
@@ -54,6 +54,7 @@ function SearchControl({ features, markers }: { features: SiteFeature[]; markers
     const [lng, lat] = f.geometry.coordinates;
     map.flyTo([lat, lng], 14, { duration: 0.8 });
     setQ('');
+    onSelect(f.properties.id); // surbrillance pulsée temporaire
     // Ouvre le popup du marqueur une fois le déplacement lancé.
     setTimeout(() => markers.current[f.properties.id]?.openPopup(), 450);
   };
@@ -99,10 +100,28 @@ function SearchControl({ features, markers }: { features: SiteFeature[]; markers
 
 export function SitesMap({ features }: { features: SiteFeature[] }) {
   const markers = useRef<MarkerMap>({});
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+
+  // La surbrillance s'estompe automatiquement au bout de quelques secondes.
+  useEffect(() => {
+    if (!highlightId) return;
+    const t = setTimeout(() => setHighlightId(null), 5000);
+    return () => clearTimeout(t);
+  }, [highlightId]);
+
+  const highlighted = highlightId ? features.find((f) => f.properties.id === highlightId) : null;
 
   return (
     <MapContainer center={[8.6, 1.0]} zoom={7} scrollWheelZoom className="h-full w-full rounded-xl">
-      <SearchControl features={features} markers={markers} />
+      <SearchControl features={features} markers={markers} onSelect={setHighlightId} />
+      {highlighted && (
+        <CircleMarker
+          center={[highlighted.geometry.coordinates[1], highlighted.geometry.coordinates[0]]}
+          radius={16}
+          interactive={false}
+          pathOptions={{ className: 'site-pulse', color: '#F59E0B', fillOpacity: 0, weight: 3 }}
+        />
+      )}
       <TileLayer
         attribution='&copy; OpenStreetMap'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
