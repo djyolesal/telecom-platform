@@ -126,7 +126,9 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
       "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
       "Bash(sort -t_ -k1 -n)",
-      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" npx prisma generate)"
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" npx prisma generate)",
+      "Bash(sed -n '/export const GE_PARAMS/,/};/p' src/utils/calculator.ts)",
+      "Bash(sed -n '/export function litresMoisGE/,/^}/p' src/utils/calculator.ts)"
     ]
   }
 }
