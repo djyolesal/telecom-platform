@@ -415,8 +415,12 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
     const geojson = {
       type: 'FeatureCollection',
       features: sites.map(site => {
-        const stock = calculerStockSite(site, stockMap.has(site.id) ? { volumeGasoilLitres: stockMap.get(site.id)! } : null, gp);
+        const rawStock = stockMap.has(site.id) ? stockMap.get(site.id)! : null;
         const fc = fcMap.get(site.id);
+        // Niveau d'alerte (couleur marqueur + filtre) basé sur le stock ESTIMÉ à date,
+        // avec repli sur la dernière jauge mesurée si aucune prévision.
+        const stockRef = fc ? fc.stockActuel : rawStock;
+        const niveau = calculerStockSite(site, stockRef != null ? { volumeGasoilLitres: stockRef } : null, gp);
         return {
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [Number(site.longitude), Number(site.latitude)] },
@@ -424,9 +428,9 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
             id: site.id, nom: site.nom, code: site.code, region: site.region,
             statutGE: site.statutGE, powerConfig: site.powerConfig,
             puissanceGEkva: Number(site.puissanceGEkva),
-            hasStock: stockMap.has(site.id),
-            stockLitres: stock.stockLitres,
-            niveauStock: stock.niveauAlerte, // OK / FAIBLE / CRITIQUE / VIDE / NA
+            hasStock: rawStock != null,
+            stockLitres: rawStock != null ? Math.round(rawStock) : 0, // dernier relevé mesuré
+            niveauStock: niveau.niveauAlerte, // OK / FAIBLE / CRITIQUE / VIDE / NA (sur l'estimation)
             // Estimation à date (prévision) — null si site sans GE / sans données exploitables.
             derniereMesure: fc?.derniereMesure ?? null,
             stockEstime: fc ? fc.stockActuel : null,

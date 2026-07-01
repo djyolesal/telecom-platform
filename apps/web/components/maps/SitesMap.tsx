@@ -168,28 +168,33 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
                 <p className="text-gray-600">{f.properties.code}</p>
                 <p className="text-gray-500">{f.properties.region}</p>
                 <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
-                {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (
-                  <div className="mt-1 rounded bg-gray-50 p-1.5 leading-snug">
-                    <p>
-                      Dernier relevé : <b>{Math.round(f.properties.stockLitres ?? 0)} L</b>
-                      {fmtDateCourt(f.properties.derniereMesure) && <span className="text-gray-400"> · {fmtDateCourt(f.properties.derniereMesure)}</span>}
-                      {' · '}
-                      <span style={{ color: NIVEAU_STOCK[f.properties.niveauStock]?.color ?? '#6B7280', fontWeight: 600 }}>
-                        {NIVEAU_STOCK[f.properties.niveauStock]?.label ?? f.properties.niveauStock}
-                      </span>
-                    </p>
-                    {f.properties.stockEstime != null && (
+                {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (() => {
+                  const badge = (
+                    <span style={{ color: NIVEAU_STOCK[f.properties.niveauStock!]?.color ?? '#6B7280', fontWeight: 600 }}>
+                      {NIVEAU_STOCK[f.properties.niveauStock!]?.label ?? f.properties.niveauStock}
+                    </span>
+                  );
+                  const hasEstime = f.properties.stockEstime != null;
+                  return (
+                    <div className="mt-1 rounded bg-gray-50 p-1.5 leading-snug">
                       <p>
-                        Estimé aujourd’hui : <b>{Math.round(f.properties.stockEstime)} L</b>
-                        {f.properties.tendance && <span className="text-gray-400"> {TENDANCE_ICON[f.properties.tendance] ?? ''}</span>}
-                        {f.properties.autonomieJours != null && <span> · autonomie {f.properties.autonomieJours} j</span>}
+                        Dernier relevé : <b>{Math.round(f.properties.stockLitres ?? 0)} L</b>
+                        {fmtDateCourt(f.properties.derniereMesure) && <span className="text-gray-400"> · {fmtDateCourt(f.properties.derniereMesure)}</span>}
+                        {!hasEstime && <> · {badge}</>}
                       </p>
-                    )}
-                    {fmtDateCourt(f.properties.dateRupture) && (
-                      <p className="text-gray-500">Rupture estimée : {fmtDateCourt(f.properties.dateRupture)}</p>
-                    )}
-                  </div>
-                )}
+                      {hasEstime && (
+                        <p>
+                          Estimé aujourd’hui : <b>{Math.round(f.properties.stockEstime!)} L</b> · {badge}
+                          {f.properties.tendance && <span className="text-gray-400"> {TENDANCE_ICON[f.properties.tendance] ?? ''}</span>}
+                          {f.properties.autonomieJours != null && <span> · autonomie {f.properties.autonomieJours} j</span>}
+                        </p>
+                      )}
+                      {fmtDateCourt(f.properties.dateRupture) && (
+                        <p className="text-gray-500">Rupture estimée : {fmtDateCourt(f.properties.dateRupture)}</p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="mt-1 flex flex-col gap-0.5">
                   <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`} target="_blank" rel="noreferrer" className="text-[#0E7C6B] underline">🧭 Itinéraire →</a>
