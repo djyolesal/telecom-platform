@@ -122,7 +122,11 @@
       "Bash(git -C /Users/yohaness/Downloads/telecom-platform show HEAD --stat)",
       "Bash(awk '/model Maintenance /,/^}/' apps/api/prisma/schema.prisma)",
       "Bash(awk '/model ReleveEnergie/,/^}/' apps/api/prisma/schema.prisma)",
-      "Bash(grep -n '\\\\$AppConfig\\\\.' lib/features/maintenance/presentation/maintenance_detail_screen.dart)"
+      "Bash(grep -n '\\\\$AppConfig\\\\.' lib/features/maintenance/presentation/maintenance_detail_screen.dart)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(sort -t_ -k1 -n)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" npx prisma generate)"
     ]
   }
 }
