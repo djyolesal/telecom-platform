@@ -488,6 +488,26 @@ model SystemSettings {
   @@map("system_settings")
 }
 
+enum FrequenceTache {
+  MENSUELLE
+  TRIMESTRIELLE
+  SEMESTRIELLE
+  AU_BESOIN
+}
+
+// Surcharge admin (libellé + fréquence) d'une tâche préventive contractuelle.
+// La clé référence CONTRACTUAL_TASKS (apps/api/src/utils/tachesPreventives.ts) ;
+// l'éligibilité et la catégorie restent du code, seuls libellé/fréquence sont éditables.
+model TachePreventiveOverride {
+  key       String         @id @db.VarChar(40)
+  libelle   String
+  frequence FrequenceTache
+  updatedBy String?        @map("updated_by")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@map("taches_preventives_overrides")
+}
+
 model Notification {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")

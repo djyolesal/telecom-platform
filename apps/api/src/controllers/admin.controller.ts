@@ -8,6 +8,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings } from '../services/settings.service';
+import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride } from '../services/tachesPreventives.service';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
 export async function getSettings(_req: Request, res: Response, next: NextFunction) {
@@ -40,6 +41,32 @@ export async function updateSettings(req: Request, res: Response, next: NextFunc
     await auditLog(req.user!.id, 'UPDATE', 'system_settings', undefined, { keys: entries.map((e) => e.key) }, req);
     await loadSettings(); // recharge le cache → effet immédiat sans redéploiement
     res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+// ── Tâches préventives (libellé + fréquence éditables ; clé/éligibilité en code) ──
+export async function getTachePreventiveOverrides(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ success: true, data: await tacheOverridesCatalog() });
+  } catch (err) { next(err); }
+}
+
+export async function updateTachePreventiveOverride(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { key } = req.params;
+    const { libelle, frequence } = req.body as { libelle: string; frequence: string };
+    await upsertTacheOverride(key, { libelle, frequence: frequence as never }, req.user!.id);
+    await auditLog(req.user!.id, 'UPDATE', 'taches_preventives_overrides', key, { libelle, frequence }, req);
+    res.json({ success: true, data: await tacheOverridesCatalog() });
+  } catch (err) { next(err); }
+}
+
+export async function deleteTachePreventiveOverride(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { key } = req.params;
+    await resetTacheOverride(key);
+    await auditLog(req.user!.id, 'DELETE', 'taches_preventives_overrides', key, {}, req);
+    res.json({ success: true, data: await tacheOverridesCatalog() });
   } catch (err) { next(err); }
 }
 

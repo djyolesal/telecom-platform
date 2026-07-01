@@ -22,12 +22,12 @@ async function loadLogo(key?: string | null): Promise<FicheLogo | null> {
   }
 }
 import {
-  CONTRACTUAL_TASKS,
   TASK_BY_KEY,
   FREQUENCE_MOIS,
   FREQUENCE_LABEL,
   tachesForSite,
   tachesPlanifiables,
+  effectiveCatalogue,
   SiteEligibilite,
 } from '../utils/tachesPreventives';
 
@@ -43,11 +43,11 @@ function statutEcheance(lastDone: Date | null, freqMois: number | null, now: Dat
   return { statut: prochaine < now ? 'EN_RETARD' : 'A_JOUR', prochaine };
 }
 
-/** Catalogue contractuel (statique). */
+/** Catalogue contractuel (libellé/fréquence effectifs — surchargeables par l'admin). */
 export async function getCatalogue(_req: Request, res: Response) {
   res.json({
     success: true,
-    data: CONTRACTUAL_TASKS.map((t) => ({
+    data: effectiveCatalogue().map((t) => ({
       numero: t.numero,
       key: t.key,
       libelle: t.libelle,

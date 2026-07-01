@@ -108,9 +108,33 @@ export const TASK_BY_KEY: Record<string, TachePreventive> = Object.fromEntries(
   CONTRACTUAL_TASKS.map((t) => [t.key, t])
 );
 
-/** Tâches contractuelles applicables à un site donné. */
+/**
+ * Surcharges admin (libellé + fréquence uniquement — la clé, la catégorie et
+ * l'éligibilité restent du code). Cache mémoire mutable via setTacheOverrides(),
+ * appelé par le service au démarrage et après chaque édition (effet immédiat,
+ * même principe que les seuils de settings.service.ts).
+ */
+export interface TacheOverride { libelle: string; frequence: Frequence }
+const overrides = new Map<string, TacheOverride>();
+
+export function setTacheOverrides(rows: Array<{ key: string; libelle: string; frequence: Frequence }>): void {
+  overrides.clear();
+  for (const r of rows) overrides.set(r.key, { libelle: r.libelle, frequence: r.frequence });
+}
+
+function withOverride(t: TachePreventive): TachePreventive {
+  const o = overrides.get(t.key);
+  return o ? { ...t, libelle: o.libelle, frequence: o.frequence } : t;
+}
+
+/** Catalogue effectif (valeurs par défaut surchargées par l'admin si présentes). */
+export function effectiveCatalogue(): TachePreventive[] {
+  return CONTRACTUAL_TASKS.map(withOverride);
+}
+
+/** Tâches contractuelles applicables à un site donné (libellé/fréquence effectifs). */
 export function tachesForSite(s: SiteEligibilite): TachePreventive[] {
-  return CONTRACTUAL_TASKS.filter((t) => t.eligible(s));
+  return CONTRACTUAL_TASKS.filter((t) => t.eligible(s)).map(withOverride);
 }
 
 /** Tâches périodiques (hors « au besoin ») applicables — celles qui se planifient. */

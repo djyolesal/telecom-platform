@@ -186,6 +186,9 @@ router.post('/users/:id/reset-password', rbac(['ADMIN']), usersCtrl.resetUserPas
 router.get('/admin/settings', rbac(['ADMIN']), adminCtrl.getSettings);
 router.get('/admin/settings/effectifs', rbac(['ADMIN']), adminCtrl.getEffectiveSettings);
 router.put('/admin/settings', rbac(['ADMIN']), adminCtrl.updateSettings);
+router.get('/admin/taches-preventives', rbac(['ADMIN']), adminCtrl.getTachePreventiveOverrides);
+router.put('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.updateTachePreventiveOverride);
+router.delete('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.deleteTachePreventiveOverride);
 router.get('/admin/audit', rbac(['ADMIN']), adminCtrl.getAuditLogs);
 router.get('/admin/health', rbac(['ADMIN']), adminCtrl.getSystemHealth);
 router.get('/admin/metrics', rbac(['ADMIN']), adminCtrl.getMetrics);
