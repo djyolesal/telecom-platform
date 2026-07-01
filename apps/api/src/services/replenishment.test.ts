@@ -9,6 +9,7 @@ function site(p: Partial<SiteForecast>): SiteForecast {
     latitude: p.latitude ?? null, longitude: p.longitude ?? null,
     capaciteCuve: 10000, stockActuel: 0,
     consoJour: 100, consoTheoriqueJour: 100, tendance: 'STABLE', source: 'historique',
+    derniereMesure: null,
     autonomieJours: 5, dateRupture: null, dateLivraisonCible: null, joursAvantLivraison: 5,
     quantiteRecommandee: p.quantiteRecommandee ?? 1000, priorite: 'URGENT',
   };

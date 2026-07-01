@@ -20,8 +20,20 @@ export interface SiteFeature {
     hasStock: boolean;
     stockLitres?: number;
     niveauStock?: string; // OK / FAIBLE / CRITIQUE / VIDE / NA
+    derniereMesure?: string | null;
+    stockEstime?: number | null;
+    autonomieJours?: number | null;
+    dateRupture?: string | null;
+    tendance?: string | null;
   };
 }
+
+const fmtDateCourt = (iso?: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+};
+const TENDANCE_ICON: Record<string, string> = { HAUSSE: '↑', BAISSE: '↓', STABLE: '→' };
 
 const NIVEAU_STOCK: Record<string, { label: string; color: string }> = {
   OK: { label: 'OK', color: '#0E7C6B' },
@@ -157,12 +169,26 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
                 <p className="text-gray-500">{f.properties.region}</p>
                 <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
                 {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (
-                  <p className="mt-0.5">
-                    Stock : {Math.round(f.properties.stockLitres ?? 0)} L ·{' '}
-                    <span style={{ color: NIVEAU_STOCK[f.properties.niveauStock]?.color ?? '#6B7280', fontWeight: 600 }}>
-                      {NIVEAU_STOCK[f.properties.niveauStock]?.label ?? f.properties.niveauStock}
-                    </span>
-                  </p>
+                  <div className="mt-1 rounded bg-gray-50 p-1.5 leading-snug">
+                    <p>
+                      Dernier relevé : <b>{Math.round(f.properties.stockLitres ?? 0)} L</b>
+                      {fmtDateCourt(f.properties.derniereMesure) && <span className="text-gray-400"> · {fmtDateCourt(f.properties.derniereMesure)}</span>}
+                      {' · '}
+                      <span style={{ color: NIVEAU_STOCK[f.properties.niveauStock]?.color ?? '#6B7280', fontWeight: 600 }}>
+                        {NIVEAU_STOCK[f.properties.niveauStock]?.label ?? f.properties.niveauStock}
+                      </span>
+                    </p>
+                    {f.properties.stockEstime != null && (
+                      <p>
+                        Estimé aujourd’hui : <b>{Math.round(f.properties.stockEstime)} L</b>
+                        {f.properties.tendance && <span className="text-gray-400"> {TENDANCE_ICON[f.properties.tendance] ?? ''}</span>}
+                        {f.properties.autonomieJours != null && <span> · autonomie {f.properties.autonomieJours} j</span>}
+                      </p>
+                    )}
+                    {fmtDateCourt(f.properties.dateRupture) && (
+                      <p className="text-gray-500">Rupture estimée : {fmtDateCourt(f.properties.dateRupture)}</p>
+                    )}
+                  </div>
                 )}
                 <div className="mt-1 flex flex-col gap-0.5">
                   <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>

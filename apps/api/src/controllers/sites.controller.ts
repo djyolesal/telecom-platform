@@ -8,6 +8,7 @@ import { auditLog } from '../services/audit.service';
 import { cacheService } from '../services/cache.service';
 import { calculerStockSite } from '../utils/calculator';
 import { geParams } from '../services/settings.service';
+import { forecastSites } from '../services/replenishment.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
@@ -407,10 +408,15 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
     for (const r of releves) if (!stockMap.has(r.siteId)) stockMap.set(r.siteId, Number(r.volumeGasoilLitres));
     const gp = geParams();
 
+    // Prévision par site (stock estimé à date, autonomie, rupture, tendance) — mémoïsée.
+    const forecasts = await forecastSites({ all: true });
+    const fcMap = new Map(forecasts.map((f) => [f.siteId, f]));
+
     const geojson = {
       type: 'FeatureCollection',
       features: sites.map(site => {
         const stock = calculerStockSite(site, stockMap.has(site.id) ? { volumeGasoilLitres: stockMap.get(site.id)! } : null, gp);
+        const fc = fcMap.get(site.id);
         return {
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [Number(site.longitude), Number(site.latitude)] },
@@ -421,6 +427,12 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
             hasStock: stockMap.has(site.id),
             stockLitres: stock.stockLitres,
             niveauStock: stock.niveauAlerte, // OK / FAIBLE / CRITIQUE / VIDE / NA
+            // Estimation à date (prévision) — null si site sans GE / sans données exploitables.
+            derniereMesure: fc?.derniereMesure ?? null,
+            stockEstime: fc ? fc.stockActuel : null,
+            autonomieJours: fc?.autonomieJours ?? null,
+            dateRupture: fc?.dateRupture ?? null,
+            tendance: fc?.tendance ?? null,
           },
         };
       }),

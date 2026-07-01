@@ -16,6 +16,7 @@ export interface SiteForecast {
   consoTheoriqueJour: number;       // attendu selon la config GE
   tendance: 'HAUSSE' | 'STABLE' | 'BAISSE';
   source: 'historique' | 'theorique';
+  derniereMesure: string | null;    // date du dernier relevé de cuve (ISO), ou null
   autonomieJours: number | null;
   dateRupture: string | null;
   dateLivraisonCible: string | null;
@@ -192,6 +193,7 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
       consoTheoriqueJour: Math.round(consoTheoriqueJour * 10) / 10,
       tendance,
       source,
+      derniereMesure: dernier ? dernier.dateReleve.toISOString() : null,
       autonomieJours,
       dateRupture: new Date(dateRupture).toISOString(),
       dateLivraisonCible: new Date(dateLivraison).toISOString(),
