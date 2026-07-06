@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_logo.dart';
 import 'auth_cubit.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -62,10 +63,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('📡', style: TextStyle(fontSize: 40)),
-                            const SizedBox(height: 8),
-                            const Text('TélécomOps', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.brand)),
-                            const Text('Application terrain', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                            const AppLogo(size: 64),
+                            const SizedBox(height: 10),
+                            const AppWordmark(fontSize: 24),
+                            const Text('Exploitation & Maintenance · Operations Services', style: TextStyle(color: Colors.grey, fontSize: 11.5)),
                             const SizedBox(height: 24),
                             TextFormField(
                               controller: _email,

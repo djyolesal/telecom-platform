@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/shared/NotificationBell';
+import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
 
 const NAV_ITEMS = [
   { href: '/dashboard',               label: 'Tableau de bord',  icon: LayoutDashboard,  roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
@@ -44,7 +45,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-[#2471A3]">
           {sidebarOpen && (
-            <span className="font-bold text-lg tracking-tight">📡 TélécomOps</span>
+            <span className="flex items-center gap-2 font-bold text-lg tracking-tight">
+              <LogoIcon size={26} variant="dark" />
+              <LogoWordmark variant="dark" />
+            </span>
           )}
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 rounded hover:bg-[#2471A3] transition-colors">
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}

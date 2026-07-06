@@ -59,7 +59,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
     await auditLog(req.user!.id, 'CREATE', 'users', user.id, { email, role: rest.role }, req);
     await sendEmail({
       to: user.email,
-      subject: 'Votre compte TélécomOps',
+      subject: 'Votre compte E&M OpS',
       html: `<p>Bonjour ${user.prenom},</p><p>Votre compte a été créé. Mot de passe provisoire : <b>${plain}</b></p><p>Merci de le changer dès votre première connexion.</p>`,
     });
 
@@ -120,7 +120,7 @@ export async function resetUserPassword(req: Request, res: Response, next: NextF
     await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { field: 'password_reset' }, req);
     await sendEmail({
       to: existing.email,
-      subject: 'Réinitialisation de votre mot de passe TélécomOps',
+      subject: 'Réinitialisation de votre mot de passe E&M OpS',
       html: `<p>Bonjour ${existing.prenom},</p><p>Votre nouveau mot de passe provisoire : <b>${plain}</b></p>`,
     });
 

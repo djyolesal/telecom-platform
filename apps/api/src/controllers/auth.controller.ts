@@ -189,7 +189,7 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
       const link = `${env.APP_URL}/reset-password?token=${token}`;
       await sendEmail({
         to: user.email,
-        subject: 'Réinitialisation de votre mot de passe TélécomOps',
+        subject: 'Réinitialisation de votre mot de passe E&M OpS',
         html: `<p>Bonjour ${user.prenom},</p><p>Pour réinitialiser votre mot de passe, cliquez sur ce lien (valable 1 h) :</p><p><a href="${link}">${link}</a></p><p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`,
       });
       logger.info(`[auth] Lien de réinitialisation envoyé à ${user.email}`);

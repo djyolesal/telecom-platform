@@ -79,7 +79,7 @@ class AuthRepository {
   Future<bool> authenticateBiometric() async {
     try {
       return await _localAuth.authenticate(
-        localizedReason: 'Authentifiez-vous pour accéder à TélécomOps',
+        localizedReason: 'Authentifiez-vous pour accéder à E&M OpS',
         options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true),
       );
     } catch (_) {

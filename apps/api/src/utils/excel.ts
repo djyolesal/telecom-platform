@@ -15,7 +15,7 @@ export async function buildXlsx(
   rows: Record<string, unknown>[]
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'TélécomOps';
+  wb.creator = 'E&M OpS';
   wb.created = new Date();
 
   const ws = wb.addWorksheet(sheetName);
@@ -41,7 +41,7 @@ export async function buildXlsxMulti(
   sheets: Array<{ name: string; columns: ExcelColumn[]; rows: Record<string, unknown>[] }>
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'TélécomOps';
+  wb.creator = 'E&M OpS';
   wb.created = new Date();
 
   for (const s of sheets) {

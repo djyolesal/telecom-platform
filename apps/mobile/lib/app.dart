@@ -59,7 +59,7 @@ class _TelecomAppState extends State<TelecomApp> {
       child: BlocProvider.value(
         value: _authCubit,
         child: MaterialApp.router(
-          title: 'TélécomOps',
+          title: 'E&M OpS',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           routerConfig: _router,

@@ -35,7 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TélécomOps'),
+        title: const Text('E&M OpS'),
         actions: [
           IconButton(icon: const Icon(Icons.sync), onPressed: () => sync.sync()),
           PopupMenuButton<String>(

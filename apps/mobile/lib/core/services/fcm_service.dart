@@ -17,7 +17,7 @@ class FcmService {
 
   static const _channel = AndroidNotificationChannel(
     'telecom_alerts',
-    'Alertes TélécomOps',
+    'Alertes E&M OpS',
     description: 'Incidents, alertes carburant et tâches assignées',
     importance: Importance.high,
   );

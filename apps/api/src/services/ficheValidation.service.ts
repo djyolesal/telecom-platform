@@ -54,7 +54,7 @@ export interface FicheValidationData {
 
 export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'TélécomOps';
+  wb.creator = 'E&M OpS';
   const moisLabel = MOIS_FR[d.mois - 1] ?? '';
   const ws = wb.addWorksheet(`VAL ${moisLabel.slice(0, 3).toUpperCase()} ${d.annee}`);
 

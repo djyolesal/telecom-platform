@@ -19,12 +19,31 @@ function render(build: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
   });
 }
 
+/** Logo « Écrou-signal » E&M OpS, vectoriel (écrou hexagonal + signal). */
+function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number, size: number) {
+  const k = size / 120; // le tracé est défini dans un viewBox 120×120
+  doc.save();
+  doc.translate(x, y).scale(k);
+  doc.path('M104 60 L82 98 L38 98 L16 60 L38 22 L82 22 Z').lineWidth(9).lineJoin('round').stroke('#FFFFFF');
+  doc.circle(60, 64, 7).fill('#FFB020');
+  doc.path('M46 52 A18 18 0 0 1 74 52').lineWidth(6.5).lineCap('round').stroke('#3BC9AF');
+  doc.path('M40 45 A25 25 0 0 1 80 45').lineWidth(6.5).lineCap('round').stroke('#3BC9AF');
+  doc.restore();
+}
+
 function header(doc: PDFKit.PDFDocument, title: string, subtitle?: string) {
-  doc.rect(0, 0, doc.page.width, 90).fill(BRAND);
-  doc.fillColor('white').fontSize(20).text('📡 TélécomOps', 50, 30);
-  doc.fontSize(13).text(title, 50, 56);
-  if (subtitle) doc.fontSize(9).fillColor('#cdd9e8').text(subtitle, 50, 73);
-  doc.fillColor('black').moveDown(2);
+  const w = doc.page.width;
+  doc.rect(0, 0, w, 90).fill(BRAND);
+  drawLogo(doc, 46, 16, 46);
+  // Nom : « E&M » blanc, « OpS » teal.
+  doc.font('Helvetica-Bold').fontSize(17).fillColor('white').text('E&M ', 102, 22, { continued: true });
+  doc.fillColor('#3BC9AF').text('OpS');
+  doc.font('Helvetica').fontSize(12).fillColor('white').text(title, 102, 44);
+  if (subtitle) doc.fontSize(8.5).fillColor('#cdd9e8').text(subtitle, 102, 61);
+  // « Ligne de vie » : battement de supervision terminé par un point de géolocalisation.
+  doc.path(`M46 80 H${w - 190} l6 -9 l8 16 l6 -7 H${w - 70}`).lineWidth(1.4).lineJoin('round').lineCap('round').stroke('#FFB020');
+  doc.circle(w - 62, 80, 2.8).fill('#3BC9AF');
+  doc.fillColor('black');
   doc.y = 110;
 }
 
@@ -100,7 +119,7 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
 
     doc.moveDown(2);
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — TélécomOps`,
+      `Généré le ${fmtDate(new Date())} — E&M OpS`,
       50,
       doc.page.height - 60,
       { align: 'center', width: doc.page.width - 100 }
@@ -168,7 +187,7 @@ export async function generateMonthlyReportPdf(r: MonthlyReportData): Promise<Bu
     }
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré automatiquement le ${fmtDate(new Date())} — TélécomOps`,
+      `Généré automatiquement le ${fmtDate(new Date())} — E&M OpS`,
       50,
       doc.page.height - 60,
       { align: 'center', width: doc.page.width - 100 }
@@ -234,7 +253,7 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
     doc.text(`${Math.round(total)} L`, cols.vol, ty, { width: 90, align: 'right' });
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — TélécomOps`,
+      `Généré le ${fmtDate(new Date())} — E&M OpS`,
       50, doc.page.height - 60, { align: 'center', width: doc.page.width - 100 }
     );
   });
@@ -349,7 +368,7 @@ export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
     }
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — TélécomOps`,
+      `Généré le ${fmtDate(new Date())} — E&M OpS`,
       50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 }
     );
   });

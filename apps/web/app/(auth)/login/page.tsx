@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Loader2, LogIn, AlertCircle } from 'lucide-react';
+import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
 
 function LoginForm() {
   const router = useRouter();
@@ -35,9 +36,9 @@ function LoginForm() {
   return (
     <div className="bg-white rounded-2xl shadow-2xl p-8">
       <div className="text-center mb-8">
-        <div className="text-4xl mb-2">📡</div>
-        <h1 className="text-2xl font-bold text-[#1B3F6B]">TélécomOps</h1>
-        <p className="text-sm text-gray-500 mt-1">Supervision télécom & énergie</p>
+        <div className="mb-3 flex justify-center"><LogoIcon size={56} /></div>
+        <h1 className="text-2xl font-bold text-[#1B3F6B]"><LogoWordmark /></h1>
+        <p className="text-sm text-gray-500 mt-1">Exploitation &amp; Maintenance · Operations Services</p>
       </div>
 
       {error && (

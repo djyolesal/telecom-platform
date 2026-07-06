@@ -300,7 +300,7 @@ export async function sendRapportMensuel(req: Request, res: Response, next: Next
 
     const sent = await sendEmail({
       to: destinataires,
-      subject: `Rapport mensuel TélécomOps — ${String(mo).padStart(2, '0')}/${an}`,
+      subject: `Rapport mensuel E&M OpS — ${String(mo).padStart(2, '0')}/${an}`,
       html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint le rapport mensuel d'exploitation (${String(mo).padStart(2, '0')}/${an}).</p>`,
       attachments: [{ filename: `rapport-${an}-${String(mo).padStart(2, '0')}.pdf`, content: pdf, contentType: 'application/pdf' }],
     });

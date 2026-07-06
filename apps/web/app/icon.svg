@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- Logo « Écrou-signal » E&M OpS (favicon) -->
+  <path d="M104 60 L82 98 L38 98 L16 60 L38 22 L82 22 Z" fill="none" stroke="#1B3F6B" stroke-width="11" stroke-linejoin="round"/>
+  <circle cx="60" cy="64" r="8" fill="#F59E0B"/>
+  <path d="M46 52 A18 18 0 0 1 74 52" fill="none" stroke="#0E7C6B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M40 45 A25 25 0 0 1 80 45" fill="none" stroke="#0E7C6B" stroke-width="8" stroke-linecap="round"/>
+</svg>
