@@ -130,7 +130,16 @@
       "Bash(sed -n '/export const GE_PARAMS/,/};/p' src/utils/calculator.ts)",
       "Bash(sed -n '/export function litresMoisGE/,/^}/p' src/utils/calculator.ts)",
       "Skill(artifact-design)",
-      "Skill(artifact-design:*)"
+      "Skill(artifact-design:*)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-yohaness-Downloads-telecom-platform/d9f77179-4b1d-400b-9390-fb9d8efdeb28/scratchpad/iconegen /Users/yohaness/Downloads/telecom-platform/apps/mobile/assets/icon)",
+      "Bash(npm init *)",
+      "Bash(dart run *)",
+      "Bash(sed -n '/export async function exportReleves/,/^}/p' src/controllers/releves.controller.ts)",
+      "Bash(sed -n '/export async function exportIncidents/,/^}/p' src/controllers/incidents.controller.ts)",
+      "Bash(sed -n '/export async function exportUsers/,/^}/p' src/controllers/users.controller.ts)",
+      "Bash(python3 -)",
+      "Bash(npx ts-node -e ' *)",
+      "Bash(qlmanage -t -s 900 -o /tmp /tmp/test-export.pdf)"
     ]
   }
 }
