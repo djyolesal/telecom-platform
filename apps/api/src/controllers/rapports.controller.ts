@@ -44,6 +44,8 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
 
     const stockTotalLitres = stocks.reduce((s, x) => s + x.stock.stockLitres, 0);
     const sitesCritiques = stocks.filter((x) => ['CRITIQUE', 'VIDE'].includes(x.stock.niveauAlerte)).length;
+    const sitesFaibles = stocks.filter((x) => x.stock.niveauAlerte === 'FAIBLE').length;
+    const sitesOk = stocks.filter((x) => x.stock.niveauAlerte === 'OK').length;
     const autonomies = stocks.map((x) => x.stock.autonomieJours).filter((a): a is number => a != null).sort((a, b) => a - b);
     const autonomieMediane = autonomies.length ? autonomies[Math.floor(autonomies.length / 2)] : null;
 
@@ -92,6 +94,8 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
         incidentsOuverts,
         incidentsCritiques,
         sitesCritiques,
+        sitesFaibles,
+        sitesOk,
         stockTotalLitres,
         autonomieMediane,
         parPowerConfig,

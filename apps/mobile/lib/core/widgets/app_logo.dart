@@ -63,6 +63,51 @@ class _EcrouSignalPainter extends CustomPainter {
   bool shouldRepaint(covariant _EcrouSignalPainter old) => old.dark != dark;
 }
 
+/// « Ligne de vie » : battement de supervision terminé par un point de
+/// géolocalisation — même tracé que les en-têtes PDF et le motif du logo.
+class LigneDeVie extends StatelessWidget {
+  final double height;
+  final Color pulse;
+  final Color dot;
+  const LigneDeVie({super.key, this.height = 22, this.pulse = const Color(0xFFF59E0B), this.dot = const Color(0xFF3BC9AF)});
+
+  @override
+  Widget build(BuildContext context) =>
+      SizedBox(height: height, width: double.infinity, child: CustomPaint(painter: _LvPainter(pulse, dot)));
+}
+
+class _LvPainter extends CustomPainter {
+  final Color pulse;
+  final Color dot;
+  _LvPainter(this.pulse, this.dot);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final y = size.height * 0.62;
+    final spikeX = size.width - 96;
+    final p = Path()
+      ..moveTo(4, y)
+      ..lineTo(spikeX, y)
+      ..relativeLineTo(7, -11)
+      ..relativeLineTo(9, 18)
+      ..relativeLineTo(7, -8)
+      ..lineTo(size.width - 18, y);
+    canvas.drawPath(
+      p,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.4
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = pulse,
+    );
+    canvas.drawCircle(Offset(size.width - 8, y), 3.5, Paint()..color = dot);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LvPainter old) => old.pulse != pulse || old.dot != dot;
+}
+
 /// Nom de l'app « E&M OpS » avec le « OpS » en teal.
 class AppWordmark extends StatelessWidget {
   final double fontSize;
