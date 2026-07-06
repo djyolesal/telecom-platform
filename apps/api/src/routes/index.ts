@@ -41,7 +41,7 @@ router.post('/auth/fcm-token', authCtrl.updateFcmToken);
 // ── Sites ─────────────────────────────────────────────────────
 router.get('/sites', sitesCtrl.getSites);
 router.get('/sites/geojson', sitesCtrl.getSitesGeoJSON);
-router.get('/sites/export/xlsx', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
+router.get('/sites/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
 
@@ -89,7 +89,7 @@ router.delete('/lots/:id/sites/:siteId', rbac(['MANAGER', 'ADMIN']), lotsCtrl.re
 // ── Maintenances ──────────────────────────────────────────────
 router.get('/maintenances', maintenanceCtrl.getMaintenances);
 router.get('/maintenances/planning', maintenanceCtrl.getPlanning);
-router.get('/maintenances/export/xlsx', rbac(['MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
+router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
 router.post('/maintenances', maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', maintenanceCtrl.updateMaintenance);
@@ -105,7 +105,7 @@ router.get('/actifs/:type/:id', actifsCtrl.getActif);
 
 // ── Dépotages ─────────────────────────────────────────────────
 router.get('/depotages', depotagesCtrl.getDepotages);
-router.get('/depotages/export/xlsx', rbac(['MANAGER','ADMIN']), depotagesCtrl.exportDepotages);
+router.get('/depotages/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), depotagesCtrl.exportDepotages);
 router.post('/depotages', depotagesCtrl.createDepotage);
 router.get('/depotages/:id/bordereau.pdf', depotagesCtrl.exportDepotagePdf);
 router.get('/depotages/:id', depotagesCtrl.getDepotageById);
@@ -114,7 +114,7 @@ router.delete('/depotages/:id', rbac(['ADMIN']), depotagesCtrl.deleteDepotage);
 
 // ── Logistique carburant : bons de commande ───────────────────
 router.get('/bons-commande', carburantCtrl.getBonsCommande);
-router.get('/bons-commande/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsCommande);
+router.get('/bons-commande/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsCommande);
 router.post('/bons-commande', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBonCommande);
 router.get('/bons-commande/:id', carburantCtrl.getBonCommandeById);
 router.put('/bons-commande/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.updateBonCommande);
@@ -122,7 +122,7 @@ router.delete('/bons-commande/:id', rbac(['ADMIN']), carburantCtrl.deleteBonComm
 
 // ── Logistique carburant : bons de livraison + plan ───────────
 router.get('/bons-livraison', carburantCtrl.getBonsLivraison);
-router.get('/bons-livraison/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsLivraison);
+router.get('/bons-livraison/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsLivraison);
 router.post('/bons-livraison', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), carburantCtrl.createBonLivraison);
 router.get('/bons-livraison/:id', carburantCtrl.getBonLivraisonById);
 router.get('/bons-livraison/:id/plan.xlsx', carburantCtrl.exportPlanLivraisonXlsx);
@@ -142,19 +142,19 @@ router.post('/bons-livraison/brouillon', rbac(['MANAGER', 'ADMIN']), carburantCt
 
 // ── Rapport suivi des manquants de livraison (pilotage — pas les transporteurs) ──
 router.get('/rapports/manquants-livraison', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.getManquantsLivraison);
-router.get('/rapports/manquants-livraison/export/xlsx', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportManquantsLivraison);
+router.get('/rapports/manquants-livraison/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportManquantsLivraison);
 router.get('/rapports/manquants-livraison/site/:id', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.getManquantsSite);
 
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);
-router.get('/releves/export/xlsx', rbac(['MANAGER','ADMIN']), relevesCtrl.exportReleves);
+router.get('/releves/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), relevesCtrl.exportReleves);
 router.post('/releves', relevesCtrl.createReleve);
 router.get('/releves/:id', relevesCtrl.getReleveById);
 
 // ── Incidents ─────────────────────────────────────────────────
 router.get('/incidents', incidentsCtrl.getIncidents);
 router.get('/incidents/kpis', incidentsCtrl.getIncidentKPIs);
-router.get('/incidents/export/xlsx', rbac(['MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
+router.get('/incidents/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
 router.post('/incidents', incidentsCtrl.createIncident);
 router.get('/incidents/:id', incidentsCtrl.getIncidentById);
 router.put('/incidents/:id', incidentsCtrl.updateIncident);
@@ -174,7 +174,7 @@ router.post('/rapports/mensuel/send', rbac(['MANAGER','ADMIN']), rapportsCtrl.se
 
 // ── Utilisateurs ──────────────────────────────────────────────
 router.get('/users', rbac(['SUPERVISEUR','MANAGER','ADMIN']), usersCtrl.getUsers);
-router.get('/users/export/csv', rbac(['ADMIN']), usersCtrl.exportUsers);
+router.get('/users/export/:format(csv|xlsx|pdf)', rbac(['ADMIN']), usersCtrl.exportUsers);
 router.post('/users', rbac(['ADMIN']), usersCtrl.createUser);
 router.get('/users/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), usersCtrl.getUserById);
 router.put('/users/:id', rbac(['ADMIN']), usersCtrl.updateUser);

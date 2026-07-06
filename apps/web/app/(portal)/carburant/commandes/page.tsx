@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Download, GitCompare, AlertTriangle, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
@@ -144,7 +145,7 @@ export default function BonsCommandePage() {
             <ButtonLink href="/carburant/reapprovisionnement" variant="secondary" icon={Sparkles}>Réappro prédictif</ButtonLink>
             <ButtonLink href="/carburant/manquants" variant="secondary" icon={AlertTriangle}>Manquants</ButtonLink>
             <ButtonLink href="/carburant/correlation" variant="secondary" icon={GitCompare}>Corrélation conso</ButtonLink>
-            <Button variant="secondary" icon={Download} onClick={() => downloadFile('/bons-commande/export/xlsx', 'bons-commande.xlsx')}>Excel</Button>
+            <ExportButtons base="/bons-commande/export" name="bons-commande" />
             <Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de commande</Button>
           </div>
         }

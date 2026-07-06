@@ -6,6 +6,7 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
+import { sendTabular } from '../utils/exporter';
 
 const SALT_ROUNDS = 12;
 const SAFE_SELECT = {
@@ -131,16 +132,43 @@ export async function resetUserPassword(req: Request, res: Response, next: NextF
 export async function exportUsers(req: Request, res: Response, next: NextFunction) {
   try {
     const users = await prisma.user.findMany({ orderBy: { nom: 'asc' }, select: SAFE_SELECT });
-    const header = 'Nom;Prénom;Email;Téléphone;Rôle;Région;Actif;Dernière connexion';
-    const lines = users.map((u) =>
-      [u.nom, u.prenom, u.email, u.telephone ?? '', u.role, u.region ?? '',
-        u.isActive ? 'Oui' : 'Non', u.lastLoginAt?.toISOString() ?? ''].join(';')
-    );
-    const csv = '﻿' + [header, ...lines].join('\n');
-
     await auditLog(req.user!.id, 'EXPORT', 'users', undefined, { count: users.length }, req);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="utilisateurs.csv"');
-    res.send(csv);
+
+    const format = req.params.format || 'csv';
+    if (format === 'csv') {
+      const header = 'Nom;Prénom;Email;Téléphone;Rôle;Région;Actif;Dernière connexion';
+      const lines = users.map((u) =>
+        [u.nom, u.prenom, u.email, u.telephone ?? '', u.role, u.region ?? '',
+          u.isActive ? 'Oui' : 'Non', u.lastLoginAt?.toISOString() ?? ''].join(';')
+      );
+      const csv = '﻿' + [header, ...lines].join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="utilisateurs.csv"');
+      res.send(csv);
+      return;
+    }
+    await sendTabular(res, format, 'utilisateurs', 'Utilisateurs', [{
+      name: 'Utilisateurs',
+      columns: [
+        { header: 'Nom', key: 'nom', width: 18 },
+        { header: 'Prénom', key: 'prenom', width: 16 },
+        { header: 'Email', key: 'email', width: 26 },
+        { header: 'Téléphone', key: 'telephone', width: 14 },
+        { header: 'Rôle', key: 'role', width: 14 },
+        { header: 'Région', key: 'region', width: 14 },
+        { header: 'Actif', key: 'actif', width: 8 },
+        { header: 'Dernière connexion', key: 'connexion', width: 18 },
+      ],
+      rows: users.map((u) => ({
+        nom: u.nom,
+        prenom: u.prenom,
+        email: u.email,
+        telephone: u.telephone ?? '',
+        role: u.role,
+        region: u.region ?? '',
+        actif: u.isActive ? 'Oui' : 'Non',
+        connexion: u.lastLoginAt ? u.lastLoginAt.toLocaleString('fr-FR') : '',
+      })),
+    }]);
   } catch (err) { next(err); }
 }

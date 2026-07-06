@@ -4,7 +4,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
-import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { sendTabular } from '../utils/exporter';
 import { clearMemo } from '../utils/memo';
 import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../utils/energy';
 import { getNum } from '../services/settings.service';
@@ -416,9 +416,10 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
       include: { site: { select: { code: true } } },
     });
 
-    const buffer = await buildXlsx(
-      'Depotages',
-      [
+    await auditLog(req.user!.id, 'EXPORT', 'depotages', undefined, { count: rows.length }, req);
+    await sendTabular(res, req.params.format, 'depotages', 'Dépotages carburant', [{
+      name: 'Depotages',
+      columns: [
         { header: 'Site', key: 'site', width: 16 },
         { header: 'Date', key: 'date', width: 18 },
         { header: 'Volume livré (L)', key: 'volume', width: 14 },
@@ -428,7 +429,7 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
         { header: 'Fournisseur', key: 'fournisseur', width: 20 },
         { header: 'Bon livraison', key: 'bl', width: 18 },
       ],
-      rows.map((d) => ({
+      rows: rows.map((d) => ({
         site: d.site?.code ?? '',
         date: d.dateDepotage.toLocaleString('fr-FR'),
         volume: Number(d.volumeLitres),
@@ -437,11 +438,7 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
         stockApres: d.stockApresLitres != null ? Number(d.stockApresLitres) : '',
         fournisseur: d.fournisseur ?? '',
         bl: d.numeroBonLivraison ?? '',
-      }))
-    );
-
-    await auditLog(req.user!.id, 'EXPORT', 'depotages', undefined, { count: rows.length }, req);
-    setXlsxHeaders(res, 'depotages.xlsx');
-    res.send(buffer);
+      })),
+    }]);
   } catch (err) { next(err); }
 }

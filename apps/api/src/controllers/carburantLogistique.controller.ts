@@ -4,7 +4,8 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
-import { buildXlsx, buildXlsxMulti, setXlsxHeaders } from '../utils/excel';
+import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { sendTabular } from '../utils/exporter';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
@@ -660,9 +661,7 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
         rows: m.parBc as unknown as Record<string, unknown>[],
       },
     ];
-    const buffer = await buildXlsxMulti(sheets);
-    setXlsxHeaders(res, 'manquants-livraison.xlsx');
-    res.send(buffer);
+    await sendTabular(res, req.params.format, 'manquants-livraison', 'Suivi des manquants de livraison', sheets);
   } catch (err) { next(err); }
 }
 
@@ -802,9 +801,10 @@ export async function exportBonsCommande(req: Request, res: Response, next: Next
       include: { volumesMensuels: true, _count: { select: { bonsLivraison: true } } },
     });
 
-    const buffer = await buildXlsx(
-      'Bons de commande',
-      [
+    await auditLog(req.user!.id, 'EXPORT', 'bons_commande', undefined, { count: rows.length }, req);
+    await sendTabular(res, req.params.format, 'bons-commande', 'Bons de commande carburant', [{
+      name: 'Bons de commande',
+      columns: [
         { header: 'N° BC', key: 'numero', width: 18 },
         { header: 'Année', key: 'annee', width: 8 },
         { header: 'Trimestre', key: 'trimestre', width: 10 },
@@ -813,7 +813,7 @@ export async function exportBonsCommande(req: Request, res: Response, next: Next
         { header: 'Bons de livraison', key: 'bl', width: 16 },
         { header: 'Statut', key: 'statut', width: 12 },
       ],
-      rows.map((b) => ({
+      rows: rows.map((b) => ({
         numero: b.numero,
         annee: b.annee,
         trimestre: `T${b.trimestre}`,
@@ -821,11 +821,8 @@ export async function exportBonsCommande(req: Request, res: Response, next: Next
         volume: b.volumesMensuels.reduce((s, v) => s + n(v.volumePrevuLitres), 0),
         bl: b._count.bonsLivraison,
         statut: b.statut,
-      }))
-    );
-    await auditLog(req.user!.id, 'EXPORT', 'bons_commande', undefined, { count: rows.length }, req);
-    setXlsxHeaders(res, 'bons-commande.xlsx');
-    res.send(buffer);
+      })),
+    }]);
   } catch (err) { next(err); }
 }
 
@@ -870,9 +867,10 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
       }
     }
 
-    const buffer = await buildXlsx(
-      'Bons de livraison',
-      [
+    await auditLog(req.user!.id, 'EXPORT', 'bons_livraison', undefined, { count: bls.length }, req);
+    await sendTabular(res, req.params.format, 'bons-livraison', 'Bons de livraison carburant', [{
+      name: 'Bons de livraison',
+      columns: [
         { header: 'N° BL', key: 'bl', width: 16 },
         { header: 'BC', key: 'bc', width: 16 },
         { header: 'Mois', key: 'mois', width: 12 },
@@ -885,11 +883,8 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
         { header: 'Livré site (L)', key: 'livre', width: 14 },
         { header: 'Statut ligne', key: 'statut', width: 12 },
       ],
-      rows
-    );
-    await auditLog(req.user!.id, 'EXPORT', 'bons_livraison', undefined, { count: bls.length }, req);
-    setXlsxHeaders(res, 'bons-livraison.xlsx');
-    res.send(buffer);
+      rows,
+    }]);
   } catch (err) { next(err); }
 }
 

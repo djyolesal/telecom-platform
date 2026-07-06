@@ -10,6 +10,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams } from '../services/settings.service';
 import { forecastSites } from '../services/replenishment.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { sendTabular } from '../utils/exporter';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
 const IMPORT_COLUMNS = [
@@ -540,9 +541,10 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
 
     const sites = await prisma.site.findMany({ where, orderBy: { code: 'asc' } });
 
-    const buffer = await buildXlsx(
-      'Sites',
-      [
+    await auditLog(req.user!.id, 'EXPORT', 'sites', undefined, { count: sites.length }, req);
+    await sendTabular(res, req.params.format, 'sites', 'Parc de sites', [{
+      name: 'Sites',
+      columns: [
         { header: 'Code', key: 'code', width: 14 },
         { header: 'Nom', key: 'nom', width: 26 },
         { header: 'Région', key: 'region', width: 14 },
@@ -553,7 +555,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
         { header: 'Latitude', key: 'lat', width: 12 },
         { header: 'Longitude', key: 'lng', width: 12 },
       ],
-      sites.map((s) => ({
+      rows: sites.map((s) => ({
         code: s.code,
         nom: s.nom,
         region: s.region,
@@ -563,11 +565,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
         puissance: Number(s.puissanceGEkva),
         lat: s.latitude != null ? Number(s.latitude) : '',
         lng: s.longitude != null ? Number(s.longitude) : '',
-      }))
-    );
-
-    await auditLog(req.user!.id, 'EXPORT', 'sites', undefined, { count: sites.length }, req);
-    setXlsxHeaders(res, 'sites.xlsx');
-    res.send(buffer);
+      })),
+    }]);
   } catch (err) { next(err); }
 }

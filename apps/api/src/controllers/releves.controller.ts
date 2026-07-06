@@ -4,7 +4,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
-import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { sendTabular } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 
 // Libellé court de la tâche préventive d'origine (pour la « provenance » du relevé).
@@ -119,9 +119,10 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
       include: { site: { select: { code: true } }, maintenance: { select: { type: true, tachePreventiveKey: true } } },
     });
 
-    const buffer = await buildXlsx(
-      'Releves',
-      [
+    await auditLog(req.user!.id, 'EXPORT', 'releves', undefined, { count: rows.length }, req);
+    await sendTabular(res, req.params.format, 'releves', 'Relevés énergie', [{
+      name: 'Releves',
+      columns: [
         { header: 'Site', key: 'site', width: 16 },
         { header: 'Date', key: 'date', width: 18 },
         { header: 'Provenance', key: 'provenance', width: 14 },
@@ -132,7 +133,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
         { header: 'Heures GE', key: 'heures', width: 10 },
         { header: 'Coût estimé', key: 'cout', width: 14 },
       ],
-      rows.map((r) => ({
+      rows: rows.map((r) => ({
         site: r.site?.code ?? '',
         date: r.dateReleve.toLocaleString('fr-FR'),
         provenance: provenanceReleve(r.maintenance),
@@ -142,11 +143,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
         gasoil: r.volumeGasoilLitres != null ? Number(r.volumeGasoilLitres) : '',
         heures: r.heuresFonctGE != null ? Number(r.heuresFonctGE) : '',
         cout: r.coutEstime != null ? Number(r.coutEstime) : '',
-      }))
-    );
-
-    await auditLog(req.user!.id, 'EXPORT', 'releves', undefined, { count: rows.length }, req);
-    setXlsxHeaders(res, 'releves.xlsx');
-    res.send(buffer);
+      })),
+    }]);
   } catch (err) { next(err); }
 }

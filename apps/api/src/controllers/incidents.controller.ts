@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { notificationService } from '../services/notifications.service';
-import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { sendTabular } from '../utils/exporter';
 import { io } from '../server';
 import { differenceInMinutes } from 'date-fns';
 
@@ -197,9 +197,10 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
       include: { site: { select: { code: true, region: true } }, technicien: { select: { nom: true, prenom: true } } },
     });
 
-    const buffer = await buildXlsx(
-      'Incidents',
-      [
+    await auditLog(req.user!.id, 'EXPORT', 'incidents', undefined, { count: rows.length }, req);
+    await sendTabular(res, req.params.format, 'incidents', 'Incidents', [{
+      name: 'Incidents',
+      columns: [
         { header: 'Site', key: 'site', width: 14 },
         { header: 'Région', key: 'region', width: 14 },
         { header: 'Type', key: 'type', width: 16 },
@@ -211,7 +212,7 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
         { header: 'Coupure (min)', key: 'coupure', width: 14 },
         { header: 'Technicien', key: 'technicien', width: 20 },
       ],
-      rows.map((i) => ({
+      rows: rows.map((i) => ({
         site: i.site?.code ?? '',
         region: i.site?.region ?? '',
         type: i.type,
@@ -222,12 +223,8 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
         mtti: i.delaiInterventionMinutes ?? '',
         coupure: i.dureeCoupureMinutes ?? '',
         technicien: i.technicien ? `${i.technicien.prenom} ${i.technicien.nom}` : '',
-      }))
-    );
-
-    await auditLog(req.user!.id, 'EXPORT', 'incidents', undefined, { count: rows.length }, req);
-    setXlsxHeaders(res, 'incidents.xlsx');
-    res.send(buffer);
+      })),
+    }]);
   } catch (err) { next(err); }
 }
 

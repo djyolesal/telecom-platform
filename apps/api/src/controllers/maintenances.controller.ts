@@ -8,7 +8,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl } from '../services/storage.service';
-import { buildXlsx, setXlsxHeaders } from '../utils/excel';
+import { sendTabular } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
@@ -710,9 +710,10 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
       include: { site: { select: { code: true, nom: true } }, technicien: { select: { nom: true, prenom: true } } },
     });
 
-    const buffer = await buildXlsx(
-      'Maintenances',
-      [
+    await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined, { count: rows.length }, req);
+    await sendTabular(res, req.params.format, 'maintenances', 'Maintenances', [{
+      name: 'Maintenances',
+      columns: [
         { header: 'Site', key: 'site', width: 18 },
         { header: 'Type', key: 'type', width: 12 },
         { header: 'Catégorie', key: 'categorie', width: 14 },
@@ -722,7 +723,7 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
         { header: 'Planifiée', key: 'datePlanifiee', width: 18 },
         { header: 'Durée (min)', key: 'duree', width: 12 },
       ],
-      rows.map((m) => ({
+      rows: rows.map((m) => ({
         site: m.site?.code ?? '',
         type: m.type,
         categorie: m.categorie,
@@ -731,11 +732,7 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
         technicien: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '',
         datePlanifiee: m.datePlanifiee.toLocaleString('fr-FR'),
         duree: m.dureeMinutes ?? '',
-      }))
-    );
-
-    await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined, { count: rows.length }, req);
-    setXlsxHeaders(res, 'maintenances.xlsx');
-    res.send(buffer);
+      })),
+    }]);
   } catch (err) { next(err); }
 }

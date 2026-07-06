@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, AlertTriangle, MapPin, Truck, Calendar, Camera, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable, Column } from '@/components/shared/DataTable';
@@ -171,7 +172,7 @@ export default function ManquantsPage() {
         title="Suivi des manquants de livraison"
         subtitle={`Écart entre prévu et réellement livré · seuil de retard ${data?.seuilJours ?? 7} j`}
         backHref="/carburant/commandes"
-        actions={<Button variant="secondary" icon={Download} onClick={() => downloadFile(`/rapports/manquants-livraison/export/xlsx${params ? `?${params}` : ''}`, 'manquants-livraison.xlsx')}>Excel</Button>}
+        actions={<ExportButtons base="/rapports/manquants-livraison/export" name="manquants-livraison" query={params || undefined} />}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">

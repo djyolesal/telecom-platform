@@ -20,7 +20,7 @@ function render(build: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
 }
 
 /** Logo « Écrou-signal » E&M OpS, vectoriel (écrou hexagonal + signal). */
-function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number, size: number) {
+export function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number, size: number) {
   const k = size / 120; // le tracé est défini dans un viewBox 120×120
   doc.save();
   doc.translate(x, y).scale(k);
