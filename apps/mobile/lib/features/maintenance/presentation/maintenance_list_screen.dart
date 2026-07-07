@@ -6,6 +6,7 @@ import '../../../core/bloc/list_cubit.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/gps_refine_sheet.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
 import '../../sites/data/site_model.dart';
@@ -73,22 +74,22 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
     context.read<ListCubit<Maintenance>>().run(() => repo.getMaintenances(search: _query));
   }
 
-  /// Planifier intelligent : détecte si le technicien est SUR un site (GPS),
-  /// pré-remplit ce site et propose ses maintenances planifiées ; sinon ouvre
-  /// le formulaire vierge.
+  /// Planifier intelligent : AFFINE d'abord la position (feuille avec loader
+  /// et précision en direct, comme le dépotage), détecte si le technicien est
+  /// SUR un site, pré-remplit ce site et propose ses maintenances planifiées ;
+  /// sinon ouvre le formulaire vierge.
   Future<void> _onPlanifier(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
     final router = GoRouter.of(context);
     final siteRepo = context.read<SiteRepository>();
-    messenger.showSnackBar(const SnackBar(content: Text('Localisation en cours…'), duration: Duration(seconds: 1)));
-    final pos = await LocationService().freshPosition();
-    final sites = await siteRepo.getSites();
+    final fix = await refineGpsPosition(context);
+    if (!context.mounted) return;
     Site? onSite;
     double best = double.infinity;
-    if (pos != null) {
+    if (fix != null) {
+      final sites = await siteRepo.getSites();
       for (final s in sites) {
         if (s.latitude == null || s.longitude == null) continue;
-        final d = LocationService.distanceMeters(pos.lat, pos.lng, s.latitude!, s.longitude!);
+        final d = LocationService.distanceMeters(fix.lat, fix.lng, s.latitude!, s.longitude!);
         if (d <= AppConfig.geofenceRadiusM && d < best) {
           best = d;
           onSite = s;
@@ -97,14 +98,15 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
     }
     if (!context.mounted) return;
     if (onSite != null) {
-      await _showOnSiteSheet(context, onSite);
+      await _showOnSiteSheet(context, onSite, fix!.accuracyM);
     } else {
+      // GPS annulé/indisponible ou aucun site à proximité : formulaire vierge.
       await router.push('/maintenance/nouveau');
     }
     if (context.mounted) _reload(context);
   }
 
-  Future<void> _showOnSiteSheet(BuildContext context, Site site) async {
+  Future<void> _showOnSiteSheet(BuildContext context, Site site, double accuracyM) async {
     final repo = context.read<MaintenanceRepository>();
     final router = GoRouter.of(context);
     final planifiees = await repo.getMaintenances(statut: 'PLANIFIEE', siteId: site.id);
@@ -122,7 +124,11 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
               Row(children: [
                 const Icon(Icons.location_on, color: Colors.green),
                 const SizedBox(width: 8),
-                Expanded(child: Text('Vous êtes sur le site\n${site.nom}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(
+                  child: Text(
+                      'Vous êtes sur le site\n${site.nom}${accuracyM > 0 ? ' (± ${accuracyM.toStringAsFixed(0)} m)' : ''}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
               ]),
               const SizedBox(height: 12),
               if (planifiees.isEmpty)
