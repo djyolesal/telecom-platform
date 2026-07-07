@@ -1,7 +1,31 @@
 import 'package:geolocator/geolocator.dart';
 
+/// Position GPS avec sa précision estimée (rayon d'incertitude en mètres).
+typedef GpsFix = ({double lat, double lng, double accuracyM});
+
 /// Capture la position GPS pour géolocaliser les saisies terrain.
 class LocationService {
+  /// Service actif + permission accordée (demande si nécessaire).
+  Future<bool> ensurePermission() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return false;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      return permission != LocationPermission.denied &&
+          permission != LocationPermission.deniedForever;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Flux de mesures GPS haute précision (pour affiner jusqu'à ~5 m avant de
+  /// chercher le site). Appeler [ensurePermission] avant de s'abonner.
+  Stream<GpsFix> preciseFixes() => Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.bestForNavigation),
+      ).map((p) => (lat: p.latitude, lng: p.longitude, accuracyM: p.accuracy));
+
   /// Retourne (latitude, longitude) ou null si indisponible/refusé.
   Future<({double lat, double lng})?> currentPosition() async {
     try {
