@@ -5,11 +5,23 @@ import 'em_ops_loader.dart';
 
 /// Ouvre la feuille d'affinage GPS et retourne la position affinée
 /// (~5 m visés), ou null si annulé / GPS indisponible.
-Future<GpsFix?> refineGpsPosition(BuildContext context) {
+Future<GpsFix?> refineGpsPosition(BuildContext context) async {
+  // Permission demandée AVANT d'ouvrir la feuille : le dialogue système ne
+  // doit pas apparaître pendant l'animation d'ouverture (rendu gelé).
+  final ok = await LocationService().ensurePermission();
+  if (!context.mounted) return null;
+  if (!ok) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Localisation indisponible — activez le GPS (précision élevée).')),
+    );
+    return null;
+  }
   return showModalBottomSheet<GpsFix>(
     context: context,
     isDismissible: false,
     enableDrag: false,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
     builder: (_) => const GpsRefineSheet(),
   );
 }
@@ -36,26 +48,35 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
   @override
   void initState() {
     super.initState();
-    _start();
+    // Démarre l'écoute APRÈS le premier rendu (la feuille s'affiche d'abord).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
-  Future<void> _start() async {
-    final ok = await LocationService().ensurePermission();
+  void _start() {
     if (!mounted) return;
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Localisation indisponible — activez le GPS (précision élevée).')),
-      );
-      Navigator.pop(context, null);
-      return;
-    }
     // Au bout du délai max, on part avec la meilleure mesure obtenue.
     _timeout = Timer(_maxWait, _finish);
     _sub = LocationService().preciseFixes().listen((f) {
       if (_best == null || f.accuracyM < _best!.accuracyM) _best = f;
       if (mounted) setState(() => _current = f.accuracyM);
       if (f.accuracyM <= _targetM) _finish();
-    }, onError: (_) => _finish());
+    }, onError: (_) => _fallback());
+  }
+
+  /// Le flux haute précision a échoué (ex. permission « approximative ») :
+  /// repli sur une mesure GPS classique plutôt qu'un abandon silencieux.
+  Future<void> _fallback() async {
+    if (_best != null) return _finish();
+    final pos = await LocationService().freshPosition();
+    if (!mounted) return;
+    if (pos != null) {
+      Navigator.pop(context, (lat: pos.lat, lng: pos.lng, accuracyM: -1.0)); // précision inconnue
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Position GPS indisponible — réessayez à découvert.')),
+      );
+      Navigator.pop(context, null);
+    }
   }
 
   void _finish() {
@@ -75,7 +96,7 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
     final acc = _current;
     final atteint = acc != null && acc <= _targetM;
     // Progression indicative : 30 m (ou pire) → 0 %, 5 m → 100 %.
-    final progress = acc == null ? null : (1 - ((acc - _targetM) / 25)).clamp(0.0, 1.0);
+    final progress = acc == null ? null : (1 - ((acc - _targetM) / 25)).clamp(0.0, 1.0).toDouble();
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),

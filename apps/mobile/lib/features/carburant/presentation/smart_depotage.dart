@@ -61,7 +61,8 @@ Future<void> _showOnSiteSheet(BuildContext context, Site site, double accuracyM)
               const Icon(Icons.local_gas_station, color: Colors.green),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('Vous êtes sur le site\n${site.nom} (± ${accuracyM.toStringAsFixed(0)} m)',
+                child: Text(
+                    'Vous êtes sur le site\n${site.nom}${accuracyM > 0 ? ' (± ${accuracyM.toStringAsFixed(0)} m)' : ''}',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ]),

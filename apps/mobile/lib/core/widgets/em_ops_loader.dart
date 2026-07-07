@@ -128,7 +128,9 @@ class _LoaderPainter extends CustomPainter {
       ..relativeLineTo(9, 18)
       ..relativeLineTo(7, -8)
       ..lineTo(w - 16, y);
-    final metric = line.computeMetrics().first;
+    final metrics = line.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
     final tt = Curves.easeInOut.transform(t);
     final drawn = metric.extractPath(0, metric.length * tt);
     canvas.drawPath(
