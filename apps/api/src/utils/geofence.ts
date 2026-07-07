@@ -1,0 +1,45 @@
+import { Prisma } from '@prisma/client';
+import { AppError } from './AppError';
+import { env } from '../config/env';
+import { getNum } from '../services/settings.service';
+
+/** Rayon « sur site » (configurable côté admin). */
+export const geofenceRadiusM = () => getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M);
+
+/** Distance en mètres entre deux points GPS (formule de haversine). */
+export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // rayon terrestre (m)
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/**
+ * Vérifie que l'opération (démarrage/clôture) est réalisée SUR le site.
+ * - Si le site n'a pas de coordonnées, on ne peut pas vérifier → on laisse passer.
+ * - Sinon la position GPS est obligatoire et doit être à moins de geofenceRadiusM().
+ */
+export function assertOnSite(
+  site: { latitude: Prisma.Decimal | null; longitude: Prisma.Decimal | null; code?: string },
+  latitude: unknown,
+  longitude: unknown,
+  action: string
+) {
+  if (site.latitude == null || site.longitude == null) return; // site non géolocalisé
+  const lat = latitude == null || latitude === '' ? null : Number(latitude);
+  const lng = longitude == null || longitude === '' ? null : Number(longitude);
+  if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+    throw new AppError(`Position GPS requise : ${action} doit être effectué(e) sur le site.`, 422);
+  }
+  const dist = distanceMeters(lat, lng, Number(site.latitude), Number(site.longitude));
+  if (dist > geofenceRadiusM()) {
+    throw new AppError(
+      `Vous n'êtes pas sur le site ${site.code ?? ''} (à ${Math.round(dist)} m, max ${geofenceRadiusM()} m). ${action} autorisé(e) uniquement sur place.`.trim(),
+      422
+    );
+  }
+}

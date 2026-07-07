@@ -160,6 +160,7 @@ router.get('/incidents/:id', incidentsCtrl.getIncidentById);
 router.put('/incidents/:id', incidentsCtrl.updateIncident);
 router.delete('/incidents/:id', rbac(['ADMIN']), incidentsCtrl.deleteIncident);
 router.post('/incidents/:id/assign', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.assignIncident);
+router.post('/incidents/:id/demarrer', incidentsCtrl.startIncident);
 router.post('/incidents/:id/close', incidentsCtrl.closeIncident);
 
 // ── Rapports ──────────────────────────────────────────────────

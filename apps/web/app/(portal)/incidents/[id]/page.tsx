@@ -3,13 +3,13 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, CheckCircle2, AlertCircle, Wrench, Clock } from 'lucide-react';
+import { UserPlus, CheckCircle2, AlertCircle, Wrench, Clock, Smartphone } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
 import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
-import { Field, Input, Select, Textarea } from '@/components/shared/Form';
+import { Select } from '@/components/shared/Form';
 import { TYPES_INCIDENT } from '@/lib/constants';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -40,7 +40,6 @@ export default function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [technicienId, setTechnicienId] = useState('');
-  const [closeForm, setCloseForm] = useState({ dateIntervention: '', dateResolution: '', causeProbable: '', actionCorrective: '', creerMaintenance: false });
 
   const { data: inc, isLoading, isError } = useQuery({
     queryKey: ['incident', id],
@@ -54,15 +53,6 @@ export default function IncidentDetailPage() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['incident', id] });
   const assign = useMutation({ mutationFn: () => api.post(`/incidents/${id}/assign`, { technicienId }), onSuccess: refresh });
-  const close = useMutation({
-    mutationFn: () => api.post(`/incidents/${id}/close`, {
-      dateIntervention: new Date(closeForm.dateIntervention).toISOString(),
-      dateResolution: new Date(closeForm.dateResolution).toISOString(),
-      causeProbable: closeForm.causeProbable, actionCorrective: closeForm.actionCorrective,
-      creerMaintenance: closeForm.creerMaintenance,
-    }),
-    onSuccess: refresh,
-  });
 
   if (isLoading) return <Loading />;
   if (isError || !inc) return <ErrorState message="Incident introuvable" />;
@@ -106,32 +96,27 @@ export default function IncidentDetailPage() {
             </div>
           )}
 
-          {!resolu && (
+          {(inc.photos?.length ?? 0) > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <h3 className="font-semibold text-gray-700 text-sm mb-3">Clôturer l&apos;incident</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Date intervention" required>
-                  <Input type="datetime-local" value={closeForm.dateIntervention} onChange={(e) => setCloseForm((f) => ({ ...f, dateIntervention: e.target.value }))} />
-                </Field>
-                <Field label="Date résolution" required>
-                  <Input type="datetime-local" value={closeForm.dateResolution} onChange={(e) => setCloseForm((f) => ({ ...f, dateResolution: e.target.value }))} />
-                </Field>
-                <Field label="Cause probable" className="md:col-span-2">
-                  <Textarea value={closeForm.causeProbable} onChange={(e) => setCloseForm((f) => ({ ...f, causeProbable: e.target.value }))} />
-                </Field>
-                <Field label="Action corrective" className="md:col-span-2">
-                  <Textarea value={closeForm.actionCorrective} onChange={(e) => setCloseForm((f) => ({ ...f, actionCorrective: e.target.value }))} />
-                </Field>
-                <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-600">
-                  <input type="checkbox" checked={closeForm.creerMaintenance} onChange={(e) => setCloseForm((f) => ({ ...f, creerMaintenance: e.target.checked }))} />
-                  Créer une maintenance curative associée
-                </label>
+              <h3 className="font-semibold text-gray-700 text-sm mb-2">Photos ({inc.photos.length})</h3>
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                {inc.photos.map((p: { id: string; url: string }, i: number) => (
+                  <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.url} alt={`Photo ${i + 1}`} className="h-28 w-full rounded-lg object-cover border border-gray-100" />
+                  </a>
+                ))}
               </div>
-              <div className="mt-4 flex justify-end">
-                <Button icon={CheckCircle2} loading={close.isPending} disabled={!closeForm.dateIntervention || !closeForm.dateResolution} onClick={() => close.mutate()}>
-                  Clôturer
-                </Button>
-              </div>
+            </div>
+          )}
+
+          {!resolu && (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 flex items-start gap-3">
+              <Smartphone size={18} className="text-gray-400 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-gray-500">
+                Démarrage et clôture retirés du web : l&apos;intervention s&apos;exécute sur site via l&apos;application
+                mobile (vérification GPS et au moins 6 photos prises sur place avant clôture).
+              </p>
             </div>
           )}
         </div>

@@ -7,6 +7,11 @@ import { notificationService } from '../services/notifications.service';
 import { sendTabular } from '../utils/exporter';
 import { io } from '../server';
 import { differenceInMinutes } from 'date-fns';
+import { assertOnSite } from '../utils/geofence';
+import { publicFileUrl } from '../services/storage.service';
+
+// Photos minimum (prises sur place) pour clôturer un incident.
+const MIN_PHOTOS_INCIDENT = 6;
 
 export async function getIncidents(req: Request, res: Response, next: NextFunction) {
   try {
@@ -49,7 +54,19 @@ export async function getIncidentById(req: Request, res: Response, next: NextFun
       },
     });
     if (!incident) throw new AppError('Incident introuvable', 404);
-    res.json({ success: true, data: incident });
+
+    // Photos terrain (table polymorphe) — URL recalculée depuis la clé MinIO.
+    const photos = await prisma.photo.findMany({
+      where: { entityType: 'incident', entityId: incident.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({
+      success: true,
+      data: {
+        ...incident,
+        photos: photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
+      },
+    });
   } catch (err) { next(err); }
 }
 
@@ -119,14 +136,96 @@ export async function assignIncident(req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 }
 
+/**
+ * Démarre l'intervention sur un incident : le technicien doit être SUR le site
+ * (vérification GPS). Passe l'incident EN_COURS et fige la date d'intervention.
+ */
+export async function startIncident(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { latitude, longitude } = req.body;
+    const incident = await prisma.incident.findUnique({
+      where: { id: req.params.id },
+      include: { site: { select: { latitude: true, longitude: true, code: true } } },
+    });
+    if (!incident) throw new AppError('Incident introuvable', 404);
+    if (incident.statut === 'RESOLU' || incident.statut === 'CLOS') {
+      throw new AppError(`Cet incident est déjà ${incident.statut === 'RESOLU' ? 'résolu' : 'clos'}.`, 409);
+    }
+    if (incident.dateIntervention) {
+      throw new AppError("L'intervention sur cet incident est déjà démarrée.", 409);
+    }
+
+    // Tout incident doit être DÉMARRÉ sur le site.
+    assertOnSite(incident.site, latitude, longitude, 'le démarrage');
+
+    const updated = await prisma.incident.update({
+      where: { id: req.params.id },
+      data: {
+        statut: 'EN_COURS',
+        dateIntervention: new Date(),
+        technicienId: incident.technicienId ?? req.user!.id,
+      },
+    });
+
+    await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'demarrage', latitude, longitude }, req);
+    io.of('/supervision').emit('incident:updated', { id: updated.id, statut: updated.statut });
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
 export async function closeIncident(req: Request, res: Response, next: NextFunction) {
   try {
-    const { dateIntervention, dateResolution, causeProbable, actionCorrective, creerMaintenance } = req.body;
-    const incident = await prisma.incident.findUnique({ where: { id: req.params.id } });
+    const { dateIntervention, dateResolution, causeProbable, actionCorrective, creerMaintenance, latitude, longitude, photos } = req.body as {
+      dateIntervention?: string;
+      dateResolution?: string;
+      causeProbable?: string;
+      actionCorrective?: string;
+      creerMaintenance?: boolean;
+      latitude?: number;
+      longitude?: number;
+      photos?: { url: string; key: string }[];
+    };
+    const incident = await prisma.incident.findUnique({
+      where: { id: req.params.id },
+      include: { site: { select: { latitude: true, longitude: true, code: true } } },
+    });
     if (!incident) throw new AppError('Incident introuvable', 404);
 
-    const dateInterv = new Date(dateIntervention);
-    const dateResol = new Date(dateResolution);
+    // Anti re-clôture : seul un incident EN COURS (intervention démarrée) se clôture.
+    if (incident.statut !== 'EN_COURS' || !incident.dateIntervention) {
+      throw new AppError(
+        incident.statut === 'RESOLU' || incident.statut === 'CLOS'
+          ? 'Cet incident est déjà clôturé.'
+          : "L'intervention doit être démarrée (sur site) avant la clôture.",
+        409
+      );
+    }
+
+    // Tout incident doit être CLÔTURÉ sur le site.
+    assertOnSite(incident.site, latitude, longitude, 'la clôture');
+
+    // Preuve terrain : minimum de photos prises sur place.
+    const dejaPresentes = await prisma.photo.count({
+      where: { entityType: 'incident', entityId: incident.id },
+    });
+    const totalPhotos = dejaPresentes + (photos?.length ?? 0);
+    if (totalPhotos < MIN_PHOTOS_INCIDENT) {
+      throw new AppError(
+        `Au moins ${MIN_PHOTOS_INCIDENT} photos sont requises pour clôturer un incident (${totalPhotos} fournie(s)).`,
+        422
+      );
+    }
+    if (photos?.length) {
+      await prisma.photo.createMany({
+        data: photos
+          .filter((p) => p && p.url && p.key)
+          .map((p) => ({ entityType: 'incident', entityId: incident.id, url: p.url, minioKey: p.key })),
+      });
+    }
+
+    // Date d'intervention figée au démarrage ; le corps reste accepté en repli.
+    const dateInterv = incident.dateIntervention ?? new Date(dateIntervention ?? Date.now());
+    const dateResol = dateResolution ? new Date(dateResolution) : new Date();
     const delai = differenceInMinutes(dateInterv, incident.dateOuverture);
     const duree = differenceInMinutes(dateResol, incident.dateOuverture);
 

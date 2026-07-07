@@ -54,24 +54,41 @@ class IncidentRepository {
     );
   }
 
+  /// Démarrage de l'intervention (offline-first) — vérifié SUR SITE côté serveur.
+  Future<SubmitResult> start(String id, {double? latitude, double? longitude}) => _sync.submit(
+        endpoint: '/incidents/$id/demarrer',
+        entityType: 'incident_start',
+        payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
+      );
+
+  /// Clôture offline-first. [photoPaths] : chemins LOCAUX des photos prises sur
+  /// place (≥ 6 exigées côté serveur) — uploadées par le moteur de sync,
+  /// immédiatement si en ligne, sinon à la reconnexion.
   Future<SubmitResult> close({
     required String id,
-    required DateTime dateIntervention,
     required DateTime dateResolution,
     String? causeProbable,
     String? actionCorrective,
     bool creerMaintenance = false,
+    List<String> photoPaths = const [],
+    double? latitude,
+    double? longitude,
   }) {
     return _sync.submit(
       endpoint: '/incidents/$id/close',
       entityType: 'incident_close',
       payload: {
-        'dateIntervention': dateIntervention.toUtc().toIso8601String(),
         'dateResolution': dateResolution.toUtc().toIso8601String(),
         if (causeProbable != null && causeProbable.isNotEmpty) 'causeProbable': causeProbable,
         if (actionCorrective != null && actionCorrective.isNotEmpty) 'actionCorrective': actionCorrective,
         'creerMaintenance': creerMaintenance,
+        // Position au moment de la clôture (vérification « sur site » côté serveur).
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       },
+      attachments: [
+        for (final p in photoPaths) {'path': p, 'kind': 'photo'},
+      ],
     );
   }
 }
