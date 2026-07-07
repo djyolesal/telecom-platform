@@ -148,11 +148,18 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
                   child: const Text('Annuler'),
                 ),
                 const Spacer(),
-                FilledButton.tonal(
+                FilledButton(
                   // Le thème impose minimumSize Size.fromHeight(50) (largeur
                   // infinie) : fatal dans une Row (contraintes non bornées) —
                   // la feuille entière échouait à se rendre (écran grisé).
-                  style: FilledButton.styleFrom(minimumSize: const Size(64, 44)),
+                  // Couleurs explicites : le fond marine du thème s'applique à
+                  // tous les états et rendait le libellé illisible.
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(64, 44),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.blueGrey.shade50,
+                    disabledForegroundColor: Colors.blueGrey.shade400,
+                  ),
                   onPressed: _best == null ? null : _finish,
                   child: Text(_best == null
                       ? 'Utiliser cette position'
