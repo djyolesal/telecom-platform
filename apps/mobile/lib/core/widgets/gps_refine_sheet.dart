@@ -3,19 +3,10 @@ import 'package:flutter/material.dart';
 import '../services/location_service.dart';
 import 'em_ops_loader.dart';
 
-/// Ouvre la feuille d'affinage GPS et retourne la position affinée
-/// (~5 m visés), ou null si annulé / GPS indisponible.
-Future<GpsFix?> refineGpsPosition(BuildContext context) async {
-  // Permission demandée AVANT d'ouvrir la feuille : le dialogue système ne
-  // doit pas apparaître pendant l'animation d'ouverture (rendu gelé).
-  final ok = await LocationService().ensurePermission();
-  if (!context.mounted) return null;
-  if (!ok) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Localisation indisponible — activez le GPS (précision élevée).')),
-    );
-    return null;
-  }
+/// Ouvre IMMÉDIATEMENT la feuille d'affinage GPS (loader de marque affiché
+/// pendant toute l'acquisition) et retourne la position affinée (~5 m visés),
+/// ou null si annulé / GPS indisponible.
+Future<GpsFix?> refineGpsPosition(BuildContext context) {
   return showModalBottomSheet<GpsFix>(
     context: context,
     isDismissible: false,
@@ -48,12 +39,22 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
   @override
   void initState() {
     super.initState();
-    // Démarre l'écoute APRÈS le premier rendu (la feuille s'affiche d'abord).
+    // Démarre APRÈS le premier rendu : la feuille (et son loader) s'affiche
+    // d'abord, l'éventuel dialogue de permission apparaît par-dessus.
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
-  void _start() {
+  Future<void> _start() async {
     if (!mounted) return;
+    final ok = await LocationService().ensurePermission();
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Localisation indisponible — activez le GPS (précision élevée).')),
+      );
+      Navigator.pop(context, null);
+      return;
+    }
     // Au bout du délai max, on part avec la meilleure mesure obtenue.
     _timeout = Timer(_maxWait, _finish);
     _sub = LocationService().preciseFixes().listen((f) {
@@ -105,18 +106,19 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              const EmOpsLoader(logoSize: 34, width: 38, withLine: false),
-              const SizedBox(width: 12),
               const Text('Affinage de la position…', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               const Spacer(),
               Icon(Icons.gps_fixed, size: 18, color: atteint ? Colors.green : Colors.blueGrey.shade300),
             ]),
+            const SizedBox(height: 16),
+            // Loader de marque affiché pendant TOUTE l'acquisition.
+            const Center(child: EmOpsLoader(logoSize: 60, width: 170)),
             const SizedBox(height: 14),
             Center(
               child: Text(
-                acc == null ? 'Recherche du signal…' : '± ${acc.toStringAsFixed(0)} m',
+                acc == null ? 'Acquisition du signal GPS…' : '± ${acc.toStringAsFixed(0)} m',
                 style: TextStyle(
-                  fontSize: 30,
+                  fontSize: acc == null ? 15 : 30,
                   fontWeight: FontWeight.w800,
                   color: atteint ? Colors.green.shade700 : Colors.blueGrey.shade700,
                 ),
