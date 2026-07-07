@@ -149,6 +149,10 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
                 ),
                 const Spacer(),
                 FilledButton.tonal(
+                  // Le thème impose minimumSize Size.fromHeight(50) (largeur
+                  // infinie) : fatal dans une Row (contraintes non bornées) —
+                  // la feuille entière échouait à se rendre (écran grisé).
+                  style: FilledButton.styleFrom(minimumSize: const Size(64, 44)),
                   onPressed: _best == null ? null : _finish,
                   child: Text(_best == null
                       ? 'Utiliser cette position'
