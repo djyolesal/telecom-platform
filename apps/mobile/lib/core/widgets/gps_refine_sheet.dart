@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/location_service.dart';
+import 'em_ops_loader.dart';
 
 /// Ouvre la feuille d'affinage GPS et retourne la position affinée
 /// (~5 m visés), ou null si annulé / GPS indisponible.
@@ -83,9 +84,11 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Icons.gps_fixed, color: atteint ? Colors.green : Colors.blueGrey),
-              const SizedBox(width: 10),
+              const EmOpsLoader(logoSize: 34, width: 38, withLine: false),
+              const SizedBox(width: 12),
               const Text('Affinage de la position…', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Spacer(),
+              Icon(Icons.gps_fixed, size: 18, color: atteint ? Colors.green : Colors.blueGrey.shade300),
             ]),
             const SizedBox(height: 14),
             Center(

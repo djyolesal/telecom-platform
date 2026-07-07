@@ -1,25 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'em_ops_loader.dart';
 
-/// Indicateur de chargement centré.
+/// Indicateur de chargement centré (loader de marque : Écrou-signal + Ligne de vie).
 class LoadingView extends StatelessWidget {
   final String? label;
   const LoadingView({super.key, this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(strokeWidth: 2.5),
-          if (label != null) ...[
-            const SizedBox(height: 12),
-            Text(label!, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-          ],
-        ],
-      ),
-    );
+    return Center(child: EmOpsLoader(label: label));
   }
 }
 

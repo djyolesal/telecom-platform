@@ -43,3 +43,14 @@ body {
   100% { stroke-width: 20; stroke-opacity: 0; }
 }
 .site-pulse { animation: sitePulse 1.2s ease-out infinite; }
+
+/* Loader de marque E&M OpS : arcs en émission séquencée + Ligne de vie tracée */
+@keyframes emopsArc1 { 0%,8%{opacity:0} 26%,80%{opacity:1} 96%,100%{opacity:0} }
+@keyframes emopsArc2 { 0%,34%{opacity:0} 52%,80%{opacity:1} 96%,100%{opacity:0} }
+@keyframes emopsTrace { 0%{stroke-dashoffset:230} 75%,100%{stroke-dashoffset:0} }
+.emops-arc1 { animation: emopsArc1 1.8s linear infinite; }
+.emops-arc2 { animation: emopsArc2 1.8s linear infinite; }
+.emops-trace { stroke-dasharray: 230; animation: emopsTrace 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .emops-arc1, .emops-arc2, .emops-trace { animation: none; opacity: 1; stroke-dashoffset: 0; }
+}
