@@ -59,6 +59,12 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.brand,
+          foregroundColor: Colors.white,
+          // Sans quoi le fond marine s'applique aussi à l'état désactivé,
+          // avec un libellé sombre illisible (ex. Démarrer/Clôturer pendant
+          // l'opération, bouton de la feuille GPS avant la première mesure).
+          disabledBackgroundColor: const Color(0xFFECEFF1),
+          disabledForegroundColor: Colors.blueGrey.shade400,
           minimumSize: const Size.fromHeight(50),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
