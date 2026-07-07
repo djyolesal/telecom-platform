@@ -1,9 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/widgets/gps_refine_sheet.dart';
 import '../../sites/data/site_model.dart';
 import '../../sites/data/site_repository.dart';
 import '../data/depotage_repository.dart';
@@ -19,12 +19,7 @@ Future<void> smartDepoter(BuildContext context) async {
   final siteRepo = context.read<SiteRepository>();
 
   // Affinage GPS : feuille avec précision en direct (annulable).
-  final fix = await showModalBottomSheet<GpsFix>(
-    context: context,
-    isDismissible: false,
-    enableDrag: false,
-    builder: (_) => const _GpsRefineSheet(),
-  );
+  final fix = await refineGpsPosition(context);
   if (fix == null || !context.mounted) return; // annulé ou GPS indisponible
 
   final sites = await siteRepo.getSites();
@@ -44,125 +39,6 @@ Future<void> smartDepoter(BuildContext context) async {
   } else {
     messenger.showSnackBar(const SnackBar(content: Text('Vous n\'êtes à proximité d\'aucun site — sélectionnez-le manuellement.')));
     await router.push('/carburant/nouveau');
-  }
-}
-
-/// Feuille d'affinage GPS : écoute le flux de positions et se ferme dès que la
-/// précision atteint ~[_targetM] m (ou au bout de [_maxWait], avec la meilleure
-/// mesure obtenue). L'utilisateur peut accepter tôt ou annuler.
-class _GpsRefineSheet extends StatefulWidget {
-  const _GpsRefineSheet();
-
-  @override
-  State<_GpsRefineSheet> createState() => _GpsRefineSheetState();
-}
-
-class _GpsRefineSheetState extends State<_GpsRefineSheet> {
-  static const _targetM = 5.0;
-  static const _maxWait = Duration(seconds: 30);
-
-  StreamSubscription<GpsFix>? _sub;
-  Timer? _timeout;
-  GpsFix? _best;
-  double? _current;
-
-  @override
-  void initState() {
-    super.initState();
-    _start();
-  }
-
-  Future<void> _start() async {
-    final ok = await LocationService().ensurePermission();
-    if (!mounted) return;
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Localisation indisponible — activez le GPS (précision élevée).')),
-      );
-      Navigator.pop(context, null);
-      return;
-    }
-    // Au bout du délai max, on part avec la meilleure mesure obtenue.
-    _timeout = Timer(_maxWait, _finish);
-    _sub = LocationService().preciseFixes().listen((f) {
-      if (_best == null || f.accuracyM < _best!.accuracyM) _best = f;
-      if (mounted) setState(() => _current = f.accuracyM);
-      if (f.accuracyM <= _targetM) _finish();
-    }, onError: (_) => _finish());
-  }
-
-  void _finish() {
-    if (!mounted) return;
-    Navigator.pop(context, _best);
-  }
-
-  @override
-  void dispose() {
-    _sub?.cancel();
-    _timeout?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final acc = _current;
-    final atteint = acc != null && acc <= _targetM;
-    // Progression indicative : 30 m (ou pire) → 0 %, 5 m → 100 %.
-    final progress = acc == null ? null : (1 - ((acc - _targetM) / 25)).clamp(0.0, 1.0);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(Icons.gps_fixed, color: atteint ? Colors.green : Colors.blueGrey),
-              const SizedBox(width: 10),
-              const Text('Affinage de la position…', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            ]),
-            const SizedBox(height: 14),
-            Center(
-              child: Text(
-                acc == null ? 'Recherche du signal…' : '± ${acc.toStringAsFixed(0)} m',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  color: atteint ? Colors.green.shade700 : Colors.blueGrey.shade700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Center(
-              child: Text('Objectif ~${_targetM.toStringAsFixed(0)} m — restez immobile, à découvert',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-            ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(value: progress, minHeight: 5, borderRadius: BorderRadius.circular(3)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () {
-                    _sub?.cancel();
-                    _timeout?.cancel();
-                    Navigator.pop(context, null);
-                  },
-                  child: const Text('Annuler'),
-                ),
-                const Spacer(),
-                FilledButton.tonal(
-                  onPressed: _best == null ? null : _finish,
-                  child: Text(_best == null
-                      ? 'Utiliser cette position'
-                      : 'Utiliser (± ${_best!.accuracyM.toStringAsFixed(0)} m)'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
