@@ -141,7 +141,16 @@
       "Bash(npx ts-node -e ' *)",
       "Bash(qlmanage -t -s 900 -o /tmp /tmp/test-export.pdf)",
       "Bash(nc -z localhost 5432)",
-      "Bash(grep -A3 -i \"41.78.137.83\\\\|telecom\" ~/.ssh/config 2>/dev/null | head -8; echo \"---\" *)"
+      "Bash(grep -A3 -i \"41.78.137.83\\\\|telecom\" ~/.ssh/config 2>/dev/null | head -8; echo \"---\" *)",
+      "Bash(adb devices *)",
+      "Bash(~/Library/Android/sdk/platform-tools/adb devices *)",
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/mobile *)",
+      "Bash(curl -sk -m 8 -o /dev/null -w \"%{http_code}\" http://41.78.137.83/api/v1/config)",
+      "Bash(curl -sk -m 8 -o /dev/null -w \"%{http_code}\" https://41.78.137.83/api/v1/config)",
+      "Bash(flutter test *)",
+      "Bash(flutter emulators *)",
+      "Bash(awk -F: '{print $1}')",
+      "Bash(flutter build *)"
     ]
   }
 }
