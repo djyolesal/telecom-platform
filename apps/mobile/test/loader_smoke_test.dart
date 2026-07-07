@@ -25,4 +25,27 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Affinage de la position…'), findsOneWidget);
   });
+
+  testWidgets('refineGpsPosition ouvre une feuille VISIBLE (chemin réel)', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (ctx) => Center(
+            child: ElevatedButton(
+              onPressed: () => refineGpsPosition(ctx),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('go'));
+    await tester.pump(); // pousse la route modale
+    await tester.pump(const Duration(milliseconds: 300)); // animation d'entrée
+    expect(find.text('Affinage de la position…'), findsOneWidget);
+    // La feuille doit occuper une hauteur réelle, visible dans le viewport.
+    final sheetRect = tester.getRect(find.byType(GpsRefineSheet));
+    expect(sheetRect.height, greaterThan(100));
+    expect(sheetRect.bottom, lessThanOrEqualTo(tester.view.physicalSize.height));
+  });
 }
