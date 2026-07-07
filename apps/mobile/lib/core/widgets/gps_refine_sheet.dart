@@ -57,11 +57,16 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
     }
     // Au bout du délai max, on part avec la meilleure mesure obtenue.
     _timeout = Timer(_maxWait, _finish);
-    _sub = LocationService().preciseFixes().listen((f) {
-      if (_best == null || f.accuracyM < _best!.accuracyM) _best = f;
-      if (mounted) setState(() => _current = f.accuracyM);
-      if (f.accuracyM <= _targetM) _finish();
-    }, onError: (_) => _fallback());
+    try {
+      _sub = LocationService().preciseFixes().listen((f) {
+        if (_best == null || f.accuracyM < _best!.accuracyM) _best = f;
+        if (mounted) setState(() => _current = f.accuracyM);
+        if (f.accuracyM <= _targetM) _finish();
+      }, onError: (_) => _fallback());
+    } catch (_) {
+      // getPositionStream peut lever de façon synchrone selon la plateforme.
+      _fallback();
+    }
   }
 
   /// Le flux haute précision a échoué (ex. permission « approximative ») :
