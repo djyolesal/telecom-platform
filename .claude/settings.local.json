@@ -139,7 +139,9 @@
       "Bash(sed -n '/export async function exportUsers/,/^}/p' src/controllers/users.controller.ts)",
       "Bash(python3 -)",
       "Bash(npx ts-node -e ' *)",
-      "Bash(qlmanage -t -s 900 -o /tmp /tmp/test-export.pdf)"
+      "Bash(qlmanage -t -s 900 -o /tmp /tmp/test-export.pdf)",
+      "Bash(nc -z localhost 5432)",
+      "Bash(grep -A3 -i \"41.78.137.83\\\\|telecom\" ~/.ssh/config 2>/dev/null | head -8; echo \"---\" *)"
     ]
   }
 }
