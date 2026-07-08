@@ -10,6 +10,7 @@ import { Loading, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
 import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { Select } from '@/components/shared/Form';
+import { PhotoGallery } from '@/components/shared/PhotoGallery';
 import { TYPES_INCIDENT } from '@/lib/constants';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -96,19 +97,7 @@ export default function IncidentDetailPage() {
             </div>
           )}
 
-          {(inc.photos?.length ?? 0) > 0 && (
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <h3 className="font-semibold text-gray-700 text-sm mb-2">Photos ({inc.photos.length})</h3>
-              <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-                {inc.photos.map((p: { id: string; url: string }, i: number) => (
-                  <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.url} alt={`Photo ${i + 1}`} className="h-28 w-full rounded-lg object-cover border border-gray-100" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
+          <PhotoGallery photos={inc.photos ?? []} />
 
           {!resolu && (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 flex items-start gap-3">
