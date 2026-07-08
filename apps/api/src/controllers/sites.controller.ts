@@ -82,6 +82,19 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
       { code: { contains: search, mode: 'insensitive' } },
     ];
 
+    // Un technicien PRESTATAIRE ne voit que les sites des lots attribués à son
+    // entreprise (planification, sélecteurs, liste mobile). Un technicien
+    // interne (sans prestataire) voit tous les sites.
+    if (req.user!.role === 'TECHNICIEN') {
+      const me = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+        select: { prestataireId: true },
+      });
+      if (me?.prestataireId) {
+        where.lot = { assignments: { some: { prestataireId: me.prestataireId } } };
+      }
+    }
+
     // Mode « tous » (sélecteurs, liste mobile) : pas de pagination (le paginateur
     // plafonne à 200, ce qui tronquerait les sites au-delà).
     if ((req.query.all as string) === 'true') {
