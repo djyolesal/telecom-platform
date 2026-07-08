@@ -478,6 +478,21 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     const dateDebut = existing.dateDebut ?? dateFin;
     const dureeMinutes = Math.max(0, differenceInMinutes(dateFin, dateDebut));
 
+    // Vidange GE confirmée (case cochée à la clôture) : l'index horaire saisi
+    // devient la référence de l'actif, et la fiche/PDF le mentionne.
+    const geHoursBody = (e.geHours ?? {}) as Record<string, unknown>;
+    const vidangeIds = new Set((Array.isArray(e.vidangeGeIds) ? e.vidangeGeIds : []).map(String));
+    const vidanges = (existing.site.groupes ?? [])
+      .filter((g) => vidangeIds.has(g.id))
+      .map((g) => ({ id: g.id, numero: g.numero, index: num(geHoursBody[g.id]) }))
+      .filter((v) => v.index != null);
+    const obsFinal = vidanges.length
+      ? [
+          `Vidange effectuée : ${vidanges.map((v) => `GE n°${v.numero} (index ${v.index} h)`).join(', ')}.`,
+          observations ?? '',
+        ].filter(Boolean).join('\n')
+      : observations;
+
     // Écritures ATOMIQUES : pièces, photos, passage TERMINEE, relevés énergie ET
     // mouvement d'actif dans une seule transaction → tout réussit ou tout est annulé
     // (plus de maintenance TERMINEE avec actif non déplacé). Retry sur collision de
@@ -500,7 +515,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
 
         let m = await tx.maintenance.update({
           where: { id: req.params.id },
-          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations, signaturePath },
+          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath },
         });
 
         // Relevés énergie (un par source), consommations calculées par différence.
@@ -589,6 +604,15 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         }
         if (analyseEnergie) {
           m = await tx.maintenance.update({ where: { id: req.params.id }, data: { analyseEnergie } });
+        }
+
+        // Vidange confirmée → l'index saisi devient la référence du GE (atomique
+        // avec la clôture : pas de vidange enregistrée si la clôture échoue).
+        for (const v of vidanges) {
+          await tx.groupeElectrogene.update({
+            where: { id: v.id },
+            data: { indexHeuresDerniereVidange: v.index!, dateDerniereVidange: dateFin },
+          });
         }
 
         // Mouvement d'actif (pose/dépose/déplacement), atomique avec le passage TERMINEE.

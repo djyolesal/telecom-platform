@@ -214,6 +214,10 @@ model GroupeElectrogene {
   numeroSerie  String?     @unique @map("numero_serie") // identité physique de l'actif
   statutActif  StatutActif @default(EN_SERVICE) @map("statut_actif")
   isActive     Boolean     @default(true) @map("is_active")
+  // Vidange conditionnée aux heures de marche : index horaire relevé à la
+  // dernière vidange confirmée (ces champs suivent l'ACTIF, pas le site).
+  indexHeuresDerniereVidange Decimal?  @map("index_heures_derniere_vidange") @db.Decimal(10, 1)
+  dateDerniereVidange        DateTime? @map("date_derniere_vidange")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 

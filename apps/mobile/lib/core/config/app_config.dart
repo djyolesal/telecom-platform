@@ -7,6 +7,7 @@ class AppConfig {
   static double geofenceRadiusM = 20;
   static int minPhotosPreventive = 6;
   static int minPhotosMouvement = 2;
+  static int intervalleVidangeHeures = 250;
 }
 
 /// Charge la configuration applicative depuis l'API et met à jour [AppConfig].
@@ -25,6 +26,7 @@ class ConfigService {
             AppConfig.geofenceRadiusM = (d['geofenceRadiusM'] as num?)?.toDouble() ?? AppConfig.geofenceRadiusM;
             AppConfig.minPhotosPreventive = (d['minPhotosPreventive'] as num?)?.toInt() ?? AppConfig.minPhotosPreventive;
             AppConfig.minPhotosMouvement = (d['minPhotosMouvement'] as num?)?.toInt() ?? AppConfig.minPhotosMouvement;
+            AppConfig.intervalleVidangeHeures = (d['intervalleVidangeHeures'] as num?)?.toInt() ?? AppConfig.intervalleVidangeHeures;
           }
         },
       );

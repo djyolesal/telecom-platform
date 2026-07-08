@@ -14,6 +14,7 @@ export function getAppConfig(_req: Request, res: Response) {
       geofenceRadiusM: getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M),
       minPhotosPreventive: 6,
       minPhotosMouvement: getNum('maintenance.minPhotosMouvement', 2),
+      intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
     },
   });
 }

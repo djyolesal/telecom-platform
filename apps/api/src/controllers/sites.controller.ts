@@ -7,7 +7,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { cacheService } from '../services/cache.service';
 import { calculerStockSite } from '../utils/calculator';
-import { geParams } from '../services/settings.service';
+import { geParams, getNum } from '../services/settings.service';
 import { forecastSites } from '../services/replenishment.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
@@ -129,7 +129,30 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
       },
     });
     if (!site) throw new AppError('Site introuvable', 404);
-    res.json({ success: true, data: site });
+
+    // Compteur vidange par GE : dernier index horaire relevé + heures écoulées
+    // depuis la dernière vidange confirmée (null si jamais enregistrée).
+    const derniers = await prisma.releveEnergie.findMany({
+      where: { source: 'GE', groupeId: { in: site.groupes.map((g) => g.id) }, indexHeuresGE: { not: null } },
+      orderBy: { dateReleve: 'desc' },
+      select: { groupeId: true, indexHeuresGE: true },
+    });
+    const idxMap = new Map<string, number>();
+    for (const r of derniers) {
+      if (r.groupeId && !idxMap.has(r.groupeId)) idxMap.set(r.groupeId, Number(r.indexHeuresGE));
+    }
+    const groupes = site.groupes.map((g) => ({
+      ...g,
+      dernierIndexHeures: idxMap.get(g.id) ?? null,
+      heuresDepuisVidange:
+        g.indexHeuresDerniereVidange != null && idxMap.has(g.id)
+          ? Math.max(0, idxMap.get(g.id)! - Number(g.indexHeuresDerniereVidange))
+          : null,
+    }));
+    res.json({
+      success: true,
+      data: { ...site, groupes, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250) },
+    });
   } catch (err) { next(err); }
 }
 

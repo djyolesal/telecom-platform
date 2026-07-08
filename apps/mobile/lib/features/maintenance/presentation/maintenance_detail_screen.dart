@@ -353,6 +353,9 @@ class _CloseSheetState extends State<_CloseSheet> {
   final List<XFile> _photos = [];
   // Un contrôleur d'index horaire par GE du site (cuve partagée → un seul _gasoil).
   final Map<String, TextEditingController> _geCtrls = {};
+  // Vidange par GE : choix explicite du technicien (sinon pré-cochage au seuil).
+  final Map<String, bool> _vidange = {};
+  final Set<String> _vidangeTouched = {};
   String? _error;
 
   @override
@@ -373,6 +376,51 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   double? _num(TextEditingController c) =>
       c.text.trim().isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
+
+  /// Heures de marche depuis la dernière vidange, d'après l'index saisi (null si inconnu).
+  double? _heuresDepuisVidange(GroupeGE g) {
+    final idx = _num(_geCtrls[g.id]!);
+    final ref = g.indexDerniereVidange;
+    return (idx == null || ref == null) ? null : idx - ref;
+  }
+
+  /// État effectif de la case vidange : choix du technicien, sinon pré-cochée au seuil.
+  bool _vidangeEffective(GroupeGE g) {
+    if (_vidangeTouched.contains(g.id)) return _vidange[g.id] ?? false;
+    final h = _heuresDepuisVidange(g);
+    return h != null && h >= AppConfig.intervalleVidangeHeures;
+  }
+
+  /// Case « Vidange effectuée » sous l'index horaire du GE, avec le compteur
+  /// d'heures depuis la dernière vidange (seuil configurable, 250 h par défaut).
+  Widget _vidangeTile(GroupeGE g) {
+    final seuil = AppConfig.intervalleVidangeHeures;
+    final h = _heuresDepuisVidange(g);
+    final due = h != null && h >= seuil;
+    final String hint;
+    if (g.indexDerniereVidange == null) {
+      hint = 'Première vidange non encore enregistrée — cochez si effectuée.';
+    } else if (h == null) {
+      hint = 'Saisissez l\'index pour évaluer (seuil $seuil h).';
+    } else if (h < 0) {
+      hint = 'Index inférieur à la dernière vidange (compteur remplacé ?).';
+    } else {
+      hint = '${h.toStringAsFixed(0)} h depuis la dernière vidange (seuil $seuil h).';
+    }
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      controlAffinity: ListTileControlAffinity.leading,
+      value: _vidangeEffective(g),
+      onChanged: (v) => setState(() {
+        _vidangeTouched.add(g.id);
+        _vidange[g.id] = v ?? false;
+      }),
+      title: Text('Vidange GE n°${g.numero} effectuée', style: const TextStyle(fontSize: 13)),
+      subtitle: Text(hint,
+          style: TextStyle(fontSize: 11, color: due ? Colors.orange.shade800 : Colors.grey.shade600)),
+    );
+  }
 
   /// Prise de photo SUR SITE uniquement (caméra). La galerie est volontairement
   /// désactivée : chaque photo doit être prise au moment de l'intervention.
@@ -426,6 +474,9 @@ class _CloseSheetState extends State<_CloseSheet> {
           geHours[g.id] = v;
         }
         energie['geHours'] = geHours; // index horaire par GE
+        // Vidange confirmée sur certains GE → le serveur fige l'index de référence.
+        final vidangeIds = groupes.where(_vidangeEffective).map((g) => g.id).toList();
+        if (vidangeIds.isNotEmpty) energie['vidangeGeIds'] = vidangeIds;
       } else {
         if (_num(_heures) == null) {
           setState(() => _error = 'Renseignez l\'index horaire GE.');
@@ -501,10 +552,18 @@ class _CloseSheetState extends State<_CloseSheet> {
                       if (m.siteGroupes.isNotEmpty)
                         ...m.siteGroupes.map((g) => Padding(
                               padding: const EdgeInsets.only(bottom: 10),
-                              child: TextField(
-                                controller: _geCtrls[g.id],
-                                keyboardType: numKb,
-                                decoration: InputDecoration(labelText: 'Index horaire GE n°${g.numero} (carte GE) *'),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextField(
+                                    controller: _geCtrls[g.id],
+                                    keyboardType: numKb,
+                                    // Recalcule en direct « X h depuis la dernière vidange ».
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: InputDecoration(labelText: 'Index horaire GE n°${g.numero} (carte GE) *'),
+                                  ),
+                                  _vidangeTile(g),
+                                ],
                               ),
                             ))
                       else ...[

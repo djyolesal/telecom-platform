@@ -2,9 +2,15 @@
 class GroupeGE {
   final String id;
   final int numero;
-  const GroupeGE({required this.id, required this.numero});
-  factory GroupeGE.fromJson(Map<String, dynamic> j) =>
-      GroupeGE(id: j['id'] as String, numero: (j['numero'] as num?)?.toInt() ?? 1);
+  /// Index horaire relevé à la dernière vidange confirmée (null = jamais enregistrée).
+  final double? indexDerniereVidange;
+  const GroupeGE({required this.id, required this.numero, this.indexDerniereVidange});
+  factory GroupeGE.fromJson(Map<String, dynamic> j) => GroupeGE(
+        id: j['id'] as String,
+        numero: (j['numero'] as num?)?.toInt() ?? 1,
+        // Prisma sérialise les Decimal en chaîne.
+        indexDerniereVidange: double.tryParse(j['indexHeuresDerniereVidange']?.toString() ?? ''),
+      );
 }
 
 /// Maintenance (préventive/curative).

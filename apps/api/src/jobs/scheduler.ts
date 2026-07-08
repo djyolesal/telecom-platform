@@ -7,6 +7,7 @@ import { dbBackupJob } from './db-backup';
 import { incidentEscalationJob } from './incident-escalation';
 import { preventivePlanJob } from './preventive-plan';
 import { manquantAlertJob } from './manquant-alert';
+import { vidangeAlertJob } from './vidange-alert';
 
 export function setupCronJobs() {
   // ── Vérif stock carburant — tous les jours à 8h ─────────────
@@ -51,5 +52,11 @@ export function setupCronJobs() {
     try { await manquantAlertJob(); } catch (e) { logger.error('[CRON] manquantAlert error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 7 cron jobs planifiés (TZ: Africa/Lome)');
+  // ── Vidanges GE dues (≥ seuil d'heures) — tous les jours à 7h30 ──
+  cron.schedule('30 7 * * *', async () => {
+    logger.info('[CRON] Vérification des vidanges GE dues');
+    try { await vidangeAlertJob(); } catch (e) { logger.error('[CRON] vidangeAlert error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
+  logger.info('✅ 8 cron jobs planifiés (TZ: Africa/Lome)');
 }
