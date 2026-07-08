@@ -36,6 +36,7 @@ class _IncidentsView extends StatelessWidget {
       appBar: AppBar(title: const Text('Incidents')),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.critique,
+        foregroundColor: Colors.white, // sinon libellé marine illisible sur fond rouge
         onPressed: () async {
           await context.push('/incidents/nouveau');
           if (context.mounted) _reload(context);
