@@ -167,17 +167,24 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       { site: { code: { contains: search, mode: 'insensitive' } } },
     ];
 
-    // Un technicien ne voit que les activités de SON entreprise (prestataire)
-    // et de SON périmètre (équipe passive → catégories passives, active → actives).
+    // Un technicien voit les activités de SON entreprise (prestataire) dans SON
+    // périmètre (équipe passive → catégories passives, active → actives), PLUS
+    // celles qui lui sont assignées (ex. planifiées par lui sur un site sans lot,
+    // sinon elles disparaîtraient de sa liste).
     if (req.user!.role === 'TECHNICIEN') {
       const me = await prisma.user.findUnique({
         where: { id: req.user!.id },
         select: { prestataireId: true, equipe: true },
       });
-      where.prestataireId = me?.prestataireId ?? '__none__'; // sans prestataire → aucune activité
-      if (me?.equipe) {
-        where.categorie = { in: me.equipe === 'ACTIVE' ? ACTIVE_CATS : PASSIVE_CATS };
+      const scope: Record<string, unknown>[] = [{ technicienId: req.user!.id }];
+      if (me?.prestataireId) {
+        const entreprise: Record<string, unknown> = { prestataireId: me.prestataireId };
+        if (me.equipe) {
+          entreprise.categorie = { in: me.equipe === 'ACTIVE' ? ACTIVE_CATS : PASSIVE_CATS };
+        }
+        scope.push(entreprise);
       }
+      where.AND = [...((where.AND as unknown[]) ?? []), { OR: scope }];
     }
     if (date_debut || date_fin) {
       where.datePlanifiee = {
