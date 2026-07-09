@@ -10,10 +10,13 @@ class ReleveRepository {
 
   ReleveRepository(this._client, this._network, this._sync);
 
-  Future<List<Releve>> getReleves() async {
+  Future<List<Releve>> getReleves({String? siteId}) async {
     if (!await _network.isConnected) return [];
     return _client.request(
-      (dio) => dio.get('/releves', queryParameters: {'limit': 50}),
+      (dio) => dio.get('/releves', queryParameters: {
+        'limit': 50,
+        if (siteId != null) 'site_id': siteId,
+      }),
       (data) => (data['data'] as List).map((e) => Releve.fromJson(e as Map<String, dynamic>)).toList(),
     );
   }

@@ -9,24 +9,27 @@ import '../data/releve_model.dart';
 import '../data/releve_repository.dart';
 
 class ReleveListScreen extends StatelessWidget {
-  const ReleveListScreen({super.key});
+  /// Si fourni, la liste est limitée aux relevés de ce site.
+  final String? siteId;
+  const ReleveListScreen({super.key, this.siteId});
 
   @override
   Widget build(BuildContext context) {
     final repo = context.read<ReleveRepository>();
     return BlocProvider(
-      create: (_) => ListCubit<Releve>()..run(() => repo.getReleves()),
-      child: const _ReleveView(),
+      create: (_) => ListCubit<Releve>()..run(() => repo.getReleves(siteId: siteId)),
+      child: _ReleveView(siteId: siteId),
     );
   }
 }
 
 class _ReleveView extends StatelessWidget {
-  const _ReleveView();
+  final String? siteId;
+  const _ReleveView({this.siteId});
 
   void _reload(BuildContext context) {
     final repo = context.read<ReleveRepository>();
-    context.read<ListCubit<Releve>>().run(() => repo.getReleves());
+    context.read<ListCubit<Releve>>().run(() => repo.getReleves(siteId: siteId));
   }
 
   @override

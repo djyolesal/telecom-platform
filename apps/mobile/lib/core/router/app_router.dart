@@ -50,7 +50,7 @@ GoRouter createRouter(AuthCubit authCubit) {
       GoRoute(path: '/carburant/bon-livraison/nouveau', builder: (_, __) => const BlFormScreen()),
 
       // Énergie
-      GoRoute(path: '/energie', builder: (_, __) => const ReleveListScreen()),
+      GoRoute(path: '/energie', builder: (_, s) => ReleveListScreen(siteId: s.uri.queryParameters['siteId'])),
       GoRoute(path: '/energie/detail/:id', builder: (_, s) => ReleveDetailScreen(id: s.pathParameters['id']!)),
 
       // Incidents (nouveau avant :id)

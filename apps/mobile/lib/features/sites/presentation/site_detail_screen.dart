@@ -214,7 +214,8 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                     _action(context, Icons.navigation, 'Itinéraire', () => _navigateTo(s)),
                   _action(context, Icons.build, 'Maintenance', () => context.push('/maintenance/nouveau?siteId=${s.id}')),
                   _action(context, Icons.local_gas_station, 'Dépotage', () => context.push('/carburant/nouveau?siteId=${s.id}')),
-                  _action(context, Icons.bolt, 'Relevé', () => context.push('/energie/nouveau?siteId=${s.id}')),
+                  // Consultation seule : les relevés naissent des maintenances/dépotages.
+                  _action(context, Icons.bolt, 'Relevés', () => context.push('/energie?siteId=${s.id}')),
                   _action(context, Icons.warning_amber, 'Incident', () => context.push('/incidents/nouveau?siteId=${s.id}')),
                 ],
               ),
