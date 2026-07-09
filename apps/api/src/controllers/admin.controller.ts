@@ -7,14 +7,24 @@ import { minioClient, MINIO_BUCKET } from '../config/minio';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { logger } from '../utils/logger';
-import { loadSettings, effectiveSettings } from '../services/settings.service';
+import { loadSettings, effectiveSettings, settingsCatalog } from '../services/settings.service';
 import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride } from '../services/tachesPreventives.service';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
 export async function getSettings(_req: Request, res: Response, next: NextFunction) {
   try {
     const settings = await prisma.systemSettings.findMany({ orderBy: { key: 'asc' } });
-    res.json({ success: true, data: settings });
+    // Fusionne le catalogue : toute clé éditable apparaît, même sans ligne en
+    // base (elle montre sa valeur par défaut ; l'enregistrement fait un upsert).
+    const present = new Set(settings.map((s) => s.key));
+    const merged: Array<Record<string, unknown>> = [...settings];
+    for (const meta of settingsCatalog()) {
+      if (!present.has(meta.key)) {
+        merged.push({ key: meta.key, value: meta.defaut, description: `${meta.label} (${meta.unite})` });
+      }
+    }
+    merged.sort((a, b) => String(a.key).localeCompare(String(b.key)));
+    res.json({ success: true, data: merged });
   } catch (err) { next(err); }
 }
 
