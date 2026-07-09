@@ -150,7 +150,9 @@
       "Bash(flutter test *)",
       "Bash(flutter emulators *)",
       "Bash(awk -F: '{print $1}')",
-      "Bash(flutter build *)"
+      "Bash(flutter build *)",
+      "Bash(sed -n '/export async function getSettings/,/^}/p' apps/api/src/controllers/admin.controller.ts)",
+      "Bash(sed -n '/export async function getEffectiveSettings/,/^}/p' apps/api/src/controllers/admin.controller.ts)"
     ]
   }
 }
