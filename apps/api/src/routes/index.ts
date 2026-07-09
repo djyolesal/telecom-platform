@@ -9,6 +9,7 @@ import * as maintenanceCtrl from '../controllers/maintenances.controller';
 import * as actifsCtrl from '../controllers/actifs.controller';
 import * as depotagesCtrl from '../controllers/depotages.controller';
 import * as relevesCtrl from '../controllers/releves.controller';
+import * as relevesImportCtrl from '../controllers/relevesImport.controller';
 import * as incidentsCtrl from '../controllers/incidents.controller';
 import * as rapportsCtrl from '../controllers/rapports.controller';
 import * as usersCtrl from '../controllers/users.controller';
@@ -149,6 +150,7 @@ router.get('/rapports/manquants-livraison/site/:id', rbac(['SUPERVISEUR', 'MANAG
 router.get('/releves', relevesCtrl.getReleves);
 router.get('/releves/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), relevesCtrl.exportReleves);
 router.post('/releves', relevesCtrl.createReleve);
+router.post('/releves/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), relevesImportCtrl.importReleves);
 router.get('/releves/:id', relevesCtrl.getReleveById);
 
 // ── Incidents ─────────────────────────────────────────────────
