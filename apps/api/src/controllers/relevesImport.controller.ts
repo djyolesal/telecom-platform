@@ -108,13 +108,25 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
 
       const type = text(row, 'type').toUpperCase();
       const marque = `Import historique — ${type || 'TICKET'}`;
-      const indexCEET = numOrNull(row, 'indexCEET');
-      const heureGE = numOrNull(row, 'heureGE');
-      const heureGE2 = numOrNull(row, 'heureGE2');
-      const volumeGasoil = numOrNull(row, 'volumeGasoil');
-      const volumeGasoil2 = numOrNull(row, 'volumeGasoil2');
-      const qteLivre = numOrNull(row, 'qteLivre');
-      const qteAvant = numOrNull(row, 'qteAvant');
+      // Saisies aberrantes du système historique (ex. index CEET à 665 M,
+      // volume cuve à 54 M de litres) : au-delà de la capacité des colonnes
+      // Decimal, la valeur est écartée (signalée) sans perdre le reste de la ligne.
+      const borne = (field: string, max: number): number | null => {
+        const v = numOrNull(row, field);
+        if (v == null) return null;
+        if (v < 0 || v >= max) {
+          ignorees.push({ ligne: r, code, raison: `${field} aberrant (${v}) — valeur écartée` });
+          return null;
+        }
+        return v;
+      };
+      const indexCEET = borne('indexCEET', 1e8);      // Decimal(10,2)
+      const heureGE = borne('heureGE', 1e9);          // Decimal(10,1)
+      const heureGE2 = borne('heureGE2', 1e9);
+      const volumeGasoil = borne('volumeGasoil', 1e6);   // Decimal(8,2)
+      const volumeGasoil2 = borne('volumeGasoil2', 1e6);
+      const qteLivre = borne('qteLivre', 1e6);
+      const qteAvant = borne('qteAvant', 1e6);
       let produit = false;
 
       if (indexCEET != null) {
@@ -179,7 +191,7 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
               .filter((d) => { const t = new Date(d.dateDepotage as Date).getTime(); return t > t0 && t <= t1; })
               .reduce((s, d) => s + Number(d.volumeLitres), 0);
             const conso = Number(prev.volumeGasoilLitres) + ajout - Number(cur.volumeGasoilLitres);
-            if (conso >= 0) { cur.gasoilConsommeLitres = conso; cur.coutEstime = Math.round(conso * prixLitre); }
+            if (conso >= 0 && conso < 1e6) { cur.gasoilConsommeLitres = conso; cur.coutEstime = Math.round(conso * prixLitre); }
           }
         }
       }
