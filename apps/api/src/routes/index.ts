@@ -104,6 +104,7 @@ router.get('/actifs', actifsCtrl.listActifs);
 router.get('/actifs/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), actifsCtrl.exportActifs);
 router.post('/actifs', rbac(['MANAGER','ADMIN']), actifsCtrl.createActif);
 router.get('/actifs/:type/:id', actifsCtrl.getActif);
+router.delete('/actifs/:type/:id', rbac(['ADMIN']), actifsCtrl.deleteActif);
 
 // ── Dépotages ─────────────────────────────────────────────────
 router.get('/depotages', depotagesCtrl.getDepotages);

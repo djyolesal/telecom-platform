@@ -259,3 +259,39 @@ export async function createActif(req: Request, res: Response, next: NextFunctio
     res.status(201).json({ success: true, data: created });
   } catch (err) { next(err); }
 }
+
+/**
+ * Suppression d'un actif (ADMIN). Garde-fous :
+ * - refusée s'il est posé sur un site (le retirer d'abord via une dépose) ;
+ * - refusée s'il porte un historique (mouvements, relevés, heures de dépotage)
+ *   pour préserver la traçabilité — réservée aux créations par erreur.
+ */
+export async function deleteActif(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { type, id } = req.params;
+    const isGE = type === 'GE';
+    const actif = isGE
+      ? await prisma.groupeElectrogene.findUnique({ where: { id } })
+      : await prisma.equipementActif.findUnique({ where: { id } });
+    if (!actif) throw new AppError('Actif introuvable', 404);
+    if (actif.siteId != null) {
+      throw new AppError('Cet actif est posé sur un site — désinstallez-le (travail de dépose) avant de le supprimer.', 409);
+    }
+
+    const mouvements = await prisma.maintenance.count({ where: { actifId: id } });
+    const releves = isGE ? await prisma.releveEnergie.count({ where: { groupeId: id } }) : 0;
+    const heures = isGE ? await prisma.depotageHeureGE.count({ where: { groupeId: id } }) : 0;
+    if (mouvements || releves || heures) {
+      throw new AppError(
+        `Cet actif porte un historique (${mouvements} mouvement(s), ${releves} relevé(s)) — suppression refusée pour préserver la traçabilité.`,
+        409
+      );
+    }
+
+    if (isGE) await prisma.groupeElectrogene.delete({ where: { id } });
+    else await prisma.equipementActif.delete({ where: { id } });
+
+    await auditLog(req.user!.id, 'DELETE', 'actifs', id, { type }, req);
+    res.json({ success: true, message: 'Actif supprimé' });
+  } catch (err) { next(err); }
+}

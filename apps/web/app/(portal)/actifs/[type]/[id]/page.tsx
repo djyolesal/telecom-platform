@@ -1,9 +1,12 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { fmtDateTime } from '@/lib/utils';
@@ -40,9 +43,24 @@ interface Mouvement {
 
 export default function ActifDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
+
   const { data: a, isLoading, isError } = useQuery({
     queryKey: ['actif', type, id],
     queryFn: () => api.get(`/actifs/${type}/${id}`).then((r) => r.data.data),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/actifs/${type}/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['actifs'] });
+      router.push('/actifs');
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) =>
+      alert(e.response?.data?.error || 'Suppression impossible'),
   });
 
   if (isLoading) return <Loading />;
@@ -52,7 +70,23 @@ export default function ActifDetailPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title={a.libelle ?? a.categorie} subtitle={a.numeroSerie ? `N° série ${a.numeroSerie}` : a.categorie} backHref="/actifs" />
+      <PageHeader
+        title={a.libelle ?? a.categorie}
+        subtitle={a.numeroSerie ? `N° série ${a.numeroSerie}` : a.categorie}
+        backHref="/actifs"
+        actions={isAdmin ? (
+          <Button
+            variant="secondary"
+            icon={Trash2}
+            loading={remove.isPending}
+            onClick={() => {
+              if (confirm('Supprimer définitivement cet actif du parc ?\nRefusé s\'il est posé sur un site ou porte un historique.')) remove.mutate();
+            }}
+          >
+            Supprimer
+          </Button>
+        ) : undefined}
+      />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
         <Row label="Type" value={a.categorie} />
