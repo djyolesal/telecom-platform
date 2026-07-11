@@ -101,6 +101,7 @@ router.get('/maintenances/:id/pdf', maintenanceCtrl.getMaintenancePdf);
 
 // ── Actifs (parc GE / batteries / climatiseurs) ───────────────
 router.get('/actifs', actifsCtrl.listActifs);
+router.get('/actifs/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), actifsCtrl.exportActifs);
 router.post('/actifs', rbac(['MANAGER','ADMIN']), actifsCtrl.createActif);
 router.get('/actifs/:type/:id', actifsCtrl.getActif);
 

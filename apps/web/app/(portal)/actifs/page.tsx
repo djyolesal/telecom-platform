@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Boxes, CheckCircle2, Warehouse, Truck, Archive } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { Button } from '@/components/shared/Button';
 import { Field, Input, Select } from '@/components/shared/Form';
 
@@ -24,6 +25,10 @@ interface Actif {
   statutActif: string;
   siteId: string | null;
   site: { code: string; nom: string } | null;
+  marque: string | null;
+  updatedAt: string | null;
+  heuresDepuisVidange: number | null;
+  vidangeDue: boolean;
 }
 
 const STATUT_COLOR: Record<string, string> = {
@@ -100,6 +105,8 @@ function CreateActifModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+const JOURS_TRANSIT_ALERTE = 7; // au-delà : mouvement probablement bloqué/perdu
+
 export default function ActifsPage() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -108,44 +115,126 @@ export default function ActifsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [type, setType] = useState('');
   const [statut, setStatut] = useState('');
+  const [marque, setMarque] = useState('');
+  const [search, setSearch] = useState('');
 
+  // Le parc complet tient en une requête : stats globales + filtres instantanés côté client.
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['actifs', { type, statut }],
-    queryFn: () => api.get('/actifs', { params: { type: type || undefined, statut: statut || undefined } }).then((r) => r.data.data),
+    queryKey: ['actifs'],
+    queryFn: () => api.get('/actifs').then((r) => r.data.data),
   });
 
-  const rows: Actif[] = data ?? [];
+  const parc: Actif[] = data ?? [];
+  const marqueOptions = [...new Set(parc.map((a) => a.marque).filter(Boolean))]
+    .sort()
+    .map((m) => ({ value: m as string, label: m as string }));
+
+  const q = search.trim().toLowerCase();
+  const rows = parc.filter((a) =>
+    (!type || a.actifType === type) &&
+    (!statut || a.statutActif === statut) &&
+    (!marque || a.marque === marque) &&
+    (!q || [a.libelle, a.numeroSerie, a.marque, a.site?.code, a.site?.nom]
+      .some((v) => v?.toLowerCase().includes(q)))
+  );
+
+  const nb = (s: string) => parc.filter((a) => a.statutActif === s).length;
+  const joursTransit = (a: Actif) =>
+    a.updatedAt ? Math.floor((Date.now() - new Date(a.updatedAt).getTime()) / 86400000) : null;
 
   const columns: Column<Actif>[] = [
     { key: 'libelle', header: 'Actif', render: (a) => <span className="font-medium text-gray-800">{a.libelle ?? a.categorie}</span> },
     { key: 'categorie', header: 'Type', render: (a) => TYPE_OPTIONS.find((t) => t.value === a.actifType)?.label ?? a.actifType },
     { key: 'numeroSerie', header: 'N° série', render: (a) => a.numeroSerie || '—' },
+    { key: 'marque', header: 'Marque', render: (a) => a.marque || '—' },
     { key: 'caracteristique', header: 'Caractéristique', render: (a) => a.caracteristique || '—' },
-    { key: 'statutActif', header: 'Statut', render: (a) => <Badge className={STATUT_COLOR[a.statutActif] || 'bg-gray-100 text-gray-600'}>{STATUT_LABEL[a.statutActif] ?? a.statutActif}</Badge> },
+    {
+      key: 'statutActif', header: 'Statut', render: (a) => {
+        const j = a.statutActif === 'EN_TRANSIT' ? joursTransit(a) : null;
+        const bloque = j != null && j >= JOURS_TRANSIT_ALERTE;
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <Badge className={bloque ? 'bg-red-100 text-red-700' : STATUT_COLOR[a.statutActif] || 'bg-gray-100 text-gray-600'}>
+              {STATUT_LABEL[a.statutActif] ?? a.statutActif}
+            </Badge>
+            {j != null && j > 0 && (
+              <span className={`text-xs ${bloque ? 'font-semibold text-red-600' : 'text-gray-400'}`} title={bloque ? 'Mouvement probablement bloqué — vérifier' : undefined}>
+                depuis {j} j{bloque ? ' ⚠' : ''}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
     { key: 'site', header: 'Site', render: (a) => (a.site ? `${a.site.code} — ${a.site.nom}` : <span className="text-gray-400">Dépôt</span>) },
+    {
+      key: 'vidange', header: 'Vidange', render: (a) =>
+        a.heuresDepuisVidange == null ? <span className="text-gray-300">—</span> : (
+          <span className={a.vidangeDue ? 'font-semibold text-amber-700' : 'text-gray-500'}>
+            {Math.round(a.heuresDepuisVidange)} h{a.vidangeDue ? ' ⚠' : ''}
+          </span>
+        ),
+    },
   ];
+
+  const statCard = (label: string, value: number, Icon: React.ElementType, cls: string, filtre: string) => (
+    <button
+      type="button"
+      onClick={() => setStatut(statut === filtre ? '' : filtre)}
+      className={`flex items-center gap-3 rounded-xl border bg-white p-4 text-left transition hover:border-gray-300 ${statut === filtre ? 'border-[#2471A3] ring-1 ring-[#2471A3]/30' : 'border-gray-100'}`}
+    >
+      <span className={`flex h-9 w-9 items-center justify-center rounded-lg text-white ${cls}`}><Icon size={17} /></span>
+      <span>
+        <span className="block text-lg font-bold leading-tight text-gray-800">{value}</span>
+        <span className="text-xs text-gray-500">{label}</span>
+      </span>
+    </button>
+  );
 
   return (
     <div>
       <PageHeader
         title="Parc d'actifs"
         subtitle="Groupes électrogènes, batteries, climatiseurs"
-        actions={canCreate ? <Button icon={Plus} onClick={() => setShowCreate(true)}>Nouvel actif</Button> : undefined}
+        actions={
+          <>
+            <ExportButtons base="/actifs/export" name="parc-actifs" />
+            {canCreate && <Button icon={Plus} onClick={() => setShowCreate(true)}>Nouvel actif</Button>}
+          </>
+        }
       />
 
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1B3F6B] text-white"><Boxes size={17} /></span>
+          <span>
+            <span className="block text-lg font-bold leading-tight text-gray-800">{parc.length}</span>
+            <span className="text-xs text-gray-500">Actifs au total</span>
+          </span>
+        </div>
+        {statCard('En service', nb('EN_SERVICE'), CheckCircle2, 'bg-[#0E7C6B]', 'EN_SERVICE')}
+        {statCard('Au dépôt', nb('EN_STOCK'), Warehouse, 'bg-gray-500', 'EN_STOCK')}
+        {statCard('En transit', nb('EN_TRANSIT'), Truck, 'bg-[#F59E0B]', 'EN_TRANSIT')}
+        {statCard('Réformés', nb('REFORME'), Archive, 'bg-[#DC2626]', 'REFORME')}
+      </div>
+
       <FilterBar
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder="N° série, libellé, marque, site…"
         filters={[
           { key: 'type', label: 'Tous types', value: type, options: TYPE_OPTIONS, onChange: setType },
           { key: 'statut', label: 'Tous statuts', value: statut, options: STATUT_OPTIONS, onChange: setStatut },
+          ...(marqueOptions.length ? [{ key: 'marque', label: 'Toutes marques', value: marque, options: marqueOptions, onChange: setMarque }] : []),
         ]}
       />
 
       {isLoading ? (
-        <TableSkeleton cols={6} />
+        <TableSkeleton cols={8} />
       ) : isError ? (
         <ErrorState />
       ) : rows.length === 0 ? (
-        <EmptyState title="Aucun actif" hint="Enregistrez un GE, une batterie ou un climatiseur." />
+        <EmptyState title="Aucun actif" hint={parc.length ? 'Aucun résultat avec ces filtres.' : 'Enregistrez un GE, une batterie ou un climatiseur.'} />
       ) : (
         <DataTable columns={columns} data={rows} onRowClick={(a) => router.push(`/actifs/${a.actifType}/${a.id}`)} />
       )}

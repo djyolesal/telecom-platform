@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
+import { sendTabular } from '../utils/exporter';
+import { getNum } from '../services/settings.service';
 
 /** Vue unifiée d'un actif (GE ou équipement) pour le registre. */
 interface ActifDTO {
@@ -15,12 +17,23 @@ interface ActifDTO {
   siteId: string | null;
   site: { code: string; nom: string } | null;
   numero: number | null;
+  marque: string | null;
+  updatedAt: Date | null;
+  /// GE uniquement : heures de marche depuis la dernière vidange confirmée.
+  heuresDepuisVidange: number | null;
+  vidangeDue: boolean;
 }
 
 const geToDTO = (g: {
   id: string; puissanceKva: unknown; numeroSerie: string | null; statutActif: string; numero: number;
   siteId: string | null; site: { code: string; nom: string } | null;
-}): ActifDTO => ({
+  marque?: string | null; updatedAt?: Date; indexHeuresDerniereVidange?: unknown;
+}, dernierIndex?: Map<string, number>, seuilVidange = 250): ActifDTO => {
+  const heures =
+    g.indexHeuresDerniereVidange != null && dernierIndex?.get(g.id) != null
+      ? Math.max(0, dernierIndex.get(g.id)! - Number(g.indexHeuresDerniereVidange))
+      : null;
+  return ({
   id: g.id,
   actifType: 'GE',
   categorie: 'GE',
@@ -31,12 +44,18 @@ const geToDTO = (g: {
   siteId: g.siteId,
   site: g.site,
   numero: g.numero,
+  marque: g.marque ?? null,
+  updatedAt: g.updatedAt ?? null,
+  heuresDepuisVidange: heures,
+  vidangeDue: heures != null && heures >= seuilVidange,
 });
+};
 
 const equipToDTO = (e: {
   id: string; categorie: string; numeroSerie: string | null; libelle: string | null;
   valeur: unknown; unite: string | null; statutActif: string;
   siteId: string | null; site: { code: string; nom: string } | null;
+  updatedAt?: Date;
 }): ActifDTO => ({
   id: e.id,
   actifType: e.categorie,
@@ -48,45 +67,94 @@ const equipToDTO = (e: {
   siteId: e.siteId,
   site: e.site,
   numero: null,
+  marque: null,
+  updatedAt: e.updatedAt ?? null,
+  heuresDepuisVidange: null,
+  vidangeDue: false,
 });
 
 /** Liste du parc d'actifs (GE + équipements), filtrable par type / statut / site. */
+async function fetchActifs(query: Record<string, string>): Promise<ActifDTO[]> {
+  const { type, statut, site_id, en_stock, limit } = query;
+  const siteSel = { select: { code: true, nom: true } };
+  const out: ActifDTO[] = [];
+  // Borne anti-surcharge large : couvre tout le parc réaliste pour ne pas tronquer
+  // silencieusement les sélecteurs d'actifs (qui chargent toute la liste filtrée).
+  const take = Math.min(Math.max(parseInt(limit || '2000', 10) || 2000, 1), 5000);
+
+  // en_stock prime sur site_id (filtres mutuellement exclusifs : dépôt = sans site).
+  const siteClause = en_stock === 'true' ? { siteId: null } : site_id ? { siteId: site_id } : {};
+  const statutClause = statut ? { statutActif: statut as never } : {};
+
+  const wantGE = !type || type === 'GE';
+  const wantEquip = !type || type !== 'GE';
+
+  if (wantGE) {
+    const ges = await prisma.groupeElectrogene.findMany({
+      where: { ...statutClause, ...siteClause },
+      include: { site: siteSel },
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
+    // Dernier index horaire relevé par GE → compteur « heures depuis vidange ».
+    const releves = await prisma.releveEnergie.findMany({
+      where: { source: 'GE', groupeId: { in: ges.map((g) => g.id) }, indexHeuresGE: { not: null } },
+      orderBy: { dateReleve: 'desc' },
+      select: { groupeId: true, indexHeuresGE: true },
+    });
+    const dernierIndex = new Map<string, number>();
+    for (const r of releves) {
+      if (r.groupeId && !dernierIndex.has(r.groupeId)) dernierIndex.set(r.groupeId, Number(r.indexHeuresGE));
+    }
+    const seuilVidange = getNum('ge.intervalleVidangeHeures', 250);
+    out.push(...ges.map((g) => geToDTO(g, dernierIndex, seuilVidange)));
+  }
+  if (wantEquip) {
+    const eqs = await prisma.equipementActif.findMany({
+      where: { ...(type && type !== 'GE' ? { categorie: type as never } : {}), ...statutClause, ...siteClause },
+      include: { site: siteSel },
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
+    out.push(...eqs.map(equipToDTO));
+  }
+  return out;
+}
+
 export async function listActifs(req: Request, res: Response, next: NextFunction) {
   try {
-    const { type, statut, site_id, en_stock, limit } = req.query as Record<string, string>;
-    const siteSel = { select: { code: true, nom: true } };
-    const out: ActifDTO[] = [];
-    // Borne anti-surcharge large : couvre tout le parc réaliste pour ne pas tronquer
-    // silencieusement les sélecteurs d'actifs (qui chargent toute la liste filtrée).
-    const take = Math.min(Math.max(parseInt(limit || '2000', 10) || 2000, 1), 5000);
+    res.json({ success: true, data: await fetchActifs(req.query as Record<string, string>) });
+  } catch (err) { next(err); }
+}
 
-    // en_stock prime sur site_id (filtres mutuellement exclusifs : dépôt = sans site).
-    const siteClause = en_stock === 'true' ? { siteId: null } : site_id ? { siteId: site_id } : {};
-    const statutClause = statut ? { statutActif: statut as never } : {};
-
-    const wantGE = !type || type === 'GE';
-    const wantEquip = !type || type !== 'GE';
-
-    if (wantGE) {
-      const ges = await prisma.groupeElectrogene.findMany({
-        where: { ...statutClause, ...siteClause },
-        include: { site: siteSel },
-        orderBy: { createdAt: 'desc' },
-        take,
-      });
-      out.push(...ges.map(geToDTO));
-    }
-    if (wantEquip) {
-      const eqs = await prisma.equipementActif.findMany({
-        where: { ...(type && type !== 'GE' ? { categorie: type as never } : {}), ...statutClause, ...siteClause },
-        include: { site: siteSel },
-        orderBy: { createdAt: 'desc' },
-        take,
-      });
-      out.push(...eqs.map(equipToDTO));
-    }
-
-    res.json({ success: true, data: out });
+/** Export du registre du parc (mêmes filtres que la liste). */
+export async function exportActifs(req: Request, res: Response, next: NextFunction) {
+  try {
+    const actifs = await fetchActifs(req.query as Record<string, string>);
+    const LABELS: Record<string, string> = { EN_SERVICE: 'En service', EN_STOCK: 'Au dépôt', EN_TRANSIT: 'En transit', REFORME: 'Réformé' };
+    await sendTabular(res, req.params.format as 'xlsx' | 'pdf', 'parc-actifs', "Parc d'actifs", [{
+      name: 'Parc',
+      columns: [
+        { header: 'Type', key: 'type', width: 16 },
+        { header: 'Libellé', key: 'libelle', width: 26 },
+        { header: 'N° série', key: 'serie', width: 16 },
+        { header: 'Marque', key: 'marque', width: 14 },
+        { header: 'Caractéristique', key: 'carac', width: 16 },
+        { header: 'Statut', key: 'statut', width: 12 },
+        { header: 'Site', key: 'site', width: 24 },
+        { header: 'Vidange (h)', key: 'vidange', width: 12 },
+      ],
+      rows: actifs.map((a) => ({
+        type: a.actifType,
+        libelle: a.libelle ?? a.categorie,
+        serie: a.numeroSerie ?? '',
+        marque: a.marque ?? '',
+        carac: a.caracteristique ?? '',
+        statut: LABELS[a.statutActif] ?? a.statutActif,
+        site: a.site ? `${a.site.code} — ${a.site.nom}` : 'Dépôt',
+        vidange: a.heuresDepuisVidange != null ? Math.round(a.heuresDepuisVidange) : '',
+      })),
+    }]);
   } catch (err) { next(err); }
 }
 
