@@ -22,10 +22,11 @@ export default function ModifierSitePage() {
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     hasGardien: 'false', societeGardiennage: '', telephoneSite: '',
+    marqueGE: '',
   });
   const [error, setError] = useState('');
   // Groupes électrogènes supplémentaires (GE n°2, 3…). Le GE n°1 = champs statut/puissance ci-dessus.
-  const [extraGEs, setExtraGEs] = useState<{ puissanceKva: string; statut: string }[]>([]);
+  const [extraGEs, setExtraGEs] = useState<{ puissanceKva: string; statut: string; marque: string }[]>([]);
 
   const { data: site, isLoading, isError } = useQuery({
     queryKey: ['site', id],
@@ -66,11 +67,12 @@ export default function ModifierSitePage() {
       hasGardien: site.hasGardien ? 'true' : 'false',
       societeGardiennage: site.societeGardiennage ?? '',
       telephoneSite: site.telephoneSite ?? '',
+      marqueGE: (site.groupes as { numero: number; marque?: string | null }[] | undefined)?.find((g) => g.numero === 1)?.marque ?? '',
     });
     const extras = (site.groupes ?? [])
       .filter((g: { numero: number }) => g.numero > 1)
       .sort((a: { numero: number }, b: { numero: number }) => a.numero - b.numero)
-      .map((g: { puissanceKva: number; statut: string }) => ({ puissanceKva: String(g.puissanceKva ?? 0), statut: g.statut ?? 'GE_SECOURS' }));
+      .map((g: { puissanceKva: number; statut: string; marque?: string | null }) => ({ puissanceKva: String(g.puissanceKva ?? 0), statut: g.statut ?? 'GE_SECOURS', marque: g.marque ?? '' }));
     setExtraGEs(extras);
   }, [site]);
 
@@ -96,11 +98,11 @@ export default function ModifierSitePage() {
         telephoneSite: form.telephoneSite || null,
       });
       // Synchronise la liste des GE : n°1 = champs ci-dessus, n°2+ = liste supplémentaire.
-      const groupes: { numero: number; puissanceKva: number; statut: string }[] = [];
+      const groupes: { numero: number; puissanceKva: number; statut: string; marque?: string }[] = [];
       if (form.statutGE !== 'PAS_DE_GE') {
-        groupes.push({ numero: 1, puissanceKva: Number(form.puissanceGEkva) || 0, statut: form.statutGE });
+        groupes.push({ numero: 1, puissanceKva: Number(form.puissanceGEkva) || 0, statut: form.statutGE, marque: form.marqueGE || undefined });
       }
-      extraGEs.forEach((g, i) => groupes.push({ numero: i + 2, puissanceKva: Number(g.puissanceKva) || 0, statut: g.statut }));
+      extraGEs.forEach((g, i) => groupes.push({ numero: i + 2, puissanceKva: Number(g.puissanceKva) || 0, statut: g.statut, marque: g.marque || undefined }));
       await api.put(`/sites/${id}/groupes`, { groupes });
     },
     onSuccess: () => {
@@ -191,7 +193,7 @@ export default function ModifierSitePage() {
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-gray-700">Groupes électrogènes supplémentaires</span>
-              <button type="button" onClick={() => setExtraGEs((g) => [...g, { puissanceKva: '0', statut: 'GE_SECOURS' }])} className="text-sm font-medium text-[#2471A3] hover:underline">+ Ajouter un GE</button>
+              <button type="button" onClick={() => setExtraGEs((g) => [...g, { puissanceKva: '0', statut: 'GE_SECOURS', marque: '' }])} className="text-sm font-medium text-[#2471A3] hover:underline">+ Ajouter un GE</button>
             </div>
             {extraGEs.length === 0 ? (
               <p className="text-xs text-gray-400">Le GE n°1 est défini ci-dessus. Ajoutez un GE n°2, 3… pour les sites multi-générateurs (cuve partagée).</p>
@@ -205,6 +207,9 @@ export default function ModifierSitePage() {
                     </Field>
                     <Field label="Puissance (kVA)" className="flex-1">
                       <Input type="number" step="0.01" value={g.puissanceKva} onChange={(e) => setExtraGEs((arr) => arr.map((x, j) => j === i ? { ...x, puissanceKva: e.target.value } : x))} />
+                    </Field>
+                    <Field label="Marque" className="flex-1">
+                      <Input value={g.marque} onChange={(e) => setExtraGEs((arr) => arr.map((x, j) => j === i ? { ...x, marque: e.target.value } : x))} placeholder="CATERPILLAR" />
                     </Field>
                     <button type="button" onClick={() => setExtraGEs((arr) => arr.filter((_, j) => j !== i))} className="pb-2 text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
                   </div>

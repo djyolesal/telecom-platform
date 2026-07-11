@@ -168,11 +168,16 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
 
 export async function createSite(req: Request, res: Response, next: NextFunction) {
   try {
-    const site = await prisma.site.create({ data: req.body });
+    // marqueGE ne vit pas sur le site : extraite du corps, posée sur le GE n°1.
+    const { marqueGE, ...data } = req.body as Record<string, unknown> & { marqueGE?: string };
+    const site = await prisma.site.create({ data: data as never });
     // Crée automatiquement le GE n°1 si le site a un GE (cohérence avec la table dédiée).
     if (site.statutGE !== 'PAS_DE_GE') {
       await prisma.groupeElectrogene.create({
-        data: { siteId: site.id, numero: 1, puissanceKva: site.puissanceGEkva, statut: site.statutGE, isActive: true },
+        data: {
+          siteId: site.id, numero: 1, puissanceKva: site.puissanceGEkva, statut: site.statutGE,
+          marque: marqueGE?.trim() ? marqueGE.trim() : null, isActive: true,
+        },
       });
     }
     await auditLog(req.user!.id, 'CREATE', 'sites', site.id, req.body, req);
@@ -205,7 +210,7 @@ export async function replaceSiteGroupes(req: Request, res: Response, next: Next
     if (!site) throw new AppError('Site introuvable', 404);
 
     const groupes = (Array.isArray(req.body) ? req.body : req.body?.groupes) as
-      | Array<{ numero: number; puissanceKva?: number; statut?: string }>
+      | Array<{ numero: number; puissanceKva?: number; statut?: string; marque?: string }>
       | undefined;
     if (!Array.isArray(groupes)) throw new AppError('Liste de groupes électrogènes attendue.', 422);
 
@@ -218,10 +223,11 @@ export async function replaceSiteGroupes(req: Request, res: Response, next: Next
       numeros.push(numero);
       const statut = (g.statut && STATUTS.includes(g.statut) ? g.statut : 'GE_SECOURS') as StatutGE;
       const puissanceKva = Number(g.puissanceKva) || 0;
+      const marque = g.marque?.trim() ? g.marque.trim() : null;
       await prisma.groupeElectrogene.upsert({
         where: { siteId_numero: { siteId, numero } },
-        create: { siteId, numero, puissanceKva, statut, isActive: true },
-        update: { puissanceKva, statut, isActive: true },
+        create: { siteId, numero, puissanceKva, statut, marque, isActive: true },
+        update: { puissanceKva, statut, marque, isActive: true },
       });
     }
     // GE retirés → désactivés (historique préservé).

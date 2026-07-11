@@ -20,6 +20,7 @@ export default function NouveauSitePage() {
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     hasGardien: 'false', societeGardiennage: '', telephoneSite: '',
+    marqueGE: '',
   });
   const [error, setError] = useState('');
 
@@ -54,6 +55,7 @@ export default function NouveauSitePage() {
         hasGardien: form.hasGardien === 'true',
         societeGardiennage: form.societeGardiennage || undefined,
         telephoneSite: form.telephoneSite || undefined,
+        marqueGE: form.marqueGE || undefined,
       }),
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
@@ -91,6 +93,9 @@ export default function NouveauSitePage() {
           </Field>
           <Field label="Puissance GE (kVA)">
             <Input type="number" step="0.01" value={form.puissanceGEkva} onChange={(e) => set('puissanceGEkva', e.target.value)} />
+          </Field>
+          <Field label="Marque du GE">
+            <Input value={form.marqueGE} onChange={(e) => set('marqueGE', e.target.value)} placeholder="ex: CATERPILLAR" />
           </Field>
           <Field label="Lot (rattachement / prestataire)">
             <Select value={form.lotId} onChange={(e) => set('lotId', e.target.value)} options={lotOptions} placeholder="Aucun lot" />

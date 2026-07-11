@@ -233,6 +233,7 @@ export async function createActif(req: Request, res: Response, next: NextFunctio
           puissanceKva: b.puissanceKva != null ? Number(b.puissanceKva) : 0,
           statut: (b.statut as never) ?? 'GE_SECOURS',
           numeroSerie: b.numeroSerie ? String(b.numeroSerie) : null,
+          marque: b.marque ? String(b.marque).trim() : null,
           statutActif,
           isActive: !!siteId,
         },

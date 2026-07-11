@@ -56,7 +56,7 @@ const STATUT_OPTIONS = [
 
 function CreateActifModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ actifType: 'GE', numeroSerie: '', libelle: '', puissanceKva: '', valeur: '', unite: '' });
+  const [form, setForm] = useState({ actifType: 'GE', numeroSerie: '', libelle: '', puissanceKva: '', valeur: '', unite: '', marque: '' });
   const [error, setError] = useState('');
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const isGE = form.actifType === 'GE';
@@ -67,6 +67,7 @@ function CreateActifModal({ onClose }: { onClose: () => void }) {
       numeroSerie: form.numeroSerie || undefined,
       libelle: form.libelle || undefined,
       puissanceKva: isGE && form.puissanceKva ? Number(form.puissanceKva) : undefined,
+      marque: isGE && form.marque ? form.marque : undefined,
       valeur: !isGE && form.valeur ? Number(form.valeur) : undefined,
       unite: !isGE ? form.unite || undefined : undefined,
     }),
@@ -90,7 +91,10 @@ function CreateActifModal({ onClose }: { onClose: () => void }) {
           <Field label="N° série"><Input value={form.numeroSerie} onChange={(e) => set('numeroSerie', e.target.value)} /></Field>
           <Field label="Libellé" className="col-span-2"><Input value={form.libelle} onChange={(e) => set('libelle', e.target.value)} placeholder={isGE ? '(auto)' : 'ex. Batterie 200 Ah'} /></Field>
           {isGE ? (
-            <Field label="Puissance (kVA)"><Input type="number" value={form.puissanceKva} onChange={(e) => set('puissanceKva', e.target.value)} /></Field>
+            <>
+              <Field label="Puissance (kVA)"><Input type="number" value={form.puissanceKva} onChange={(e) => set('puissanceKva', e.target.value)} /></Field>
+              <Field label="Marque"><Input value={form.marque} onChange={(e) => set('marque', e.target.value)} placeholder="ex: CATERPILLAR" /></Field>
+            </>
           ) : (
             <>
               <Field label="Caractéristique"><Input type="number" value={form.valeur} onChange={(e) => set('valeur', e.target.value)} placeholder="ex. 200" /></Field>
@@ -128,9 +132,10 @@ export default function ActifsPage() {
   });
 
   const parc: Actif[] = data ?? [];
-  const marqueOptions = [...new Set(parc.map((a) => a.marque).filter(Boolean))]
-    .sort()
-    .map((m) => ({ value: m as string, label: m as string }));
+  const marqueOptions = [
+    ...[...new Set(parc.map((a) => a.marque).filter(Boolean))].sort().map((m) => ({ value: m as string, label: m as string })),
+    ...(parc.some((a) => a.actifType === 'GE' && !a.marque) ? [{ value: '__SANS__', label: 'Sans marque' }] : []),
+  ];
 
   const q = search.trim().toLowerCase();
   const bySiteThenNumero = (x: Actif, y: Actif) => {
@@ -141,7 +146,7 @@ export default function ActifsPage() {
   const rows = parc.filter((a) =>
     (!type || a.actifType === type) &&
     (!statut || a.statutActif === statut) &&
-    (!marque || a.marque === marque) &&
+    (!marque || (marque === '__SANS__' ? (a.actifType === 'GE' && !a.marque) : a.marque === marque)) &&
     (!q || [a.libelle, a.numeroSerie, a.marque, a.site?.code, a.site?.nom]
       .some((v) => v?.toLowerCase().includes(q)))
   ).sort(bySiteThenNumero);
@@ -268,9 +273,12 @@ export default function ActifsPage() {
                       <td className="py-2 pr-4">
                         <button
                           type="button"
-                          onClick={() => setMarque(m === SANS_MARQUE ? '' : marque === m ? '' : m)}
-                          className={`font-medium hover:underline ${marque === m ? 'text-[#2471A3]' : 'text-gray-800'}`}
-                          title="Filtrer la liste sur cette marque"
+                          onClick={() => {
+                            const cible = m === SANS_MARQUE ? '__SANS__' : m;
+                            setMarque(marque === cible ? '' : cible);
+                          }}
+                          className={`font-medium hover:underline ${marque === (m === SANS_MARQUE ? '__SANS__' : m) ? 'text-[#2471A3]' : 'text-gray-800'}`}
+                          title={m === SANS_MARQUE ? 'Lister les GE dont la marque reste à renseigner' : 'Filtrer la liste sur cette marque'}
                         >
                           {m}
                         </button>
