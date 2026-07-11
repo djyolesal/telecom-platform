@@ -59,6 +59,10 @@ class Site {
   final double? cuveVolumeLitres;
   final String? formeCuve;
   final String? cuveDimensions;
+  // Gardiennage & contact local (fiche détail uniquement)
+  final bool hasGardien;
+  final String? societeGardiennage;
+  final String? telephoneSite;
 
   const Site({
     required this.id,
@@ -80,6 +84,9 @@ class Site {
     this.cuveVolumeLitres,
     this.formeCuve,
     this.cuveDimensions,
+    this.hasGardien = false,
+    this.societeGardiennage,
+    this.telephoneSite,
   });
 
   static double _toD(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
@@ -108,6 +115,9 @@ class Site {
       cuveVolumeLitres: _toDn(j['cuveVolumeLitres']),
       formeCuve: j['formeCuve'] as String?,
       cuveDimensions: j['cuveDimensions'] as String?,
+      hasGardien: j['hasGardien'] == true,
+      societeGardiennage: j['societeGardiennage'] as String?,
+      telephoneSite: j['telephoneSite'] as String?,
     );
   }
 

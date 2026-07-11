@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/maps_launcher.dart';
 import '../../../core/theme/app_theme.dart';
@@ -107,6 +108,10 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                       if (s.cuveVolumeLitres != null) _row('Volume cuve', '${s.cuveVolumeLitres!.toStringAsFixed(0)} L'),
                       if (s.formeCuve != null) _row('Forme cuve', _formeLabel(s.formeCuve!)),
                       if (s.cuveDimensions != null && s.cuveDimensions!.isNotEmpty) _row('Dimensions cuve', s.cuveDimensions!),
+                      _row('Agent de sécurité', s.hasGardien ? 'Oui' : 'Non'),
+                      if (s.societeGardiennage != null && s.societeGardiennage!.isNotEmpty)
+                        _row('Sté gardiennage', s.societeGardiennage!),
+                      if (s.telephoneSite != null && s.telephoneSite!.isNotEmpty) _phoneRow(s.telephoneSite!),
                     ],
                   ),
                 ),
@@ -235,6 +240,22 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       );
     }
   }
+
+  /// Téléphone du gardien/contact local : appel direct depuis le terrain.
+  Widget _phoneRow(String tel) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: InkWell(
+          onTap: () => launchUrl(Uri(scheme: 'tel', path: tel.replaceAll(' ', ''))),
+          child: Row(
+            children: [
+              Expanded(child: Text('Téléphone site', style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+              Icon(Icons.phone, size: 15, color: Colors.teal.shade700),
+              const SizedBox(width: 4),
+              Text(tel, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.teal.shade700)),
+            ],
+          ),
+        ),
+      );
 
   Widget _row(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),

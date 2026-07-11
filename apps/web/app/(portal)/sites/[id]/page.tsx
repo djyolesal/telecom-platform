@@ -135,12 +135,15 @@ export default function SiteDetailPage() {
           <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '—'} />
           <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '—'} />
           <InfoRow label="Dimensions cuve" value={site.cuveDimensions || '—'} />
+          <InfoRow label="Agent de sécurité" value={site.hasGardien ? 'Oui' : 'Non'} />
+          <InfoRow label="Sté gardiennage" value={site.societeGardiennage || '—'} />
+          <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[#2471A3] hover:underline">{site.telephoneSite}</a> : '—'} />
         </div>
         {site.groupes?.length > 0 && (
           <div className="mt-3 border-t border-gray-50 pt-3">
             <p className="mb-1.5 text-xs font-medium text-gray-500">Groupes électrogènes ({site.groupes.length})</p>
             <div className="flex flex-wrap gap-2">
-              {site.groupes.map((g: { id: string; numero: number; puissanceKva: number; statut: string; heuresDepuisVidange?: number | null }) => {
+              {site.groupes.map((g: { id: string; numero: number; puissanceKva: number; statut: string; marque?: string | null; heuresDepuisVidange?: number | null }) => {
                 const seuil = site.intervalleVidangeHeures ?? 250;
                 const vidangeDue = g.heuresDepuisVidange != null && g.heuresDepuisVidange >= seuil;
                 return (
@@ -149,7 +152,7 @@ export default function SiteDetailPage() {
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 ring-inset ${vidangeDue ? 'bg-amber-50 text-amber-800 ring-amber-200' : 'bg-gray-50 text-gray-700 ring-gray-100'}`}
                     title={g.heuresDepuisVidange == null ? 'Vidange : aucune référence enregistrée' : `Heures depuis la dernière vidange (seuil ${seuil} h)`}
                   >
-                    <b>GE n°{g.numero}</b> · {Number(g.puissanceKva).toFixed(0)} kVA · {STATUTS_GE.find((s) => s.value === g.statut)?.label ?? g.statut}
+                    <b>GE n°{g.numero}</b>{g.marque ? ` · ${g.marque}` : ''} · {Number(g.puissanceKva).toFixed(0)} kVA · {STATUTS_GE.find((s) => s.value === g.statut)?.label ?? g.statut}
                     {g.heuresDepuisVidange != null && (
                       <span className={vidangeDue ? 'font-semibold' : 'text-gray-400'}>
                         · vidange {Math.round(g.heuresDepuisVidange)} / {seuil} h{vidangeDue ? ' ⚠' : ''}
@@ -234,7 +237,7 @@ export default function SiteDetailPage() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <span className="text-gray-500">{label} : </span>

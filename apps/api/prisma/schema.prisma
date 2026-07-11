@@ -182,6 +182,10 @@ model Site {
   cuveVolumeLitres Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
   formeCuve        FormeCuve?  @map("forme_cuve")
   cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100)
+  // Gardiennage et contact local (préparation d'intervention, litiges manquants)
+  hasGardien         Boolean  @default(false) @map("has_gardien")
+  societeGardiennage String?  @map("societe_gardiennage") @db.VarChar(100)
+  telephoneSite      String?  @map("telephone_site") @db.VarChar(30)
   isActive         Boolean     @default(true) @map("is_active")
   lotId            String?     @map("lot_id")
   createdAt        DateTime    @default(now()) @map("created_at")
@@ -212,6 +216,7 @@ model GroupeElectrogene {
   puissanceKva Decimal     @default(0) @map("puissance_kva") @db.Decimal(6, 2)
   statut       StatutGE    @default(GE_SECOURS)        // rôle sur site (permanent/secours)
   numeroSerie  String?     @unique @map("numero_serie") // identité physique de l'actif
+  marque       String?     @db.VarChar(60)              // constructeur (pièces, gammes d'entretien)
   statutActif  StatutActif @default(EN_SERVICE) @map("statut_actif")
   isActive     Boolean     @default(true) @map("is_active")
   // Vidange conditionnée aux heures de marche : index horaire relevé à la

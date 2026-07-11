@@ -33,6 +33,11 @@ const IMPORT_COLUMNS = [
   { key: 'cuveDimensions', header: 'cuveDimensions' },
   { key: 'puissanceGE2', header: 'puissanceGE2' },
   { key: 'statutGE2', header: 'statutGE2' },
+  { key: 'hasGardien', header: 'gardien' },
+  { key: 'societeGardiennage', header: 'societeGardiennage' },
+  { key: 'telephoneSite', header: 'telephoneSite' },
+  { key: 'marqueGE', header: 'marqueGE' },
+  { key: 'marqueGE2', header: 'marqueGE2' },
 ];
 
 // Normalise un en-tête : minuscules, sans accents ni séparateurs.
@@ -60,6 +65,11 @@ const HEADER_ALIASES: Record<string, string> = {
   cuvedimensions: 'cuveDimensions', dimensionscuve: 'cuveDimensions', dimensions: 'cuveDimensions',
   puissancege2: 'puissanceGE2', puissgege2: 'puissanceGE2', kvage2: 'puissanceGE2',
   statutge2: 'statutGE2',
+  gardien: 'hasGardien', hasgardien: 'hasGardien', agentsecurite: 'hasGardien', agentdesecurite: 'hasGardien',
+  societegardiennage: 'societeGardiennage', gardiennage: 'societeGardiennage', societedegardiennage: 'societeGardiennage',
+  telephonesite: 'telephoneSite', telephone: 'telephoneSite', tel: 'telephoneSite', contact: 'telephoneSite',
+  marquege: 'marqueGE', marque: 'marqueGE',
+  marquege2: 'marqueGE2',
 };
 
 /**
@@ -258,6 +268,8 @@ export async function sitesImportTemplate(_req: Request, res: Response, next: Ne
         typePylone: 'GREENFIELD', hasClimatiseur: 'oui', hasExtincteurs: 'oui',
         cuveVolumeLitres: 2000, formeCuve: 'CYLINDRE_COUCHE', cuveDimensions: '2m x 1m x 1m',
         puissanceGE2: '', statutGE2: '', // remplir pour un 2e GE (ex: 100 / GE_SECOURS)
+        hasGardien: 'oui', societeGardiennage: 'SECURITOGO', telephoneSite: '+228 90 00 00 00',
+        marqueGE: 'CATERPILLAR', marqueGE2: '',
       },
     ]);
     setXlsxHeaders(res, 'modele_import_sites.xlsx');
@@ -374,6 +386,9 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           // Booléens : seulement si la colonne existe (sinon on préserve l'existant).
           ...(colByField.hasClimatiseur != null ? { hasClimatiseur: toBool(cellText(row, 'hasClimatiseur')) } : {}),
           ...(colByField.hasExtincteurs != null ? { hasExtincteurs: toBool(cellText(row, 'hasExtincteurs')) } : {}),
+          ...(colByField.hasGardien != null ? { hasGardien: toBool(cellText(row, 'hasGardien')) } : {}),
+          ...(colByField.societeGardiennage != null ? { societeGardiennage: cellText(row, 'societeGardiennage') || null } : {}),
+          ...(colByField.telephoneSite != null ? { telephoneSite: cellText(row, 'telephoneSite') || null } : {}),
           isActive: true,
         };
 
@@ -392,8 +407,9 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
         if (data.statutGE !== 'PAS_DE_GE') {
           await prisma.groupeElectrogene.upsert({
             where: { siteId_numero: { siteId, numero: 1 } },
-            create: { siteId, numero: 1, puissanceKva: data.puissanceGEkva, statut: data.statutGE, isActive: true },
-            update: { puissanceKva: data.puissanceGEkva, statut: data.statutGE, isActive: true },
+            create: { siteId, numero: 1, puissanceKva: data.puissanceGEkva, statut: data.statutGE, isActive: true, marque: cellText(row, 'marqueGE') || null },
+            update: { puissanceKva: data.puissanceGEkva, statut: data.statutGE, isActive: true,
+              ...(colByField.marqueGE != null ? { marque: cellText(row, 'marqueGE') || null } : {}) },
           });
         } else {
           await prisma.groupeElectrogene.updateMany({ where: { siteId, numero: 1 }, data: { isActive: false } });
@@ -406,8 +422,9 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           if (!STATUT.includes(statutGE2)) throw new Error(`statutGE2 invalide « ${statutGE2} » (attendu : ${STATUT.join(', ')})`);
           await prisma.groupeElectrogene.upsert({
             where: { siteId_numero: { siteId, numero: 2 } },
-            create: { siteId, numero: 2, puissanceKva: puissGE2 ?? 0, statut: statutGE2 as StatutGE, isActive: true },
-            update: { puissanceKva: puissGE2 ?? 0, statut: statutGE2 as StatutGE, isActive: true },
+            create: { siteId, numero: 2, puissanceKva: puissGE2 ?? 0, statut: statutGE2 as StatutGE, isActive: true, marque: cellText(row, 'marqueGE2') || null },
+            update: { puissanceKva: puissGE2 ?? 0, statut: statutGE2 as StatutGE, isActive: true,
+              ...(colByField.marqueGE2 != null ? { marque: cellText(row, 'marqueGE2') || null } : {}) },
           });
         } else {
           await prisma.groupeElectrogene.updateMany({ where: { siteId, numero: 2 }, data: { isActive: false } });
@@ -590,6 +607,9 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
         { header: 'Puissance GE (kVA)', key: 'puissance', width: 16 },
         { header: 'Latitude', key: 'lat', width: 12 },
         { header: 'Longitude', key: 'lng', width: 12 },
+        { header: 'Gardien', key: 'gardien', width: 10 },
+        { header: 'Sté gardiennage', key: 'gardiennage', width: 18 },
+        { header: 'Téléphone site', key: 'telephone', width: 16 },
       ],
       rows: sites.map((s) => ({
         code: s.code,
@@ -601,6 +621,9 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
         puissance: Number(s.puissanceGEkva),
         lat: s.latitude != null ? Number(s.latitude) : '',
         lng: s.longitude != null ? Number(s.longitude) : '',
+        gardien: s.hasGardien ? 'oui' : 'non',
+        gardiennage: s.societeGardiennage ?? '',
+        telephone: s.telephoneSite ?? '',
       })),
     }]);
   } catch (err) { next(err); }

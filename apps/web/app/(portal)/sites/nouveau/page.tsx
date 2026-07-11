@@ -19,6 +19,7 @@ export default function NouveauSitePage() {
     latitude: '', longitude: '', lotId: '',
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
+    hasGardien: 'false', societeGardiennage: '', telephoneSite: '',
   });
   const [error, setError] = useState('');
 
@@ -45,6 +46,9 @@ export default function NouveauSitePage() {
         cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : undefined,
         formeCuve: form.formeCuve || undefined,
         cuveDimensions: form.cuveDimensions || undefined,
+        hasGardien: form.hasGardien === 'true',
+        societeGardiennage: form.societeGardiennage || undefined,
+        telephoneSite: form.telephoneSite || undefined,
       }),
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
@@ -114,6 +118,17 @@ export default function NouveauSitePage() {
           </Field>
           <Field label="Dimensions de la cuve">
             <Input value={form.cuveDimensions} onChange={(e) => set('cuveDimensions', e.target.value)} placeholder="ex: 2m × 1m × 1m" />
+          </Field>
+
+          <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Gardiennage & contact</div>
+          <Field label="Agent de sécurité sur le site">
+            <Select value={form.hasGardien} onChange={(e) => set('hasGardien', e.target.value)} options={OUI_NON} />
+          </Field>
+          <Field label="Société de gardiennage">
+            <Input value={form.societeGardiennage} onChange={(e) => set('societeGardiennage', e.target.value)} placeholder="ex: SECURITOGO" />
+          </Field>
+          <Field label="Téléphone du site (gardien / contact local)">
+            <Input value={form.telephoneSite} onChange={(e) => set('telephoneSite', e.target.value)} placeholder="+228 90 00 00 00" />
           </Field>
 
           <div className="md:col-span-2 flex justify-end gap-2 pt-2">
