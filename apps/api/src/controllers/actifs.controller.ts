@@ -22,6 +22,8 @@ interface ActifDTO {
   /// GE uniquement : heures de marche depuis la dernière vidange confirmée.
   heuresDepuisVidange: number | null;
   vidangeDue: boolean;
+  /// GE uniquement : dernier index horaire relevé (carte GE).
+  dernierIndexHeures: number | null;
 }
 
 const geToDTO = (g: {
@@ -48,6 +50,7 @@ const geToDTO = (g: {
   updatedAt: g.updatedAt ?? null,
   heuresDepuisVidange: heures,
   vidangeDue: heures != null && heures >= seuilVidange,
+  dernierIndexHeures: dernierIndex?.get(g.id) ?? null,
 });
 };
 
@@ -71,6 +74,7 @@ const equipToDTO = (e: {
   updatedAt: e.updatedAt ?? null,
   heuresDepuisVidange: null,
   vidangeDue: false,
+  dernierIndexHeures: null,
 });
 
 /** Liste du parc d'actifs (GE + équipements), filtrable par type / statut / site. */
@@ -135,23 +139,25 @@ export async function exportActifs(req: Request, res: Response, next: NextFuncti
     await sendTabular(res, req.params.format as 'xlsx' | 'pdf', 'parc-actifs', "Parc d'actifs", [{
       name: 'Parc',
       columns: [
+        { header: 'Site', key: 'site', width: 24 },
+        { header: 'N° GE', key: 'numero', width: 8 },
         { header: 'Type', key: 'type', width: 16 },
-        { header: 'Libellé', key: 'libelle', width: 26 },
         { header: 'N° série', key: 'serie', width: 16 },
         { header: 'Marque', key: 'marque', width: 14 },
         { header: 'Caractéristique', key: 'carac', width: 16 },
         { header: 'Statut', key: 'statut', width: 12 },
-        { header: 'Site', key: 'site', width: 24 },
+        { header: 'Index heures (h)', key: 'index', width: 14 },
         { header: 'Vidange (h)', key: 'vidange', width: 12 },
       ],
       rows: actifs.map((a) => ({
-        type: a.actifType,
-        libelle: a.libelle ?? a.categorie,
+        site: a.site ? `${a.site.code} — ${a.site.nom}` : 'Dépôt',
+        numero: a.numero ?? '',
+        type: a.actifType === 'GE' ? `GE ${a.caracteristique ?? ''}`.trim() : (a.libelle ?? a.categorie),
         serie: a.numeroSerie ?? '',
         marque: a.marque ?? '',
         carac: a.caracteristique ?? '',
         statut: LABELS[a.statutActif] ?? a.statutActif,
-        site: a.site ? `${a.site.code} — ${a.site.nom}` : 'Dépôt',
+        index: a.dernierIndexHeures != null ? Math.round(a.dernierIndexHeures) : '',
         vidange: a.heuresDepuisVidange != null ? Math.round(a.heuresDepuisVidange) : '',
       })),
     }]);

@@ -29,6 +29,8 @@ interface Actif {
   updatedAt: string | null;
   heuresDepuisVidange: number | null;
   vidangeDue: boolean;
+  dernierIndexHeures: number | null;
+  numero: number | null;
 }
 
 const STATUT_COLOR: Record<string, string> = {
@@ -131,13 +133,18 @@ export default function ActifsPage() {
     .map((m) => ({ value: m as string, label: m as string }));
 
   const q = search.trim().toLowerCase();
+  const bySiteThenNumero = (x: Actif, y: Actif) => {
+    if (!!x.site !== !!y.site) return x.site ? -1 : 1; // dépôt en fin de liste
+    const c = (x.site?.code ?? '').localeCompare(y.site?.code ?? '');
+    return c !== 0 ? c : (x.numero ?? 99) - (y.numero ?? 99);
+  };
   const rows = parc.filter((a) =>
     (!type || a.actifType === type) &&
     (!statut || a.statutActif === statut) &&
     (!marque || a.marque === marque) &&
     (!q || [a.libelle, a.numeroSerie, a.marque, a.site?.code, a.site?.nom]
       .some((v) => v?.toLowerCase().includes(q)))
-  );
+  ).sort(bySiteThenNumero);
 
   const nb = (s: string) => parc.filter((a) => a.statutActif === s).length;
 
@@ -154,11 +161,12 @@ export default function ActifsPage() {
     a.updatedAt ? Math.floor((Date.now() - new Date(a.updatedAt).getTime()) / 86400000) : null;
 
   const columns: Column<Actif>[] = [
-    { key: 'libelle', header: 'Actif', render: (a) => <span className="font-medium text-gray-800">{a.libelle ?? a.categorie}</span> },
+    { key: 'site', header: 'Site', render: (a) => (a.site ? <span className="font-medium text-gray-800">{a.site.code} — {a.site.nom}</span> : <span className="text-gray-400">Dépôt</span>) },
+    { key: 'numero', header: 'N° GE', render: (a) => (a.numero != null ? <span className="font-semibold text-gray-700">n°{a.numero}</span> : <span className="text-gray-300">—</span>) },
+    { key: 'libelle', header: 'Actif', render: (a) => <span className="font-medium text-gray-800">{a.actifType === 'GE' ? `GE ${a.caracteristique ?? ''}`.trim() : (a.libelle ?? a.categorie)}</span> },
     { key: 'categorie', header: 'Type', render: (a) => TYPE_OPTIONS.find((t) => t.value === a.actifType)?.label ?? a.actifType },
     { key: 'numeroSerie', header: 'N° série', render: (a) => a.numeroSerie || '—' },
     { key: 'marque', header: 'Marque', render: (a) => a.marque || '—' },
-    { key: 'caracteristique', header: 'Caractéristique', render: (a) => a.caracteristique || '—' },
     {
       key: 'statutActif', header: 'Statut', render: (a) => {
         const j = a.statutActif === 'EN_TRANSIT' ? joursTransit(a) : null;
@@ -177,7 +185,10 @@ export default function ActifsPage() {
         );
       },
     },
-    { key: 'site', header: 'Site', render: (a) => (a.site ? `${a.site.code} — ${a.site.nom}` : <span className="text-gray-400">Dépôt</span>) },
+    {
+      key: 'index', header: 'Index heures', render: (a) =>
+        a.dernierIndexHeures == null ? <span className="text-gray-300">—</span> : <span className="text-gray-700">{Math.round(a.dernierIndexHeures).toLocaleString('fr-FR')} h</span>,
+    },
     {
       key: 'vidange', header: 'Vidange', render: (a) =>
         a.heuresDepuisVidange == null ? <span className="text-gray-300">—</span> : (
