@@ -154,7 +154,8 @@
       "Bash(sed -n '/export async function getSettings/,/^}/p' apps/api/src/controllers/admin.controller.ts)",
       "Bash(sed -n '/export async function getEffectiveSettings/,/^}/p' apps/api/src/controllers/admin.controller.ts)",
       "Bash(python3 -m pip install --quiet --user pandas openpyxl)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform *)"
     ]
   }
 }
