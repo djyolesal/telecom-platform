@@ -37,6 +37,11 @@ export default function SiteDetailPage() {
     },
   });
 
+  const { data: typesPylone } = useQuery({
+    queryKey: ['types-pylone'],
+    queryFn: () => api.get('/types-pylone').then((r) => r.data.data as { code: string; libelle: string }[]),
+  });
+  const pyloneOptions = typesPylone?.map((t) => ({ value: t.code, label: t.libelle })) ?? TYPES_PYLONE;
   const { data: site, isLoading, isError } = useQuery({
     queryKey: ['site', id],
     queryFn: () => api.get(`/sites/${id}`).then((r) => r.data.data),
@@ -129,7 +134,7 @@ export default function SiteDetailPage() {
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Infrastructure</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-          <InfoRow label="Type de pylône" value={TYPES_PYLONE.find((t) => t.value === site.typePylone)?.label ?? '—'} />
+          <InfoRow label="Type de pylône" value={pyloneOptions.find((t) => t.value === site.typePylone)?.label ?? site.typePylone ?? '—'} />
           <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
           <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '—'} />

@@ -187,6 +187,10 @@ router.post('/users/:id/toggle-active', rbac(['ADMIN']), usersCtrl.toggleActive)
 router.post('/users/:id/reset-password', rbac(['ADMIN']), usersCtrl.resetUserPassword);
 
 // ── Administration ────────────────────────────────────────────
+// Référentiel types de pylône : lecture pour tous (formulaires), édition admin.
+router.get('/types-pylone', adminCtrl.listTypesPylone);
+router.post('/admin/types-pylone', rbac(['ADMIN']), adminCtrl.upsertTypePylone);
+router.delete('/admin/types-pylone/:code', rbac(['ADMIN']), adminCtrl.deleteTypePylone);
 router.get('/admin/settings', rbac(['ADMIN']), adminCtrl.getSettings);
 router.get('/admin/settings/effectifs', rbac(['ADMIN']), adminCtrl.getEffectiveSettings);
 router.put('/admin/settings', rbac(['ADMIN']), adminCtrl.updateSettings);

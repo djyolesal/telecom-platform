@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList } from 'lucide-react';
+import { Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList, RadioTower } from 'lucide-react';
 
 const SECTIONS = [
   { href: '/administration/utilisateurs', icon: Users, title: 'Utilisateurs', desc: 'Créer, modifier et désactiver les comptes.' },
@@ -11,6 +11,7 @@ const SECTIONS = [
   { href: '/administration/parametres', icon: Settings, title: 'Paramètres système', desc: 'Configuration générale de la plateforme.' },
   { href: '/administration/seuils', icon: SlidersHorizontal, title: 'Seuils d\'alerte', desc: 'Seuils carburant et tarifs énergie.' },
   { href: '/administration/taches-preventives', icon: ClipboardList, title: 'Tâches préventives', desc: 'Libellé et fréquence du catalogue contractuel.' },
+  { href: '/administration/types-pylone', icon: RadioTower, title: 'Types de pylône', desc: 'Référentiel éditable des types de pylône.' },
   { href: '/administration/audit', icon: ScrollText, title: 'Journal d\'audit', desc: 'Historique des actions sensibles.' },
   { href: '/administration/serveur', icon: ServerCog, title: 'Santé serveur', desc: 'État des services, métriques et monitoring.' },
 ];

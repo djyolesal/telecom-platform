@@ -25,6 +25,11 @@ export default function NouveauSitePage() {
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  const { data: typesPylone } = useQuery({
+    queryKey: ['types-pylone'],
+    queryFn: () => api.get('/types-pylone').then((r) => r.data.data as { code: string; libelle: string }[]),
+  });
+  const pyloneOptions = typesPylone?.map((t) => ({ value: t.code, label: t.libelle })) ?? TYPES_PYLONE;
   const { data: lots } = useQuery({
     queryKey: ['lots-select'],
     queryFn: () => api.get('/lots', { params: { limit: 500 } }).then((r) => r.data.data),
@@ -102,7 +107,7 @@ export default function NouveauSitePage() {
 
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Infrastructure</div>
           <Field label="Type de pylône">
-            <Select value={form.typePylone} onChange={(e) => set('typePylone', e.target.value)} options={TYPES_PYLONE} placeholder="Sélectionner…" />
+            <Select value={form.typePylone} onChange={(e) => set('typePylone', e.target.value)} options={pyloneOptions} placeholder="Sélectionner…" />
           </Field>
           <Field label="Climatiseur sur le site">
             <Select value={form.hasClimatiseur} onChange={(e) => set('hasClimatiseur', e.target.value)} options={OUI_NON} />

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import ExcelJS from 'exceljs';
-import { PowerConfig, StatutGE, TypePylone, FormeCuve } from '@prisma/client';
+import { PowerConfig, StatutGE, FormeCuve } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
@@ -302,8 +302,14 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
 
     const POWER = Object.values(PowerConfig) as string[];
     const STATUT = Object.values(StatutGE) as string[];
-    // Résolution tolérante des enums (insensible casse/accents/tirets).
-    const pyloneByNorm = new Map((Object.values(TypePylone) as string[]).map((v) => [norm(v), v]));
+    // Résolution tolérante des enums/référentiels (insensible casse/accents/tirets).
+    // Types de pylône : référentiel éditable — accepté par code OU par libellé.
+    const typesPylone = await prisma.typePyloneRef.findMany();
+    const pyloneByNorm = new Map<string, string>();
+    for (const t of typesPylone) {
+      pyloneByNorm.set(norm(t.code), t.code);
+      pyloneByNorm.set(norm(t.libelle), t.code);
+    }
     const formeByNorm = new Map((Object.values(FormeCuve) as string[]).map((v) => [norm(v), v]));
     const TRUE_SET = new Set(['1', 'oui', 'true', 'vrai', 'x', 'yes', 'y']);
     const toBool = (s: string) => TRUE_SET.has(norm(s));
@@ -351,12 +357,12 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
         }
 
         // Infrastructure (toutes optionnelles). Colonne vide → champ préservé en update.
-        let typePylone: TypePylone | undefined;
+        let typePylone: string | undefined;
         const tp = cellText(row, 'typePylone');
         if (tp) {
           const found = pyloneByNorm.get(norm(tp));
-          if (!found) throw new Error(`type pylône invalide « ${tp} »`);
-          typePylone = found as TypePylone;
+          if (!found) throw new Error(`type pylône inconnu « ${tp} » (gérez la liste dans Administration → Types de pylône)`);
+          typePylone = found;
         }
         let formeCuve: FormeCuve | undefined;
         const fc = cellText(row, 'formeCuve');

@@ -28,15 +28,6 @@ enum StatutGE {
 
 // Type de pylône du site (les libellés "TGC-GREENFIELD"/"LP-GREENFIELD" utilisent
 // un underscore car un identifiant d'enum ne peut pas contenir de tiret).
-enum TypePylone {
-  GREENFIELD
-  ROOFTOP
-  TGC_GREENFIELD
-  TROTTOIR
-  RURAL
-  LP_GREENFIELD
-}
-
 // Forme de la cuve à gasoil.
 enum FormeCuve {
   RECTANGULAIRE
@@ -178,7 +169,7 @@ model Site {
   // Infrastructure du site
   hasClimatiseur   Boolean     @default(false) @map("has_climatiseur")
   hasExtincteurs   Boolean     @default(false) @map("has_extincteurs")
-  typePylone       TypePylone? @map("type_pylone")
+  typePylone       String?     @map("type_pylone") @db.VarChar(40) // code du référentiel types_pylone
   cuveVolumeLitres Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
   formeCuve        FormeCuve?  @map("forme_cuve")
   cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100)
@@ -484,6 +475,15 @@ model AuditLog {
   @@index([resource])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// Référentiel éditable des types de pylône (CRUD admin web) — remplace l'ancien enum figé.
+model TypePyloneRef {
+  code      String   @id @db.VarChar(40)
+  libelle   String   @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("types_pylone")
 }
 
 model SystemSettings {

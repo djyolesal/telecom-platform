@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { redisClient } from '../config/redis';
 import { minioClient, MINIO_BUCKET } from '../config/minio';
 import { paginate } from '../utils/paginator';
+import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog } from '../services/settings.service';
@@ -198,4 +199,43 @@ export async function getMetrics(_req: Request, res: Response, next: NextFunctio
     logger.error('Erreur metrics:', err);
     next(err);
   }
+}
+
+// ── Référentiel des types de pylône (liste éditable par l'admin) ──
+
+export async function listTypesPylone(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const types = await prisma.typePyloneRef.findMany({ orderBy: { libelle: 'asc' } });
+    res.json({ success: true, data: types });
+  } catch (err) { next(err); }
+}
+
+export async function upsertTypePylone(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { code, libelle } = req.body as { code?: string; libelle?: string };
+    if (!code?.trim() || !libelle?.trim()) throw new AppError('Code et libellé requis.', 422);
+    // Code normalisé : identifiant stable en base (le libellé reste libre).
+    const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+    if (!cleanCode) throw new AppError('Code invalide.', 422);
+    const type = await prisma.typePyloneRef.upsert({
+      where: { code: cleanCode },
+      create: { code: cleanCode, libelle: libelle.trim() },
+      update: { libelle: libelle.trim() },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'types_pylone', type.code, { libelle: type.libelle }, req);
+    res.json({ success: true, data: type });
+  } catch (err) { next(err); }
+}
+
+export async function deleteTypePylone(req: Request, res: Response, next: NextFunction) {
+  try {
+    const code = req.params.code;
+    const used = await prisma.site.count({ where: { typePylone: code } });
+    if (used > 0) {
+      throw new AppError(`Type utilisé par ${used} site(s) — réaffectez-les avant suppression.`, 409);
+    }
+    await prisma.typePyloneRef.delete({ where: { code } });
+    await auditLog(req.user!.id, 'DELETE', 'types_pylone', code, {}, req);
+    res.json({ success: true });
+  } catch (err) { next(err); }
 }
