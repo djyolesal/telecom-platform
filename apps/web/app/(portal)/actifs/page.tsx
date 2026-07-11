@@ -158,10 +158,14 @@ export default function ActifsPage() {
   const ges = parc.filter((a) => a.actifType === 'GE' && a.statutActif !== 'REFORME');
   const kvaOf = (a: Actif) => parseInt(a.caracteristique ?? '0', 10) || 0;
   const puissances = [...new Set(ges.map(kvaOf))].sort((x, y) => x - y);
-  const marques = [...new Set(ges.map((a) => a.marque ?? SANS_MARQUE))]
-    .sort((x, y) => (x === SANS_MARQUE ? 1 : y === SANS_MARQUE ? -1 : x.localeCompare(y)));
   const nbGE = (m: string, kva?: number) =>
     ges.filter((a) => (a.marque ?? SANS_MARQUE) === m && (kva == null || kvaOf(a) === kva)).length;
+  // Marques triées par taille de flotte (les plus représentées d'abord), « Sans marque » en dernier.
+  const marques = [...new Set(ges.map((a) => a.marque ?? SANS_MARQUE))]
+    .sort((x, y) => (x === SANS_MARQUE ? 1 : y === SANS_MARQUE ? -1 : nbGE(y) - nbGE(x) || x.localeCompare(y)));
+  const maxCellule = Math.max(1, ...marques.flatMap((m) => puissances.map((k) => nbGE(m, k))));
+  // Heatmap : fond teal d'autant plus soutenu que la cellule concentre de GE.
+  const heat = (n: number) => (n ? { backgroundColor: `rgba(14, 124, 107, ${(0.07 + 0.33 * (n / maxCellule)).toFixed(2)})` } : undefined);
   const joursTransit = (a: Actif) =>
     a.updatedAt ? Math.floor((Date.now() - new Date(a.updatedAt).getTime()) / 86400000) : null;
 
@@ -262,14 +266,14 @@ export default function ActifsPage() {
                   <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
                     <th className="py-2 pr-4 font-medium">Marque</th>
                     {puissances.map((kva) => (
-                      <th key={kva} className="px-3 py-2 text-center font-medium">{kva ? `${kva} kVA` : 'kVA ?'}</th>
+                      <th key={kva} className="px-3 py-2 text-center font-medium">{kva ? `${kva} kVA` : 'N.C.'}</th>
                     ))}
                     <th className="px-3 py-2 text-center font-semibold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {marques.map((m) => (
-                    <tr key={m} className="border-b border-gray-50 last:border-0">
+                    <tr key={m} className={`border-b border-gray-50 last:border-0 hover:bg-gray-50/60 ${m === SANS_MARQUE ? 'bg-amber-50/50' : ''}`}>
                       <td className="py-2 pr-4">
                         <button
                           type="button"
@@ -286,18 +290,23 @@ export default function ActifsPage() {
                       {puissances.map((kva) => {
                         const n = nbGE(m, kva);
                         return (
-                          <td key={kva} className={`px-3 py-2 text-center ${n ? 'text-gray-800' : 'text-gray-200'}`}>{n || '·'}</td>
+                          <td key={kva} className={`px-3 py-2 text-center tabular-nums ${n ? 'font-medium text-gray-800' : 'text-gray-200'}`} style={heat(n)}>
+                            {n || '·'}
+                          </td>
                         );
                       })}
-                      <td className="px-3 py-2 text-center font-semibold text-gray-800">{nbGE(m)}</td>
+                      <td className="px-3 py-2 text-center tabular-nums font-semibold text-gray-800">
+                        {nbGE(m)}
+                        <span className="ml-1.5 text-[11px] font-normal text-gray-400">{Math.round((nbGE(m) / ges.length) * 100)}%</span>
+                      </td>
                     </tr>
                   ))}
-                  <tr className="border-t border-gray-100 text-xs text-gray-500">
-                    <td className="py-2 pr-4 font-semibold">Total</td>
+                  <tr className="border-t border-gray-200 bg-gray-50/70 text-xs text-gray-500">
+                    <td className="rounded-bl-lg py-2 pr-4 font-semibold">Total</td>
                     {puissances.map((kva) => (
-                      <td key={kva} className="px-3 py-2 text-center font-semibold">{ges.filter((a) => kvaOf(a) === kva).length}</td>
+                      <td key={kva} className="px-3 py-2 text-center font-semibold tabular-nums">{ges.filter((a) => kvaOf(a) === kva).length}</td>
                     ))}
-                    <td className="px-3 py-2 text-center font-bold text-gray-800">{ges.length}</td>
+                    <td className="rounded-br-lg px-3 py-2 text-center font-bold tabular-nums text-gray-800">{ges.length}</td>
                   </tr>
                 </tbody>
               </table>
