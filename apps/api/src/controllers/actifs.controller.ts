@@ -150,9 +150,9 @@ export async function exportActifs(req: Request, res: Response, next: NextFuncti
         { header: 'Vidange (h)', key: 'vidange', width: 12 },
       ],
       rows: actifs.map((a) => ({
-        site: a.site ? `${a.site.code} — ${a.site.nom}` : 'Dépôt',
+        site: a.site ? a.site.nom : 'Dépôt',
         numero: a.numero ?? '',
-        type: a.actifType === 'GE' ? `GE ${a.caracteristique ?? ''}`.trim() : (a.libelle ?? a.categorie),
+        type: a.actifType === 'GE' ? (a.caracteristique ?? 'GE') : (a.libelle ?? a.categorie),
         serie: a.numeroSerie ?? '',
         marque: a.marque ?? '',
         carac: a.caracteristique ?? '',

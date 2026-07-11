@@ -161,9 +161,9 @@ export default function ActifsPage() {
     a.updatedAt ? Math.floor((Date.now() - new Date(a.updatedAt).getTime()) / 86400000) : null;
 
   const columns: Column<Actif>[] = [
-    { key: 'site', header: 'Site', render: (a) => (a.site ? <span className="font-medium text-gray-800">{a.site.code} — {a.site.nom}</span> : <span className="text-gray-400">Dépôt</span>) },
-    { key: 'numero', header: 'N° GE', render: (a) => (a.numero != null ? <span className="font-semibold text-gray-700">n°{a.numero}</span> : <span className="text-gray-300">—</span>) },
-    { key: 'libelle', header: 'Actif', render: (a) => <span className="font-medium text-gray-800">{a.actifType === 'GE' ? `GE ${a.caracteristique ?? ''}`.trim() : (a.libelle ?? a.categorie)}</span> },
+    { key: 'site', header: 'Site', render: (a) => (a.site ? <span className="font-medium text-gray-800">{a.site.nom}</span> : <span className="text-gray-400">Dépôt</span>) },
+    { key: 'numero', header: 'N° GE', render: (a) => (a.numero != null ? <span className="font-semibold text-gray-700">{a.numero}</span> : <span className="text-gray-300">—</span>) },
+    { key: 'libelle', header: 'Actif', render: (a) => <span className="font-medium text-gray-800">{a.actifType === 'GE' ? (a.caracteristique ?? '—') : (a.libelle ?? a.categorie)}</span> },
     { key: 'categorie', header: 'Type', render: (a) => TYPE_OPTIONS.find((t) => t.value === a.actifType)?.label ?? a.actifType },
     { key: 'numeroSerie', header: 'N° série', render: (a) => a.numeroSerie || '—' },
     { key: 'marque', header: 'Marque', render: (a) => a.marque || '—' },
