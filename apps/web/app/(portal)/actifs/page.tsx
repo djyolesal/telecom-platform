@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Boxes, CheckCircle2, Warehouse, Truck, Archive } from 'lucide-react';
+import { Plus, X, Boxes, CheckCircle2, Warehouse, Truck, Archive, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -117,6 +117,7 @@ export default function ActifsPage() {
   const [statut, setStatut] = useState('');
   const [marque, setMarque] = useState('');
   const [search, setSearch] = useState('');
+  const [showRecap, setShowRecap] = useState(false);
 
   // Le parc complet tient en une requête : stats globales + filtres instantanés côté client.
   const { data, isLoading, isError } = useQuery({
@@ -139,6 +140,16 @@ export default function ActifsPage() {
   );
 
   const nb = (s: string) => parc.filter((a) => a.statutActif === s).length;
+
+  // ── Récap GE : marque × puissance (hors réformés) ──
+  const SANS_MARQUE = 'Sans marque';
+  const ges = parc.filter((a) => a.actifType === 'GE' && a.statutActif !== 'REFORME');
+  const kvaOf = (a: Actif) => parseInt(a.caracteristique ?? '0', 10) || 0;
+  const puissances = [...new Set(ges.map(kvaOf))].sort((x, y) => x - y);
+  const marques = [...new Set(ges.map((a) => a.marque ?? SANS_MARQUE))]
+    .sort((x, y) => (x === SANS_MARQUE ? 1 : y === SANS_MARQUE ? -1 : x.localeCompare(y)));
+  const nbGE = (m: string, kva?: number) =>
+    ges.filter((a) => (a.marque ?? SANS_MARQUE) === m && (kva == null || kvaOf(a) === kva)).length;
   const joursTransit = (a: Actif) =>
     a.updatedAt ? Math.floor((Date.now() - new Date(a.updatedAt).getTime()) / 86400000) : null;
 
@@ -217,6 +228,64 @@ export default function ActifsPage() {
         {statCard('En transit', nb('EN_TRANSIT'), Truck, 'bg-[#F59E0B]', 'EN_TRANSIT')}
         {statCard('Réformés', nb('REFORME'), Archive, 'bg-[#DC2626]', 'REFORME')}
       </div>
+
+      {ges.length > 0 && (
+        <div className="mb-4 rounded-xl border border-gray-100 bg-white">
+          <button
+            type="button"
+            onClick={() => setShowRecap((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-gray-700"
+          >
+            <span>Répartition des GE par marque et puissance ({ges.length} GE hors réformés)</span>
+            {showRecap ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {showRecap && (
+            <div className="overflow-x-auto px-4 pb-4">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
+                    <th className="py-2 pr-4 font-medium">Marque</th>
+                    {puissances.map((kva) => (
+                      <th key={kva} className="px-3 py-2 text-center font-medium">{kva ? `${kva} kVA` : 'kVA ?'}</th>
+                    ))}
+                    <th className="px-3 py-2 text-center font-semibold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marques.map((m) => (
+                    <tr key={m} className="border-b border-gray-50 last:border-0">
+                      <td className="py-2 pr-4">
+                        <button
+                          type="button"
+                          onClick={() => setMarque(m === SANS_MARQUE ? '' : marque === m ? '' : m)}
+                          className={`font-medium hover:underline ${marque === m ? 'text-[#2471A3]' : 'text-gray-800'}`}
+                          title="Filtrer la liste sur cette marque"
+                        >
+                          {m}
+                        </button>
+                      </td>
+                      {puissances.map((kva) => {
+                        const n = nbGE(m, kva);
+                        return (
+                          <td key={kva} className={`px-3 py-2 text-center ${n ? 'text-gray-800' : 'text-gray-200'}`}>{n || '·'}</td>
+                        );
+                      })}
+                      <td className="px-3 py-2 text-center font-semibold text-gray-800">{nbGE(m)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t border-gray-100 text-xs text-gray-500">
+                    <td className="py-2 pr-4 font-semibold">Total</td>
+                    {puissances.map((kva) => (
+                      <td key={kva} className="px-3 py-2 text-center font-semibold">{ges.filter((a) => kvaOf(a) === kva).length}</td>
+                    ))}
+                    <td className="px-3 py-2 text-center font-bold text-gray-800">{ges.length}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <FilterBar
         search={search}
