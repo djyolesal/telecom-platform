@@ -3,6 +3,7 @@ import { parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { idempotencyKey } from '../utils/idempotency';
+import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendTabular } from '../utils/exporter';
@@ -335,9 +336,13 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
     const existing = await prisma.depotage.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Dépotage introuvable', 404);
 
-    const { site: _s, technicien: _t, heuresGE: _h, prixLitre: _p, coutTotal: _c, ...data } = req.body;
+    // Liste blanche : jamais de technicienId/isSynced/ligneLivraisonId arbitraires.
+    const data = pick<Record<string, unknown>>(req.body, [
+      'siteId', 'dateDepotage', 'stockAvantLitres', 'stockApresLitres', 'volumeLitres',
+      'fournisseur', 'numeroBonLivraison', 'observations', 'latitude', 'longitude',
+    ]);
     const { volume, stockApres } = deriveVolume({ ...existing, ...data });
-    if (data.dateDepotage) data.dateDepotage = new Date(data.dateDepotage);
+    if (data.dateDepotage) data.dateDepotage = new Date(data.dateDepotage as string);
 
     const updated = await prisma.depotage.update({
       where: { id: req.params.id },

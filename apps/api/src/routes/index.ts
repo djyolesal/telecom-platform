@@ -93,7 +93,7 @@ router.get('/maintenances/planning', maintenanceCtrl.getPlanning);
 router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
 router.post('/maintenances', maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
-router.put('/maintenances/:id', maintenanceCtrl.updateMaintenance);
+router.put('/maintenances/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.updateMaintenance);
 router.delete('/maintenances/:id', rbac(['ADMIN']), maintenanceCtrl.deleteMaintenance);
 router.post('/maintenances/:id/start', maintenanceCtrl.startMaintenance);
 router.post('/maintenances/:id/close', maintenanceCtrl.closeMaintenance);
@@ -112,7 +112,7 @@ router.get('/depotages/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), dep
 router.post('/depotages', depotagesCtrl.createDepotage);
 router.get('/depotages/:id/bordereau.pdf', depotagesCtrl.exportDepotagePdf);
 router.get('/depotages/:id', depotagesCtrl.getDepotageById);
-router.put('/depotages/:id', depotagesCtrl.updateDepotage);
+router.put('/depotages/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), depotagesCtrl.updateDepotage);
 router.delete('/depotages/:id', rbac(['ADMIN']), depotagesCtrl.deleteDepotage);
 
 // ── Logistique carburant : bons de commande ───────────────────
@@ -161,7 +161,7 @@ router.get('/incidents/kpis', incidentsCtrl.getIncidentKPIs);
 router.get('/incidents/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
 router.post('/incidents', incidentsCtrl.createIncident);
 router.get('/incidents/:id', incidentsCtrl.getIncidentById);
-router.put('/incidents/:id', incidentsCtrl.updateIncident);
+router.put('/incidents/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.updateIncident);
 router.delete('/incidents/:id', rbac(['ADMIN']), incidentsCtrl.deleteIncident);
 router.post('/incidents/:id/assign', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.assignIncident);
 router.post('/incidents/:id/demarrer', incidentsCtrl.startIncident);

@@ -4,6 +4,7 @@ import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns'
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
+import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf } from '../services/pdf.service';
@@ -300,8 +301,15 @@ export async function updateMaintenance(req: Request, res: Response, next: NextF
     const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
 
-    const { pieces: _pieces, site: _site, technicien: _tech, ...data } = req.body;
-    if (data.datePlanifiee) data.datePlanifiee = new Date(data.datePlanifiee);
+    // Liste blanche : la clôture/démarrage/mouvement passent par leurs endpoints
+    // dédiés (avec geofence, photos, transaction). Ce PUT ne modifie QUE les
+    // méta de planification — jamais statut/dateDebut/dateFin/dureeMinutes/actif*.
+    const data = pick<Prisma.MaintenanceUncheckedUpdateInput>(req.body, [
+      'equipement', 'categorie', 'description', 'observations',
+      'datePlanifiee', 'technicienId', 'prestataireId', 'tachePreventiveKey',
+    ]);
+    if (data.datePlanifiee) data.datePlanifiee = new Date(data.datePlanifiee as string);
+    if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
 
     const updated = await prisma.maintenance.update({ where: { id: req.params.id }, data });
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, data, req);

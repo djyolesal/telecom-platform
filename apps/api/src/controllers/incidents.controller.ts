@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { notificationService } from '../services/notifications.service';
@@ -72,12 +74,21 @@ export async function getIncidentById(req: Request, res: Response, next: NextFun
 
 export async function createIncident(req: Request, res: Response, next: NextFunction) {
   try {
+    const b = req.body as Record<string, unknown>;
+    if (!b.siteId || !b.type || !b.severite || !b.description) {
+      throw new AppError('Site, type, sévérité et description sont requis.', 400);
+    }
+    // Liste blanche : statut/dates/technicien fixés par le workflow, declarePar
+    // toujours l'utilisateur courant (jamais usurpé depuis le client).
+    const data = pick<Prisma.IncidentUncheckedCreateInput>(b, [
+      'siteId', 'type', 'severite', 'description', 'latitude', 'longitude',
+    ]);
     const incident = await prisma.incident.create({
-      data: { ...req.body, declarePar: req.user!.id },
+      data: { ...(data as Prisma.IncidentUncheckedCreateInput), declarePar: req.user!.id },
       include: { site: { select: { nom: true, code: true, region: true } } },
     });
 
-    await auditLog(req.user!.id, 'CREATE', 'incidents', incident.id, req.body, req);
+    await auditLog(req.user!.id, 'CREATE', 'incidents', incident.id, data, req);
 
     // Notifier via WebSocket
     io.of('/supervision').emit('incident:created', {
@@ -106,8 +117,15 @@ export async function updateIncident(req: Request, res: Response, next: NextFunc
     const incident = await prisma.incident.findUnique({ where: { id: req.params.id } });
     if (!incident) throw new AppError('Incident introuvable', 404);
 
-    const updated = await prisma.incident.update({ where: { id: req.params.id }, data: req.body });
-    await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { before: incident, after: req.body }, req);
+    // Liste blanche : le workflow (statut, dates, technicien) passe par assign/
+    // demarrer/close. Ce PUT ne modifie que la description du problème.
+    const data = pick<Prisma.IncidentUncheckedUpdateInput>(req.body, [
+      'type', 'severite', 'description', 'causeProbable', 'actionCorrective',
+    ]);
+    if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
+
+    const updated = await prisma.incident.update({ where: { id: req.params.id }, data });
+    await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { after: data }, req);
 
     io.of('/supervision').emit('incident:updated', { id: updated.id, statut: updated.statut });
     res.json({ success: true, data: updated });

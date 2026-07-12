@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import ExcelJS from 'exceljs';
-import { PowerConfig, StatutGE, FormeCuve } from '@prisma/client';
+import { PowerConfig, StatutGE, FormeCuve, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { cacheService } from '../services/cache.service';
@@ -190,8 +191,16 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
   try {
     const site = await prisma.site.findUnique({ where: { id: req.params.id } });
     if (!site) throw new AppError('Site introuvable', 404);
-    const updated = await prisma.site.update({ where: { id: req.params.id }, data: req.body });
-    await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { before: site, after: req.body }, req);
+    // Liste blanche : jamais de isActive/createdAt/marqueGE arbitraires ici.
+    const data = pick<Prisma.SiteUncheckedUpdateInput>(req.body, [
+      'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
+      'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
+      'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite',
+    ]);
+    if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
+    const updated = await prisma.site.update({ where: { id: req.params.id }, data });
+    await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { after: data }, req);
     await cacheService.invalidate('sites:geojson');
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
