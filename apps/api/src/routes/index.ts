@@ -203,6 +203,7 @@ router.get('/admin/taches-preventives', rbac(['ADMIN']), adminCtrl.getTachePreve
 router.put('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.updateTachePreventiveOverride);
 router.delete('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.deleteTachePreventiveOverride);
 router.get('/admin/audit', rbac(['ADMIN']), adminCtrl.getAuditLogs);
+router.post('/admin/test-email', rbac(['ADMIN']), adminCtrl.testEmail);
 router.get('/admin/health', rbac(['ADMIN']), adminCtrl.getSystemHealth);
 router.get('/admin/metrics', rbac(['ADMIN']), adminCtrl.getMetrics);
 

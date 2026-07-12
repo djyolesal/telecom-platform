@@ -37,7 +37,8 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default('noreply@telecom.local'),
+  SMTP_FROM: z.string().default('E&M OpS <noreply@emops.uk>'),
+  SMTP_REPLY_TO: z.string().optional(),
 
   // Firebase Cloud Messaging
   FCM_SERVER_KEY: z.string().optional(),

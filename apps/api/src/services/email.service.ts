@@ -35,6 +35,8 @@ export async function sendEmail(opts: MailOptions): Promise<boolean> {
   try {
     await tx.sendMail({
       from: env.SMTP_FROM,
+      // Les réponses (à noreply@) arrivent sur l'adresse de contact si configurée.
+      ...(env.SMTP_REPLY_TO ? { replyTo: env.SMTP_REPLY_TO } : {}),
       to: Array.isArray(opts.to) ? opts.to.join(',') : opts.to,
       subject: opts.subject,
       html: opts.html,

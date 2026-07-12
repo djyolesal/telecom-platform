@@ -6,6 +6,7 @@ import { redisClient } from '../config/redis';
 import { minioClient, MINIO_BUCKET } from '../config/minio';
 import { paginate } from '../utils/paginator';
 import { AppError } from '../utils/AppError';
+import { sendEmail } from '../services/email.service';
 import { auditLog } from '../services/audit.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog } from '../services/settings.service';
@@ -237,5 +238,29 @@ export async function deleteTypePylone(req: Request, res: Response, next: NextFu
     await prisma.typePyloneRef.delete({ where: { code } });
     await auditLog(req.user!.id, 'DELETE', 'types_pylone', code, {}, req);
     res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Test d'envoi d'email (ADMIN) : envoie un message à l'adresse fournie (ou à
+ * l'appelant) pour vérifier la config SMTP/DKIM sans attendre un vrai reset.
+ */
+export async function testEmail(req: Request, res: Response, next: NextFunction) {
+  try {
+    let to = (req.body?.to as string | undefined)?.trim();
+    if (!to) {
+      const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { email: true } });
+      to = me?.email;
+    }
+    if (!to) throw new AppError('Adresse destinataire requise.', 400);
+    const ok = await sendEmail({
+      to,
+      subject: 'E&M OpS — test de configuration email',
+      html: '<p>Ceci est un email de test envoyé depuis <b>E&amp;M OpS</b>. Si vous le recevez (hors spam), SMTP et DKIM sont bien configurés.</p>',
+      text: 'Email de test E&M OpS — SMTP et DKIM bien configurés si reçu hors spam.',
+    });
+    if (!ok) throw new AppError('SMTP non configuré ou envoi refusé — vérifiez les variables SMTP_* et le domaine vérifié chez le fournisseur.', 502);
+    await auditLog(req.user!.id, 'CREATE', 'email_test', to, {}, req);
+    res.json({ success: true, message: `Email de test envoyé à ${to}` });
   } catch (err) { next(err); }
 }
