@@ -10,7 +10,10 @@ import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const callbackUrl = params.get('callbackUrl') || '/dashboard';
+  // Anti open-redirect : on n'accepte qu'un chemin interne (commençant par « / »
+  // et pas « // »), jamais une URL absolue vers un site tiers (hameçonnage).
+  const rawCallback = params.get('callbackUrl') || '/dashboard';
+  const callbackUrl = /^\/(?!\/)/.test(rawCallback) ? rawCallback : '/dashboard';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
