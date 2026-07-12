@@ -33,6 +33,9 @@ export async function stockAlertJob(): Promise<void> {
   }
 
   const alertes = sites
+    // Un site JAMAIS relevé (aucun stock connu) ne doit pas générer un faux
+    // « VIDE » quotidien : on ne l'évalue que si une mesure de cuve existe.
+    .filter((site) => stockMap.has(site.id) || depotMap.has(site.id))
     .map((site) => ({ site, stock: calculerStockSite(site, { volumeGasoilLitres: (stockMap.get(site.id) ?? 0) + (depotMap.get(site.id) ?? 0) }, geParams()) }))
     .filter(({ stock }) => ['CRITIQUE', 'VIDE'].includes(stock.niveauAlerte));
 

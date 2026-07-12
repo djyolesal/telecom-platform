@@ -122,8 +122,15 @@ async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
   const livre = ligne.depotages.reduce((s, d) => s + Number(d.volumeLitres), 0);
   const prevu = Number(ligne.volumePrevuLitres);
   const seuilPct = getNum('carburant.seuilLivraisonMinPct', 5);
-  const livreSuffisant = livre > 0 && (prevu <= 0 || livre >= (seuilPct / 100) * prevu);
-  const statut = livreSuffisant ? 'LIVRE' : 'PREVU';
+  // Trois états : au-delà de (100 − seuil) % du prévu → LIVRE (complet, tolérance) ;
+  // au-dessus du seuil mais en-deçà → PARTIEL (reste proposé au mobile pour un 2e
+  // passage) ; livraison négligeable → PREVU. Le manquant (prévu − livré) reste
+  // comptabilisé par volume indépendamment du statut.
+  let statut: 'PREVU' | 'PARTIEL' | 'LIVRE';
+  if (livre <= 0) statut = 'PREVU';
+  else if (prevu <= 0 || livre >= prevu * (1 - seuilPct / 100)) statut = 'LIVRE';
+  else if (livre >= prevu * (seuilPct / 100)) statut = 'PARTIEL';
+  else statut = 'PREVU';
   await prisma.ligneLivraison.update({
     where: { id: ligne.id },
     data: { volumeLivreLitres: livre, statut },

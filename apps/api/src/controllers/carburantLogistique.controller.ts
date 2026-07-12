@@ -414,11 +414,11 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     const effMois = data.mois != null ? (data.mois as number) : existing.mois;
     const effVolume = data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : n(existing.volumeChargeLitres);
 
+    let nouvellesLignes: { siteId: string; volumePrevuLitres: number }[] | null = null;
     if (req.body.lignes !== undefined && !isTransporteur) {
-      const lignes = parseLignes(req.body.lignes);
-      ({ warnings } = await validatePlan(existing.bonCommandeId, effMois, effVolume, lignes, existing.id));
-      await prisma.ligneLivraison.deleteMany({ where: { bonLivraisonId: existing.id } });
-      data.lignes = { create: lignes };
+      nouvellesLignes = parseLignes(req.body.lignes);
+      ({ warnings } = await validatePlan(existing.bonCommandeId, effMois, effVolume, nouvellesLignes, existing.id));
+      // Les lignes sont remplacées en préservant les dépotages (hors bloc update ci-dessous).
     } else if (data.mois != null || data.volumeChargeLitres != null) {
       // Volume/mois changé sans toucher aux lignes : re-vérifie cohérence sur les lignes existantes.
       const lignes = await prisma.ligneLivraison.findMany({ where: { bonLivraisonId: existing.id } });
@@ -428,12 +428,18 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
       ));
     }
 
-    const bl = await prisma.bonLivraison.update({
-      where: { id: existing.id },
-      data,
-      include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+    const bl = await prisma.$transaction(async (tx) => {
+      if (nouvellesLignes) {
+        const preserveWarn = await replaceLignesPreservees(tx, existing.id, nouvellesLignes);
+        warnings = [...warnings, ...preserveWarn];
+      }
+      return tx.bonLivraison.update({
+        where: { id: existing.id },
+        data,
+        include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+      });
     });
-    await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, req.body, req);
+    await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { updated: Object.keys(data) }, req);
     clearMemo();
     res.json({ success: true, data: bl, warnings });
   } catch (err) { next(mapKnownError(err, 'Un bon de livraison avec ce numéro existe déjà')); }
@@ -443,6 +449,12 @@ export async function deleteBonLivraison(req: Request, res: Response, next: Next
   try {
     const existing = await prisma.bonLivraison.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Bon de livraison introuvable', 404);
+    // Refus si des dépotages réels sont rattachés à ce BL : la cascade détacherait
+    // les livraisons (ligneLivraisonId → NULL) et fausserait manquants/stocks.
+    const depotagesLies = await prisma.depotage.count({ where: { ligneLivraison: { bonLivraisonId: existing.id } } });
+    if (depotagesLies > 0) {
+      throw new AppError(`Suppression refusée : ${depotagesLies} dépotage(s) sont rattachés à ce bon de livraison.`, 409);
+    }
     await prisma.bonLivraison.delete({ where: { id: existing.id } });
     await auditLog(req.user!.id, 'DELETE', 'bons_livraison', existing.id, {}, req);
     clearMemo();
@@ -451,8 +463,45 @@ export async function deleteBonLivraison(req: Request, res: Response, next: Next
 }
 
 /**
+ * Remplace les lignes d'un plan SANS détruire les livraisons réelles.
+ * - upsert par (bonLivraison, site) : préserve la ligne et ses dépotages rattachés ;
+ * - une ligne retirée du plan n'est supprimée QUE si aucun dépotage n'y est
+ *   rattaché (sinon conservée + avertissement) → plus de `ligneLivraisonId` remis
+ *   à NULL sur des dépotages réels (faux « manquants critiques »).
+ * Retourne les avertissements de préservation. À exécuter dans une transaction.
+ */
+async function replaceLignesPreservees(
+  tx: Prisma.TransactionClient,
+  blId: string,
+  lignes: { siteId: string; volumePrevuLitres: number }[]
+): Promise<string[]> {
+  const warnings: string[] = [];
+  const existantes = await tx.ligneLivraison.findMany({
+    where: { bonLivraisonId: blId },
+    include: { _count: { select: { depotages: true } }, site: { select: { code: true } } },
+  });
+  const sitesCibles = new Set(lignes.map((l) => l.siteId));
+  for (const l of existantes) {
+    if (sitesCibles.has(l.siteId)) continue; // conservée (mise à jour ci-dessous)
+    if (l._count.depotages > 0) {
+      warnings.push(`Ligne ${l.site.code} conservée : des dépotages y sont déjà rattachés.`);
+    } else {
+      await tx.ligneLivraison.delete({ where: { id: l.id } });
+    }
+  }
+  for (const l of lignes) {
+    await tx.ligneLivraison.upsert({
+      where: { bonLivraisonId_siteId: { bonLivraisonId: blId, siteId: l.siteId } },
+      create: { bonLivraisonId: blId, siteId: l.siteId, volumePrevuLitres: l.volumePrevuLitres },
+      update: { volumePrevuLitres: l.volumePrevuLitres }, // préserve volumeLivre/statut/dépotages
+    });
+  }
+  return warnings;
+}
+
+/**
  * Génère / édite le plan de livraison d'un bon de livraison (réservé MANAGER/ADMIN).
- * Remplace l'ensemble des lignes ; contrôle Σ lignes = volume chargé.
+ * Remplace les lignes en PRÉSERVANT les livraisons déjà rattachées ; Σ = volume chargé.
  */
 export async function setPlanLivraison(req: Request, res: Response, next: NextFunction) {
   try {
@@ -460,17 +509,19 @@ export async function setPlanLivraison(req: Request, res: Response, next: NextFu
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
 
     const lignes = parseLignes(req.body.lignes);
-    const { warnings } = await validatePlan(bl.bonCommandeId, bl.mois, n(bl.volumeChargeLitres), lignes, bl.id);
+    const { warnings: planWarn } = await validatePlan(bl.bonCommandeId, bl.mois, n(bl.volumeChargeLitres), lignes, bl.id);
 
-    await prisma.ligneLivraison.deleteMany({ where: { bonLivraisonId: bl.id } });
-    const updated = await prisma.bonLivraison.update({
-      where: { id: bl.id },
-      data: { lignes: { create: lignes } },
-      include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+    const updated = await prisma.$transaction(async (tx) => {
+      const preserveWarn = await replaceLignesPreservees(tx, bl.id, lignes);
+      const full = await tx.bonLivraison.findUnique({
+        where: { id: bl.id },
+        include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+      });
+      return { full, preserveWarn };
     });
     await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { plan: lignes.length }, req);
     clearMemo();
-    res.json({ success: true, data: updated, warnings });
+    res.json({ success: true, data: updated.full, warnings: [...planWarn, ...updated.preserveWarn] });
   } catch (err) { next(err); }
 }
 
