@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { rbac } from '../middlewares/rbac';
+import { rateLimit } from '../middlewares/rateLimit';
 
 // Controllers
 import * as authCtrl from '../controllers/auth.controller';
@@ -26,10 +27,13 @@ import { uploadMiddleware, uploadSpreadsheet } from '../middlewares/upload';
 export const router = Router();
 
 // ── Auth (public) ─────────────────────────────────────────────
-router.post('/auth/login', authCtrl.login);
+// Anti-bruteforce : limite le débit des routes sensibles (par IP + email).
+const loginLimit = rateLimit({ windowSec: 900, max: 10, keyPrefix: 'login' });       // 10 / 15 min
+const resetLimit = rateLimit({ windowSec: 3600, max: 5, keyPrefix: 'pwreset' });      // 5 / h
+router.post('/auth/login', loginLimit, authCtrl.login);
 router.post('/auth/refresh-token', authCtrl.refreshToken);
-router.post('/auth/forgot-password', authCtrl.forgotPassword);
-router.post('/auth/reset-password', authCtrl.resetPassword);
+router.post('/auth/forgot-password', resetLimit, authCtrl.forgotPassword);
+router.post('/auth/reset-password', resetLimit, authCtrl.resetPassword);
 
 // ── Auth (protégé) ────────────────────────────────────────────
 router.use(authMiddleware); // Tout ce qui suit requiert un JWT valide

@@ -1,3 +1,12 @@
+# Rotation des logs Docker (json-file) partagée par tous les services : sans
+# elle, les logs de conteneurs grossissent sans limite et remplissent le disque
+# (→ Postgres en read-only, API en 500). Appliquée via `logging: *default-logging`.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 networks:
   telecom_net:
     driver: bridge
@@ -16,6 +25,8 @@ services:
   nginx:
     image: nginx:1.25-alpine
     container_name: telecom_nginx
+    logging: *default-logging
+    mem_limit: 128m
     restart: unless-stopped
     ports:
       - "80:80"
@@ -43,6 +54,8 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
     container_name: telecom_web
+    logging: *default-logging
+    mem_limit: 768m
     restart: unless-stopped
     env_file: .env
     environment:
@@ -73,6 +86,8 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: telecom_api
+    logging: *default-logging
+    mem_limit: 1g
     restart: unless-stopped
     env_file: .env
     environment:
@@ -118,6 +133,8 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg16
     container_name: telecom_postgres
+    logging: *default-logging
+    mem_limit: 3g
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -149,6 +166,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: telecom_redis
+    logging: *default-logging
+    mem_limit: 1280m
     restart: unless-stopped
     command: >
       redis-server
@@ -169,6 +188,8 @@ services:
   minio:
     image: minio/minio:latest
     container_name: telecom_minio
+    logging: *default-logging
+    mem_limit: 512m
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -187,11 +208,13 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: telecom_prometheus
+    logging: *default-logging
+    mem_limit: 512m
     restart: unless-stopped
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=90d'
+      - '--storage.tsdb.retention.time=30d'
       - '--web.enable-lifecycle'
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -203,6 +226,8 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: telecom_grafana
+    logging: *default-logging
+    mem_limit: 256m
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
