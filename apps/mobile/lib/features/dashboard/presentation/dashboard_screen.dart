@@ -109,6 +109,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
               stream: sync.pendingCount,
               builder: (context, snap) => OfflineBanner(pendingCount: snap.data ?? 0),
             ),
+            // Bandeau d'alerte : opérations qui n'ont pas pu partir (échec serveur
+            // répété). Elles ne sont JAMAIS supprimées ; un appui relance l'envoi.
+            StreamBuilder<int>(
+              stream: sync.failedCount,
+              builder: (context, snap) {
+                final n = snap.data ?? 0;
+                if (n == 0) return const SizedBox.shrink();
+                return Material(
+                  color: Colors.red.shade50,
+                  child: InkWell(
+                    onTap: () async {
+                      final entries = await sync.failedEntries();
+                      if (!context.mounted) return;
+                      for (final e in entries) {
+                        sync.retryFailed(e.localId);
+                      }
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Nouvel essai des opérations en échec…')),
+                        );
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Row(children: [
+                        Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('$n opération(s) non envoyée(s) — vos saisies sont conservées. Touchez pour réessayer.',
+                              style: TextStyle(color: Colors.red.shade800, fontSize: 13, fontWeight: FontWeight.w500)),
+                        ),
+                        Icon(Icons.refresh, color: Colors.red.shade700, size: 18),
+                      ]),
+                    ),
+                  ),
+                );
+              },
+            ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async => _reload(),

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { idempotencyKey } from '../utils/idempotency';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendTabular } from '../utils/exporter';
@@ -200,6 +201,15 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     if (!siteId) throw new AppError('Site requis', 400);
     const ligneLivraisonId = b.ligneLivraisonId ? String(b.ligneLivraisonId) : null;
 
+    // Idempotence : le mobile envoie un UUID stable via le header Idempotency-Key,
+    // réutilisé comme identifiant du dépotage. Un rejeu de la file (réponse perdue
+    // sur réseau lent) retrouve le dépotage déjà créé et le renvoie sans doublon.
+    const clientUuid = idempotencyKey(req);
+    if (clientUuid) {
+      const deja = await prisma.depotage.findUnique({ where: { id: clientUuid } });
+      if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
+    }
+
     // Une ligne de plan ciblée doit appartenir AU MÊME site (anti-corruption croisée).
     if (ligneLivraisonId) {
       const ligne = await prisma.ligneLivraison.findUnique({ where: { id: ligneLivraisonId }, select: { siteId: true } });
@@ -245,6 +255,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     const depotage = await prisma.$transaction(async (tx) => {
       const dep = await tx.depotage.create({
         data: {
+          ...(clientUuid ? { id: clientUuid } : {}),
           siteId,
           ligneLivraisonId,
           dateDepotage: b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date(),
@@ -307,7 +318,16 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     }
 
     res.status(201).json({ success: true, data: depotage });
-  } catch (err) { next(err); }
+  } catch (err) {
+    // Rejeu concurrent : deux soumissions du même clientUuid arrivées avant que
+    // la 1re ne soit visible → collision de PK. On renvoie le dépotage existant.
+    const key = idempotencyKey(req);
+    if ((err as { code?: string }).code === 'P2002' && key) {
+      const deja = await prisma.depotage.findUnique({ where: { id: key } });
+      if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
+    }
+    next(err);
+  }
 }
 
 export async function updateDepotage(req: Request, res: Response, next: NextFunction) {

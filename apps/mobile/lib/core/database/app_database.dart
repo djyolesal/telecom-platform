@@ -57,8 +57,24 @@ class AppDatabase extends _$AppDatabase {
   // ── Outbox ─────────────────────────────────────────────────
   Future<int> enqueue(OutboxEntriesCompanion entry) => into(outboxEntries).insert(entry);
 
+  // Seuil au-delà duquel une entrée cesse d'être rejouée automatiquement et
+  // passe en « échec » (conservée en base, jamais supprimée → aucune perte).
+  static const kMaxRetries = 5;
+
+  /// File à rejouer : uniquement les entrées PAS encore en échec permanent,
+  /// plus anciennes d'abord (tiebreaker localId = ordre d'insertion stable).
   Future<List<OutboxEntry>> pendingOutbox() =>
-      (select(outboxEntries)..orderBy([(t) => OrderingTerm(expression: t.createdAt)])).get();
+      (select(outboxEntries)
+            ..where((t) => t.retries.isSmallerThanValue(kMaxRetries))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt), (t) => OrderingTerm(expression: t.localId)]))
+          .get();
+
+  /// Entrées en échec permanent (à présenter à l'utilisateur : réessayer/abandonner).
+  Future<List<OutboxEntry>> failedOutbox() =>
+      (select(outboxEntries)
+            ..where((t) => t.retries.isBiggerOrEqualValue(kMaxRetries))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+          .get();
 
   Future<void> removeOutbox(int localId) =>
       (delete(outboxEntries)..where((t) => t.localId.equals(localId))).go();
@@ -67,9 +83,26 @@ class AppDatabase extends _$AppDatabase {
       (update(outboxEntries)..where((t) => t.localId.equals(localId)))
           .write(OutboxEntriesCompanion(retries: Value(retries), lastError: Value(error)));
 
+  /// Relance manuelle d'une entrée en échec : compteur remis à zéro.
+  Future<void> retryOutbox(int localId) =>
+      (update(outboxEntries)..where((t) => t.localId.equals(localId)))
+          .write(const OutboxEntriesCompanion(retries: Value(0), lastError: Value(null)));
+
+  /// Nombre d'opérations encore à envoyer (hors échecs permanents).
   Stream<int> watchOutboxCount() {
     final count = outboxEntries.localId.count();
-    final q = selectOnly(outboxEntries)..addColumns([count]);
+    final q = selectOnly(outboxEntries)
+      ..addColumns([count])
+      ..where(outboxEntries.retries.isSmallerThanValue(kMaxRetries));
+    return q.map((row) => row.read(count) ?? 0).watchSingle();
+  }
+
+  /// Nombre d'opérations en échec permanent (à signaler à l'utilisateur).
+  Stream<int> watchFailedCount() {
+    final count = outboxEntries.localId.count();
+    final q = selectOnly(outboxEntries)
+      ..addColumns([count])
+      ..where(outboxEntries.retries.isBiggerOrEqualValue(kMaxRetries));
     return q.map((row) => row.read(count) ?? 0).watchSingle();
   }
 }

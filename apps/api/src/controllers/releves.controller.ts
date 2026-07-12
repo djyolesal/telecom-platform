@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { idempotencyKey } from '../utils/idempotency';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendTabular } from '../utils/exporter';
@@ -92,16 +93,46 @@ export async function getReleveById(req: Request, res: Response, next: NextFunct
 
 export async function createReleve(req: Request, res: Response, next: NextFunction) {
   try {
-    const coutEstime = estimerCout(req.body);
+    const b = req.body as Record<string, unknown>;
+    if (!b.siteId) throw new AppError('Site requis', 400);
+    if (!b.source) throw new AppError('Source requise', 400);
+
+    // Bornes : mêmes capacités que les colonnes Decimal (cf. import historique) —
+    // évite qu'une saisie aberrante devienne le stock/index courant du site.
+    const bounded = (v: unknown, max: number): number | null => {
+      const n = v == null || v === '' ? null : Number(v);
+      return n != null && Number.isFinite(n) && n >= 0 && n < max ? n : null;
+    };
+
+    // Idempotence (header Idempotency-Key → id) : un rejeu retrouve le relevé créé.
+    const clientUuid = idempotencyKey(req);
+    if (clientUuid) {
+      const deja = await prisma.releveEnergie.findUnique({ where: { id: clientUuid } });
+      if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
+    }
+
+    // Liste blanche stricte : jamais de gasoilConsommeLitres/isSynced/technicienId
+    // arbitraires depuis le client (mass-assignment fermé).
+    const coutEstime = estimerCout(b);
     const releve = await prisma.releveEnergie.create({
       data: {
-        ...req.body,
-        dateReleve: req.body.dateReleve ? new Date(req.body.dateReleve) : new Date(),
-        technicienId: req.body.technicienId ?? req.user!.id,
+        ...(clientUuid ? { id: clientUuid } : {}),
+        siteId: String(b.siteId),
+        source: b.source as never,
+        dateReleve: b.dateReleve ? new Date(String(b.dateReleve)) : new Date(),
+        technicienId: req.user!.id, // toujours l'utilisateur courant
+        groupeId: b.groupeId ? String(b.groupeId) : null,
+        indexCompteur: bounded(b.indexCompteur, 1e8),
+        indexHeuresGE: bounded(b.indexHeuresGE, 1e9),
+        volumeGasoilLitres: bounded(b.volumeGasoilLitres, 1e6),
+        puissanceKva: bounded(b.puissanceKva, 1e4),
+        observations: b.observations ? String(b.observations) : null,
+        latitude: b.latitude != null ? Number(b.latitude) : null,
+        longitude: b.longitude != null ? Number(b.longitude) : null,
         coutEstime,
       },
     });
-    await auditLog(req.user!.id, 'CREATE', 'releves', releve.id, req.body, req);
+    await auditLog(req.user!.id, 'CREATE', 'releves', releve.id, { siteId: b.siteId, source: b.source }, req);
     res.status(201).json({ success: true, data: releve });
   } catch (err) { next(err); }
 }

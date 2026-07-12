@@ -39,6 +39,9 @@ class SyncService {
 
   /// Démarre l'écoute de la connectivité pour synchroniser automatiquement.
   void start() {
+    // Drainage immédiat : une app relancée déjà en ligne avec une file pleine ne
+    // doit pas attendre un CHANGEMENT de connectivité pour envoyer ses opérations.
+    sync();
     _connSub = _network.onStatusChange.listen((online) {
       if (online) sync();
     });
@@ -47,6 +50,14 @@ class SyncService {
   void dispose() => _connSub?.cancel();
 
   Stream<int> get pendingCount => _db.watchOutboxCount();
+  /// Opérations en échec permanent (à signaler à l'utilisateur pour revue).
+  Stream<int> get failedCount => _db.watchFailedCount();
+  Future<List<OutboxEntry>> failedEntries() => _db.failedOutbox();
+  /// Relance manuelle d'une opération en échec (remet son compteur à zéro).
+  Future<void> retryFailed(int localId) async {
+    await _db.retryOutbox(localId);
+    await sync();
+  }
 
   /// Soumet une écriture : envoie immédiatement si en ligne, sinon met en file.
   ///
@@ -61,10 +72,14 @@ class SyncService {
     String method = 'POST',
     List<Map<String, String>>? attachments,
   }) async {
-    // clientUuid sert uniquement au suivi local (outbox) — il n'est PAS envoyé
-    // au serveur, sinon Prisma rejette ce champ inconnu (erreur 500).
+    // clientUuid : STABLE entre l'envoi direct et un éventuel rejeu depuis la file.
+    // Transmis au serveur via le header `Idempotency-Key` (clé réservée `_idem`
+    // dans le payload stocké, retirée avant l'envoi) → le serveur déduplique un
+    // dépotage/relevé dont la réponse a été perdue sur réseau lent. Pas dans le
+    // corps JSON : aucun risque pour les endpoints à liste blanche stricte.
     final clientUuid = _uuid.v4();
     final body = Map<String, dynamic>.from(payload);
+    body['_idem'] = clientUuid;
     // Les pièces jointes locales voyagent DANS le payload stocké (clé réservée
     // `_attachments`), retirée avant l'envoi réel → pas de migration Drift.
     if (attachments != null && attachments.isNotEmpty) {
@@ -106,14 +121,17 @@ class SyncService {
           await _db.removeOutbox(entry.localId);
           _logger.i('[sync] ${entry.entityType} envoyé (${entry.endpoint})');
         } on NetworkException {
-          break; // réseau coupé (ou upload photos KO) → on réessaiera plus tard
+          break; // réseau coupé → on réessaiera tout plus tard (rien n'est perdu)
         } catch (e) {
-          // Erreur serveur (ex: validation) → on incrémente le compteur et on abandonne après 5 essais
+          // Erreur SERVEUR (validation, refus…) propre à CETTE entrée : on compte
+          // un essai et on CONTINUE avec les suivantes (pas de blocage en tête).
+          // Après kMaxRetries, l'entrée n'est plus rejouée mais reste en base
+          // (visible via failedOutbox → écran « échecs », réessai manuel possible).
+          // JAMAIS de removeOutbox ici : une clôture/dépotage terrain ne se perd pas.
           final retries = entry.retries + 1;
           await _db.markOutboxError(entry.localId, retries, e.toString());
-          if (retries >= 5) {
-            await _db.removeOutbox(entry.localId);
-            _logger.w('[sync] ${entry.entityType} abandonné après 5 tentatives');
+          if (retries >= AppDatabase.kMaxRetries) {
+            _logger.w('[sync] ${entry.entityType} en échec (${entry.endpoint}) — conservé pour revue manuelle');
           }
         }
       }
@@ -126,6 +144,7 @@ class SyncService {
   /// (`_attachments`) vers MinIO, injecte les clés dans le corps, puis POST.
   /// En cas d'échec d'upload (hors-ligne), lève NetworkException → mise en file.
   Future<Map<String, dynamic>?> _process(String endpoint, String method, Map<String, dynamic> body) async {
+    final idempotencyKey = body.remove('_idem') as String?;
     final atts = (body.remove('_attachments') as List?) ?? const [];
     final uploadedPaths = <String>[];
 
@@ -162,7 +181,7 @@ class SyncService {
       if (photos.isNotEmpty) body['photos'] = photos;
     }
 
-    final data = await _send(endpoint, method, body);
+    final data = await _send(endpoint, method, body, idempotencyKey);
 
     // Envoi réussi → on libère les fichiers locaux mis en cache pour la sync.
     for (final p in uploadedPaths) {
@@ -173,12 +192,15 @@ class SyncService {
     return data;
   }
 
-  Future<Map<String, dynamic>?> _send(String endpoint, String method, Map<String, dynamic> body) {
+  Future<Map<String, dynamic>?> _send(String endpoint, String method, Map<String, dynamic> body, [String? idempotencyKey]) {
     return _client.request<Map<String, dynamic>?>(
       (dio) => dio.request(
         endpoint,
         data: body,
-        options: Options(method: method),
+        options: Options(
+          method: method,
+          headers: idempotencyKey != null ? {'Idempotency-Key': idempotencyKey} : null,
+        ),
       ),
       (data) => data is Map<String, dynamic> ? (data['data'] as Map<String, dynamic>?) : null,
     );

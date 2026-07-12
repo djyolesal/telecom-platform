@@ -397,8 +397,12 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
 
-    // Seule une maintenance EN COURS peut être clôturée (anti re-clôture : sinon un
-    // retry réseau / double-tap / re-sync re-appliquerait mouvement, relevés et photos).
+    // Rejeu idempotent : une maintenance DÉJÀ clôturée (retry réseau / re-sync)
+    // renvoie un succès sans rien réappliquer — le mobile considère l'op terminée.
+    if (existing.statut === 'TERMINEE') {
+      return res.json({ success: true, data: existing, idempotent: true });
+    }
+    // Seule une maintenance EN COURS peut être clôturée.
     if (existing.statut !== 'EN_COURS') {
       throw new AppError(`Cette maintenance ne peut pas être clôturée (statut : ${existing.statut}).`, 409);
     }
@@ -499,6 +503,16 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // numéro GE (P2002), car nextNumeroGE est un read-then-write.
     const runClose = () =>
       prisma.$transaction(async (tx) => {
+        // VERROU anti-double-clôture concurrente : le passage EN_COURS→TERMINEE
+        // est fait EN PREMIER et conditionné. Postgres verrouille la ligne ; une
+        // 2e transaction concurrente attend le commit puis voit statut TERMINEE →
+        // count 0 → on abandonne (rejeu idempotent), aucune écriture dupliquée.
+        const verrou = await tx.maintenance.updateMany({
+          where: { id: req.params.id, statut: 'EN_COURS' },
+          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath },
+        });
+        if (verrou.count === 0) throw Object.assign(new Error('ALREADY_CLOSED'), { alreadyClosed: true });
+
         if (pieces?.length) {
           await tx.pieceRechange.createMany({
             data: pieces.map((p) => ({ ...p, maintenanceId: existing.id })) as unknown as Prisma.PieceRechangeCreateManyInput[],
@@ -513,10 +527,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
           });
         }
 
-        let m = await tx.maintenance.update({
-          where: { id: req.params.id },
-          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath },
-        });
+        let m = await tx.maintenance.findUniqueOrThrow({ where: { id: req.params.id } });
 
         // Relevés énergie (un par source), consommations calculées par différence.
         let analyseEnergie: string | null = null;
@@ -624,6 +635,11 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     for (let attempt = 0; attempt < 4; attempt++) {
       try { updated = await runClose(); break; }
       catch (err) {
+        // Course concurrente perdue : l'autre transaction a clôturé → rejeu idempotent.
+        if ((err as { alreadyClosed?: boolean }).alreadyClosed) {
+          const m = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
+          return res.json({ success: true, data: m, idempotent: true });
+        }
         if ((err as { code?: string }).code === 'P2002' && attempt < 3) continue; // collision numéro GE → retry
         throw err;
       }
