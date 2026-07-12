@@ -163,7 +163,14 @@
       "Bash(nslookup emops.uk)",
       "Bash(dig +short www.emops.uk A)",
       "Bash(curl -sk -m 10 -o /dev/null -w \"HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/api/v1/config)",
-      "Bash(git commit -q -m 'feat\\(infra\\): domaine emops.uk + HTTPS Let'\\\\''s Encrypt *)"
+      "Bash(git commit -q -m 'feat\\(infra\\): domaine emops.uk + HTTPS Let'\\\\''s Encrypt *)",
+      "Bash(openssl s_client -connect emops.uk:443 -servername emops.uk)",
+      "Bash(curl -s -m 8 -o /dev/null -D - -H \"Origin: https://emops.uk\" https://emops.uk/api/v1/config)",
+      "Bash(curl -sk -m 10 -X POST https://emops.uk/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@telecom.tg\",\"password\":\"Telecom@2026\"}' -w '\\\\nHTTP %{http_code}\\\\n')",
+      "Bash(curl -sk -m 10 -o /dev/null -w \"config: HTTP %{http_code}\\\\n\" https://emops.uk/api/v1/config)",
+      "Bash(curl -sk -m 10 -o /dev/null -w \"config: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/api/v1/config)",
+      "Bash(curl -sk -m 10 -o /dev/null -w \"login: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 -X POST https://emops.uk/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@telecom.tg\",\"password\":\"Telecom@2026\"}')",
+      "Bash(curl -sk -m 10 -o /dev/null -w \"web: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/)"
     ]
   }
 }
