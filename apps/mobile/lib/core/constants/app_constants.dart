@@ -5,7 +5,7 @@ class AppConstants {
   /// URL de base de l'API. Surchargée au build via --dart-define=API_URL=...
   static const String apiBaseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://telecom.votredomaine.tg/api/v1',
+    defaultValue: 'https://emops.uk/api/v1',
   );
 
   static const Duration connectTimeout = Duration(seconds: 20);

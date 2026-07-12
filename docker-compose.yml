@@ -35,6 +35,11 @@ services:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./infra/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./infra/ssl:/etc/nginx/ssl:ro
+      # Certificats Let's Encrypt (emops.uk) montés en direct → le renouvellement
+      # met à jour les fichiers, un restart nginx suffit (pas de copie manuelle).
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Webroot pour la validation ACME au renouvellement (sans arrêter nginx).
+      - /opt/telecom/certbot-webroot:/var/www/certbot
       - logs_data:/var/log/nginx
     depends_on:
       api:

@@ -62,17 +62,17 @@ flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 
 # 4. Lancer (en pointant vers l'API)
-flutter run --dart-define=API_URL=https://telecom.votredomaine.tg/api/v1
+flutter run --dart-define=API_URL=https://emops.uk/api/v1
 ```
 
 ### Build release
 
 ```bash
 # Android (APK signé : configurer android/key.properties au préalable)
-flutter build apk --release --dart-define=API_URL=https://telecom.votredomaine.tg/api/v1
+flutter build apk --release --dart-define=API_URL=https://emops.uk/api/v1
 
 # iOS (archive Xcode)
-flutter build ipa --release --dart-define=API_URL=https://telecom.votredomaine.tg/api/v1
+flutter build ipa --release --dart-define=API_URL=https://emops.uk/api/v1
 ```
 
 ## Firebase Cloud Messaging (push)
