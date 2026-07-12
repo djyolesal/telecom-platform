@@ -42,7 +42,15 @@ app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) }
 app.use(metricsMiddleware);
 
 // ── Métriques Prometheus ──────────────────────────────────────
-app.get('/metrics', metricsHandler);
+// Scrapées par Prometheus DANS le réseau Docker interne. Si METRICS_TOKEN est
+// défini, l'exiger (défense en profondeur au cas où /metrics serait exposé).
+app.get('/metrics', (req, res) => {
+  const token = env.METRICS_TOKEN;
+  if (token && req.header('Authorization') !== `Bearer ${token}`) {
+    return res.status(401).end();
+  }
+  return metricsHandler(req, res);
+});
 
 // ── Swagger ───────────────────────────────────────────────────
 const swaggerOptions = {
@@ -59,7 +67,11 @@ const swaggerOptions = {
   },
   apis: ['./src/routes/*.ts'],
 };
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(swaggerOptions)));
+// Documentation d'API : exposée hors production uniquement (ne pas divulguer la
+// surface d'API en prod).
+if (env.NODE_ENV !== 'production') {
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(swaggerOptions)));
+}
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/health', async (_req, res) => {

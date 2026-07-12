@@ -44,7 +44,11 @@ const envSchema = z.object({
 
   // Divers
   APP_URL: z.string().default('http://localhost:3000'),
-  CORS_ORIGIN: z.string().default('*'),
+  // Origines autorisées (CORS + Socket.IO). Défaut = origine locale du portail
+  // (JAMAIS '*' avec credentials). En prod, fixer l'URL publique via l'env.
+  CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  // Jeton facultatif protégeant /metrics (défense en profondeur).
+  METRICS_TOKEN: z.string().optional(),
 
   // Règles terrain (configurables)
   MIN_DUREE_CLOTURE_MIN: z.coerce.number().default(60), // durée min (min) avant clôture
