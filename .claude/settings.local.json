@@ -155,7 +155,15 @@
       "Bash(sed -n '/export async function getEffectiveSettings/,/^}/p' apps/api/src/controllers/admin.controller.ts)",
       "Bash(python3 -m pip install --quiet --user pandas openpyxl)",
       "Bash(python3 -c ' *)",
-      "Bash(cd /Users/yohaness/Downloads/telecom-platform *)"
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform *)",
+      "Bash(grep -n \"data: req.body\\\\|req.body\\\\b\\\\|\\\\.\\\\.\\\\.req.body\\\\|data: { ...req.body\" maintenances.controller.ts incidents.controller.ts depotages.controller.ts releves.controller.ts sites.controller.ts actifs.controller.ts)",
+      "Bash(awk -F_ '{print $1\" \"$0}')",
+      "WebSearch",
+      "Bash(dig +short emops.uk A)",
+      "Bash(nslookup emops.uk)",
+      "Bash(dig +short www.emops.uk A)",
+      "Bash(curl -sk -m 10 -o /dev/null -w \"HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/api/v1/config)",
+      "Bash(git commit -q -m 'feat\\(infra\\): domaine emops.uk + HTTPS Let'\\\\''s Encrypt *)"
     ]
   }
 }
