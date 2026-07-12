@@ -170,7 +170,10 @@
       "Bash(curl -sk -m 10 -o /dev/null -w \"config: HTTP %{http_code}\\\\n\" https://emops.uk/api/v1/config)",
       "Bash(curl -sk -m 10 -o /dev/null -w \"config: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/api/v1/config)",
       "Bash(curl -sk -m 10 -o /dev/null -w \"login: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 -X POST https://emops.uk/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@telecom.tg\",\"password\":\"Telecom@2026\"}')",
-      "Bash(curl -sk -m 10 -o /dev/null -w \"web: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/)"
+      "Bash(curl -sk -m 10 -o /dev/null -w \"web: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/)",
+      "Bash(grep -n \"proxy_pass\\\\|set \\\\$\\\\|resolver\\\\|api:3001\\\\|web:3000\" infra/nginx/conf.d/telecom.conf)",
+      "Bash(docker run *)",
+      "Bash(git commit -q -m 'fix\\(infra\\): résolution DNS dynamique de l'\\\\''upstream API \\(fin des 502 après rebuild\\) *)"
     ]
   }
 }
