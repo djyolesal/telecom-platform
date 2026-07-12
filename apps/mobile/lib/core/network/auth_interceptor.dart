@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -62,7 +63,17 @@ class AuthInterceptor extends Interceptor {
     handler.next(err);
   }
 
-  Future<String?> _tryRefresh() async {
+  // Verrou : plusieurs requêtes en 401 simultanées (le dashboard en tire ~5)
+  // ne doivent lancer QU'UN SEUL refresh. Sinon, avec la rotation single-use des
+  // refresh tokens, le 2e appel échoue et déconnecte une session pourtant valide.
+  Future<String?>? _refreshing;
+
+  Future<String?> _tryRefresh() {
+    // Un refresh est déjà en cours → on attend son résultat (pas un 2e appel).
+    return _refreshing ??= _doRefresh().whenComplete(() => _refreshing = null);
+  }
+
+  Future<String?> _doRefresh() async {
     final refresh = await _storage.refreshToken;
     if (refresh == null) return null;
     try {
