@@ -3,7 +3,6 @@ import { logger } from '../utils/logger';
 import { stockAlertJob } from './stock-alert';
 import { maintenanceReminderJob } from './maintenance-reminder';
 import { monthlyReportJob } from './monthly-report';
-import { dbBackupJob } from './db-backup';
 import { incidentEscalationJob } from './incident-escalation';
 import { preventivePlanJob } from './preventive-plan';
 import { manquantAlertJob } from './manquant-alert';
@@ -28,11 +27,11 @@ export function setupCronJobs() {
     try { await monthlyReportJob(); } catch (e) { logger.error('[CRON] monthlyReport error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  // ── Backup BDD — tous les jours à 2h ───────────────────────
-  cron.schedule('0 2 * * *', async () => {
-    logger.info('[CRON] Démarrage backup base de données');
-    try { await dbBackupJob(); } catch (e) { logger.error('[CRON] dbBackup error:', e); }
-  }, { timezone: 'Africa/Lome' });
+  // ── Sauvegarde : PAS ici. La sauvegarde complète (base + fichiers MinIO +
+  // copie hors-site) est faite par le cron SYSTÈME de l'hôte qui appelle
+  // infra/scripts/backup.sh (le conteneur API n'a ni pg_dump ni accès au volume
+  // MinIO). Voir infra/scripts/setup-server.sh. Ne pas réintroduire de job de
+  // backup applicatif : il tournerait à vide et donnerait une fausse assurance.
 
   // ── Escalade incidents — toutes les heures ──────────────────
   cron.schedule('0 * * * *', async () => {
@@ -58,5 +57,5 @@ export function setupCronJobs() {
     try { await vidangeAlertJob(); } catch (e) { logger.error('[CRON] vidangeAlert error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 8 cron jobs planifiés (TZ: Africa/Lome)');
+  logger.info('✅ 7 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
 }

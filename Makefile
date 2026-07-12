@@ -90,19 +90,11 @@ migrate:
 	@echo "✅ Migrations appliquées"
 
 backup:
-	@echo "=== Backup PostgreSQL ==="
-	@mkdir -p /opt/telecom/backups
-	@DATE=$$(date +%Y%m%d_%H%M%S); \
-	PGPASSWORD=$$(grep POSTGRES_PASSWORD .env | cut -d= -f2) \
-	docker compose exec -T postgres pg_dump \
-		-U $$(grep POSTGRES_USER .env | cut -d= -f2) \
-		$$(grep POSTGRES_DB .env | cut -d= -f2) \
-		| gzip > /opt/telecom/backups/backup_$$DATE.sql.gz; \
-	echo "✅ Backup : /opt/telecom/backups/backup_$$DATE.sql.gz"
-	@echo "=== Nettoyage backups > 30 jours ==="
-	@find /opt/telecom/backups -name "*.sql.gz" -mtime +30 -delete
-	@echo "=== Backups disponibles ==="
-	@ls -lh /opt/telecom/backups/*.sql.gz 2>/dev/null || echo "(aucun)"
+	@# Sauvegarde COMPLÈTE (base + fichiers MinIO + copie hors-site si BACKUP_REMOTE).
+	@# Source unique de vérité, appelée par le cron système (voir setup-server.sh).
+	@bash infra/scripts/backup.sh
+	@echo "=== Sauvegardes disponibles ==="
+	@ls -lh /opt/telecom/backups/db_*.sql.gz /opt/telecom/backups/minio_*.tar.gz 2>/dev/null || echo "(aucune)"
 
 reset-sites:
 	@echo "⚠️  RESET COMPLET DES SITES"
