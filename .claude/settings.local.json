@@ -182,7 +182,12 @@
       "Bash(python3 -m pip install --quiet --user pyyaml)",
       "Bash(python3 -c \"import yaml; [yaml.safe_load\\(open\\(f\\)\\) for f in ['infra/prometheus/prometheus.yml','infra/prometheus/alerts.yml','infra/grafana/datasources/datasource.yml','infra/alertmanager/alertmanager.yml']]; print\\('✓ 4 fichiers YAML valides'\\)\")",
       "Bash(python3 -c \"import json; json.load\\(open\\('infra/grafana/dashboards/infra-sante.json'\\)\\); print\\('✓ dashboard JSON valide'\\)\")",
-      "Bash(git commit -q -m 'feat\\(infra\\): monitoring réel — node-exporter, alertes email, datasource Grafana *)"
+      "Bash(git commit -q -m 'feat\\(infra\\): monitoring réel — node-exporter, alertes email, datasource Grafana *)",
+      "Bash(mkdir -p \"apps/web/app/\\(portal\\)/fiabilite-ge\")",
+      "Bash(mv \"apps/web/app/\\(portal\\)/direction/fiabilite-ge/page.tsx\" \"apps/web/app/\\(portal\\)/fiabilite-ge/page.tsx\")",
+      "Bash(rmdir \"apps/web/app/\\(portal\\)/direction/fiabilite-ge\")",
+      "Bash(npm i *)",
+      "Bash(awk '/function geToDTO/{f=1} f{print} f&&/^}/{c++; if\\(c>=1 && /^}/\\){exit}}' src/controllers/actifs.controller.ts)"
     ]
   }
 }
