@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   LayoutDashboard, MapPin, Wrench, Fuel, Zap, AlertTriangle,
-  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes
+  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/shared/NotificationBell';
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/actifs',                   label: "Parc d'actifs",     icon: Boxes,            roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/carburant/stock',          label: 'Carburant',         icon: Fuel,             roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/carburant/commandes',       label: 'Appro. carburant',  icon: Truck,            roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
+  { href: '/carburant/pertes',         label: 'Pertes carburant',  icon: ShieldAlert,      roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { href: '/energie',                  label: 'Énergie',           icon: Zap,              roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/incidents',                label: 'Incidents',         icon: AlertTriangle,    roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/rapports',                 label: 'Rapports',          icon: BarChart3,        roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
