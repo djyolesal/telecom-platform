@@ -173,7 +173,16 @@
       "Bash(curl -sk -m 10 -o /dev/null -w \"web: HTTP %{http_code}\\\\n\" --resolve emops.uk:443:41.78.137.83 https://emops.uk/)",
       "Bash(grep -n \"proxy_pass\\\\|set \\\\$\\\\|resolver\\\\|api:3001\\\\|web:3000\" infra/nginx/conf.d/telecom.conf)",
       "Bash(docker run *)",
-      "Bash(git commit -q -m 'fix\\(infra\\): résolution DNS dynamique de l'\\\\''upstream API \\(fin des 502 après rebuild\\) *)"
+      "Bash(git commit -q -m 'fix\\(infra\\): résolution DNS dynamique de l'\\\\''upstream API \\(fin des 502 après rebuild\\) *)",
+      "Bash(curl -sk -m 20 -X POST https://emops.uk/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@telecom.tg\",\"password\":\"Telecom@2026\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(sed -n '/export function analyseGasoilCoherence/,/^}/p' src/utils/energy.ts)",
+      "Bash(sed -n '/export function analyseLivraison/,/^}/p' src/utils/energy.ts)",
+      "Bash(sed -n '/^  prometheus:/,/^  grafana:/p' docker-compose.yml)",
+      "Bash(sed -n '/^  grafana:/,/networks/p' docker-compose.yml)",
+      "Bash(python3 -m pip install --quiet --user pyyaml)",
+      "Bash(python3 -c \"import yaml; [yaml.safe_load\\(open\\(f\\)\\) for f in ['infra/prometheus/prometheus.yml','infra/prometheus/alerts.yml','infra/grafana/datasources/datasource.yml','infra/alertmanager/alertmanager.yml']]; print\\('✓ 4 fichiers YAML valides'\\)\")",
+      "Bash(python3 -c \"import json; json.load\\(open\\('infra/grafana/dashboards/infra-sante.json'\\)\\); print\\('✓ dashboard JSON valide'\\)\")",
+      "Bash(git commit -q -m 'feat\\(infra\\): monitoring réel — node-exporter, alertes email, datasource Grafana *)"
     ]
   }
 }
