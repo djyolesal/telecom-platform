@@ -1,0 +1,20 @@
+global:
+  smtp_smarthost: 'smtp-relay.brevo.com:587'
+  smtp_from: 'E&M OpS Alertes <noreply@emops.uk>'
+  smtp_auth_username: 'REMPLACER_PAR_LOGIN_SMTP_BREVO'
+  # Le mot de passe SMTP est lu depuis un fichier monté (jamais versionné).
+  smtp_auth_password_file: '/etc/alertmanager/smtp_password'
+  smtp_require_tls: true
+
+route:
+  receiver: 'email-admin'
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 6h        # ne pas spammer : un rappel toutes les 6 h tant que ça dure
+
+receivers:
+  - name: 'email-admin'
+    email_configs:
+      - to: 'mindhirou@gmail.com'
+        send_resolved: true

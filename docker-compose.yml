@@ -223,8 +223,39 @@ services:
       - '--web.enable-lifecycle'
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     expose: ["9090"]
+    depends_on: [node-exporter, alertmanager]
+    networks: [telecom_net]
+
+  # ── NODE EXPORTER (métriques hôte : disque, RAM, CPU) ─────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: telecom_node_exporter
+    logging: *default-logging
+    mem_limit: 64m
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave
+    expose: ["9100"]
+    networks: [telecom_net]
+
+  # ── ALERTMANAGER (notifications email des alertes) ────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: telecom_alertmanager
+    logging: *default-logging
+    mem_limit: 64m
+    restart: unless-stopped
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Mot de passe SMTP Brevo (fichier créé sur l'hôte, non versionné).
+      - /opt/telecom/secrets/alertmanager-smtp-password:/etc/alertmanager/smtp_password:ro
+    expose: ["9093"]
     networks: [telecom_net]
 
   # ── GRAFANA ───────────────────────────────────────────────────
@@ -244,6 +275,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      # Datasource Prometheus provisionnée (sinon les dashboards n'ont aucune source).
+      - ./infra/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     expose: ["3000"]
     depends_on: [prometheus]
     networks: [telecom_net]

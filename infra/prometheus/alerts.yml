@@ -1,0 +1,45 @@
+groups:
+  - name: infrastructure
+    rules:
+      # Disque hôte : la panne la plus grave (Postgres passe en read-only, API 500).
+      - alert: DisqueBientotPlein
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.80
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Disque hôte à plus de 80 %"
+          description: "L'espace disque de / dépasse 80 %. Purger logs/backups/anciennes données avant saturation."
+
+      - alert: DisquePresqueSature
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.92
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Disque hôte à plus de 92 % — CRITIQUE"
+          description: "Risque imminent d'arrêt (Postgres read-only, sauvegardes en échec). Libérer de l'espace immédiatement."
+
+      # Mémoire hôte saturée → risque d'OOM-kill (peut tuer Postgres).
+      - alert: MemoireHauteHote
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Mémoire hôte à plus de 90 %"
+          description: "Risque d'OOM-kill. Vérifier les conteneurs et les requêtes lourdes."
+
+      # API injoignable par Prometheus (crash, boucle de redémarrage).
+      - alert: ApiInjoignable
+        expr: up{job="telecom-api"} == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "API injoignable depuis 3 min"
+          description: "Le service API ne répond plus à Prometheus (crash / crash-loop). Les techniciens terrain sont impactés."
+
+      - alert: SondeHoteInjoignable
+        expr: up{job="node"} == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Sonde node-exporter injoignable"
+          description: "Plus de métriques hôte (disque/RAM) — surveillance aveugle."
