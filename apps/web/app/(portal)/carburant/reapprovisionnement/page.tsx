@@ -21,7 +21,7 @@ const PRIO_LABEL: Record<string, string> = { CRITIQUE: 'Critique', URGENT: 'Urge
 
 interface SiteForecast { siteId: string; code: string; nom: string; region: string; stockActuel: number; consoJour: number; source: string; tendance: string; autonomieJours: number | null; dateLivraisonCible: string | null; joursAvantLivraison: number | null; quantiteRecommandee: number; priorite: string }
 interface Anomalie { siteId: string; code: string; nom: string; region: string; consoReelleJour: number; consoTheoriqueJour: number; ecartPct: number; type: string; tendance: string; manquantAssocie: boolean; severite: string }
-interface Tournee { region: string; sites: Array<{ siteId: string; code: string; nom: string; quantite: number }>; total: number; capacite: number; distanceKm: number; tauxRemplissage: number }
+interface Tournee { region: string; sites: Array<{ siteId: string; code: string; nom: string; quantite: number; passage?: number; nbPassages?: number }>; total: number; capacite: number; distanceKm: number; tauxRemplissage: number }
 interface ReapproData { sites: SiteForecast[]; tournees: Tournee[]; params: { horizonJours: number; capaciteCamion: number }; totaux: { nbSites: number; nbCritiques: number; volumeRecommande: number; nbTournees: number; totalKm: number; tauxRemplissageMoyen: number } }
 interface BCOption { id: string; numero: string }
 
@@ -153,8 +153,16 @@ export default function ReapprovisionnementPage() {
                     <div className="h-1.5 w-full rounded bg-gray-100 mb-1"><div className="h-1.5 rounded bg-[#0E7C6B]" style={{ width: `${pct}%` }} /></div>
                     <p className="text-xs text-gray-400 mb-3">≈ {fmtNumber(tr.distanceKm)} km de tournée</p>
                     <ul className="text-sm space-y-1 mb-3 max-h-40 overflow-y-auto">
-                      {tr.sites.map((s) => (
-                        <li key={s.siteId} className="flex justify-between"><span className="text-gray-700">{s.code} <span className="text-gray-400">{s.nom}</span></span><span className="font-medium">{fmtNumber(s.quantite)} L</span></li>
+                      {tr.sites.map((s, si) => (
+                        <li key={`${s.siteId}-${si}`} className="flex justify-between">
+                          <span className="text-gray-700">
+                            {s.code} <span className="text-gray-400">{s.nom}</span>
+                            {s.nbPassages && s.nbPassages > 1 && (
+                              <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700" title="Ce site nécessite plusieurs camions">passage {s.passage}/{s.nbPassages}</span>
+                            )}
+                          </span>
+                          <span className="font-medium">{fmtNumber(s.quantite)} L</span>
+                        </li>
                       ))}
                     </ul>
                     {created ? (

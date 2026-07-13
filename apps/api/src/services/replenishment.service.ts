@@ -28,11 +28,36 @@ export interface SiteForecast {
 
 export interface Tournee {
   region: string;
-  sites: Array<{ siteId: string; code: string; nom: string; quantite: number }>;
+  // passage/nbPassages : un site dont le besoin dépasse un camion est livré en
+  // plusieurs fois (ex. passage 1/2) — plus de troncage silencieux du surplus.
+  sites: Array<{ siteId: string; code: string; nom: string; quantite: number; passage?: number; nbPassages?: number }>;
   total: number;
   capacite: number;
   distanceKm: number;        // longueur estimée de la tournée (route optimisée)
   tauxRemplissage: number;   // % de la capacité camion utilisée
+}
+
+// Demande unitaire ≤ capacité camion (part d'un site, avec son n° de passage).
+type Demande = SiteForecast & { _part: number; _passage: number; _nbPassages: number };
+
+/**
+ * Découpe chaque besoin en demandes livrables par UN camion : un site nécessitant
+ * plus que la capacité génère plusieurs demandes (ex. 15 000 L / camion 10 000 →
+ * 10 000 + 5 000). Le surplus n'est plus perdu — il part sur un autre passage.
+ */
+function explodeDemandes(forecasts: SiteForecast[], capacite: number): Demande[] {
+  const out: Demande[] = [];
+  for (const f of forecasts) {
+    if (f.quantiteRecommandee <= 0) continue;
+    const nb = Math.max(1, Math.ceil(f.quantiteRecommandee / capacite));
+    let reste = f.quantiteRecommandee;
+    for (let i = 0; i < nb; i++) {
+      const part = Math.min(reste, capacite);
+      reste -= part;
+      out.push({ ...f, quantiteRecommandee: part, _part: part, _passage: i + 1, _nbPassages: nb });
+    }
+  }
+  return out;
 }
 
 /** Pente d'une régression linéaire simple y = a·x + b (moindres carrés). */
@@ -221,8 +246,10 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
  * KILOMÈTRES (ordre intra-tournée par plus-proche-voisin puis amélioration 2-opt).
  */
 export function suggestTournees(forecasts: SiteForecast[], capacite = getNum('appro.camionCapaciteLitres', env.CAMION_CAPACITE_LITRES)): Tournee[] {
-  const dus = forecasts.filter((f) => f.quantiteRecommandee > 0);
-  const parRegion = new Map<string, SiteForecast[]>();
+  // Découpe d'abord les besoins en demandes ≤ capacité (gros site = plusieurs
+  // passages), PUIS regroupe — le surplus n'est plus jamais perdu.
+  const dus = explodeDemandes(forecasts, capacite);
+  const parRegion = new Map<string, Demande[]>();
   for (const f of dus) {
     const arr = parRegion.get(f.region) ?? [];
     arr.push(f);
@@ -235,21 +262,24 @@ export function suggestTournees(forecasts: SiteForecast[], capacite = getNum('ap
     const sansGeo = list.filter((f) => f.latitude == null || f.longitude == null);
 
     // 1) Regroupement capacitaire par balayage angulaire autour du barycentre.
-    const loads = sweepCapacitated(geo, capacite);
+    const loads = sweepCapacitated(geo, capacite) as Demande[][];
     // 2) Sites sans coordonnées : placés au mieux (premier camion ayant de la place).
     for (const f of sansGeo) {
-      const q = Math.min(f.quantiteRecommandee, capacite);
-      const slot = loads.find((l) => l.reduce((s, x) => s + Math.min(x.quantiteRecommandee, capacite), 0) + q <= capacite);
+      const q = f._part;
+      const slot = loads.find((l) => l.reduce((s, x) => s + x._part, 0) + q <= capacite);
       if (slot) slot.push(f); else loads.push([f]);
     }
 
     // 3) Pour chaque camion : ordre optimisé + distance.
     for (const load of loads) {
-      const ordered = twoOpt(nearestNeighbour(load));
-      const total = ordered.reduce((s, f) => s + Math.min(f.quantiteRecommandee, capacite), 0);
+      const ordered = twoOpt(nearestNeighbour(load)) as Demande[];
+      const total = ordered.reduce((s, f) => s + f._part, 0);
       tournees.push({
         region,
-        sites: ordered.map((f) => ({ siteId: f.siteId, code: f.code, nom: f.nom, quantite: Math.min(f.quantiteRecommandee, capacite) })),
+        sites: ordered.map((f) => ({
+          siteId: f.siteId, code: f.code, nom: f.nom, quantite: f._part,
+          ...(f._nbPassages > 1 ? { passage: f._passage, nbPassages: f._nbPassages } : {}),
+        })),
         total,
         capacite,
         distanceKm: Math.round(pathDistance(ordered) * 10) / 10,

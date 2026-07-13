@@ -47,11 +47,16 @@ describe('suggestTournees', () => {
     expect(t.length).toBe(2); // une tournée par région
   });
 
-  it('plafonne une quantité supérieure à la capacité', () => {
+  it('découpe un besoin supérieur à la capacité en plusieurs passages (rien perdu)', () => {
     const t = suggestTournees([site({ quantiteRecommandee: 15000 })], 10000);
-    expect(t).toHaveLength(1);
-    expect(t[0].sites[0].quantite).toBe(10000);
-    expect(t[0].total).toBe(10000);
+    // 15 000 L / camion 10 000 → 2 tournées (10 000 + 5 000), surplus conservé.
+    expect(t).toHaveLength(2);
+    const volumeTotal = t.reduce((s, x) => s + x.total, 0);
+    expect(volumeTotal).toBe(15000);
+    // Chaque part est marquée passage i / 2.
+    const parts = t.flatMap((x) => x.sites.map((s) => s.quantite)).sort((a, b) => b - a);
+    expect(parts).toEqual([10000, 5000]);
+    expect(t.every((x) => x.sites.every((s) => s.nbPassages === 2))).toBe(true);
   });
 
   it('calcule le taux de remplissage et la distance', () => {
