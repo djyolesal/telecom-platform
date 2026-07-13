@@ -7,6 +7,7 @@ import { geParams } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
 import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
+import { geReliabilityByMarque } from '../services/geReliability.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 
@@ -510,5 +511,14 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
           .slice(0, 10),
       },
     });
+  } catch (err) { next(err); }
+}
+
+/** Fiabilité des GE par marque (pannes rapportées au parc + MTBF). */
+export async function getFiabiliteGE(req: Request, res: Response, next: NextFunction) {
+  try {
+    const jours = req.query.jours ? parseInt(String(req.query.jours), 10) : 180;
+    const data = await geReliabilityByMarque({ jours });
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 }
