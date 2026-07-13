@@ -402,3 +402,113 @@ export async function getAnomaliesCarburant(req: Request, res: Response, next: N
     });
   } catch (err) { next(err); }
 }
+
+/**
+ * Tableau de bord Direction : indicateurs consolidés et financiers sur une
+ * fenêtre de N mois (coûts énergie, pertes carburant, tendance, top sites,
+ * performance maintenance/incidents). S'appuie sur les données déjà agrégées.
+ */
+export async function getDashboardDirection(req: Request, res: Response, next: NextFunction) {
+  try {
+    const mois = req.query.mois ? Math.max(1, Math.min(24, parseInt(String(req.query.mois), 10))) : 6;
+    const depuis = startOfMonth(subMonths(new Date(), mois - 1));
+
+    const [releves, maints, incidents, anomalies, nbSitesActifs] = await Promise.all([
+      prisma.releveEnergie.findMany({
+        where: { dateReleve: { gte: depuis } },
+        select: { dateReleve: true, source: true, coutEstime: true, gasoilConsommeLitres: true,
+          site: { select: { id: true, code: true, nom: true, region: true } } },
+      }),
+      prisma.maintenance.findMany({
+        where: { datePlanifiee: { gte: depuis } },
+        select: { type: true, statut: true },
+      }),
+      prisma.incident.findMany({
+        where: { dateOuverture: { gte: depuis } },
+        select: { statut: true, dureeCoupureMinutes: true, delaiInterventionMinutes: true, site: { select: { region: true } } },
+      }),
+      detectFuelAnomalies({ jours: mois * 30 }),
+      prisma.site.count({ where: { isActive: true } }),
+    ]);
+
+    // ── Coûts énergie (gasoil vs CEET) + série mensuelle ──
+    const moisKeys: string[] = [];
+    for (let i = mois - 1; i >= 0; i--) moisKeys.push(format(subMonths(new Date(), i), 'MMM yy'));
+    const serie = new Map(moisKeys.map((k) => [k, { mois: k, coutGasoil: 0, coutCeet: 0, gasoilLitres: 0 }]));
+    let coutGasoil = 0, coutCeet = 0, gasoilLitres = 0;
+    const parRegion = new Map<string, { region: string; coutEnergie: number; gasoilLitres: number; incidents: number }>();
+    const parSite = new Map<string, { code: string; nom: string; region: string; coutEnergie: number }>();
+
+    for (const r of releves) {
+      const cout = r.coutEstime != null ? Number(r.coutEstime) : 0;
+      const litres = r.gasoilConsommeLitres != null ? Number(r.gasoilConsommeLitres) : 0;
+      const key = format(r.dateReleve, 'MMM yy');
+      const bucket = serie.get(key);
+      if (r.source === 'GE') { coutGasoil += cout; gasoilLitres += litres; if (bucket) { bucket.coutGasoil += cout; bucket.gasoilLitres += litres; } }
+      else if (r.source === 'CEET') { coutCeet += cout; if (bucket) bucket.coutCeet += cout; }
+
+      const reg = r.site?.region ?? '—';
+      const pr = parRegion.get(reg) ?? { region: reg, coutEnergie: 0, gasoilLitres: 0, incidents: 0 };
+      pr.coutEnergie += cout; pr.gasoilLitres += litres; parRegion.set(reg, pr);
+
+      if (r.site) {
+        const ps = parSite.get(r.site.id) ?? { code: r.site.code, nom: r.site.nom, region: r.site.region, coutEnergie: 0 };
+        ps.coutEnergie += cout; parSite.set(r.site.id, ps);
+      }
+    }
+    for (const i of incidents) {
+      const reg = i.site?.region ?? '—';
+      const pr = parRegion.get(reg) ?? { region: reg, coutEnergie: 0, gasoilLitres: 0, incidents: 0 };
+      pr.incidents += 1; parRegion.set(reg, pr);
+    }
+
+    // ── Performance maintenance (respect du préventif) ──
+    const prev = maints.filter((m) => m.type === 'PREVENTIVE');
+    const prevRealisees = prev.filter((m) => m.statut === 'TERMINEE').length;
+    const curatives = maints.filter((m) => m.type === 'CURATIVE').length;
+
+    // ── Incidents : MTTR / MTTA ──
+    const resolus = incidents.filter((i) => i.dureeCoupureMinutes != null);
+    const mttr = resolus.length ? Math.round(resolus.reduce((s, i) => s + (i.dureeCoupureMinutes ?? 0), 0) / resolus.length) : null;
+    const avecDelai = incidents.filter((i) => i.delaiInterventionMinutes != null);
+    const mtta = avecDelai.length ? Math.round(avecDelai.reduce((s, i) => s + (i.delaiInterventionMinutes ?? 0), 0) / avecDelai.length) : null;
+
+    const pertesFCFA = anomalies.reduce((s, a) => s + a.perteFCFA, 0);
+    const pertesLitres = anomalies.reduce((s, a) => s + a.perteTotaleLitres, 0);
+
+    res.json({
+      success: true,
+      data: {
+        periodeMois: mois,
+        kpis: {
+          coutEnergieFCFA: Math.round(coutGasoil + coutCeet),
+          coutGasoilFCFA: Math.round(coutGasoil),
+          coutCeetFCFA: Math.round(coutCeet),
+          gasoilLitres: Math.round(gasoilLitres),
+          pertesCarburantFCFA: pertesFCFA,
+          pertesCarburantLitres: pertesLitres,
+          partPertes: gasoilLitres > 0 ? Math.round((pertesLitres / gasoilLitres) * 100) : 0,
+          nbSitesActifs,
+          tauxPreventif: prev.length ? Math.round((prevRealisees / prev.length) * 100) : null,
+          preventivesRealisees: prevRealisees,
+          preventivesPlanifiees: prev.length,
+          curatives,
+          incidentsTotal: incidents.length,
+          incidentsOuverts: incidents.filter((i) => ['OUVERT', 'EN_COURS'].includes(i.statut)).length,
+          mttrMinutes: mttr,
+          mttaMinutes: mtta,
+        },
+        serieMensuelle: Array.from(serie.values()).map((s) => ({
+          mois: s.mois, coutGasoil: Math.round(s.coutGasoil), coutCeet: Math.round(s.coutCeet), gasoilLitres: Math.round(s.gasoilLitres),
+        })),
+        parRegion: Array.from(parRegion.values())
+          .map((r) => ({ ...r, coutEnergie: Math.round(r.coutEnergie), gasoilLitres: Math.round(r.gasoilLitres) }))
+          .sort((a, b) => b.coutEnergie - a.coutEnergie),
+        topSitesCouteux: Array.from(parSite.values())
+          .map((s) => ({ ...s, coutEnergie: Math.round(s.coutEnergie) }))
+          .sort((a, b) => b.coutEnergie - a.coutEnergie)
+          .slice(0, 10),
+      },
+    });
+  } catch (err) { next(err); }
+}
