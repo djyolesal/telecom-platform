@@ -69,6 +69,12 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'appro.securiteJours', label: 'Stock de sécurité', groupe: 'Carburant — réappro', unite: 'j', defaut: env.APPRO_STOCK_SECURITE_JOURS },
     { key: 'appro.horizonJours', label: 'Horizon de planification', groupe: 'Carburant — réappro', unite: 'j', defaut: env.APPRO_HORIZON_JOURS },
     { key: 'appro.camionCapaciteLitres', label: 'Capacité camion', groupe: 'Carburant — réappro', unite: 'L', defaut: env.CAMION_CAPACITE_LITRES },
+    // SLA prestataires (engagements contractuels + pénalités)
+    { key: 'sla.delaiResolutionMaxH', label: 'Délai max de résolution incident', groupe: 'SLA prestataires', unite: 'h', defaut: 24 },
+    { key: 'sla.tauxPreventifMinPct', label: 'Taux de préventif minimal', groupe: 'SLA prestataires', unite: '%', defaut: 95 },
+    { key: 'sla.tolerancePreventifJours', label: 'Tolérance retard préventif', groupe: 'SLA prestataires', unite: 'j', defaut: 7 },
+    { key: 'sla.penaliteResolutionFCFA', label: 'Pénalité par incident hors délai', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 50000 },
+    { key: 'sla.penalitePreventifFCFA', label: 'Pénalité par point de préventif manquant', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 100000 },
   ];
 }
 

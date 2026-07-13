@@ -8,6 +8,7 @@ import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.ser
 import { computeManquants } from '../services/manquants.service';
 import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
 import { geReliabilityByMarque } from '../services/geReliability.service';
+import { computeSla } from '../services/slaCompliance.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 
@@ -520,5 +521,13 @@ export async function getFiabiliteGE(req: Request, res: Response, next: NextFunc
     const jours = req.query.jours ? parseInt(String(req.query.jours), 10) : 180;
     const data = await geReliabilityByMarque({ jours });
     res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+/** Conformité SLA par prestataire (respect délais + préventif, pénalités). */
+export async function getSlaPrestataires(req: Request, res: Response, next: NextFunction) {
+  try {
+    const jours = req.query.jours ? parseInt(String(req.query.jours), 10) : 90;
+    res.json({ success: true, data: await computeSla({ jours }) });
   } catch (err) { next(err); }
 }
