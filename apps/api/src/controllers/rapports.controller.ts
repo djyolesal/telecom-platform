@@ -6,6 +6,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
+import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 
@@ -369,6 +370,34 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
           tauxConformite: maints.length ? Math.round((conformes / maints.length) * 100) : 0,
         },
         parPrestataire,
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Sites suspects de perte/vol de carburant, triés par score. S'appuie sur les
+ * écarts déjà réconciliés à chaque dépotage (surconsommation, manquant livraison).
+ */
+export async function getAnomaliesCarburant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const jours = req.query.jours ? parseInt(String(req.query.jours), 10) : 90;
+    const tous = await detectFuelAnomalies({ jours });
+    // Par défaut on ne renvoie que les sites réellement à risque (score > 0),
+    // sauf ?all=true (export/analyse complète).
+    const data = String(req.query.all) === 'true' ? tous : tous.filter((s) => s.score > 0);
+    const totalPerteFCFA = data.reduce((s, x) => s + x.perteFCFA, 0);
+    const totalPerteLitres = data.reduce((s, x) => s + x.perteTotaleLitres, 0);
+    res.json({
+      success: true,
+      data,
+      meta: {
+        jours,
+        nbSites: data.length,
+        critiques: data.filter((s) => s.niveau === 'CRITIQUE').length,
+        suspects: data.filter((s) => s.niveau === 'SUSPECT').length,
+        totalPerteLitres,
+        totalPerteFCFA,
       },
     });
   } catch (err) { next(err); }

@@ -144,6 +144,7 @@ router.get('/rapports/correlation-carburant', carburantCtrl.getCorrelationCarbur
 // ── Réapprovisionnement prédictif ─────────────────────────────
 router.get('/rapports/reapprovisionnement', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getReapprovisionnement);
 router.get('/rapports/anomalies-conso', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getAnomaliesConso);
+router.get('/rapports/anomalies-carburant', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR', 'DIRECTION']), rapportsCtrl.getAnomaliesCarburant);
 router.get('/rapports/synthese-appro', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getSyntheseAppro);
 router.post('/bons-livraison/brouillon', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBrouillonLivraison);
 
