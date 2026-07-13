@@ -15,6 +15,7 @@ interface Actif { id: string; actifType: string; categorie: string; libelle: str
 
 const NATURE_OPTIONS = [
   { value: 'ENTRETIEN', label: 'Entretien (tâche contractuelle)' },
+  { value: 'CURATIVE', label: 'Dépannage / curative (GE en panne)' },
   { value: 'INSTALLATION', label: 'Installation d’un actif' },
   { value: 'DESINSTALLATION', label: 'Désinstallation d’un actif' },
   { value: 'DEPLACEMENT', label: 'Déplacement d’un actif' },
@@ -32,6 +33,8 @@ export default function NouvelleMaintenancePage() {
   });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const isEntretien = form.nature === 'ENTRETIEN';
+  const isCurative = form.nature === 'CURATIVE';
+  const isMouvement = !isEntretien && !isCurative;
   const needsDest = form.nature === 'INSTALLATION' || form.nature === 'DEPLACEMENT';
 
   const { data: sites } = useQuery({
@@ -51,8 +54,15 @@ export default function NouvelleMaintenancePage() {
   const { data: actifs } = useQuery<Actif[]>({
     queryKey: ['actifs-picker', form.nature],
     queryFn: () => api.get('/actifs', { params: form.nature === 'INSTALLATION' ? { en_stock: 'true' } : { statut: 'EN_SERVICE' } }).then((r) => r.data.data),
-    enabled: !isEntretien,
+    enabled: isMouvement,
   });
+  // GE du site sélectionné (dépannage curatif : on impute la panne à un GE précis).
+  const { data: gesDuSite } = useQuery<Actif[]>({
+    queryKey: ['ges-site', form.siteId],
+    queryFn: () => api.get('/actifs', { params: { type: 'GE', site_id: form.siteId } }).then((r) => r.data.data),
+    enabled: isCurative && !!form.siteId,
+  });
+  const geOptions = (gesDuSite ?? []).map((g) => ({ value: g.id, label: g.libelle ?? 'GE' }));
 
   const siteOptions = (sites ?? []).map((s: { id: string; nom: string }) => ({ value: s.id, label: s.nom }));
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
@@ -74,6 +84,20 @@ export default function NouvelleMaintenancePage() {
         return api.post('/maintenances', {
           siteId: form.siteId, type: 'PREVENTIVE',
           categorie: tache.categorie, equipement: tache.libelle, tachePreventiveKey: tache.key,
+          description: form.description || undefined,
+          datePlanifiee: new Date(form.datePlanifiee).toISOString(),
+          technicienId: form.technicienId || undefined,
+        });
+      }
+      // Dépannage curatif rattaché à un GE précis (pas un mouvement d'actif).
+      if (isCurative) {
+        if (!form.siteId) throw new Error('Sélectionnez un site.');
+        if (!form.actifKey) throw new Error('Sélectionnez le GE concerné.');
+        const ge = (gesDuSite ?? []).find((g) => g.id === form.actifKey);
+        return api.post('/maintenances', {
+          siteId: form.siteId, type: 'CURATIVE', categorie: 'GE',
+          equipement: `Dépannage — ${ge?.libelle ?? 'GE'}`,
+          actifType: 'GE', actifId: form.actifKey,
           description: form.description || undefined,
           datePlanifiee: new Date(form.datePlanifiee).toISOString(),
           technicienId: form.technicienId || undefined,
@@ -121,6 +145,16 @@ export default function NouvelleMaintenancePage() {
               </Field>
               <Field label="Tâche contractuelle" required className="md:col-span-2">
                 <Select value={form.tacheKey} onChange={(e) => set('tacheKey', e.target.value)} required disabled={!form.siteId} options={tacheOptions} placeholder={form.siteId ? 'Sélectionner une tâche…' : 'Choisissez d’abord un site'} />
+              </Field>
+            </>
+          ) : isCurative ? (
+            <>
+              <Field label="Site" required className="md:col-span-2">
+                <SearchableSelect value={form.siteId} onChange={(v) => { set('siteId', v); set('actifKey', ''); }} options={siteOptions} placeholder="Rechercher / sélectionner un site…" />
+              </Field>
+              <Field label="GE concerné" required className="md:col-span-2">
+                <Select value={form.actifKey} onChange={(e) => set('actifKey', e.target.value)} required disabled={!form.siteId}
+                  options={geOptions} placeholder={form.siteId ? (geOptions.length ? 'Sélectionner le GE en panne…' : 'Aucun GE sur ce site') : 'Choisissez d’abord un site'} />
               </Field>
             </>
           ) : (

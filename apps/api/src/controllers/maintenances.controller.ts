@@ -274,6 +274,13 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
         where: { actifId: data.actifId, natureTravaux: { not: 'ENTRETIEN' }, statut: { in: ['PLANIFIEE', 'EN_COURS'] } },
       });
       if (open) throw new AppError('Un mouvement est déjà planifié ou en cours pour cet actif.', 409);
+    } else if (data.actifId) {
+      // Curative/entretien RATTACHÉ à un GE précis (pour la fiabilité par marque) :
+      // pas un mouvement, mais on valide que le GE existe et est bien sur le site.
+      if (data.actifType !== 'GE') throw new AppError('Seul un GE peut être rattaché à une intervention d’entretien.', 422);
+      const ge = await prisma.groupeElectrogene.findUnique({ where: { id: data.actifId } });
+      if (!ge) throw new AppError('Le GE ciblé est introuvable.', 404);
+      if (ge.siteId !== data.siteId) throw new AppError('Le GE ciblé n’appartient pas à ce site.', 422);
     }
     // Détermine automatiquement le prestataire responsable (site → lot → attribution).
     // Une tâche contractuelle est toujours passive → on résout sur le périmètre passif,
