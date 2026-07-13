@@ -12,6 +12,7 @@ import '../data/maintenance_repository.dart';
 
 const _natureOptions = [
   ('ENTRETIEN', 'Entretien (tâche contractuelle)'),
+  ('CURATIVE', 'Dépannage / curative (GE en panne)'),
   ('INSTALLATION', 'Installation d\'un actif'),
   ('DESINSTALLATION', 'Désinstallation d\'un actif'),
   ('DEPLACEMENT', 'Déplacement d\'un actif'),
@@ -39,10 +40,17 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   ActifLite? _actif;
   bool _loadingActifs = false;
 
+  // Dépannage curatif : GE du site sélectionné (imputation de la panne à un GE).
+  List<ActifLite> _gesDuSite = [];
+  ActifLite? _geEnPanne;
+  bool _loadingGes = false;
+
   DateTime _datePlanifiee = DateTime.now();
   bool _saving = false;
 
   bool get _isEntretien => _nature == 'ENTRETIEN';
+  bool get _isCurative => _nature == 'CURATIVE';
+  bool get _isMouvement => _nature == 'INSTALLATION' || _nature == 'DESINSTALLATION' || _nature == 'DEPLACEMENT';
   bool get _needsDest => _nature == 'INSTALLATION' || _nature == 'DEPLACEMENT';
 
   @override
@@ -76,10 +84,21 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
     setState(() { _actifs = actifs; _loadingActifs = false; });
   }
 
+  Future<void> _loadGesDuSite(String siteId) async {
+    setState(() { _loadingGes = true; _gesDuSite = []; _geEnPanne = null; });
+    final repo = context.read<MaintenanceRepository>();
+    final ges = await repo.getActifs(type: 'GE', siteId: siteId);
+    if (!mounted) return;
+    setState(() { _gesDuSite = ges; _loadingGes = false; });
+  }
+
   void _onNatureChanged(String? v) {
     if (v == null) return;
-    setState(() { _nature = v; _tacheKey = null; _actif = null; _siteId = null; _taches = []; _actifs = []; });
-    if (v != 'ENTRETIEN') _loadActifs();
+    setState(() {
+      _nature = v; _tacheKey = null; _actif = null; _siteId = null;
+      _taches = []; _actifs = []; _gesDuSite = []; _geEnPanne = null;
+    });
+    if (_isMouvement) _loadActifs();
   }
 
   void _onSiteChanged(String? v) {
@@ -89,6 +108,12 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         _loadTaches(v);
       } else {
         setState(() { _taches = []; _tacheKey = null; });
+      }
+    } else if (_isCurative) {
+      if (v != null) {
+        _loadGesDuSite(v);
+      } else {
+        setState(() { _gesDuSite = []; _geEnPanne = null; });
       }
     } else {
       setState(() {});
@@ -117,6 +142,13 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       for (final t in _taches) { if (t.key == _tacheKey) { tache = t; break; } }
       if (tache == null) { messenger.showSnackBar(const SnackBar(content: Text('Sélectionnez une tâche contractuelle'))); return; }
       payloadSiteId = _siteId; type = 'PREVENTIVE'; categorie = tache.categorie; equipement = tache.libelle; tacheKey = tache.key;
+    } else if (_isCurative) {
+      if (_siteId == null) { messenger.showSnackBar(const SnackBar(content: Text('Sélectionnez un site'))); return; }
+      final ge = _geEnPanne;
+      if (ge == null) { messenger.showSnackBar(const SnackBar(content: Text('Sélectionnez le GE en panne'))); return; }
+      payloadSiteId = _siteId; type = 'CURATIVE'; categorie = 'GE';
+      equipement = 'Dépannage — ${ge.libelle ?? 'GE'}';
+      actifType = 'GE'; actifId = ge.id; // rattachement pour la fiabilité par marque
     } else {
       final actif = _actif;
       if (actif == null) { messenger.showSnackBar(const SnackBar(content: Text('Sélectionnez un actif'))); return; }
@@ -134,9 +166,12 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       final pos = await LocationService().currentPosition();
       final now = DateTime.now();
       final datePlanifiee = _datePlanifiee.isBefore(now) ? now : _datePlanifiee;
+      // Une curative n'est pas un mouvement d'actif → natureTravaux ENTRETIEN
+      // (l'enum côté serveur ne connaît que ENTRETIEN/INSTALLATION/DÉSINSTALLATION/DÉPLACEMENT).
+      final natureTravaux = _isMouvement ? _nature : 'ENTRETIEN';
       final res = await repo.create(
         siteId: payloadSiteId!, type: type, categorie: categorie, equipement: equipement,
-        tachePreventiveKey: tacheKey, natureTravaux: _nature, actifType: actifType, actifId: actifId, siteSourceId: siteSourceId,
+        tachePreventiveKey: tacheKey, natureTravaux: natureTravaux, actifType: actifType, actifId: actifId, siteSourceId: siteSourceId,
         description: _description.text.trim(), datePlanifiee: datePlanifiee, latitude: pos?.lat, longitude: pos?.lng,
       );
       if (!mounted) return;
@@ -181,6 +216,21 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                 items: _taches.map((t) => DropdownMenuItem(value: t.key, child: Text(t.libelle, overflow: TextOverflow.ellipsis))).toList(),
                 onChanged: _siteId == null ? null : (v) => setState(() => _tacheKey = v),
                 validator: (v) => _isEntretien && (v == null || v.isEmpty) ? 'Requis' : null,
+              ),
+            ] else if (_isCurative) ...[
+              SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                initialValue: _geEnPanne?.id,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'GE en panne *',
+                  hintText: _siteId == null ? 'Choisissez d\'abord un site' : (_gesDuSite.isEmpty && !_loadingGes ? 'Aucun GE sur ce site' : null),
+                  suffixIcon: _loadingGes ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))) : null,
+                ),
+                items: _gesDuSite.map((g) => DropdownMenuItem(value: g.id, child: Text(g.libelle ?? 'GE', overflow: TextOverflow.ellipsis))).toList(),
+                onChanged: _siteId == null ? null : (v) => setState(() => _geEnPanne = _gesDuSite.where((g) => g.id == v).firstOrNull),
+                validator: (v) => _isCurative && (v == null || v.isEmpty) ? 'Requis' : null,
               ),
             ] else ...[
               DropdownButtonFormField<String>(

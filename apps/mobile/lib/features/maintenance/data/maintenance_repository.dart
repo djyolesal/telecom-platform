@@ -35,12 +35,14 @@ class MaintenanceRepository {
 
   /// Actifs candidats pour un travail de cycle de vie (au dépôt pour une pose,
   /// en service pour une dépose/déplacement).
-  Future<List<ActifLite>> getActifs({String? statut, bool enStock = false}) async {
+  Future<List<ActifLite>> getActifs({String? statut, bool enStock = false, String? type, String? siteId}) async {
     if (!await _network.isConnected) return [];
     return _client.request(
       (dio) => dio.get('/actifs', queryParameters: {
         if (statut != null && statut.isNotEmpty) 'statut': statut,
         if (enStock) 'en_stock': 'true',
+        if (type != null) 'type': type,
+        if (siteId != null) 'site_id': siteId,
       }),
       (data) => (data['data'] as List).map((e) => ActifLite.fromJson(e as Map<String, dynamic>)).toList(),
     );
