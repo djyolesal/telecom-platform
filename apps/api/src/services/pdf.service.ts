@@ -374,4 +374,99 @@ export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
   });
 }
 
-export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf, generateDepotagePdf };
+export interface BonMouvementPdfData {
+  id: string;
+  nature: string;               // INSTALLATION | DESINSTALLATION | DEPLACEMENT
+  dateMouvement?: Date | null;
+  actif: {
+    type: string;               // GE | BATTERIE | CLIMATISEUR
+    designation: string;        // ex. « GE 100 kVA » / « Batterie 200 Ah »
+    numeroSerie?: string | null;
+    marque?: string | null;
+    caracteristique?: string | null;
+  };
+  siteOrigine?: { nom: string; code: string } | null;   // désinstallation / déplacement (départ)
+  siteDestination?: { nom: string; code: string } | null; // installation / déplacement (arrivée)
+  technicien?: { nom: string; prenom: string } | null;
+  prestataire?: { nom: string } | null;
+  observations?: string | null;
+  signatures?: Array<{ label: string; nom?: string | null; image: Buffer | null }>;
+}
+
+const NATURE_MOUVEMENT: Record<string, string> = {
+  INSTALLATION: 'Installation', DESINSTALLATION: 'Désinstallation', DEPLACEMENT: 'Déplacement',
+};
+
+/**
+ * Bon de mouvement d'actif : document de traçabilité (pose / dépose / déplacement)
+ * d'un GE ou équipement, signable par le technicien et le réceptionnaire.
+ */
+export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<Buffer> {
+  return render((doc) => {
+    header(doc, 'Bon de mouvement d’actif', `Réf. ${d.id.slice(0, 8).toUpperCase()} — ${fmtDate(d.dateMouvement)}`);
+
+    sectionTitle(doc, 'Mouvement');
+    row(doc, 'Nature', NATURE_MOUVEMENT[d.nature] ?? d.nature);
+    row(doc, 'Date', fmtDate(d.dateMouvement));
+
+    sectionTitle(doc, 'Actif');
+    row(doc, 'Type', d.actif.type);
+    row(doc, 'Désignation', d.actif.designation);
+    row(doc, 'N° de série', d.actif.numeroSerie ?? '—');
+    row(doc, 'Marque', d.actif.marque ?? '—');
+    if (d.actif.caracteristique) row(doc, 'Caractéristique', d.actif.caracteristique);
+
+    sectionTitle(doc, 'Localisation');
+    const dep = d.siteOrigine ? `${d.siteOrigine.code} — ${d.siteOrigine.nom}` : 'Dépôt';
+    const arr = d.siteDestination ? `${d.siteDestination.code} — ${d.siteDestination.nom}` : 'Dépôt';
+    if (d.nature === 'INSTALLATION') {
+      row(doc, 'Provenance', 'Dépôt');
+      row(doc, 'Site d’installation', arr);
+    } else if (d.nature === 'DESINSTALLATION') {
+      row(doc, 'Site d’origine', dep);
+      row(doc, 'Destination', 'Dépôt');
+    } else {
+      row(doc, 'Site d’origine', dep);
+      row(doc, 'Site de destination', arr);
+    }
+
+    sectionTitle(doc, 'Intervenants');
+    row(doc, 'Technicien', d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—');
+    row(doc, 'Prestataire', d.prestataire?.nom ?? '—');
+
+    if (d.observations) {
+      sectionTitle(doc, 'Observations');
+      doc.fontSize(10).fillColor('#111').text(d.observations, { align: 'justify' });
+    }
+
+    const sigs = (d.signatures ?? []).filter((s) => s.image);
+    // On réserve toujours deux emplacements de signature (technicien / réceptionnaire),
+    // même sans image capturée — ils peuvent être signés à la main sur l'impression.
+    sectionTitle(doc, 'Signatures');
+    if (doc.y > doc.page.height - 170) doc.addPage();
+    const startY = doc.y;
+    const emplacements = [
+      { label: 'Technicien', nom: d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : null },
+      { label: 'Réceptionnaire / responsable site', nom: null },
+    ];
+    const colW = (doc.page.width - 100) / 2;
+    emplacements.forEach((e, i) => {
+      const x = 50 + i * colW;
+      const sig = sigs.find((s) => s.label.toLowerCase().includes(e.label.toLowerCase().split(' ')[0]));
+      if (sig?.image) {
+        try { doc.image(sig.image, x, startY, { fit: [colW - 20, 55], align: 'center' }); } catch { /* illisible */ }
+      } else {
+        doc.moveTo(x, startY + 55).lineTo(x + colW - 20, startY + 55).strokeColor('#bbb').stroke();
+      }
+      doc.fontSize(8.5).fillColor('#666').text(`${e.label}${e.nom ? ` — ${e.nom}` : ''}`, x, startY + 62, { width: colW - 10 });
+    });
+    doc.y = startY + 90;
+
+    doc.fontSize(8).fillColor('#999').text(
+      `Généré le ${fmtDate(new Date())} — E&M OpS`,
+      50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 }
+    );
+  });
+}
+
+export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf, generateDepotagePdf, generateBonMouvementPdf };

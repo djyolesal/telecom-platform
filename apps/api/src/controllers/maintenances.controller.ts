@@ -7,8 +7,8 @@ import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
-import { generateMaintenancePdf } from '../services/pdf.service';
-import { uploadBuffer, publicFileUrl } from '../services/storage.service';
+import { generateMaintenancePdf, generateBonMouvementPdf } from '../services/pdf.service';
+import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
 import { sendTabular } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
@@ -758,5 +758,69 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
         duree: m.dureeMinutes ?? '',
       })),
     }]);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Bon de mouvement PDF (traçabilité pose/dépose/déplacement d'un actif),
+ * signable. Disponible pour une maintenance de cycle de vie (natureTravaux
+ * ≠ ENTRETIEN). Charge l'actif, les sites et la signature du technicien.
+ */
+export async function getBonMouvementPdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    const m = await prisma.maintenance.findUnique({
+      where: { id: req.params.id },
+      include: {
+        site: { select: { nom: true, code: true } },
+        technicien: { select: { nom: true, prenom: true } },
+        prestataire: { select: { nom: true } },
+      },
+    });
+    if (!m) throw new AppError('Maintenance introuvable', 404);
+    if (!m.natureTravaux || m.natureTravaux === 'ENTRETIEN' || !m.actifId) {
+      throw new AppError('Cette intervention n’est pas un mouvement d’actif.', 400);
+    }
+
+    // Détails de l'actif déplacé (GE ou équipement).
+    const isGE = m.actifType === 'GE';
+    const ge = isGE ? await prisma.groupeElectrogene.findUnique({ where: { id: m.actifId } }) : null;
+    const eq = !isGE ? await prisma.equipementActif.findUnique({ where: { id: m.actifId } }) : null;
+    const actif = ge
+      ? { type: 'GE', designation: `GE ${Math.round(Number(ge.puissanceKva))} kVA`, numeroSerie: ge.numeroSerie, marque: ge.marque, caracteristique: `${Math.round(Number(ge.puissanceKva))} kVA` }
+      : {
+          type: eq?.categorie ?? m.actifType ?? 'Actif',
+          designation: eq?.libelle ?? eq?.categorie ?? 'Actif',
+          numeroSerie: eq?.numeroSerie ?? null, marque: null,
+          caracteristique: eq?.valeur != null ? `${Number(eq.valeur)} ${eq.unite ?? ''}`.trim() : null,
+        };
+
+    // Site d'origine (déplacement/désinstallation) et de destination (installation/déplacement).
+    const siteSource = m.siteSourceId
+      ? await prisma.site.findUnique({ where: { id: m.siteSourceId }, select: { nom: true, code: true } })
+      : null;
+    const siteOrigine = m.natureTravaux === 'DEPLACEMENT' ? siteSource : m.natureTravaux === 'DESINSTALLATION' ? m.site : null;
+    const siteDestination = m.natureTravaux === 'DESINSTALLATION' ? null : m.site;
+
+    // Signature du technicien (best-effort — le bon reste imprimable sans).
+    let signatureBuf: Buffer | null = null;
+    if (m.signaturePath) {
+      try { signatureBuf = await getObjectBuffer(m.signaturePath); } catch { /* signature indisponible */ }
+    }
+
+    const pdf = await generateBonMouvementPdf({
+      id: m.id,
+      nature: m.natureTravaux,
+      dateMouvement: m.dateFin ?? m.dateDebut ?? m.datePlanifiee,
+      actif,
+      siteOrigine,
+      siteDestination,
+      technicien: m.technicien,
+      prestataire: m.prestataire,
+      observations: m.observations,
+      signatures: signatureBuf ? [{ label: 'Technicien', nom: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : null, image: signatureBuf }] : [],
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="bon-mouvement-${m.id.slice(0, 8)}.pdf"`);
+    res.send(pdf);
   } catch (err) { next(err); }
 }

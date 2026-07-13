@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, Trash2 } from 'lucide-react';
+import { FileText, FileSignature, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -61,6 +61,12 @@ export default function MaintenanceDetailPage() {
             <button type="button" onClick={() => downloadFile(`/maintenances/${id}/pdf`, `maintenance-${id}.pdf`, true)} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <FileText size={15} /> PDF
             </button>
+            {/* Bon de mouvement : uniquement pour une intervention de cycle de vie (pose/dépose/déplacement). */}
+            {m.natureTravaux && m.natureTravaux !== 'ENTRETIEN' && m.actifId && (
+              <button type="button" onClick={() => downloadFile(`/maintenances/${id}/bon-mouvement.pdf`, `bon-mouvement-${id}.pdf`, true)} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                <FileSignature size={15} /> Bon de mouvement
+              </button>
+            )}
             {/* Suppression réservée à l'admin et aux plannings non encore exécutés. */}
             {isAdmin && m.statut === 'PLANIFIEE' && (
               <Button

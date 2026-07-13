@@ -102,6 +102,7 @@ router.delete('/maintenances/:id', rbac(['ADMIN']), maintenanceCtrl.deleteMainte
 router.post('/maintenances/:id/start', maintenanceCtrl.startMaintenance);
 router.post('/maintenances/:id/close', maintenanceCtrl.closeMaintenance);
 router.get('/maintenances/:id/pdf', maintenanceCtrl.getMaintenancePdf);
+router.get('/maintenances/:id/bon-mouvement.pdf', maintenanceCtrl.getBonMouvementPdf);
 
 // ── Actifs (parc GE / batteries / climatiseurs) ───────────────
 router.get('/actifs', actifsCtrl.listActifs);
