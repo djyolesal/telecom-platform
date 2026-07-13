@@ -48,6 +48,16 @@ class MaintenanceRepository {
     );
   }
 
+  /// Résout le site d'un actif (scan QR d'un GE) → renvoie son siteId, ou null
+  /// s'il n'est rattaché à aucun site (au dépôt) ou introuvable.
+  Future<String?> resolveActifSiteId(String type, String id) async {
+    if (!await _network.isConnected) throw const ServerException('Résolution impossible hors-ligne');
+    return _client.request(
+      (dio) => dio.get('/actifs/$type/$id'),
+      (data) => (data['data'] as Map<String, dynamic>)['siteId'] as String?,
+    );
+  }
+
   /// Création offline-first (mise en file si hors-ligne).
   Future<SubmitResult> create({
     required String siteId,

@@ -71,6 +71,7 @@ router.get('/sites/:id/depotages', sitesCtrl.getSiteDepotages);
 router.get('/sites/:id/releves', sitesCtrl.getSiteReleves);
 router.get('/sites/:id/incidents', sitesCtrl.getSiteIncidents);
 router.get('/sites/:id/lignes-livraison', carburantCtrl.getLignesLivraisonForSite);
+router.get('/sites/:id/etiquettes-qr.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.getEtiquettesQr);
 
 // ── Prestataires ──────────────────────────────────────────────
 router.get('/prestataires', prestatairesCtrl.getPrestataires);

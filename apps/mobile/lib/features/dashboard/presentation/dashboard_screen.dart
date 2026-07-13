@@ -271,6 +271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _moduleGrid(BuildContext context) {
     final role = context.select((AuthCubit c) => c.state.user?.role) ?? '';
     final modules = [
+      (_M('Scanner', Icons.qr_code_scanner, '/scan', AppColors.accent)),
       (_M('Sites', Icons.cell_tower, '/sites', AppColors.brand)),
       (_M('Maintenance', Icons.build, '/maintenance', AppColors.brandLight)),
       (_M('Carburant', Icons.local_gas_station, '/carburant', AppColors.accent)),

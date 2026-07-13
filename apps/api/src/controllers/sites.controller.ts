@@ -12,6 +12,7 @@ import { geParams, getNum } from '../services/settings.service';
 import { forecastSites } from '../services/replenishment.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
+import { generateEtiquettesQrPdf } from '../services/pdf.service';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
 const IMPORT_COLUMNS = [
@@ -647,5 +648,24 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
         telephone: s.telephoneSite ?? '',
       })),
     }]);
+  } catch (err) { next(err); }
+}
+
+/** Planche d'étiquettes QR (site + GE) à imprimer et coller sur place. */
+export async function getEtiquettesQr(req: Request, res: Response, next: NextFunction) {
+  try {
+    const site = await prisma.site.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, code: true, nom: true, region: true,
+        groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { id: true, numero: true, puissanceKva: true } } },
+    });
+    if (!site) throw new AppError('Site introuvable', 404);
+    const pdf = await generateEtiquettesQrPdf({
+      site: { id: site.id, code: site.code, nom: site.nom, region: site.region },
+      ges: site.groupes.map((g) => ({ id: g.id, numero: g.numero, puissanceKva: Number(g.puissanceKva) })),
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="etiquettes-qr-${site.code}.pdf"`);
+    res.send(pdf);
   } catch (err) { next(err); }
 }

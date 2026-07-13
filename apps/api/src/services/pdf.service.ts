@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
 
 const BRAND = '#1B3F6B';
 const ACCENT = '#0E7C6B';
@@ -469,4 +470,63 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
   });
 }
 
-export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf, generateDepotagePdf, generateBonMouvementPdf };
+export interface EtiquettesQrData {
+  site: { id: string; code: string; nom: string; region: string };
+  ges: Array<{ id: string; numero: number; puissanceKva: number }>;
+}
+
+/** Génère un PNG QR (data-URL → Buffer) encodant un jeton EMOPS. */
+async function qrBuffer(payload: string): Promise<Buffer> {
+  const dataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 300, errorCorrectionLevel: 'M' });
+  return Buffer.from(dataUrl.split(',')[1], 'base64');
+}
+
+/**
+ * Planche d'étiquettes QR (à imprimer et coller sur site) : un grand QR « site »
+ * (armoire) + un QR par GE. Scannés dans l'app, ils identifient directement le
+ * site / le GE sans recherche manuelle. Jetons : EMOPS:SITE:<id> / EMOPS:GE:<id>.
+ */
+export async function generateEtiquettesQrPdf(d: EtiquettesQrData): Promise<Buffer> {
+  const siteQr = await qrBuffer(`EMOPS:SITE:${d.site.id}`);
+  const geQrs = await Promise.all(d.ges.map((g) => qrBuffer(`EMOPS:GE:${g.id}`)));
+
+  return render((doc) => {
+    header(doc, 'Étiquettes QR', `${d.site.code} — ${d.site.nom}`);
+
+    // Étiquette SITE (grande, pour l'armoire).
+    sectionTitle(doc, 'Site — à coller sur l’armoire');
+    const y0 = doc.y;
+    try { doc.image(siteQr, 50, y0, { width: 140 }); } catch { /* qr illisible */ }
+    doc.fontSize(15).fillColor('#111').font('Helvetica-Bold').text(d.site.code, 210, y0 + 20);
+    doc.font('Helvetica').fontSize(11).fillColor('#444').text(d.site.nom, 210, y0 + 44, { width: 300 });
+    doc.fontSize(9).fillColor('#888').text(d.site.region, 210, y0 + 62);
+    doc.fontSize(8).fillColor('#aaa').text('Scannez ce code dans E&M OpS pour ouvrir le site', 210, y0 + 84, { width: 300 });
+    doc.y = y0 + 150;
+
+    // Étiquettes GE (grille 3 colonnes).
+    if (d.ges.length) {
+      sectionTitle(doc, 'Groupes électrogènes');
+      const colW = (doc.page.width - 100) / 3;
+      let i = 0;
+      for (const g of d.ges) {
+        const col = i % 3;
+        if (col === 0 && doc.y > doc.page.height - 160) doc.addPage();
+        const x = 50 + col * colW;
+        const y = doc.y;
+        try { doc.image(geQrs[i], x + (colW - 90) / 2, y, { width: 90 }); } catch { /* illisible */ }
+        doc.fontSize(9).fillColor('#111').font('Helvetica-Bold').text(`GE n°${g.numero}`, x, y + 94, { width: colW, align: 'center' });
+        doc.font('Helvetica').fontSize(8).fillColor('#666').text(`${Math.round(Number(g.puissanceKva))} kVA`, x, y + 106, { width: colW, align: 'center' });
+        if (col === 2) doc.y = y + 130;
+        i++;
+      }
+      if (d.ges.length % 3 !== 0) doc.moveDown(11);
+    }
+
+    doc.fontSize(8).fillColor('#999').text(
+      `Généré le ${fmtDate(new Date())} — E&M OpS`,
+      50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 }
+    );
+  });
+}
+
+export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf, generateDepotagePdf, generateBonMouvementPdf, generateEtiquettesQrPdf };

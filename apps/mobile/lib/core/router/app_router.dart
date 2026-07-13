@@ -18,6 +18,7 @@ import '../../features/energie/presentation/releve_detail_screen.dart';
 import '../../features/incidents/presentation/incidents_list_screen.dart';
 import '../../features/incidents/presentation/incident_form_screen.dart';
 import '../../features/incidents/presentation/incident_detail_screen.dart';
+import '../../features/scan/presentation/scan_screen.dart';
 
 GoRouter createRouter(AuthCubit authCubit) {
   return GoRouter(
@@ -33,6 +34,9 @@ GoRouter createRouter(AuthCubit authCubit) {
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
+
+      // Scan QR (identification armoire / GE)
+      GoRoute(path: '/scan', builder: (_, __) => const ScanScreen()),
 
       // Sites
       GoRoute(path: '/sites', builder: (_, __) => const SitesListScreen()),

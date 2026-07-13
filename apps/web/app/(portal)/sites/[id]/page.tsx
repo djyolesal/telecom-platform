@@ -3,8 +3,9 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Fuel, Zap, Gauge, Pencil, Trash2, Building2, Navigation } from 'lucide-react';
+import { MapPin, Fuel, Zap, Gauge, Pencil, Trash2, Building2, Navigation, QrCode } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { Button, ButtonLink } from '@/components/shared/Button';
@@ -87,6 +88,15 @@ export default function SiteDetailPage() {
               >
                 <Navigation size={15} /> Itinéraire
               </a>
+            )}
+            {canEdit && (
+              <Button
+                variant="secondary"
+                icon={QrCode}
+                onClick={() => downloadFile(`/sites/${id}/etiquettes-qr.pdf`, `etiquettes-qr-${site.code}.pdf`, true)}
+              >
+                Étiquettes QR
+              </Button>
             )}
             {canEdit && <ButtonLink href={`/sites/${id}/modifier`} variant="secondary" icon={Pencil}>Modifier</ButtonLink>}
             {isAdmin && (
