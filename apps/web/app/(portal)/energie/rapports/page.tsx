@@ -17,7 +17,7 @@ interface ReleveRow {
   date: string;
   source: string;
   consommationKwh: number | null;
-  volumeGasoilLitres: number | null;
+  gasoilConsommeLitres: number | null;
 }
 
 export default function EnergieRapportsPage() {
@@ -36,7 +36,7 @@ export default function EnergieRapportsPage() {
       const key = format(new Date(r.date), 'dd/MM');
       const b = map.get(key) ?? { date: key, kwh: 0, gasoil: 0 };
       b.kwh += Number(r.consommationKwh ?? 0);
-      b.gasoil += Number(r.volumeGasoilLitres ?? 0);
+      b.gasoil += Number(r.gasoilConsommeLitres ?? 0);
       map.set(key, b);
     }
     return Array.from(map.values());
