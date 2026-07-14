@@ -2,11 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Upload, X, MessageSquareText, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, X, MessageSquareText, Search, Send } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/shared/Button';
-import { Field, Input, Select } from '@/components/shared/Form';
+import { Field, Input, Select, Textarea } from '@/components/shared/Form';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -35,6 +35,8 @@ export default function ContactsPage() {
   const [edit, setEdit] = useState<Contact | null>(null);       // contact en cours d'édition
   const [creation, setCreation] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [selection, setSelection] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -87,6 +89,9 @@ export default function ContactsPage() {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importer.mutate(f); e.target.value = ''; }} />
             <Button variant="secondary" icon={Upload} loading={importer.isPending} onClick={() => fileRef.current?.click()}>Importer Excel</Button>
             <Button variant="secondary" icon={MessageSquareText} onClick={() => setJournalOpen((v) => !v)}>Journal SMS</Button>
+            <Button variant="secondary" icon={Send} onClick={() => setSmsOpen((v) => !v)}>
+              Envoyer un SMS{selection.size > 0 ? ` (${selection.size})` : ''}
+            </Button>
             <Button icon={Plus} onClick={() => { setCreation(true); setEdit(null); }}>Ajouter</Button>
           </>
         }
@@ -130,6 +135,15 @@ export default function ContactsPage() {
           options={[{ value: '', label: 'Toutes les sociétés' }, ...societes.map((s) => ({ value: s, label: s }))]} />
       </div>
 
+      {smsOpen && (
+        <SmsForm
+          selection={selection}
+          contacts={contacts}
+          onClose={() => setSmsOpen(false)}
+          onSent={() => { setSelection(new Set()); queryClient.invalidateQueries({ queryKey: ['sms-logs'] }); }}
+        />
+      )}
+
       {(creation || edit) && (
         <ContactForm
           initial={edit ?? VIDE}
@@ -146,7 +160,12 @@ export default function ContactsPage() {
         <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-gray-100 text-left text-xs text-gray-500">
-              <th className="py-3 pl-5 pr-3 font-medium">Contact</th>
+              <th className="w-10 py-3 pl-5 pr-1">
+                <input type="checkbox" title="Tout sélectionner (liste filtrée)"
+                  checked={contacts.length > 0 && contacts.every((c) => selection.has(c.id))}
+                  onChange={(e) => setSelection(e.target.checked ? new Set(contacts.map((c) => c.id)) : new Set())} />
+              </th>
+              <th className="py-3 pr-3 font-medium">Contact</th>
               <th className="px-3 py-3 font-medium">Société</th>
               <th className="px-3 py-3 font-medium">Téléphone</th>
               <th className="px-3 py-3 font-medium">Notifications</th>
@@ -156,7 +175,15 @@ export default function ContactsPage() {
             <tbody>
               {contacts.map((c) => (
                 <tr key={c.id} className={`border-b border-gray-50 last:border-0 ${c.actif ? '' : 'opacity-50'}`}>
-                  <td className="py-2.5 pl-5 pr-3">
+                  <td className="py-2.5 pl-5 pr-1">
+                    <input type="checkbox" checked={selection.has(c.id)}
+                      onChange={(e) => setSelection((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(c.id); else next.delete(c.id);
+                        return next;
+                      })} />
+                  </td>
+                  <td className="py-2.5 pr-3">
                     <p className="font-medium text-gray-800">{c.nom} {c.prenom}</p>
                     {c.email && <p className="text-xs text-gray-400">{c.email}</p>}
                   </td>
@@ -194,6 +221,94 @@ export default function ContactsPage() {
         {contacts.length} contact(s) · « Sa société » : le contact ne reçoit que les actions des techniciens de sa propre société (les internes pour un contact interne).
       </p>
     </div>
+  );
+}
+
+interface EnvoiResultat {
+  simule: boolean; total: number; envoyes: number; echecs: number;
+  resultats: { telephone: string; statut: string; erreur: string | null }[];
+}
+
+/** Envoi manuel d'un SMS : contacts cochés dans la liste + numéros libres. */
+function SmsForm({ selection, contacts, onClose, onSent }: {
+  selection: Set<string>;
+  contacts: Contact[];
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [message, setMessage] = useState('');
+  const [telsLibres, setTelsLibres] = useState('');
+  const [resultat, setResultat] = useState<EnvoiResultat | null>(null);
+  const [error, setError] = useState('');
+
+  const cibles = contacts.filter((c) => selection.has(c.id));
+  const telephones = telsLibres.split(/[,;\s]+/).map((t) => t.trim()).filter(Boolean);
+  const nbDestinataires = cibles.length + telephones.length;
+
+  const envoi = useMutation({
+    mutationFn: () => api.post('/sms/send', {
+      message,
+      contactIds: cibles.map((c) => c.id),
+      telephones,
+    }).then((r) => r.data.data as EnvoiResultat),
+    onSuccess: (r) => { setResultat(r); setError(''); onSent(); },
+    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur'),
+  });
+
+  return (
+    <form className="mb-4 rounded-xl border border-gray-100 bg-white p-4"
+      onSubmit={(e) => { e.preventDefault(); if (!envoi.isPending && !resultat) envoi.mutate(); }}>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-semibold text-gray-700">Envoyer un SMS</p>
+        <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+      </div>
+
+      {resultat ? (
+        <div>
+          <div className={`mb-3 rounded-lg px-4 py-3 text-sm ${resultat.echecs ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>
+            {resultat.simule
+              ? <>✓ {resultat.total} SMS <b>simulé(s)</b> (passerelle non configurée — visible dans le Journal SMS, rien n&apos;est parti).</>
+              : <>✓ {resultat.envoyes}/{resultat.total} SMS envoyé(s){resultat.echecs > 0 && <> · <b>{resultat.echecs} échec(s)</b></>}.</>}
+          </div>
+          {resultat.echecs > 0 && (
+            <div className="mb-3 max-h-40 overflow-y-auto text-xs">
+              {resultat.resultats.filter((r) => r.statut === 'ECHEC').map((r) => (
+                <p key={r.telephone} className="py-0.5 text-red-600">{r.telephone} — {r.erreur}</p>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => { setResultat(null); setMessage(''); setTelsLibres(''); }}>Nouvel envoi</Button>
+            <Button type="button" onClick={onClose}>Fermer</Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="mb-3 text-sm text-gray-600">
+            {cibles.length > 0
+              ? <><b>{cibles.length} contact(s)</b> coché(s) dans la liste : {cibles.slice(0, 5).map((c) => `${c.prenom} ${c.nom}`).join(', ')}{cibles.length > 5 ? '…' : ''}</>
+              : 'Cochez des contacts dans la liste ci-dessous et/ou saisissez des numéros libres.'}
+          </p>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <Field label="Numéros libres (optionnel, séparés par virgule ou espace)">
+              <Input value={telsLibres} onChange={(e) => setTelsLibres(e.target.value)} placeholder="97 00 00 00, +228 99 00 00 00" />
+            </Field>
+            <Field label={`Message (${message.length}/320${message.length > 160 ? ' — sera facturé en plusieurs SMS' : ''})`}>
+              <Textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, 320))} rows={3}
+                placeholder="[E&M OpS] Votre message…" required />
+            </Field>
+          </div>
+          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          <div className="mt-3 flex items-center justify-end gap-3">
+            <span className="text-xs text-gray-400">{nbDestinataires} destinataire(s) · 100 max</span>
+            <Button type="submit" icon={Send} loading={envoi.isPending}
+              disabled={!message.trim() || nbDestinataires === 0 || nbDestinataires > 100}>
+              Envoyer
+            </Button>
+          </div>
+        </>
+      )}
+    </form>
   );
 }
 
