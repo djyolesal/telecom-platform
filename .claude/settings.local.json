@@ -187,7 +187,8 @@
       "Bash(mv \"apps/web/app/\\(portal\\)/direction/fiabilite-ge/page.tsx\" \"apps/web/app/\\(portal\\)/fiabilite-ge/page.tsx\")",
       "Bash(rmdir \"apps/web/app/\\(portal\\)/direction/fiabilite-ge\")",
       "Bash(npm i *)",
-      "Bash(awk '/function geToDTO/{f=1} f{print} f&&/^}/{c++; if\\(c>=1 && /^}/\\){exit}}' src/controllers/actifs.controller.ts)"
+      "Bash(awk '/function geToDTO/{f=1} f{print} f&&/^}/{c++; if\\(c>=1 && /^}/\\){exit}}' src/controllers/actifs.controller.ts)",
+      "Bash(docker compose *)"
     ]
   }
 }
