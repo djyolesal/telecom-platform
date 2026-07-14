@@ -190,7 +190,9 @@
       "Bash(awk '/function geToDTO/{f=1} f{print} f&&/^}/{c++; if\\(c>=1 && /^}/\\){exit}}' src/controllers/actifs.controller.ts)",
       "Bash(docker compose *)",
       "Bash(lsof -nP -iTCP -sTCP:LISTEN)",
-      "Bash(docker info *)"
+      "Bash(docker info *)",
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/api *)",
+      "Bash(~/development/flutter/bin/flutter analyze *)"
     ]
   }
 }
