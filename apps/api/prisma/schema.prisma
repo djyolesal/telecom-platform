@@ -136,6 +136,10 @@ model User {
   fcmToken      String?            @map("fcm_token")
   isActive      Boolean            @default(true) @map("is_active")
   lastLoginAt   DateTime?          @map("last_login_at")
+  // Session unique par plateforme : identifiant de la session en cours (embarqué
+  // dans les JWT) — un nouveau login sur la même plateforme éjecte l'ancien.
+  sessionWebId    String? @map("session_web_id")
+  sessionMobileId String? @map("session_mobile_id")
   prestataireId String?            @map("prestataire_id")
   equipe        EquipeMaintenance?
   createdAt     DateTime           @default(now()) @map("created_at")

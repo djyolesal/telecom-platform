@@ -16,7 +16,7 @@ class AuthRepository {
   /// Connexion par email/mot de passe. Stocke les jetons et l'utilisateur.
   Future<User> login(String email, String password) async {
     final user = await _client.request(
-      (dio) => dio.post('/auth/login', data: {'email': email, 'password': password}),
+      (dio) => dio.post('/auth/login', data: {'email': email, 'password': password, 'platform': 'MOBILE'}),
       (data) {
         final d = data['data'] as Map<String, dynamic>;
         return (

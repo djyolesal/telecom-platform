@@ -8,6 +8,7 @@ import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
+import { enregistrerSession, effacerSession, sessionValide, Plateforme } from '../services/session.service';
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 12;
@@ -18,12 +19,17 @@ const ACCESS_TTL = env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'];
 const REFRESH_TTL = '30d';
 const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-function signAccess(userId: string, role: string) {
-  return jwt.sign({ sub: userId, role }, env.JWT_SECRET, { expiresIn: ACCESS_TTL });
+function signAccess(userId: string, role: string, sid: string, plt: Plateforme) {
+  return jwt.sign({ sub: userId, role, sid, plt }, env.JWT_SECRET, { expiresIn: ACCESS_TTL });
 }
 
-function signRefresh(userId: string) {
-  return jwt.sign({ sub: userId }, env.JWT_REFRESH_SECRET, { expiresIn: REFRESH_TTL });
+function signRefresh(userId: string, sid: string, plt: Plateforme) {
+  return jwt.sign({ sub: userId, sid, plt }, env.JWT_REFRESH_SECRET, { expiresIn: REFRESH_TTL });
+}
+
+/** Plateforme déclarée par le client (mobile envoie MOBILE ; défaut WEB). */
+function plateformeDe(body: unknown): Plateforme {
+  return (body as { platform?: string })?.platform === 'MOBILE' ? 'MOBILE' : 'WEB';
 }
 
 /**
@@ -61,16 +67,21 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       throw new AppError('Identifiants invalides', 401);
     }
 
-    const accessToken = signAccess(user.id, user.role);
-    const refreshToken = signRefresh(user.id);
+    // Session unique par plateforme : ce login devient LA session web (ou mobile)
+    // du compte — les jetons de l'ancienne session seront rejetés.
+    const plt = plateformeDe(req.body);
+    const sid = crypto.randomUUID();
+    const accessToken = signAccess(user.id, user.role, sid, plt);
+    const refreshToken = signRefresh(user.id, sid, plt);
 
-    // Stocker refresh token dans Redis
-    await redisClient.setEx(`refresh:${user.id}`, REFRESH_TTL_SECONDS, refreshToken);
+    await enregistrerSession(user.id, plt, sid);
+    // Stocker refresh token dans Redis (une clé par plateforme)
+    await redisClient.setEx(`refresh:${plt}:${user.id}`, REFRESH_TTL_SECONDS, refreshToken);
 
     // Mise à jour lastLoginAt
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
-    await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: true }, req);
+    await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: true, plateforme: plt }, req);
 
     res.json({
       success: true,
@@ -91,14 +102,17 @@ export async function logout(req: Request, res: Response, next: NextFunction) {
     const userId = req.user!.id;
     // Blacklister le token actuel
     const token = req.headers.authorization?.split(' ')[1];
+    let plt: Plateforme = 'WEB';
     if (token) {
-      const decoded = jwt.decode(token) as { exp?: number };
+      const decoded = jwt.decode(token) as { exp?: number; plt?: Plateforme };
+      if (decoded?.plt === 'MOBILE') plt = 'MOBILE';
       const ttl = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
       if (ttl > 0) await redisClient.setEx(`blacklist:${token}`, ttl, '1');
     }
-    // Supprimer refresh token
-    await redisClient.del(`refresh:${userId}`);
-    await auditLog(userId, 'LOGOUT', 'auth', undefined, {}, req);
+    // Clore la session de cette plateforme (refresh + sid → tous ses jetons meurent)
+    await redisClient.del(`refresh:${plt}:${userId}`);
+    await effacerSession(userId, plt);
+    await auditLog(userId, 'LOGOUT', 'auth', undefined, { plateforme: plt }, req);
     res.json({ success: true, message: 'Déconnecté' });
   } catch (err) { next(err); }
 }
@@ -108,23 +122,30 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
     const { refreshToken: token } = req.body;
     if (!token) throw new AppError('Refresh token manquant', 400);
 
-    let payload: { sub: string };
+    let payload: { sub: string; sid?: string; plt?: Plateforme };
     try {
-      payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as { sub: string };
+      payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as { sub: string; sid?: string; plt?: Plateforme };
     } catch {
       throw new AppError('Refresh token invalide ou expiré', 401);
     }
+    // Jetons d'avant la session unique (sans sid/plt) : reconnexion requise.
+    if (!payload.sid || !payload.plt) throw new AppError('Session expirée, reconnectez-vous', 401);
 
-    const stored = await redisClient.get(`refresh:${payload.sub}`);
+    const stored = await redisClient.get(`refresh:${payload.plt}:${payload.sub}`);
     if (stored !== token) throw new AppError('Refresh token révoqué', 401);
+    // Session remplacée par un login plus récent sur la même plateforme ?
+    if (!(await sessionValide(payload.sub, payload.plt, payload.sid))) {
+      throw new AppError('Session ouverte sur un autre appareil', 401);
+    }
 
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive) throw new AppError('Utilisateur introuvable', 401);
 
-    const newAccess = signAccess(user.id, user.role);
-    const newRefresh = signRefresh(user.id);
+    // Rotation des jetons au sein de la MÊME session (le sid ne change pas).
+    const newAccess = signAccess(user.id, user.role, payload.sid, payload.plt);
+    const newRefresh = signRefresh(user.id, payload.sid, payload.plt);
 
-    await redisClient.setEx(`refresh:${user.id}`, REFRESH_TTL_SECONDS, newRefresh);
+    await redisClient.setEx(`refresh:${payload.plt}:${user.id}`, REFRESH_TTL_SECONDS, newRefresh);
 
     res.json({ success: true, data: { accessToken: newAccess, refreshToken: newRefresh } });
   } catch (err) { next(err); }

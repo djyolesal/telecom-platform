@@ -49,7 +49,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const res = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+            body: JSON.stringify({ email: credentials.email, password: credentials.password, platform: 'WEB' }),
           });
           if (!res.ok) return null;
           const json = await res.json();
