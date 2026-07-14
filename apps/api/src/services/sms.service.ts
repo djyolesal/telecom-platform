@@ -33,17 +33,25 @@ export function normaliserTelephone(tel: string): string {
   return `+228${digits}`;
 }
 
-/** Envoi d'UN SMS via la passerelle HTTP. À ajuster au format exact de l'API Moov
- *  une fois le contrat signé (endpoint, noms de champs, authentification). */
+/**
+ * Envoi d'UN SMS via la passerelle Kannel (SMS Pro Moov Africa) :
+ *   GET http://<ip>:<port>/cgi-bin/sendsms?username=…&password=…&smsc=…&from=…&to=…&text=…
+ * Kannel répond 202 « 0: Accepted for delivery » en cas de succès (res.ok le couvre).
+ * charset=UTF-8 pour que les accents (é, à, …) passent correctement.
+ * NB : `to` accepte plusieurs numéros séparés par des virgules, mais on envoie
+ * numéro par numéro pour journaliser un statut individuel par contact.
+ */
 async function envoyerSms(telephone: string, message: string): Promise<void> {
-  const res = await fetch(env.SMS_API_URL!, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(env.SMS_API_TOKEN ? { Authorization: `Bearer ${env.SMS_API_TOKEN}` } : {}),
-    },
-    body: JSON.stringify({ from: env.SMS_SENDER, to: telephone, message }),
-  });
+  const url = new URL(env.SMS_API_URL!);
+  url.searchParams.set('username', env.SMS_USERNAME ?? '');
+  url.searchParams.set('password', env.SMS_PASSWORD ?? '');
+  if (env.SMS_SMSC) url.searchParams.set('smsc', env.SMS_SMSC);
+  url.searchParams.set('from', env.SMS_SENDER);
+  url.searchParams.set('to', telephone);
+  url.searchParams.set('text', message);
+  url.searchParams.set('charset', 'UTF-8');
+  const res = await fetch(url);
+  // Ne jamais inclure l'URL dans l'erreur : elle contient le mot de passe.
   if (!res.ok) throw new Error(`Passerelle SMS: HTTP ${res.status} ${(await res.text()).slice(0, 120)}`);
 }
 

@@ -111,9 +111,12 @@ services:
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
-      # Passerelle SMS Moov Africa (vides = mode simulation, journalisé sans envoi).
+      # Passerelle SMS Kannel Moov Africa (SMS_API_URL vide = mode simulation).
+      # SMS_API_URL = http://<ip>:<port>/cgi-bin/sendsms (sans paramètres).
       SMS_API_URL: ${SMS_API_URL:-}
-      SMS_API_TOKEN: ${SMS_API_TOKEN:-}
+      SMS_USERNAME: ${SMS_USERNAME:-}
+      SMS_PASSWORD: ${SMS_PASSWORD:-}
+      SMS_SMSC: ${SMS_SMSC:-}
       SMS_SENDER: ${SMS_SENDER:-EMOPS}
       FCM_SERVER_KEY: ${FCM_SERVER_KEY}
       CORS_ORIGIN: https://${DOMAIN}

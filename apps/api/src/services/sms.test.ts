@@ -6,7 +6,7 @@ jest.mock('../config/database', () => ({
   prisma: { smsLog: { create: jest.fn().mockResolvedValue({}) } },
 }));
 jest.mock('../config/env', () => ({
-  env: { SMS_API_URL: undefined, SMS_API_TOKEN: undefined, SMS_SENDER: 'EMOPS' },
+  env: { SMS_API_URL: undefined, SMS_USERNAME: 'user', SMS_PASSWORD: 'pass', SMS_SMSC: undefined, SMS_SENDER: 'EMOPS' },
 }));
 jest.mock('../utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn() },
@@ -53,13 +53,22 @@ describe('envoyerSmsManuel', () => {
     fetchSpy.mockRestore();
   });
 
-  it('avec passerelle : statut ENVOYE quand la requête HTTP réussit', async () => {
-    (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
+  it('avec passerelle : statut ENVOYE et URL au format Kannel (GET cgi-bin/sendsms)', async () => {
+    (env as { SMS_API_URL?: string }).SMS_API_URL = 'http://10.0.0.1:13013/cgi-bin/sendsms';
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
-    const { simule, resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test');
+    const { simule, resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test é');
     expect(simule).toBe(false);
     expect(resultats[0].statut).toBe('ENVOYE');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0][0] as URL;
+    expect(url.pathname).toBe('/cgi-bin/sendsms');
+    expect(url.searchParams.get('username')).toBe('user');
+    expect(url.searchParams.get('password')).toBe('pass');
+    expect(url.searchParams.get('from')).toBe('EMOPS');
+    expect(url.searchParams.get('to')).toBe('+22897589258');
+    expect(url.searchParams.get('text')).toBe('Test é');
+    expect(url.searchParams.get('charset')).toBe('UTF-8');
+    expect(url.searchParams.has('smsc')).toBe(false); // absent si non configuré
     fetchSpy.mockRestore();
   });
 
