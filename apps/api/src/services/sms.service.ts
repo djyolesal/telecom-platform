@@ -48,9 +48,11 @@ export function normaliserTelephone(tel: string): string {
  *    contre la passerelle Moov (envoi manuel de test) avant de basculer.
  */
 async function envoyerSms(telephone: string, message: string): Promise<void> {
-  let res: Response;
+  let cible: URL | string;
+  let init: RequestInit;
   if (env.SMS_HTTP_METHOD === 'POST') {
-    res = await fetch(env.SMS_API_URL!, {
+    cible = env.SMS_API_URL!;
+    init = {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain; charset=UTF-8',
@@ -61,7 +63,7 @@ async function envoyerSms(telephone: string, message: string): Promise<void> {
         'X-Kannel-To': telephone,
       },
       body: message,
-    });
+    };
   } else {
     const url = new URL(env.SMS_API_URL!);
     url.searchParams.set('username', env.SMS_USERNAME ?? '');
@@ -71,7 +73,21 @@ async function envoyerSms(telephone: string, message: string): Promise<void> {
     url.searchParams.set('to', telephone);
     url.searchParams.set('text', message);
     url.searchParams.set('charset', 'UTF-8');
-    res = await fetch(url);
+    cible = url;
+    init = {};
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(cible, { ...init, signal: AbortSignal.timeout(10_000) });
+  } catch (e) {
+    // « fetch failed » de Node masque la cause réseau réelle (ECONNREFUSED,
+    // ETIMEDOUT, ENOTFOUND…) dans e.cause : on la remonte pour le diagnostic.
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+    const detail = cause?.code ?? cause?.message ?? (e instanceof Error && e.name === 'TimeoutError' ? 'délai dépassé (10 s)' : null);
+    throw new Error(
+      `Passerelle SMS injoignable${detail ? ` (${detail})` : ''} — vérifier SMS_API_URL et l'accès réseau depuis le conteneur API`
+    );
   }
   // Ne jamais inclure l'URL dans l'erreur : en GET elle contient le mot de passe.
   if (!res.ok) throw new Error(`Passerelle SMS: HTTP ${res.status} ${(await res.text()).slice(0, 120)}`);

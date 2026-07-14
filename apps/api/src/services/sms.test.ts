@@ -93,6 +93,18 @@ describe('envoyerSmsManuel', () => {
     fetchSpy.mockRestore();
   });
 
+  it('panne réseau : la cause réelle (ECONNREFUSED…) est extraite du « fetch failed »', async () => {
+    (env as { SMS_API_URL?: string }).SMS_API_URL = 'http://10.0.0.1:13013/cgi-bin/sendsms';
+    const err = new TypeError('fetch failed');
+    (err as { cause?: unknown }).cause = { code: 'ECONNREFUSED' };
+    const fetchSpy = jest.spyOn(global, 'fetch').mockRejectedValue(err);
+    const { resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test');
+    expect(resultats[0].statut).toBe('ECHEC');
+    expect(resultats[0].erreur).toContain('ECONNREFUSED');
+    expect(resultats[0].erreur).toContain('injoignable');
+    fetchSpy.mockRestore();
+  });
+
   it('avec passerelle : statut ECHEC et erreur journalisée quand la requête échoue', async () => {
     (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
