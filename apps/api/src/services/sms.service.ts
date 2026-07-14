@@ -47,6 +47,46 @@ async function envoyerSms(telephone: string, message: string): Promise<void> {
   if (!res.ok) throw new Error(`Passerelle SMS: HTTP ${res.status} ${(await res.text()).slice(0, 120)}`);
 }
 
+export interface ResultatEnvoiManuel {
+  telephone: string;
+  contactId: string | null;
+  statut: 'ENVOYE' | 'ECHEC' | 'SIMULE';
+  erreur: string | null;
+}
+
+/**
+ * Envoi manuel d'un SMS à une liste de destinataires (endpoint POST /sms/send).
+ * Même passerelle et même mode SIMULE que les notifications automatiques ;
+ * chaque envoi est journalisé dans sms_logs avec l'événement MANUEL.
+ */
+export async function envoyerSmsManuel(
+  destinataires: { telephone: string; contactId?: string | null }[],
+  message: string
+): Promise<{ simule: boolean; resultats: ResultatEnvoiManuel[] }> {
+  const simule = !env.SMS_API_URL;
+  const resultats = await Promise.all(
+    destinataires.map(async (d): Promise<ResultatEnvoiManuel> => {
+      const telephone = normaliserTelephone(d.telephone);
+      let statut: ResultatEnvoiManuel['statut'] = simule ? 'SIMULE' : 'ENVOYE';
+      let erreur: string | null = null;
+      if (!simule) {
+        try {
+          await envoyerSms(telephone, message);
+        } catch (e) {
+          statut = 'ECHEC';
+          erreur = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
+        }
+      }
+      await prisma.smsLog.create({
+        data: { telephone, contactId: d.contactId ?? null, message, evenement: 'MANUEL', statut, erreur },
+      });
+      return { telephone, contactId: d.contactId ?? null, statut, erreur };
+    })
+  );
+  logger.info(`[sms] envoi manuel → ${resultats.length} destinataire(s)${simule ? ' (SIMULE)' : ''}`);
+  return { simule, resultats };
+}
+
 /**
  * Notifie les contacts concernés par une action. Best-effort et non bloquant :
  * à appeler en `void notifierAction(...)` — un échec SMS ne doit jamais faire

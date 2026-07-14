@@ -83,6 +83,8 @@ router.get('/contacts', rbac(['ADMIN']), contactsCtrl.getContacts);
 router.post('/contacts', rbac(['ADMIN']), contactsCtrl.createContact);
 router.post('/contacts/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), contactsCtrl.importContacts);
 router.get('/contacts/sms-logs', rbac(['ADMIN']), contactsCtrl.getSmsLogs);
+// Envoi manuel de SMS — limité en débit (coût par SMS une fois la passerelle active).
+router.post('/sms/send', rbac(['ADMIN']), rateLimit({ windowSec: 3600, max: 30, keyPrefix: 'smssend' }), contactsCtrl.sendSms);
 router.put('/contacts/:id', rbac(['ADMIN']), contactsCtrl.updateContact);
 router.delete('/contacts/:id', rbac(['ADMIN']), contactsCtrl.deleteContact);
 router.get('/prestataires/:id', prestatairesCtrl.getPrestataireById);

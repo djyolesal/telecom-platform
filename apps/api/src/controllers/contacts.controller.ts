@@ -4,7 +4,7 @@ import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
-import { normaliserTelephone } from '../services/sms.service';
+import { normaliserTelephone, envoyerSmsManuel } from '../services/sms.service';
 
 /**
  * Carnet de contacts à notifier par SMS (personnel interne, prestataires,
@@ -162,6 +162,55 @@ export async function importContacts(req: Request, res: Response, next: NextFunc
     }
     await auditLog(req.user!.id, 'CREATE', 'contacts', 'import-xlsx', { crees, maj, ignores }, req);
     res.json({ success: true, data: { crees, maj, ignores } });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Envoi manuel d'un SMS (admin) : à des contacts du carnet (contactIds) et/ou
+ * des numéros libres (telephones). Un même numéro présent deux fois n'est
+ * envoyé qu'une fois. Journalisé dans sms_logs (événement MANUEL) ; en mode
+ * SIMULE (passerelle non configurée), rien ne part mais tout est tracé.
+ */
+export async function sendSms(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { message, contactIds, telephones } = req.body as {
+      message?: string;
+      contactIds?: string[];
+      telephones?: string[];
+    };
+    const texte = typeof message === 'string' ? message.trim() : '';
+    if (!texte) throw new AppError('message est requis', 400);
+    if (texte.length > 320) throw new AppError('message trop long (320 caractères maximum)', 400);
+
+    // Destinataires dédupliqués par numéro normalisé.
+    const destinataires = new Map<string, { telephone: string; contactId?: string }>();
+    if (Array.isArray(contactIds) && contactIds.length) {
+      const contacts = await prisma.contact.findMany({ where: { id: { in: contactIds } } });
+      if (contacts.length !== new Set(contactIds).size) {
+        throw new AppError('Un ou plusieurs contacts sont introuvables', 404);
+      }
+      for (const c of contacts) {
+        destinataires.set(normaliserTelephone(c.telephone), { telephone: c.telephone, contactId: c.id });
+      }
+    }
+    for (const t of Array.isArray(telephones) ? telephones : []) {
+      const tel = normaliserTelephone(String(t));
+      if (!/^\+\d{8,15}$/.test(tel)) throw new AppError(`Numéro invalide : ${t}`, 400);
+      if (!destinataires.has(tel)) destinataires.set(tel, { telephone: tel });
+    }
+    if (!destinataires.size) {
+      throw new AppError('Au moins un destinataire est requis (contactIds ou telephones)', 400);
+    }
+    if (destinataires.size > 100) throw new AppError('100 destinataires maximum par envoi', 400);
+
+    const { simule, resultats } = await envoyerSmsManuel([...destinataires.values()], texte);
+    const echecs = resultats.filter((r) => r.statut === 'ECHEC').length;
+    await auditLog(req.user!.id, 'CREATE', 'sms', 'envoi-manuel',
+      { destinataires: resultats.length, echecs, simule }, req);
+    res.json({
+      success: true,
+      data: { simule, total: resultats.length, envoyes: resultats.length - echecs, echecs, resultats },
+    });
   } catch (err) { next(err); }
 }
 

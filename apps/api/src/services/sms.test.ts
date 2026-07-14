@@ -1,4 +1,16 @@
-import { normaliserTelephone } from './sms.service';
+import { normaliserTelephone, envoyerSmsManuel } from './sms.service';
+import { prisma } from '../config/database';
+import { env } from '../config/env';
+
+jest.mock('../config/database', () => ({
+  prisma: { smsLog: { create: jest.fn().mockResolvedValue({}) } },
+}));
+jest.mock('../config/env', () => ({
+  env: { SMS_API_URL: undefined, SMS_API_TOKEN: undefined, SMS_SENDER: 'EMOPS' },
+}));
+jest.mock('../utils/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn() },
+}));
 
 describe('normaliserTelephone', () => {
   it('préfixe +228 les numéros locaux à 8 chiffres (format du fichier contacts)', () => {
@@ -13,5 +25,55 @@ describe('normaliserTelephone', () => {
   it('conserve les numéros déjà internationaux', () => {
     expect(normaliserTelephone('+22897589258')).toBe('+22897589258');
     expect(normaliserTelephone('22897589258')).toBe('+22897589258');
+  });
+});
+
+describe('envoyerSmsManuel', () => {
+  const logCreate = prisma.smsLog.create as jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (env as { SMS_API_URL?: string }).SMS_API_URL = undefined;
+  });
+
+  it('sans passerelle configurée : statut SIMULE, journalisé, aucun appel réseau', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    const { simule, resultats } = await envoyerSmsManuel(
+      [{ telephone: '97589258', contactId: 'c1' }, { telephone: '+22890000000' }],
+      'Test'
+    );
+    expect(simule).toBe(true);
+    expect(resultats).toEqual([
+      { telephone: '+22897589258', contactId: 'c1', statut: 'SIMULE', erreur: null },
+      { telephone: '+22890000000', contactId: null, statut: 'SIMULE', erreur: null },
+    ]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(logCreate).toHaveBeenCalledTimes(2);
+    expect(logCreate.mock.calls[0][0].data).toMatchObject({ evenement: 'MANUEL', statut: 'SIMULE' });
+    fetchSpy.mockRestore();
+  });
+
+  it('avec passerelle : statut ENVOYE quand la requête HTTP réussit', async () => {
+    (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
+    const { simule, resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test');
+    expect(simule).toBe(false);
+    expect(resultats[0].statut).toBe('ENVOYE');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
+  it('avec passerelle : statut ECHEC et erreur journalisée quand la requête échoue', async () => {
+    (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: () => Promise.resolve('boom'),
+    } as unknown as Response);
+    const { resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test');
+    expect(resultats[0].statut).toBe('ECHEC');
+    expect(resultats[0].erreur).toContain('HTTP 500');
+    expect(logCreate.mock.calls[0][0].data).toMatchObject({ statut: 'ECHEC' });
+    fetchSpy.mockRestore();
   });
 });
