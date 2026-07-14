@@ -1,0 +1,174 @@
+import { Request, Response, NextFunction } from 'express';
+import ExcelJS from 'exceljs';
+import { prisma } from '../config/database';
+import { env } from '../config/env';
+import { AppError } from '../utils/AppError';
+import { auditLog } from '../services/audit.service';
+import { normaliserTelephone } from '../services/sms.service';
+
+/**
+ * Carnet de contacts à notifier par SMS (personnel interne, prestataires,
+ * techniciens). CRUD réservé à l'admin + import du fichier Excel existant.
+ */
+
+// Préférences booléennes éditables (liste blanche anti mass-assignment).
+const PREF_KEYS = ['actif', 'notifDemarrage', 'notifCloture', 'notifMaintenances', 'notifIncidents', 'toutesSocietes'] as const;
+
+const normNom = (s: string) => s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
+
+/** Résout la société saisie vers un prestataire connu (par nom normalisé). */
+async function resolvePrestataireId(societe: string): Promise<string | null> {
+  if (!societe || normNom(societe) === 'INTERNE') return null;
+  const prestataires = await prisma.prestataire.findMany({ select: { id: true, nom: true } });
+  return prestataires.find((p) => normNom(p.nom) === normNom(societe))?.id ?? null;
+}
+
+function pickPrefs(body: Record<string, unknown>) {
+  const out: Record<string, boolean> = {};
+  for (const k of PREF_KEYS) if (typeof body[k] === 'boolean') out[k] = body[k] as boolean;
+  return out;
+}
+
+export async function getContacts(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { search, societe } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = {};
+    if (societe) where.societe = societe;
+    if (search) where.OR = [
+      { nom: { contains: search, mode: 'insensitive' } },
+      { prenom: { contains: search, mode: 'insensitive' } },
+      { telephone: { contains: search } },
+    ];
+    const contacts = await prisma.contact.findMany({
+      where,
+      orderBy: [{ societe: 'asc' }, { nom: 'asc' }],
+      include: { prestataire: { select: { nom: true } } },
+    });
+    const societes = await prisma.contact.groupBy({ by: ['societe'], orderBy: { societe: 'asc' } });
+    res.json({ success: true, data: contacts, societes: societes.map((s) => s.societe) });
+  } catch (err) { next(err); }
+}
+
+export async function createContact(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { nom, prenom, telephone, email, societe } = req.body as Record<string, string>;
+    if (!nom || !prenom || !telephone || !societe) {
+      throw new AppError('nom, prénom, téléphone et société sont requis', 400);
+    }
+    const contact = await prisma.contact.create({
+      data: {
+        nom: nom.trim(), prenom: prenom.trim(),
+        telephone: normaliserTelephone(telephone),
+        email: email?.trim() || null,
+        societe: societe.trim(),
+        prestataireId: await resolvePrestataireId(societe),
+        toutesSocietes: normNom(societe) === 'INTERNE', // les internes voient tout par défaut
+        ...pickPrefs(req.body),
+      },
+    });
+    await auditLog(req.user!.id, 'CREATE', 'contacts', contact.id, { nom, telephone }, req);
+    res.status(201).json({ success: true, data: contact });
+  } catch (err) {
+    if ((err as { code?: string }).code === 'P2002') return next(new AppError('Un contact avec ce téléphone existe déjà', 409));
+    next(err);
+  }
+}
+
+export async function updateContact(req: Request, res: Response, next: NextFunction) {
+  try {
+    const existing = await prisma.contact.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new AppError('Contact introuvable', 404);
+    const { nom, prenom, telephone, email, societe } = req.body as Record<string, string>;
+    const updated = await prisma.contact.update({
+      where: { id: req.params.id },
+      data: {
+        ...(nom ? { nom: nom.trim() } : {}),
+        ...(prenom ? { prenom: prenom.trim() } : {}),
+        ...(telephone ? { telephone: normaliserTelephone(telephone) } : {}),
+        ...(email !== undefined ? { email: email?.trim() || null } : {}),
+        ...(societe ? { societe: societe.trim(), prestataireId: await resolvePrestataireId(societe) } : {}),
+        ...pickPrefs(req.body),
+      },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'contacts', existing.id, req.body, req);
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    if ((err as { code?: string }).code === 'P2002') return next(new AppError('Un contact avec ce téléphone existe déjà', 409));
+    next(err);
+  }
+}
+
+export async function deleteContact(req: Request, res: Response, next: NextFunction) {
+  try {
+    const existing = await prisma.contact.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new AppError('Contact introuvable', 404);
+    await prisma.contact.delete({ where: { id: req.params.id } });
+    await auditLog(req.user!.id, 'DELETE', 'contacts', existing.id, { nom: existing.nom, telephone: existing.telephone }, req);
+    res.json({ success: true, message: 'Contact supprimé' });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Import du fichier Excel (colonnes : nom, prénom, telephone, email, employe).
+ * Upsert par téléphone : les contacts existants sont mis à jour (nom/société),
+ * leurs préférences déjà réglées sont conservées.
+ */
+export async function importContacts(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) throw new AppError('Fichier .xlsx requis (champ « file »)', 400);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+    const ws = wb.worksheets[0];
+    if (!ws) throw new AppError('Classeur vide', 400);
+
+    // En-têtes (ligne 1) normalisés → index de colonne.
+    const normHeader = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+    const colIdx: Record<string, number> = {};
+    ws.getRow(1).eachCell((cell, col) => { colIdx[normHeader(String(cell.value ?? ''))] = col; });
+    for (const requis of ['nom', 'prenom', 'telephone']) {
+      if (!colIdx[requis]) throw new AppError(`Colonne « ${requis} » introuvable dans le fichier`, 400);
+    }
+
+    const prestataires = await prisma.prestataire.findMany({ select: { id: true, nom: true } });
+    const parNom = new Map(prestataires.map((p) => [normNom(p.nom), p.id]));
+
+    let crees = 0, maj = 0, ignores = 0;
+    for (let r = 2; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      const val = (key: string) => String(row.getCell(colIdx[key] ?? 0).value ?? '').trim();
+      const nom = val('nom'), prenom = val('prenom'), telephone = val('telephone');
+      if (!nom || !telephone) { if (nom || prenom || telephone) ignores++; continue; }
+      const societe = val('employe') || val('societe') || 'INTERNE';
+      const email = colIdx.email ? val('email') : '';
+      const tel = normaliserTelephone(telephone);
+      const prestataireId = parNom.get(normNom(societe)) ?? null;
+
+      const existing = await prisma.contact.findUnique({ where: { telephone: tel } });
+      if (existing) {
+        await prisma.contact.update({
+          where: { telephone: tel },
+          data: { nom, prenom, email: email || null, societe, prestataireId },
+        });
+        maj++;
+      } else {
+        await prisma.contact.create({
+          data: {
+            nom, prenom, telephone: tel, email: email || null, societe, prestataireId,
+            toutesSocietes: normNom(societe) === 'INTERNE',
+          },
+        });
+        crees++;
+      }
+    }
+    await auditLog(req.user!.id, 'CREATE', 'contacts', 'import-xlsx', { crees, maj, ignores }, req);
+    res.json({ success: true, data: { crees, maj, ignores } });
+  } catch (err) { next(err); }
+}
+
+/** Journal des derniers SMS (envoyés, simulés ou en échec) pour vérification. */
+export async function getSmsLogs(req: Request, res: Response, next: NextFunction) {
+  try {
+    const logs = await prisma.smsLog.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+    res.json({ success: true, data: logs, smsActive: !!env.SMS_API_URL });
+  } catch (err) { next(err); }
+}

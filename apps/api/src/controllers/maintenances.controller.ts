@@ -14,6 +14,7 @@ import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { assertOnSite } from '../utils/geofence';
+import { notifierAction } from '../services/sms.service';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -382,6 +383,10 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
         longitudeDebut: longitude ?? undefined,
       },
     });
+    void notifierAction({
+      domaine: 'MAINTENANCE', evenement: 'DEMARRAGE', siteCode: existing.site.code,
+      technicienId, detail: existing.type === 'PREVENTIVE' ? 'préventive' : 'curative',
+    });
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }
@@ -676,6 +681,11 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     } catch { /* PDF non bloquant : la clôture reste valide */ }
 
     await auditLog(req.user!.id, 'CLOSE', 'maintenances', existing.id, { dureeMinutes }, req);
+    void notifierAction({
+      domaine: 'MAINTENANCE', evenement: 'CLOTURE', siteCode: existing.site.code,
+      technicienId: existing.technicienId ?? req.user!.id,
+      detail: existing.type === 'PREVENTIVE' ? 'préventive' : 'curative',
+    });
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }

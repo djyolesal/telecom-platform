@@ -11,6 +11,7 @@ import { io } from '../server';
 import { differenceInMinutes } from 'date-fns';
 import { assertOnSite } from '../utils/geofence';
 import { publicFileUrl } from '../services/storage.service';
+import { notifierAction } from '../services/sms.service';
 
 // Photos minimum (prises sur place) pour clôturer un incident.
 const MIN_PHOTOS_INCIDENT = 6;
@@ -187,6 +188,10 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
 
     await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'demarrage', latitude, longitude }, req);
     io.of('/supervision').emit('incident:updated', { id: updated.id, statut: updated.statut });
+    void notifierAction({
+      domaine: 'INCIDENT', evenement: 'DEMARRAGE', siteCode: incident.site.code,
+      technicienId: incident.technicienId ?? req.user!.id,
+    });
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }
@@ -281,6 +286,10 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
 
     await auditLog(req.user!.id, 'CLOSE', 'incidents', incident.id, { causeProbable, duree }, req);
     io.of('/supervision').emit('incident:resolved', { id: updated.id, dureeCoupureMinutes: duree });
+    void notifierAction({
+      domaine: 'INCIDENT', evenement: 'CLOTURE', siteCode: incident.site.code,
+      technicienId: incident.technicienId ?? req.user!.id,
+    });
 
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }

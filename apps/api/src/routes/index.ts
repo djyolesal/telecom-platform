@@ -6,6 +6,7 @@ import { rateLimit } from '../middlewares/rateLimit';
 // Controllers
 import * as authCtrl from '../controllers/auth.controller';
 import * as sitesCtrl from '../controllers/sites.controller';
+import * as contactsCtrl from '../controllers/contacts.controller';
 import * as maintenanceCtrl from '../controllers/maintenances.controller';
 import * as actifsCtrl from '../controllers/actifs.controller';
 import * as depotagesCtrl from '../controllers/depotages.controller';
@@ -76,6 +77,14 @@ router.get('/sites/:id/etiquettes-qr.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN'
 // ── Prestataires ──────────────────────────────────────────────
 router.get('/prestataires', prestatairesCtrl.getPrestataires);
 router.post('/prestataires', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.createPrestataire);
+
+// ── Contacts à notifier (SMS) — gestion admin ──
+router.get('/contacts', rbac(['ADMIN']), contactsCtrl.getContacts);
+router.post('/contacts', rbac(['ADMIN']), contactsCtrl.createContact);
+router.post('/contacts/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), contactsCtrl.importContacts);
+router.get('/contacts/sms-logs', rbac(['ADMIN']), contactsCtrl.getSmsLogs);
+router.put('/contacts/:id', rbac(['ADMIN']), contactsCtrl.updateContact);
+router.delete('/contacts/:id', rbac(['ADMIN']), contactsCtrl.deleteContact);
 router.get('/prestataires/:id', prestatairesCtrl.getPrestataireById);
 router.put('/prestataires/:id', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.updatePrestataire);
 router.post('/prestataires/:id/toggle-active', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.togglePrestataire);

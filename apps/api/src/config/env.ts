@@ -39,6 +39,11 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('E&M OpS <noreply@emops.uk>'),
   SMTP_REPLY_TO: z.string().optional(),
+  // Passerelle SMS (contrat SMS Pro Moov Africa) — sans SMS_API_URL, les envois
+  // sont journalisés en mode SIMULE (aucun SMS réel, aucune erreur).
+  SMS_API_URL: z.string().optional(),
+  SMS_API_TOKEN: z.string().optional(),
+  SMS_SENDER: z.string().default('EMOPS'),
 
   // Firebase Cloud Messaging
   FCM_SERVER_KEY: z.string().optional(),

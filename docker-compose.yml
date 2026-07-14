@@ -111,6 +111,10 @@ services:
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
+      # Passerelle SMS Moov Africa (vides = mode simulation, journalisé sans envoi).
+      SMS_API_URL: ${SMS_API_URL:-}
+      SMS_API_TOKEN: ${SMS_API_TOKEN:-}
+      SMS_SENDER: ${SMS_SENDER:-EMOPS}
       FCM_SERVER_KEY: ${FCM_SERVER_KEY}
       CORS_ORIGIN: https://${DOMAIN}
       # Base publique pour les URLs de fichiers MinIO (photos, signatures, PDF).

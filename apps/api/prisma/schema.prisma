@@ -568,8 +568,54 @@ model Prestataire {
   users          User[]
   maintenances   Maintenance[]
   bonsLivraison  BonLivraison[]
+  contacts       Contact[]
 
   @@map("prestataires")
+}
+
+// Carnet de contacts à notifier (SMS) quand un technicien démarre/clôture une
+// action. Indépendant des comptes User : la plupart de ces personnes n'ont pas
+// accès à la plateforme. Géré en CRUD par l'admin (+ import Excel).
+model Contact {
+  id            String   @id @default(uuid())
+  nom           String   @db.VarChar(80)
+  prenom        String   @db.VarChar(80)
+  telephone     String   @unique @db.VarChar(20)
+  email         String?  @db.VarChar(100)
+  societe       String   @db.VarChar(80) // libellé affiché (INTERNE, NETIS, …)
+  prestataireId String?  @map("prestataire_id") // résolu depuis societe quand possible
+  actif         Boolean  @default(true)
+  // Préférences de notification (configurables par contact)
+  notifDemarrage    Boolean @default(true) @map("notif_demarrage")
+  notifCloture      Boolean @default(true) @map("notif_cloture")
+  notifMaintenances Boolean @default(true) @map("notif_maintenances")
+  notifIncidents    Boolean @default(true) @map("notif_incidents")
+  // true : reçoit les actions de toutes les sociétés ; false : uniquement celles
+  // de sa société (technicien du même prestataire, ou interne si contact interne).
+  toutesSocietes Boolean @default(false) @map("toutes_societes")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  prestataire Prestataire? @relation(fields: [prestataireId], references: [id])
+
+  @@index([prestataireId])
+  @@map("contacts")
+}
+
+// Journal des SMS émis (ou simulés tant que la passerelle n'est pas configurée) :
+// trace le destinataire, l'événement déclencheur et le résultat.
+model SmsLog {
+  id        String   @id @default(uuid())
+  telephone String   @db.VarChar(20)
+  contactId String?  @map("contact_id")
+  message   String   @db.VarChar(320)
+  evenement String   @db.VarChar(60) // ex: MAINTENANCE_DEMARRAGE, INCIDENT_CLOTURE
+  statut    String   @db.VarChar(12) // ENVOYE | ECHEC | SIMULE
+  erreur    String?  @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("sms_logs")
 }
 
 model Lot {
