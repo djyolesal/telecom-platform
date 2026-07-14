@@ -118,6 +118,8 @@ services:
       SMS_PASSWORD: ${SMS_PASSWORD:-}
       SMS_SMSC: ${SMS_SMSC:-}
       SMS_SENDER: ${SMS_SENDER:-EMOPS}
+      # GET (documenté Moov) ou POST (X-Kannel-*, identifiants hors des logs d'URL).
+      SMS_HTTP_METHOD: ${SMS_HTTP_METHOD:-GET}
       FCM_SERVER_KEY: ${FCM_SERVER_KEY}
       CORS_ORIGIN: https://${DOMAIN}
       # Base publique pour les URLs de fichiers MinIO (photos, signatures, PDF).

@@ -47,6 +47,9 @@ const envSchema = z.object({
   SMS_PASSWORD: z.string().optional(),
   SMS_SMSC: z.string().optional(),
   SMS_SENDER: z.string().default('EMOPS'),
+  // GET (format documenté par Moov) ou POST (en-têtes X-Kannel-*, texte en corps :
+  // identifiants hors des logs d'URL — à valider contre leur passerelle avant usage).
+  SMS_HTTP_METHOD: z.enum(['GET', 'POST']).default('GET'),
 
   // Firebase Cloud Messaging
   FCM_SERVER_KEY: z.string().optional(),

@@ -6,7 +6,7 @@ jest.mock('../config/database', () => ({
   prisma: { smsLog: { create: jest.fn().mockResolvedValue({}) } },
 }));
 jest.mock('../config/env', () => ({
-  env: { SMS_API_URL: undefined, SMS_USERNAME: 'user', SMS_PASSWORD: 'pass', SMS_SMSC: undefined, SMS_SENDER: 'EMOPS' },
+  env: { SMS_API_URL: undefined, SMS_USERNAME: 'user', SMS_PASSWORD: 'pass', SMS_SMSC: undefined, SMS_SENDER: 'EMOPS', SMS_HTTP_METHOD: 'GET' },
 }));
 jest.mock('../utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn() },
@@ -34,6 +34,7 @@ describe('envoyerSmsManuel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (env as { SMS_API_URL?: string }).SMS_API_URL = undefined;
+    (env as { SMS_HTTP_METHOD?: string }).SMS_HTTP_METHOD = 'GET';
   });
 
   it('sans passerelle configurée : statut SIMULE, journalisé, aucun appel réseau', async () => {
@@ -69,6 +70,26 @@ describe('envoyerSmsManuel', () => {
     expect(url.searchParams.get('text')).toBe('Test é');
     expect(url.searchParams.get('charset')).toBe('UTF-8');
     expect(url.searchParams.has('smsc')).toBe(false); // absent si non configuré
+    fetchSpy.mockRestore();
+  });
+
+  it('en mode POST : en-têtes X-Kannel-* et texte du message en corps (rien dans l\'URL)', async () => {
+    (env as { SMS_API_URL?: string }).SMS_API_URL = 'http://10.0.0.1:13013/cgi-bin/sendsms';
+    (env as { SMS_HTTP_METHOD?: string }).SMS_HTTP_METHOD = 'POST';
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
+    const { resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test é');
+    expect(resultats[0].statut).toBe('ENVOYE');
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toBe('http://10.0.0.1:13013/cgi-bin/sendsms'); // aucun paramètre dans l'URL
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe('Test é');
+    expect(init.headers).toMatchObject({
+      'X-Kannel-Username': 'user',
+      'X-Kannel-Password': 'pass',
+      'X-Kannel-From': 'EMOPS',
+      'X-Kannel-To': '+22897589258',
+    });
+    expect(init.headers).not.toHaveProperty('X-Kannel-SMSC'); // absent si non configuré
     fetchSpy.mockRestore();
   });
 
