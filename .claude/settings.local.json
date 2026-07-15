@@ -198,7 +198,10 @@
       "Bash(grep -nB2 -A6 \"prometheus:\" docker-compose.yml)",
       "Bash(grep -n \"resolver\\\\|set \\\\$\" infra/nginx/conf.d/telecom.conf)",
       "Bash(git commit -q -m ' *)",
-      "Bash(grep -nA5 \"enum StatutGE\" prisma/schema.prisma)"
+      "Bash(grep -nA5 \"enum StatutGE\" prisma/schema.prisma)",
+      "Bash(grep -nA10 \"enum RoleUser\" apps/api/prisma/schema.prisma)",
+      "Bash(~/flutter/bin/flutter --version)",
+      "Bash(~/flutter/bin/flutter analyze *)"
     ]
   }
 }
