@@ -32,7 +32,9 @@ export async function detectAnomalies(opts: { region?: string; sitesAll?: SiteFo
 
   const out: AnomalieConso[] = [];
   for (const s of sites) {
-    if (s.source !== 'historique' || s.consoTheoriqueJour <= 0) continue;
+    // Seules les consos mesurées (litres déclarés ou compteur horaire) sont
+    // comparables au théorique — pas les estimations régionales/théoriques.
+    if ((s.source !== 'historique' && s.source !== 'horametre') || s.consoTheoriqueJour <= 0) continue;
     const ratio = s.consoJour / s.consoTheoriqueJour;
     const type: AnomalieConso['type'] | null =
       ratio > 1 + seuil ? 'SURCONSOMMATION' : ratio < 1 - seuil ? 'SOUSCONSOMMATION' : null;

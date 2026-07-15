@@ -38,6 +38,10 @@ export function geParams() {
     seuilCritiqueLitres: getNum('ge.seuilCritiqueLitres', GE_PARAMS.seuilCritiqueLitres),
     seuilFaibleLitres: getNum('ge.seuilFaibleLitres', GE_PARAMS.seuilFaibleLitres),
     prixLitreFCFA: getNum('ge.prixLitreFCFA', GE_PARAMS.prixLitreFCFA),
+    // Garde-fous de repli de l'estimation conso (utilisés seulement quand un site
+    // n'a ni compteur horaire ni historique ni médiane régionale exploitables).
+    heuresMoisSecours: getNum('ge.heuresMoisSecours', GE_PARAMS.heuresMoisSecours),
+    facteurChargeSecours: getNum('ge.facteurChargeSecours', GE_PARAMS.facteurChargeSecours),
   };
 }
 
@@ -59,6 +63,8 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'carburant.seuilEcartLivraisonPct', label: 'Tolérance écart livraison', groupe: 'Carburant — stock', unite: '%', defaut: 5 },
     { key: 'carburant.seuilLivraisonMinPct', label: 'Livraison minimale (→ LIVRE)', groupe: 'Carburant — stock', unite: '%', defaut: 5 },
     { key: 'carburant.seuilAnomalieLitres', label: 'Plancher anti-bruit anomalie carburant', groupe: 'Carburant — stock', unite: 'L', defaut: 20 },
+    { key: 'ge.heuresMoisSecours', label: 'Marche GE secours par défaut (repli sans données)', groupe: 'Carburant — stock', unite: 'h/mois', defaut: GE_PARAMS.heuresMoisSecours },
+    { key: 'ge.facteurChargeSecours', label: 'Facteur de charge GE secours (repli)', groupe: 'Carburant — stock', unite: '', defaut: GE_PARAMS.facteurChargeSecours },
     // Carburant — manquants
     { key: 'manquant.delaiJours', label: 'Délai avant « en retard »', groupe: 'Carburant — manquants', unite: 'j', defaut: env.DELAI_MANQUANT_JOURS },
     { key: 'manquant.minLitres', label: 'Plancher anti-bruit', groupe: 'Carburant — manquants', unite: 'L', defaut: env.MANQUANT_MIN_LITRES },

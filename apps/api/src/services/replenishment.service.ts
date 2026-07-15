@@ -15,7 +15,10 @@ export interface SiteForecast {
   consoJour: number;
   consoTheoriqueJour: number;       // attendu selon la config GE
   tendance: 'HAUSSE' | 'STABLE' | 'BAISSE';
-  source: 'historique' | 'theorique';
+  // horametre : débit L/h réel × heures de marche mesurées (compteur horaire) —
+  // le plus fiable pour un GE secours. historique : EWMA des litres consommés.
+  // regional : heures de coupure médianes de la région. theorique : formule kVA.
+  source: 'horametre' | 'historique' | 'regional' | 'theorique';
   derniereMesure: string | null;    // date du dernier relevé de cuve (ISO), ou null
   heuresGEJour: number | null;       // temps de marche estimé du GE (h/jour)
   autonomieJours: number | null;
@@ -58,6 +61,176 @@ function explodeDemandes(forecasts: SiteForecast[], capacite: number): Demande[]
     }
   }
   return out;
+}
+
+// ── Estimation de la consommation journalière ────────────────────────────────
+// Pour un GE secours, la conso dépend de DEUX phénomènes indépendants : le débit
+// du moteur (L/h, propre au GE) et le temps de coupure CEET (h/j, propre au site
+// et à la saison). On les estime séparément sur les données réelles au lieu de
+// supposer 8 h/j et un facteur de charge kVA forfaitaires.
+
+/** Relevé GE minimal pour l'estimation (une ligne = un relevé d'un groupe). */
+export interface ReleveConsoLite {
+  date: Date;
+  groupeId: string | null;
+  conso: number | null;   // gasoilConsommeLitres depuis le relevé précédent
+  heures: number | null;  // heuresFonctGE déclarées depuis le relevé précédent
+  index: number | null;   // indexHeuresGE : compteur horaire cumulatif du GE
+}
+
+export interface EstimationConso {
+  consoJour: number;
+  source: SiteForecast['source'];
+  tendance: SiteForecast['tendance'];
+  heuresJour: number | null;     // h/j de marche retenues (mesurées ou régionales)
+  tauxHoraireLh: number | null;  // débit L/h retenu (réel si mesurable)
+}
+
+const EWMA_ALPHA = 0.4;
+
+/** Moyenne pondérée exponentielle, du plus ancien au plus récent. */
+function ewmaOf(vals: number[]): number {
+  let e = vals[0];
+  for (let i = 1; i < vals.length; i++) e = EWMA_ALPHA * vals[i] + (1 - EWMA_ALPHA) * e;
+  return e;
+}
+
+/** Médiane (null si vide). */
+export function mediane(vals: number[]): number | null {
+  if (!vals.length) return null;
+  const s = [...vals].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/**
+ * Heures de marche par jour d'après le COMPTEUR HORAIRE : Δindex/Δjours entre
+ * relevés consécutifs, EWMA par groupe, sommé sur les groupes du site (le
+ * compteur ne ment pas, même quand les litres déclarés sont approximatifs).
+ */
+export function heuresJourDepuisIndex(releves: ReleveConsoLite[]): number | null {
+  const parGroupe = new Map<string, { t: number; index: number }[]>();
+  for (const r of releves) {
+    if (r.index == null) continue;
+    const k = r.groupeId ?? '_';
+    const arr = parGroupe.get(k) ?? [];
+    arr.push({ t: r.date.getTime(), index: Number(r.index) });
+    parGroupe.set(k, arr);
+  }
+  let total = 0;
+  let vu = false;
+  for (const pts of parGroupe.values()) {
+    pts.sort((a, b) => a.t - b.t);
+    const debits: number[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      const dj = (pts[i].t - pts[i - 1].t) / DAY;
+      const dh = pts[i].index - pts[i - 1].index;
+      // Rejets : intervalle < 6 h (bruit), index qui recule (remplacement compteur),
+      // > 25 h/j (saisie aberrante).
+      if (dj >= 0.25 && dh >= 0 && dh / dj <= 25) debits.push(dh / dj);
+    }
+    if (debits.length) { total += ewmaOf(debits); vu = true; }
+  }
+  return vu ? total : null;
+}
+
+/** Repli : heures déclarées à la clôture (Σ heures ÷ jours couverts, par groupe). */
+export function heuresJourDeclarees(releves: ReleveConsoLite[]): number | null {
+  const parGroupe = new Map<string, { t: number; heures: number }[]>();
+  for (const r of releves) {
+    if (r.heures == null || r.heures < 0) continue;
+    const k = r.groupeId ?? '_';
+    const arr = parGroupe.get(k) ?? [];
+    arr.push({ t: r.date.getTime(), heures: Number(r.heures) });
+    parGroupe.set(k, arr);
+  }
+  let total = 0;
+  let vu = false;
+  for (const pts of parGroupe.values()) {
+    if (pts.length < 2) continue;
+    pts.sort((a, b) => a.t - b.t);
+    const span = (pts[pts.length - 1].t - pts[0].t) / DAY;
+    if (span < 3) continue; // fenêtre trop courte pour extrapoler
+    // Les heures d'un relevé couvrent l'intervalle depuis le précédent → on
+    // exclut le premier point (son intervalle est hors fenêtre).
+    const somme = pts.slice(1).reduce((s, p) => s + p.heures, 0);
+    const hj = somme / span;
+    if (hj >= 0 && hj <= 25) { total += hj; vu = true; }
+  }
+  return vu ? total : null;
+}
+
+/** Débit RÉEL du (des) GE : Σ litres ÷ Σ heures sur les relevés où les deux existent. */
+export function tauxHoraireReel(releves: ReleveConsoLite[]): number | null {
+  let litres = 0, heures = 0;
+  for (const r of releves) {
+    if (r.conso != null && r.conso >= 0 && r.heures != null && r.heures > 0) {
+      litres += Number(r.conso);
+      heures += Number(r.heures);
+    }
+  }
+  if (heures < 10) return null; // < 10 h cumulées : trop peu pour un débit fiable
+  const taux = litres / heures;
+  return taux >= 0.3 && taux <= 100 ? taux : null; // bornes de vraisemblance
+}
+
+/** EWMA des litres/jour entre relevés consécutifs (+ tendance par régression). */
+function consoJourEwma(releves: ReleveConsoLite[]): { consoJour: number; tendance: EstimationConso['tendance'] } | null {
+  const avec = releves.filter((r) => r.conso != null).sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (avec.length < 2) return null;
+  const taux: { jour: number; debit: number }[] = [];
+  for (let i = 1; i < avec.length; i++) {
+    const dj = (avec[i].date.getTime() - avec[i - 1].date.getTime()) / DAY;
+    if (dj > 0) taux.push({ jour: (avec[i].date.getTime() - avec[0].date.getTime()) / DAY, debit: Number(avec[i].conso) / dj });
+  }
+  const positifs = taux.filter((t) => t.debit > 0);
+  if (!positifs.length) return null;
+  const consoJour = ewmaOf(positifs.map((t) => t.debit));
+  let tendance: EstimationConso['tendance'] = 'STABLE';
+  if (positifs.length >= 3) {
+    const slope = linregSlope(positifs.map((t) => t.jour), positifs.map((t) => t.debit));
+    const seuil = consoJour * 0.02; // 2 %/jour
+    tendance = slope > seuil ? 'HAUSSE' : slope < -seuil ? 'BAISSE' : 'STABLE';
+  }
+  return { consoJour, tendance };
+}
+
+/**
+ * Estimation journalière d'un site, du plus fiable au moins fiable :
+ *  1. débit réel × heures mesurées (compteur horaire, sinon heures déclarées) ;
+ *  2. EWMA des litres consommés (quand les heures manquent) ;
+ *  3. heures mesurées × débit théorique (litres déclarés inexploitables) ;
+ *  4. médiane régionale des heures de coupure × débit (réel ou théorique) ;
+ *  5. formule théorique kVA (aucune donnée).
+ */
+export function estimerConsoJour(input: {
+  releves: ReleveConsoLite[];
+  litresParHeureTheorique: number;
+  heuresJourTheorique: number;
+  heuresJourRegion?: number | null;
+}): EstimationConso {
+  const heuresMesurees = heuresJourDepuisIndex(input.releves) ?? heuresJourDeclarees(input.releves);
+  const taux = tauxHoraireReel(input.releves);
+  const ewma = consoJourEwma(input.releves);
+  const tendance = ewma?.tendance ?? 'STABLE';
+
+  if (heuresMesurees != null && taux != null) {
+    return { consoJour: taux * heuresMesurees, source: 'horametre', tendance, heuresJour: heuresMesurees, tauxHoraireLh: taux };
+  }
+  if (ewma && ewma.consoJour > 0) {
+    return { consoJour: ewma.consoJour, source: 'historique', tendance, heuresJour: heuresMesurees, tauxHoraireLh: taux };
+  }
+  if (heuresMesurees != null && input.litresParHeureTheorique > 0) {
+    return { consoJour: input.litresParHeureTheorique * heuresMesurees, source: 'horametre', tendance, heuresJour: heuresMesurees, tauxHoraireLh: null };
+  }
+  if (input.heuresJourRegion != null && input.heuresJourRegion > 0 && input.litresParHeureTheorique > 0) {
+    const t = taux ?? input.litresParHeureTheorique;
+    return { consoJour: t * input.heuresJourRegion, source: 'regional', tendance, heuresJour: input.heuresJourRegion, tauxHoraireLh: taux };
+  }
+  return {
+    consoJour: input.litresParHeureTheorique * input.heuresJourTheorique,
+    source: 'theorique', tendance, heuresJour: null, tauxHoraireLh: null,
+  };
 }
 
 /** Pente d'une régression linéaire simple y = a·x + b (moindres carrés). */
@@ -108,10 +281,14 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
   if (!sites.length) return [];
   const ids = sites.map((s) => s.id);
 
-  // Relevés GE de la fenêtre (conso + niveau de cuve), triés par date.
+  // Relevés GE de la fenêtre (conso + niveau de cuve + heures de marche), triés par date.
   const releves = await prisma.releveEnergie.findMany({
     where: { siteId: { in: ids }, source: 'GE', dateReleve: { gte: fenetre } },
-    select: { siteId: true, dateReleve: true, gasoilConsommeLitres: true, volumeGasoilLitres: true },
+    select: {
+      siteId: true, groupeId: true, dateReleve: true,
+      gasoilConsommeLitres: true, volumeGasoilLitres: true,
+      heuresFonctGE: true, indexHeuresGE: true,
+    },
     orderBy: { dateReleve: 'asc' },
   });
   const parSite = new Map<string, typeof releves>();
@@ -119,6 +296,27 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
     const arr = parSite.get(r.siteId) ?? [];
     arr.push(r);
     parSite.set(r.siteId, arr);
+  }
+  const toLite = (rs: typeof releves): ReleveConsoLite[] => rs.map((r) => ({
+    date: r.dateReleve, groupeId: r.groupeId,
+    conso: r.gasoilConsommeLitres != null ? n(r.gasoilConsommeLitres) : null,
+    heures: r.heuresFonctGE != null ? n(r.heuresFonctGE) : null,
+    index: r.indexHeuresGE != null ? n(r.indexHeuresGE) : null,
+  }));
+
+  // Médiane régionale des heures de marche/jour des sites SECOURS mesurables :
+  // les coupures CEET sont corrélées géographiquement — meilleure hypothèse que
+  // les 8 h/j forfaitaires pour un site secours sans historique propre.
+  const heuresParRegion = new Map<string, number[]>();
+  for (const site of sites) {
+    if (site.statutGE !== 'GE_SECOURS') continue;
+    const lite = toLite(parSite.get(site.id) ?? []);
+    const hj = heuresJourDepuisIndex(lite) ?? heuresJourDeclarees(lite);
+    if (hj != null) {
+      const arr = heuresParRegion.get(site.region) ?? [];
+      arr.push(hj);
+      heuresParRegion.set(site.region, arr);
+    }
   }
 
   // Dépotages récents, regroupés par site (rehausse le stock après le dernier relevé).
@@ -154,35 +352,22 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
       ? site.groupes.reduce((s, g) => s + litresMoisGE(n(g.puissanceKva), g.statut, gp), 0)
       : calculerStockSite(site, null, gp).litresMois) / 30;
 
-    // Consommation journalière : historique pondéré (EWMA, récent = plus de poids)
-    // + tendance par régression linéaire ; sinon repli théorique.
-    let consoJour = 0;
-    let tendance: 'HAUSSE' | 'STABLE' | 'BAISSE' = 'STABLE';
-    let source: 'historique' | 'theorique' = 'theorique';
-    const avecConso = hist.filter((r) => r.gasoilConsommeLitres != null);
-    if (avecConso.length >= 2) {
-      // Débits journaliers par intervalle entre relevés consécutifs.
-      const taux: { jour: number; debit: number }[] = [];
-      for (let i = 1; i < avecConso.length; i++) {
-        const dj = (avecConso[i].dateReleve.getTime() - avecConso[i - 1].dateReleve.getTime()) / DAY;
-        if (dj > 0) taux.push({ jour: (avecConso[i].dateReleve.getTime() - avecConso[0].dateReleve.getTime()) / DAY, debit: n(avecConso[i].gasoilConsommeLitres) / dj });
-      }
-      const positifs = taux.filter((t) => t.debit > 0);
-      if (positifs.length >= 1) {
-        // EWMA : pondération exponentielle (alpha) du plus ancien au plus récent.
-        const alpha = 0.4;
-        let ewma = positifs[0].debit;
-        for (let i = 1; i < positifs.length; i++) ewma = alpha * positifs[i].debit + (1 - alpha) * ewma;
-        consoJour = ewma;
-        source = 'historique';
-        // Tendance : signe de la pente d'une régression linéaire débit ~ jour.
-        if (positifs.length >= 3) {
-          const slope = linregSlope(positifs.map((t) => t.jour), positifs.map((t) => t.debit));
-          const seuil = ewma * 0.02; // 2 %/jour
-          tendance = slope > seuil ? 'HAUSSE' : slope < -seuil ? 'BAISSE' : 'STABLE';
-        }
-      }
-    }
+    // Débit L/h théorique (somme des GE) et heures/jour théoriques selon le statut.
+    const litresParHeure = site.groupes.length
+      ? site.groupes.reduce((s, g) => s + litresParHeureGE(n(g.puissanceKva), g.statut, gp), 0)
+      : litresParHeureGE(n(site.puissanceGEkva), site.statutGE, gp);
+    const heuresJourTheorique = (site.statutGE === 'GE_PERMANENT' ? gp.heuresMoisPermanent : gp.heuresMoisSecours) / 30;
+
+    // Estimation découplée : débit réel × heures mesurées (compteur horaire),
+    // avec replis successifs (EWMA litres → médiane régionale → théorique kVA).
+    const est = estimerConsoJour({
+      releves: toLite(hist),
+      litresParHeureTheorique: litresParHeure,
+      heuresJourTheorique,
+      heuresJourRegion: site.statutGE === 'GE_SECOURS' ? mediane(heuresParRegion.get(site.region) ?? []) : null,
+    });
+    let consoJour = est.consoJour;
+    const { source, tendance } = est;
     if (consoJour <= 0) consoJour = consoTheoriqueJour;
 
     if (consoJour <= 0) continue; // pas de GE / pas de conso → pas concerné
@@ -194,11 +379,10 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
     const dateRupture = now + autonomieJours * DAY;
     const dateLivraison = dateRupture - leadSec * DAY;
 
-    // Temps de marche estimé du GE (h/jour) = conso journalière ÷ débit L/h en marche.
-    const litresParHeure = site.groupes.length
-      ? site.groupes.reduce((s, g) => s + litresParHeureGE(n(g.puissanceKva), g.statut, gp), 0)
-      : litresParHeureGE(n(site.puissanceGEkva), site.statutGE, gp);
-    const heuresGEJour = litresParHeure > 0 ? Math.round((consoJour / litresParHeure) * 10) / 10 : null;
+    // Temps de marche du GE (h/jour) : mesuré si disponible, sinon dérivé du débit.
+    const heuresGEJour = est.heuresJour != null
+      ? Math.round(est.heuresJour * 10) / 10
+      : litresParHeure > 0 ? Math.round((consoJour / litresParHeure) * 10) / 10 : null;
     const joursAvantLivraison = Math.round(((dateLivraison - now) / DAY) * 10) / 10;
 
     // On ne retient que les sites dus dans l'horizon (sauf scan complet pour anomalies).

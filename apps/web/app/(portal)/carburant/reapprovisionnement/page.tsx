@@ -69,7 +69,12 @@ export default function ReapprovisionnementPage() {
     { key: 'nom', header: 'Nom', render: (s) => <span className="text-gray-600">{s.nom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'stockActuel', header: 'Stock (L)', align: 'right', render: (s) => fmtNumber(s.stockActuel) },
-    { key: 'consoJour', header: 'Conso/j (L)', align: 'right', render: (s) => <span title={s.source === 'historique' ? 'D’après l’historique des relevés' : 'Estimation théorique (GE)'}>{fmtNumber(s.consoJour)}{s.source === 'theorique' && ' *'}</span> },
+    { key: 'consoJour', header: 'Conso/j (L)', align: 'right', render: (s) => <span title={
+        s.source === 'horametre' ? 'Débit réel × heures de marche mesurées (compteur horaire)'
+        : s.source === 'historique' ? 'D’après l’historique des relevés'
+        : s.source === 'regional' ? 'Heures de coupure médianes de la région × débit du GE'
+        : 'Estimation théorique (GE)'
+      }>{fmtNumber(s.consoJour)}{s.source === 'theorique' ? ' *' : s.source === 'regional' ? ' °' : ''}</span> },
     { key: 'tendance', header: 'Tend.', align: 'center', render: (s) => <span title={`Tendance ${s.tendance.toLowerCase()}`} className={s.tendance === 'HAUSSE' ? 'text-red-600' : s.tendance === 'BAISSE' ? 'text-green-600' : 'text-gray-400'}>{s.tendance === 'HAUSSE' ? '↗' : s.tendance === 'BAISSE' ? '↘' : '→'}</span> },
     { key: 'autonomie', header: 'Autonomie', align: 'right', render: (s) => s.autonomieJours != null ? `${s.autonomieJours} j` : '—' },
     { key: 'livraison', header: 'À livrer le', render: (s) => s.dateLivraisonCible ? <span className={(s.joursAvantLivraison ?? 1) <= 0 ? 'text-red-600 font-medium' : ''}>{fmtDate(s.dateLivraisonCible)}</span> : '—' },
@@ -119,7 +124,7 @@ export default function ReapprovisionnementPage() {
 
       {tab === 'sites' && (data?.sites.length
         ? <><DataTable columns={cols} data={data.sites} rowKey={(s) => s.siteId} rowClassName={(s) => s.priorite === 'CRITIQUE' ? 'bg-red-50' : undefined} />
-            <p className="text-xs text-gray-400 mt-2">* conso estimée (théorique GE), faute d&apos;historique suffisant.</p></>
+            <p className="text-xs text-gray-400 mt-2">° conso estimée d&apos;après les coupures médianes de la région · * estimation théorique (GE), faute de toute donnée. Sans marque : mesurée (compteur horaire ou relevés du site).</p></>
         : <EmptyState title="Aucun site à livrer sur l'horizon" hint="Tous les sites ont une autonomie supérieure à l'horizon choisi." />)}
 
       {tab === 'tournees' && (

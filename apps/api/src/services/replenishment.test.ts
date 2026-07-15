@@ -78,3 +78,92 @@ describe('suggestTournees', () => {
     expect(totalSites).toBe(2);
   });
 });
+
+// ── Estimation découplée de la consommation (GE secours réaliste) ──
+import { estimerConsoJour, heuresJourDepuisIndex, tauxHoraireReel, mediane, ReleveConsoLite } from './replenishment.service';
+
+const J = 86_400_000;
+const T0 = new Date('2026-06-01T08:00:00Z').getTime();
+const rel = (jour: number, p: Partial<ReleveConsoLite>): ReleveConsoLite => ({
+  date: new Date(T0 + jour * J), groupeId: p.groupeId ?? 'g1',
+  conso: p.conso ?? null, heures: p.heures ?? null, index: p.index ?? null,
+});
+
+describe('heuresJourDepuisIndex', () => {
+  it('déduit les h/j du compteur horaire (Δindex/Δjours)', () => {
+    // 40 h de marche en 10 jours → 4 h/j constants.
+    const h = heuresJourDepuisIndex([rel(0, { index: 1000 }), rel(5, { index: 1020 }), rel(10, { index: 1040 })]);
+    expect(h).toBeCloseTo(4, 1);
+  });
+
+  it('somme les groupes d\'un site multi-GE et rejette les index aberrants', () => {
+    const h = heuresJourDepuisIndex([
+      rel(0, { groupeId: 'g1', index: 100 }), rel(10, { groupeId: 'g1', index: 130 }), // 3 h/j
+      rel(0, { groupeId: 'g2', index: 500 }), rel(10, { groupeId: 'g2', index: 520 }), // 2 h/j
+      rel(11, { groupeId: 'g2', index: 100 }), // compteur remplacé (recul) → ignoré
+    ]);
+    expect(h).toBeCloseTo(5, 1);
+  });
+
+  it('null sans aucun index', () => {
+    expect(heuresJourDepuisIndex([rel(0, { conso: 50 }), rel(5, { conso: 40 })])).toBeNull();
+  });
+});
+
+describe('tauxHoraireReel', () => {
+  it('Σ litres ÷ Σ heures sur les relevés complets', () => {
+    // 120 L pour 30 h → 4 L/h.
+    const t = tauxHoraireReel([rel(0, { conso: 80, heures: 20 }), rel(5, { conso: 40, heures: 10 })]);
+    expect(t).toBeCloseTo(4, 2);
+  });
+
+  it('null si moins de 10 h cumulées (trop bruité)', () => {
+    expect(tauxHoraireReel([rel(0, { conso: 20, heures: 5 })])).toBeNull();
+  });
+});
+
+describe('estimerConsoJour', () => {
+  const base = { litresParHeureTheorique: 10, heuresJourTheorique: 8 };
+
+  it('priorité 1 : débit réel × heures compteur (source horametre)', () => {
+    // Compteur : 4 h/j ; débit réel : 120 L / 30 h = 4 L/h → 16 L/j (et non 80 L/j théoriques).
+    const e = estimerConsoJour({
+      ...base,
+      releves: [
+        rel(0, { index: 1000, conso: 80, heures: 20 }),
+        rel(5, { index: 1020, conso: 40, heures: 10 }),
+        rel(10, { index: 1040 }),
+      ],
+    });
+    expect(e.source).toBe('horametre');
+    expect(e.consoJour).toBeCloseTo(16, 0);
+    expect(e.heuresJour).toBeCloseTo(4, 1);
+    expect(e.tauxHoraireLh).toBeCloseTo(4, 1);
+  });
+
+  it('priorité 2 : EWMA des litres quand les heures manquent', () => {
+    const e = estimerConsoJour({ ...base, releves: [rel(0, { conso: 50 }), rel(5, { conso: 100 }), rel(10, { conso: 100 })] });
+    expect(e.source).toBe('historique');
+    expect(e.consoJour).toBeGreaterThan(0);
+  });
+
+  it('priorité 4 : médiane régionale × débit théorique quand le site n\'a rien', () => {
+    const e = estimerConsoJour({ ...base, releves: [], heuresJourRegion: 2.5 });
+    expect(e.source).toBe('regional');
+    expect(e.consoJour).toBeCloseTo(25, 1); // 10 L/h × 2,5 h/j
+  });
+
+  it('priorité 5 : théorique kVA en dernier recours (8 h/j × 10 L/h)', () => {
+    const e = estimerConsoJour({ ...base, releves: [] });
+    expect(e.source).toBe('theorique');
+    expect(e.consoJour).toBeCloseTo(80, 1);
+  });
+});
+
+describe('mediane', () => {
+  it('impair, pair, vide', () => {
+    expect(mediane([3, 1, 2])).toBe(2);
+    expect(mediane([1, 2, 3, 10])).toBe(2.5);
+    expect(mediane([])).toBeNull();
+  });
+});
