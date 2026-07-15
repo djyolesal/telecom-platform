@@ -30,6 +30,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _load() {
+    // Transporteur : l'API lui refuse (403) tout ce qui n'est pas appro
+    // carburant — on ne charge ni le pouls du parc ni les maintenances.
+    if (context.read<AuthCubit>().state.user?.role == 'TRANSPORTEUR') {
+      _future = Future.value(null);
+      _nbPlanifiees = Future.value(null);
+      return;
+    }
     _future = context.read<DashboardRepository>().getDashboard();
     _nbPlanifiees = context
         .read<MaintenanceRepository>()
@@ -153,6 +160,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    // Transporteur : périmètre limité à l'appro carburant — pas de
+                    // pouls du parc ni d'actions terrain, uniquement ses bons.
+                    if ((user?.role ?? '') == 'TRANSPORTEUR') ...[
+                      const Text('APPRO CARBURANT',
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      _ActionCard(
+                        color: AppColors.brand,
+                        foreground: Colors.white,
+                        icon: Icons.local_shipping,
+                        title: 'Nouveau bon de livraison',
+                        subtitle: 'déclarer un chargement',
+                        onTap: () => context.push('/carburant/bon-livraison/nouveau'),
+                      ),
+                    ] else ...[
                     // ── Pouls du parc ──
                     FutureBuilder<Map<String, dynamic>?>(
                       future: _future,
@@ -258,6 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
                     const SizedBox(height: 8),
                     _moduleGrid(context),
+                    ],
                   ],
                 ),
               ),

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth';
+import { AppError } from '../utils/AppError';
 import { rbac } from '../middlewares/rbac';
 import { rateLimit } from '../middlewares/rateLimit';
 
@@ -38,6 +39,24 @@ router.post('/auth/reset-password', resetLimit, authCtrl.resetPassword);
 
 // ── Auth (protégé) ────────────────────────────────────────────
 router.use(authMiddleware); // Tout ce qui suit requiert un JWT valide
+
+// ── Périmètre TRANSPORTEUR ────────────────────────────────────
+// Un prestataire transporteur ne fait QUE l'appro carburant : consulter les
+// bons de commande, saisir/suivre ses bons de livraison (avec photos des
+// documents) — rien d'autre (sites, maintenances, incidents… interdits).
+// Les écritures restent en plus soumises au rbac() de chaque route.
+const TRANSPORTEUR_ALLOW: RegExp[] = [
+  /^\/auth\//,                      // profil, mot de passe, logout, FCM
+  /^\/bons-commande(\/|$)/,         // lecture pour rattacher un BL
+  /^\/bons-livraison(\/|$)/,        // ses chargements (filtrés côté contrôleur)
+  /^\/upload\/(image|document)$/,   // photos du BL et du bordereau
+  /^\/notifications(\/|$)/,
+];
+router.use((req, _res, next) => {
+  if (req.user?.role !== 'TRANSPORTEUR') return next();
+  if (TRANSPORTEUR_ALLOW.some((re) => re.test(req.path))) return next();
+  next(new AppError("Accès réservé : un compte transporteur est limité à l'appro carburant.", 403));
+});
 
 router.post('/auth/logout', authCtrl.logout);
 router.get('/auth/me', authCtrl.getMe);
