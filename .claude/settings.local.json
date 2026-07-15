@@ -192,7 +192,12 @@
       "Bash(lsof -nP -iTCP -sTCP:LISTEN)",
       "Bash(docker info *)",
       "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/api *)",
-      "Bash(~/development/flutter/bin/flutter analyze *)"
+      "Bash(~/development/flutter/bin/flutter analyze *)",
+      "Bash(npm ci *)",
+      "Bash(grep -nA3 \"grafana:\" docker-compose.yml)",
+      "Bash(grep -nB2 -A6 \"prometheus:\" docker-compose.yml)",
+      "Bash(grep -n \"resolver\\\\|set \\\\$\" infra/nginx/conf.d/telecom.conf)",
+      "Bash(git commit -q -m ' *)"
     ]
   }
 }
