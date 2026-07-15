@@ -197,7 +197,8 @@
       "Bash(grep -nA3 \"grafana:\" docker-compose.yml)",
       "Bash(grep -nB2 -A6 \"prometheus:\" docker-compose.yml)",
       "Bash(grep -n \"resolver\\\\|set \\\\$\" infra/nginx/conf.d/telecom.conf)",
-      "Bash(git commit -q -m ' *)"
+      "Bash(git commit -q -m ' *)",
+      "Bash(grep -nA5 \"enum StatutGE\" prisma/schema.prisma)"
     ]
   }
 }
