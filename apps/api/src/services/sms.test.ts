@@ -1,4 +1,4 @@
-import { normaliserTelephone, envoyerSmsManuel } from './sms.service';
+import { normaliserTelephone, telephoneLocal, envoyerSmsManuel } from './sms.service';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 
@@ -6,7 +6,7 @@ jest.mock('../config/database', () => ({
   prisma: { smsLog: { create: jest.fn().mockResolvedValue({}) } },
 }));
 jest.mock('../config/env', () => ({
-  env: { SMS_API_URL: undefined, SMS_USERNAME: 'user', SMS_PASSWORD: 'pass', SMS_SMSC: undefined, SMS_SENDER: 'EMOPS', SMS_HTTP_METHOD: 'GET' },
+  env: { SMS_API_URL: undefined, SMS_API_KEY: 'cle-secrete', SMS_SENDER: 'EMOPS' },
 }));
 jest.mock('../utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn() },
@@ -28,13 +28,21 @@ describe('normaliserTelephone', () => {
   });
 });
 
+describe('telephoneLocal (format passerelle : 8 chiffres sans +228)', () => {
+  it('retire le préfixe +228 quel que soit le format saisi', () => {
+    expect(telephoneLocal('+22897589258')).toBe('97589258');
+    expect(telephoneLocal('22897589258')).toBe('97589258');
+    expect(telephoneLocal('97 58 92 58')).toBe('97589258');
+    expect(telephoneLocal('97589258')).toBe('97589258');
+  });
+});
+
 describe('envoyerSmsManuel', () => {
   const logCreate = prisma.smsLog.create as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     (env as { SMS_API_URL?: string }).SMS_API_URL = undefined;
-    (env as { SMS_HTTP_METHOD?: string }).SMS_HTTP_METHOD = 'GET';
   });
 
   it('sans passerelle configurée : statut SIMULE, journalisé, aucun appel réseau', async () => {
@@ -54,47 +62,31 @@ describe('envoyerSmsManuel', () => {
     fetchSpy.mockRestore();
   });
 
-  it('avec passerelle : statut ENVOYE et URL au format Kannel (GET cgi-bin/sendsms)', async () => {
-    (env as { SMS_API_URL?: string }).SMS_API_URL = 'http://10.0.0.1:13013/cgi-bin/sendsms';
+  it('avec passerelle : UN SEUL POST JSON pour tout le lot (apiKey, sender, recipients locaux, message)', async () => {
+    (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
-    const { simule, resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test é');
+    const { simule, resultats } = await envoyerSmsManuel(
+      [{ telephone: '97589258' }, { telephone: '+22890000000' }],
+      'Test é'
+    );
     expect(simule).toBe(false);
-    expect(resultats[0].statut).toBe('ENVOYE');
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const url = fetchSpy.mock.calls[0][0] as URL;
-    expect(url.pathname).toBe('/cgi-bin/sendsms');
-    expect(url.searchParams.get('username')).toBe('user');
-    expect(url.searchParams.get('password')).toBe('pass');
-    expect(url.searchParams.get('from')).toBe('EMOPS');
-    expect(url.searchParams.get('to')).toBe('+22897589258');
-    expect(url.searchParams.get('text')).toBe('Test é');
-    expect(url.searchParams.get('charset')).toBe('UTF-8');
-    expect(url.searchParams.has('smsc')).toBe(false); // absent si non configuré
-    fetchSpy.mockRestore();
-  });
-
-  it('en mode POST : en-têtes X-Kannel-* et texte du message en corps (rien dans l\'URL)', async () => {
-    (env as { SMS_API_URL?: string }).SMS_API_URL = 'http://10.0.0.1:13013/cgi-bin/sendsms';
-    (env as { SMS_HTTP_METHOD?: string }).SMS_HTTP_METHOD = 'POST';
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
-    const { resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test é');
-    expect(resultats[0].statut).toBe('ENVOYE');
+    expect(resultats.map((r) => r.statut)).toEqual(['ENVOYE', 'ENVOYE']);
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // un lot = une requête
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(String(url)).toBe('http://10.0.0.1:13013/cgi-bin/sendsms'); // aucun paramètre dans l'URL
+    expect(String(url)).toBe('https://sms.example/send');
     expect(init.method).toBe('POST');
-    expect(init.body).toBe('Test é');
-    expect(init.headers).toMatchObject({
-      'X-Kannel-Username': 'user',
-      'X-Kannel-Password': 'pass',
-      'X-Kannel-From': 'EMOPS',
-      'X-Kannel-To': '+22897589258',
+    expect(init.headers).toMatchObject({ 'Content-Type': 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      apiKey: 'cle-secrete',
+      sender: 'EMOPS',
+      recipients: ['97589258', '90000000'], // locaux, sans +228
+      message: 'Test é',
     });
-    expect(init.headers).not.toHaveProperty('X-Kannel-SMSC'); // absent si non configuré
     fetchSpy.mockRestore();
   });
 
   it('panne réseau : la cause réelle (ECONNREFUSED…) est extraite du « fetch failed »', async () => {
-    (env as { SMS_API_URL?: string }).SMS_API_URL = 'http://10.0.0.1:13013/cgi-bin/sendsms';
+    (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
     const err = new TypeError('fetch failed');
     (err as { cause?: unknown }).cause = { code: 'ECONNREFUSED' };
     const fetchSpy = jest.spyOn(global, 'fetch').mockRejectedValue(err);
@@ -105,16 +97,16 @@ describe('envoyerSmsManuel', () => {
     fetchSpy.mockRestore();
   });
 
-  it('avec passerelle : statut ECHEC et erreur journalisée quand la requête échoue', async () => {
+  it('réponse non-2xx : statut ECHEC pour tout le lot, erreur journalisée', async () => {
     (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
       ok: false,
-      status: 500,
-      text: () => Promise.resolve('boom'),
+      status: 401,
+      text: () => Promise.resolve('invalid api key'),
     } as unknown as Response);
-    const { resultats } = await envoyerSmsManuel([{ telephone: '97589258' }], 'Test');
-    expect(resultats[0].statut).toBe('ECHEC');
-    expect(resultats[0].erreur).toContain('HTTP 500');
+    const { resultats } = await envoyerSmsManuel([{ telephone: '97589258' }, { telephone: '90000000' }], 'Test');
+    expect(resultats.map((r) => r.statut)).toEqual(['ECHEC', 'ECHEC']);
+    expect(resultats[0].erreur).toContain('HTTP 401');
     expect(logCreate.mock.calls[0][0].data).toMatchObject({ statut: 'ECHEC' });
     fetchSpy.mockRestore();
   });

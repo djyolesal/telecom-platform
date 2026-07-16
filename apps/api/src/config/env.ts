@@ -39,17 +39,11 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('E&M OpS <noreply@emops.uk>'),
   SMTP_REPLY_TO: z.string().optional(),
-  // Passerelle SMS Kannel (SMS Pro Moov Africa) — sans SMS_API_URL, les envois
-  // sont journalisés en mode SIMULE (aucun SMS réel, aucune erreur).
-  // SMS_API_URL = http://<ip>:<port>/cgi-bin/sendsms (sans paramètres).
+  // Passerelle SMS (POST JSON : apiKey, sender, recipients locaux sans +228,
+  // message). Sans SMS_API_URL, les envois sont journalisés en mode SIMULE.
   SMS_API_URL: z.string().optional(),
-  SMS_USERNAME: z.string().optional(),
-  SMS_PASSWORD: z.string().optional(),
-  SMS_SMSC: z.string().optional(),
+  SMS_API_KEY: z.string().optional(),
   SMS_SENDER: z.string().default('EMOPS'),
-  // GET (format documenté par Moov) ou POST (en-têtes X-Kannel-*, texte en corps :
-  // identifiants hors des logs d'URL — à valider contre leur passerelle avant usage).
-  SMS_HTTP_METHOD: z.enum(['GET', 'POST']).default('GET'),
 
   // Firebase Cloud Messaging
   FCM_SERVER_KEY: z.string().optional(),

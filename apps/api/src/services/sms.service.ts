@@ -33,63 +33,43 @@ export function normaliserTelephone(tel: string): string {
   return `+228${digits}`;
 }
 
-/**
- * Envoi d'UN SMS via la passerelle Kannel (SMS Pro Moov Africa).
- * Kannel répond 202 « 0: Accepted for delivery » en cas de succès (res.ok le couvre).
- * NB : `to` accepte plusieurs numéros séparés par des virgules, mais on envoie
- * numéro par numéro pour journaliser un statut individuel par contact.
- *
- * Deux modes (SMS_HTTP_METHOD) :
- *  - GET (défaut, format documenté par Moov) :
- *      GET <url>?username=…&password=…&smsc=…&from=…&to=…&text=…&charset=UTF-8
- *  - POST (forme Kannel standard) : paramètres en en-têtes X-Kannel-*, texte du
- *    message en corps — les identifiants ne transitent plus dans l'URL, donc
- *    n'atterrissent pas dans les logs d'accès HTTP de la passerelle. À valider
- *    contre la passerelle Moov (envoi manuel de test) avant de basculer.
- */
-async function envoyerSms(telephone: string, message: string): Promise<void> {
-  let cible: URL | string;
-  let init: RequestInit;
-  if (env.SMS_HTTP_METHOD === 'POST') {
-    cible = env.SMS_API_URL!;
-    init = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain; charset=UTF-8',
-        'X-Kannel-Username': env.SMS_USERNAME ?? '',
-        'X-Kannel-Password': env.SMS_PASSWORD ?? '',
-        ...(env.SMS_SMSC ? { 'X-Kannel-SMSC': env.SMS_SMSC } : {}),
-        'X-Kannel-From': env.SMS_SENDER,
-        'X-Kannel-To': telephone,
-      },
-      body: message,
-    };
-  } else {
-    const url = new URL(env.SMS_API_URL!);
-    url.searchParams.set('username', env.SMS_USERNAME ?? '');
-    url.searchParams.set('password', env.SMS_PASSWORD ?? '');
-    if (env.SMS_SMSC) url.searchParams.set('smsc', env.SMS_SMSC);
-    url.searchParams.set('from', env.SMS_SENDER);
-    url.searchParams.set('to', telephone);
-    url.searchParams.set('text', message);
-    url.searchParams.set('charset', 'UTF-8');
-    cible = url;
-    init = {};
-  }
+/** Numéro LOCAL togolais (8 chiffres, sans +228) — format attendu par la passerelle. */
+export function telephoneLocal(tel: string): string {
+  const digits = normaliserTelephone(tel).replace(/^\+/, '');
+  return digits.startsWith('228') ? digits.slice(3) : digits;
+}
 
+/**
+ * Envoi d'un SMS à PLUSIEURS destinataires en UNE requête :
+ *   POST <SMS_API_URL>  (JSON)
+ *   { "apiKey": <clé>, "sender": <expéditeur>, "recipients": ["9XXXXXXX", …], "message": <texte> }
+ * Destinataires en numéros LOCAUX (sans +228). Une réponse non-2xx = échec du lot.
+ * NB : si la passerelle attend d'autres noms de champs, seule cette fonction change.
+ */
+async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(cible, { ...init, signal: AbortSignal.timeout(10_000) });
+    res = await fetch(env.SMS_API_URL!, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: env.SMS_API_KEY ?? '',
+        sender: env.SMS_SENDER,
+        recipients: telephonesLocaux,
+        message,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
   } catch (e) {
     // « fetch failed » de Node masque la cause réseau réelle (ECONNREFUSED,
     // ETIMEDOUT, ENOTFOUND…) dans e.cause : on la remonte pour le diagnostic.
     const cause = (e as { cause?: { code?: string; message?: string } }).cause;
-    const detail = cause?.code ?? cause?.message ?? (e instanceof Error && e.name === 'TimeoutError' ? 'délai dépassé (10 s)' : null);
+    const detail = cause?.code ?? cause?.message ?? (e instanceof Error && e.name === 'TimeoutError' ? 'délai dépassé (15 s)' : null);
     throw new Error(
       `Passerelle SMS injoignable${detail ? ` (${detail})` : ''} — vérifier SMS_API_URL et l'accès réseau depuis le conteneur API`
     );
   }
-  // Ne jamais inclure l'URL dans l'erreur : en GET elle contient le mot de passe.
+  // Ne jamais inclure le corps envoyé dans l'erreur : il contient la clé API.
   if (!res.ok) throw new Error(`Passerelle SMS: HTTP ${res.status} ${(await res.text()).slice(0, 120)}`);
 }
 
@@ -110,25 +90,24 @@ export async function envoyerSmsManuel(
   message: string
 ): Promise<{ simule: boolean; resultats: ResultatEnvoiManuel[] }> {
   const simule = !env.SMS_API_URL;
-  const resultats = await Promise.all(
-    destinataires.map(async (d): Promise<ResultatEnvoiManuel> => {
-      const telephone = normaliserTelephone(d.telephone);
-      let statut: ResultatEnvoiManuel['statut'] = simule ? 'SIMULE' : 'ENVOYE';
-      let erreur: string | null = null;
-      if (!simule) {
-        try {
-          await envoyerSms(telephone, message);
-        } catch (e) {
-          statut = 'ECHEC';
-          erreur = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
-        }
-      }
-      await prisma.smsLog.create({
-        data: { telephone, contactId: d.contactId ?? null, message, evenement: 'MANUEL', statut, erreur },
-      });
-      return { telephone, contactId: d.contactId ?? null, statut, erreur };
-    })
-  );
+  let statut: ResultatEnvoiManuel['statut'] = simule ? 'SIMULE' : 'ENVOYE';
+  let erreur: string | null = null;
+  if (!simule && destinataires.length) {
+    try {
+      await envoyerSmsBatch(destinataires.map((d) => telephoneLocal(d.telephone)), message);
+    } catch (e) {
+      statut = 'ECHEC';
+      erreur = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
+    }
+  }
+  const resultats: ResultatEnvoiManuel[] = [];
+  for (const d of destinataires) {
+    const telephone = normaliserTelephone(d.telephone);
+    await prisma.smsLog.create({
+      data: { telephone, contactId: d.contactId ?? null, message, evenement: 'MANUEL', statut, erreur },
+    });
+    resultats.push({ telephone, contactId: d.contactId ?? null, statut, erreur });
+  }
   logger.info(`[sms] envoi manuel → ${resultats.length} destinataire(s)${simule ? ' (SIMULE)' : ''}`);
   return { simule, resultats };
 }
@@ -171,22 +150,22 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
     const evenement = `${evt.domaine}_${evt.evenement}`;
     const simule = !env.SMS_API_URL;
 
-    await Promise.allSettled(
-      cibles.map(async (c) => {
-        const telephone = normaliserTelephone(c.telephone);
-        let statut = simule ? 'SIMULE' : 'ENVOYE';
-        let erreur: string | null = null;
-        if (!simule) {
-          try {
-            await envoyerSms(telephone, message);
-          } catch (e) {
-            statut = 'ECHEC';
-            erreur = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
-          }
-        }
-        await prisma.smsLog.create({ data: { telephone, contactId: c.id, message, evenement, statut, erreur } });
-      })
-    );
+    // Un seul POST pour tout le lot (l'API accepte la liste des destinataires).
+    let statut = simule ? 'SIMULE' : 'ENVOYE';
+    let erreur: string | null = null;
+    if (!simule) {
+      try {
+        await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
+      } catch (e) {
+        statut = 'ECHEC';
+        erreur = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
+      }
+    }
+    for (const c of cibles) {
+      await prisma.smsLog.create({
+        data: { telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement, statut, erreur },
+      });
+    }
     logger.info(`[sms] ${evenement} ${evt.siteCode} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
   } catch (err) {
     logger.warn('[sms] notification contacts échouée:', err);
