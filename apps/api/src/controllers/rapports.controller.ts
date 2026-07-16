@@ -552,7 +552,7 @@ export async function getRapportGardiennage(req: Request, res: Response, next: N
 
     const data = await Promise.all(societes.map(async (soc) => {
       const siteIds = soc.sitesGardes.map((s) => s.id);
-      const [maint, inc] = siteIds.length ? await Promise.all([
+      const [maint, inc, deps] = siteIds.length ? await Promise.all([
         prisma.maintenance.findMany({
           where: { siteId: { in: siteIds }, statut: 'TERMINEE', dateFin: { gte: since } },
           select: { agentPresent: true },
@@ -561,8 +561,12 @@ export async function getRapportGardiennage(req: Request, res: Response, next: N
           where: { siteId: { in: siteIds }, dateResolution: { gte: since } },
           select: { agentPresent: true },
         }),
-      ]) : [[], []];
-      const decls = [...maint, ...inc].map((x) => x.agentPresent);
+        prisma.depotage.findMany({
+          where: { siteId: { in: siteIds }, dateDepotage: { gte: since } },
+          select: { agentPresent: true },
+        }),
+      ]) : [[], [], []];
+      const decls = [...maint, ...inc, ...deps].map((x) => x.agentPresent);
       const presents = decls.filter((v) => v === true).length;
       const absents = decls.filter((v) => v === false).length;
       const nonRenseigne = decls.filter((v) => v == null).length;

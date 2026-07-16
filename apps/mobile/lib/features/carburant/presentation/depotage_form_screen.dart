@@ -46,6 +46,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
 
   // Photos des travaux de dépotage (chemins LOCAUX, uploadés par la sync).
   final List<String> _photos = [];
+  // Déclaration obligatoire : agent de gardiennage présent au dépotage ?
+  bool? _agentPresent;
+  static const int _kMinPhotos = 6;
 
   // Plan de livraison prévu pour le site (chaîne BC → BL → plan).
   List<PlanLigne> _lignes = [];
@@ -184,6 +187,22 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     });
   }
 
+  Widget _agentBouton(bool value, String label, IconData icon, Color color) {
+    final selected = _agentPresent == value;
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: () => setState(() => _agentPresent = value),
+        icon: Icon(icon, size: 16, color: selected ? Colors.white : color),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected ? color : null,
+          foregroundColor: selected ? Colors.white : color,
+          side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.5)),
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -194,6 +213,23 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     }
     if (_sigTechnicien == null) {
       messenger.showSnackBar(const SnackBar(content: Text('Votre signature (technicien) est requise'), backgroundColor: Colors.red));
+      return;
+    }
+    // Déclaration gardiennage obligatoire + signature de l'agent s'il est présent.
+    if (_agentPresent == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('Indiquez si l\'agent de sécurité est présent sur le site'), backgroundColor: Colors.red));
+      return;
+    }
+    if (_agentPresent == true && _sigAgent == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('L\'agent est présent : sa signature est requise'), backgroundColor: Colors.red));
+      return;
+    }
+    // Preuve terrain : minimum de photos prises sur place.
+    if (_photos.length < _kMinPhotos) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Au moins $_kMinPhotos photos sont requises (${_photos.length} prise(s))'),
+        backgroundColor: Colors.red,
+      ));
       return;
     }
     // Preuve obligatoire : écart de livraison anormal (jauge vs annoncé) → ≥ 1 photo.
@@ -222,6 +258,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       final res = await repo.create(
         siteId: _siteId!,
         volumeLitres: _derivedVolume ?? 0,
+        agentPresent: _agentPresent!,
         stockAvantLitres: _num(_stockAvant),
         stockApresLitres: _num(_stockApres),
         volumeAnnonceLitres: _num(_volumeAnnonce),
@@ -349,9 +386,15 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
 
             // ── Photos des travaux de dépotage ──
             const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 6),
-              child: Text('Photos du dépotage', style: TextStyle(fontWeight: FontWeight.w600)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'Photos du dépotage (${_photos.length}/$_kMinPhotos minimum) *',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _photos.length >= _kMinPhotos ? const Color(0xFF0E7C6B) : null,
+                ),
+              ),
             ),
             Wrap(
               spacing: 8,
@@ -402,9 +445,20 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             const SizedBox(height: 8),
             _SignatureTile(label: 'Signature du chauffeur *', captured: _sigChauffeur != null, onTap: () => _captureSignature('chauffeur')),
             const SizedBox(height: 14),
-            TextFormField(controller: _nomAgent, decoration: const InputDecoration(labelText: 'Nom de l\'agent de sécurité (si présent)')),
-            const SizedBox(height: 8),
-            _SignatureTile(label: 'Signature agent de sécurité', captured: _sigAgent != null, optional: true, onTap: () => _captureSignature('agent')),
+            const Text('AGENT DE SÉCURITÉ (GARDIENNAGE)',
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+            const SizedBox(height: 6),
+            Row(children: [
+              _agentBouton(true, 'Présent', Icons.verified_user, const Color(0xFF0E7C6B)),
+              const SizedBox(width: 8),
+              _agentBouton(false, 'Absent', Icons.person_off, const Color(0xFFC0392B)),
+            ]),
+            if (_agentPresent == true) ...[
+              const SizedBox(height: 10),
+              TextFormField(controller: _nomAgent, decoration: const InputDecoration(labelText: 'Nom de l\'agent de sécurité')),
+              const SizedBox(height: 8),
+              _SignatureTile(label: 'Signature agent de sécurité *', captured: _sigAgent != null, onTap: () => _captureSignature('agent')),
+            ],
             const SizedBox(height: 14),
             _SignatureTile(label: 'Votre signature (technicien) *', captured: _sigTechnicien != null, onTap: () => _captureSignature('technicien')),
 
@@ -459,9 +513,8 @@ class _DerivedVolumeBanner extends StatelessWidget {
 class _SignatureTile extends StatelessWidget {
   final String label;
   final bool captured;
-  final bool optional;
   final VoidCallback onTap;
-  const _SignatureTile({required this.label, required this.captured, required this.onTap, this.optional = false});
+  const _SignatureTile({required this.label, required this.captured, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

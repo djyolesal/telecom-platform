@@ -356,6 +356,7 @@ model Depotage {
   nomChauffeur                String? @map("nom_chauffeur") @db.VarChar(100)
   signatureChauffeurPath      String? @map("signature_chauffeur_path")
   nomAgentSecurite            String? @map("nom_agent_securite") @db.VarChar(100)
+  agentPresent                Boolean? @map("agent_present") // agent de gardiennage présent au dépotage ?
   signatureAgentSecuritePath  String? @map("signature_agent_securite_path")
   signatureTechnicienPath     String? @map("signature_technicien_path")
   observations       String?

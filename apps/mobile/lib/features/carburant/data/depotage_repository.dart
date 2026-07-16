@@ -51,6 +51,7 @@ class DepotageRepository {
   Future<SubmitResult> create({
     required String siteId,
     required double volumeLitres,
+    required bool agentPresent,
     double? stockAvantLitres,
     double? stockApresLitres,
     double? volumeAnnonceLitres,
@@ -83,6 +84,7 @@ class DepotageRepository {
       payload: {
         'siteId': siteId,
         'volumeLitres': volumeLitres,
+        'agentPresent': agentPresent,
         'dateDepotage': DateTime.now().toUtc().toIso8601String(),
         if (stockAvantLitres != null) 'stockAvantLitres': stockAvantLitres,
         if (stockApresLitres != null) 'stockApresLitres': stockApresLitres,

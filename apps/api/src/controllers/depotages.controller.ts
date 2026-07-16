@@ -246,6 +246,18 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
 
     const photosIn = (b.photos as { url?: string; key?: string }[] | undefined) ?? [];
 
+    // Preuve terrain : minimum de photos prises sur place (comme les incidents).
+    const MIN_PHOTOS_DEPOTAGE = 6;
+    if (photosIn.length < MIN_PHOTOS_DEPOTAGE) {
+      throw new AppError(`Au moins ${MIN_PHOTOS_DEPOTAGE} photos sont requises pour valider un dépotage (${photosIn.length} fournie(s)).`, 422);
+    }
+    // Déclaration gardiennage : si l'agent est déclaré présent, sa signature
+    // fait partie de la validation tripartite. (Champ absent = ancien client.)
+    const agentPresent = typeof b.agentPresent === 'boolean' ? b.agentPresent : null;
+    if (agentPresent === true && !b.signatureAgentSecuritePath) {
+      throw new AppError("L'agent est déclaré présent : sa signature est requise.", 422);
+    }
+
     // Preuve obligatoire : un écart de livraison anormal (jauge vs annoncé)
     // exige au moins une photo. Vérifié AVANT toute écriture → rien n'est créé
     // si la preuve manque (le formulaire mobile bloque déjà en amont).
@@ -279,6 +291,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           nomChauffeur: b.nomChauffeur ? String(b.nomChauffeur) : null,
           signatureChauffeurPath: b.signatureChauffeurPath ? String(b.signatureChauffeurPath) : null,
           nomAgentSecurite: b.nomAgentSecurite ? String(b.nomAgentSecurite) : null,
+          agentPresent,
           signatureAgentSecuritePath: b.signatureAgentSecuritePath ? String(b.signatureAgentSecuritePath) : null,
           signatureTechnicienPath: b.signatureTechnicienPath ? String(b.signatureTechnicienPath) : null,
           bonLivraisonPath: b.bonLivraisonPath ? String(b.bonLivraisonPath) : null,
