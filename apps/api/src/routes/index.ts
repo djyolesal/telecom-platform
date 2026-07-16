@@ -94,6 +94,10 @@ router.get('/sites/:id/lignes-livraison', carburantCtrl.getLignesLivraisonForSit
 router.get('/sites/:id/etiquettes-qr.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.getEtiquettesQr);
 
 // ── Prestataires ──────────────────────────────────────────────
+// « Ma société » : le superviseur d'un prestataire complète la fiche de SA société.
+router.get('/ma-societe', prestatairesCtrl.getMaSociete);
+router.put('/ma-societe', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN']), prestatairesCtrl.updateMaSociete);
+
 router.get('/prestataires', prestatairesCtrl.getPrestataires);
 router.post('/prestataires', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.createPrestataire);
 

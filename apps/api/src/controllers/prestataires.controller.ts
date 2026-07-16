@@ -109,3 +109,43 @@ export async function deletePrestataire(req: Request, res: Response, next: NextF
     res.json({ success: true, message: 'Prestataire supprimé' });
   } catch (err) { next(err); }
 }
+
+// ── « Ma société » : fiche du prestataire de l'utilisateur connecté ─────────
+// Le superviseur d'un prestataire complète et tient à jour les coordonnées de
+// SA société (en-tête des fiches de validation PDF). Champs identitaires
+// (nom, périmètres, statut) réservés au manager/admin.
+
+const CHAMPS_REQUIS_SOCIETE = ['email', 'adresse', 'rccm', 'nif', 'contactCommercial', 'contactTechnique'] as const;
+
+function champsManquants(p: Record<string, unknown>): string[] {
+  return CHAMPS_REQUIS_SOCIETE.filter((k) => !String(p[k] ?? '').trim());
+}
+
+export async function getMaSociete(req: Request, res: Response, next: NextFunction) {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    if (!me?.prestataireId) return res.json({ success: true, data: null }); // utilisateur interne
+    const prestataire = await prisma.prestataire.findUnique({ where: { id: me.prestataireId } });
+    if (!prestataire) return res.json({ success: true, data: null });
+    const manquants = champsManquants(prestataire as unknown as Record<string, unknown>);
+    res.json({ success: true, data: { ...prestataire, ficheComplete: manquants.length === 0, champsManquants: manquants } });
+  } catch (err) { next(err); }
+}
+
+export async function updateMaSociete(req: Request, res: Response, next: NextFunction) {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    if (!me?.prestataireId) throw new AppError("Votre compte n'est rattaché à aucun prestataire.", 403);
+    // Liste blanche : coordonnées uniquement (jamais nom/isActive/périmètres).
+    const b = req.body as Record<string, unknown>;
+    const data: Record<string, string | null> = {};
+    for (const k of ['email', 'adresse', 'rccm', 'nif', 'contactCommercial', 'contactTechnique', 'logoPath'] as const) {
+      if (typeof b[k] === 'string') data[k] = (b[k] as string).trim() || null;
+    }
+    if (!Object.keys(data).length) throw new AppError('Aucun champ modifiable fourni.', 400);
+    const updated = await prisma.prestataire.update({ where: { id: me.prestataireId }, data });
+    await auditLog(req.user!.id, 'UPDATE', 'prestataires', updated.id, { maSociete: data }, req);
+    const manquants = champsManquants(updated as unknown as Record<string, unknown>);
+    res.json({ success: true, data: { ...updated, ficheComplete: manquants.length === 0, champsManquants: manquants } });
+  } catch (err) { next(err); }
+}

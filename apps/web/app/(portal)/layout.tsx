@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   LayoutDashboard, MapPin, Wrench, Fuel, Zap, AlertTriangle,
-  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge
+  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
@@ -33,10 +35,29 @@ const NAV_ITEMS = [
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
   const userRole = (session?.user as { role?: string })?.role || '';
 
-  const visibleItems = NAV_ITEMS.filter(item => item.roles.includes(userRole));
+  // « Ma société » : un superviseur rattaché à un prestataire doit compléter la
+  // fiche de sa société (coordonnées des fiches de validation PDF) avant de
+  // naviguer — première connexion bloquée sur /ma-societe tant que c'est vide.
+  const { data: maSociete } = useQuery({
+    queryKey: ['ma-societe'],
+    queryFn: () => api.get('/ma-societe').then((r) => r.data.data as { nom: string; ficheComplete: boolean } | null),
+    enabled: userRole === 'SUPERVISEUR',
+    staleTime: 60_000,
+  });
+  useEffect(() => {
+    if (userRole === 'SUPERVISEUR' && maSociete && !maSociete.ficheComplete && pathname !== '/ma-societe') {
+      router.replace('/ma-societe');
+    }
+  }, [userRole, maSociete, pathname, router]);
+
+  const visibleItems = [
+    ...NAV_ITEMS.filter(item => item.roles.includes(userRole)),
+    ...(userRole === 'SUPERVISEUR' && maSociete ? [{ href: '/ma-societe', label: 'Ma société', icon: Building2, roles: ['SUPERVISEUR'] }] : []),
+  ];
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
