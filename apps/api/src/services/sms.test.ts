@@ -62,7 +62,7 @@ describe('envoyerSmsManuel', () => {
     fetchSpy.mockRestore();
   });
 
-  it('avec passerelle : UN SEUL POST JSON, clé en en-tête (Bearer + X-API-Key), destinataires locaux', async () => {
+  it('avec passerelle : UN SEUL POST JSON, clé en en-tête Authorization: Bearer, destinataires locaux', async () => {
     (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
     const { simule, resultats } = await envoyerSmsManuel(
@@ -78,7 +78,6 @@ describe('envoyerSmsManuel', () => {
     expect(init.headers).toMatchObject({
       'Content-Type': 'application/json',
       Authorization: 'Bearer cle-secrete',
-      'X-API-Key': 'cle-secrete',
     });
     expect(JSON.parse(String(init.body))).toEqual({
       sender: 'EMOPS',

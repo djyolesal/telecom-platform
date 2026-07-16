@@ -43,9 +43,8 @@ export function telephoneLocal(tel: string): string {
  * Envoi d'un SMS à PLUSIEURS destinataires en UNE requête :
  *   POST <SMS_API_URL>  (JSON)
  *   { "sender": <expéditeur>, "recipients": ["9XXXXXXX", …], "message": <texte> }
- * La clé d'authentification passe en EN-TÊTE — envoyée sous les deux formes
- * usuelles (Authorization: Bearer et X-API-Key), la passerelle ignore celle
- * qu'elle ne connaît pas. Destinataires en numéros LOCAUX (sans +228).
+ * La clé d'authentification passe en EN-TÊTE : Authorization: Bearer <clé>.
+ * Destinataires en numéros LOCAUX (sans +228).
  * NB : si la passerelle attend d'autres noms de champs, seule cette fonction change.
  */
 async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Promise<void> {
@@ -56,7 +55,6 @@ async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Pro
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${env.SMS_API_KEY ?? ''}`,
-        'X-API-Key': env.SMS_API_KEY ?? '',
       },
       body: JSON.stringify({
         sender: env.SMS_SENDER,
