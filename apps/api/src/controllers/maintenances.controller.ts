@@ -15,6 +15,7 @@ import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { assertOnSite } from '../utils/geofence';
 import { notifierAction } from '../services/sms.service';
+import { genererReference } from '../services/reference.service';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -164,6 +165,7 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
     if (prestataire_id) where.prestataireId = prestataire_id;
     // Recherche texte : équipement, nom/code du site.
     if (search) where.OR = [
+      { reference: { contains: search, mode: 'insensitive' } },
       { equipement: { contains: search, mode: 'insensitive' } },
       { site: { nom: { contains: search, mode: 'insensitive' } } },
       { site: { code: { contains: search, mode: 'insensitive' } } },
@@ -292,6 +294,7 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
     const maintenance = await prisma.maintenance.create({
       data: {
         ...data,
+        reference: await genererReference(prisma, 'MNT', new Date(data.datePlanifiee)),
         datePlanifiee: new Date(data.datePlanifiee),
         technicienId: data.technicienId ?? req.user!.id,
         prestataireId,
@@ -385,7 +388,8 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
     });
     void notifierAction({
       domaine: 'MAINTENANCE', evenement: 'DEMARRAGE', siteCode: existing.site.code,
-      technicienId, detail: existing.type === 'PREVENTIVE' ? 'préventive' : 'curative',
+      technicienId,
+      detail: `${existing.type === 'PREVENTIVE' ? 'préventive' : 'curative'}${existing.reference ? ` (${existing.reference})` : ''}`,
     });
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
@@ -685,7 +689,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     void notifierAction({
       domaine: 'MAINTENANCE', evenement: 'CLOTURE', siteCode: existing.site.code,
       technicienId: existing.technicienId ?? req.user!.id,
-      detail: existing.type === 'PREVENTIVE' ? 'préventive' : 'curative',
+      detail: `${existing.type === 'PREVENTIVE' ? 'préventive' : 'curative'}${existing.reference ? ` (${existing.reference})` : ''}`,
     });
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }

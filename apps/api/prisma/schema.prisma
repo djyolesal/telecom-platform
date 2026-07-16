@@ -258,6 +258,7 @@ model EquipementActif {
 
 model Maintenance {
   id             String              @id @default(uuid())
+  reference      String?             @unique @db.VarChar(20) // MNT-2026-00481 (lisible, séquentiel par année)
   siteId         String              @map("site_id")
   incidentId     String?             @map("incident_id")
   type           TypeMaintenance
@@ -340,6 +341,7 @@ model Photo {
 
 model Depotage {
   id                 String   @id @default(uuid())
+  reference          String?  @unique @db.VarChar(20) // DEP-2026-01893
   siteId             String   @map("site_id")
   dateDepotage       DateTime @map("date_depotage")
   volumeLitres       Decimal  @map("volume_litres") @db.Decimal(8, 2)
@@ -436,6 +438,7 @@ model ReleveEnergie {
 
 model Incident {
   id                       String         @id @default(uuid())
+  reference                String?        @unique @db.VarChar(20) // INC-2026-00112
   siteId                   String         @map("site_id")
   type                     TypeIncident
   severite                 NiveauSeverite

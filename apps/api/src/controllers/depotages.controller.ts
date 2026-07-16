@@ -9,6 +9,7 @@ import { auditLog } from '../services/audit.service';
 import { sendTabular } from '../utils/exporter';
 import { clearMemo } from '../utils/memo';
 import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../utils/energy';
+import { genererReference } from '../services/reference.service';
 import { getNum } from '../services/settings.service';
 import { publicFileUrl, getObjectBuffer } from '../services/storage.service';
 import { generateDepotagePdf } from '../services/pdf.service';
@@ -276,6 +277,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       const dep = await tx.depotage.create({
         data: {
           ...(clientUuid ? { id: clientUuid } : {}),
+          reference: await genererReference(tx, 'DEP', b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date()),
           siteId,
           ligneLivraisonId,
           dateDepotage: b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date(),

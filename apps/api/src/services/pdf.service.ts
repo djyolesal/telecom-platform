@@ -67,6 +67,7 @@ const fmtDate = (d?: Date | string | null) =>
 
 export interface MaintenancePdfData {
   id: string;
+  reference?: string | null;
   type: string;
   categorie: string;
   equipement: string;
@@ -84,7 +85,7 @@ export interface MaintenancePdfData {
 
 export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buffer> {
   return render((doc) => {
-    header(doc, 'Rapport de maintenance', `Réf. ${m.id.slice(0, 8).toUpperCase()}`);
+    header(doc, 'Rapport de maintenance', `Réf. ${m.reference ?? m.id.slice(0, 8).toUpperCase()}`);
 
     sectionTitle(doc, 'Site');
     row(doc, 'Nom', m.site?.nom ?? '—');
@@ -262,6 +263,7 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
 
 export interface DepotagePdfData {
   id: string;
+  reference?: string | null;
   dateDepotage: Date;
   site?: { code: string; nom: string; region: string } | null;
   technicien?: { nom: string; prenom: string } | null;
@@ -286,7 +288,7 @@ const SIGNED = (n?: number | null) => (n == null ? '—' : `${Number(n) > 0 ? '+
 
 export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
   return render((doc) => {
-    header(doc, 'Bordereau de dépotage', `Réf. ${d.id.slice(0, 8).toUpperCase()} — ${fmtDate(d.dateDepotage)}`);
+    header(doc, 'Bordereau de dépotage', `Réf. ${d.reference ?? d.id.slice(0, 8).toUpperCase()} — ${fmtDate(d.dateDepotage)}`);
 
     sectionTitle(doc, 'Site');
     row(doc, 'Nom', d.site?.nom ?? '—');

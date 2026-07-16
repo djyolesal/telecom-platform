@@ -50,6 +50,7 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               _card('Livraison', [
+                if (d.reference != null) _row('Référence', d.reference!),
                 _row('Site', d.siteNom ?? d.siteCode ?? '—'),
                 _row('Date', fmtDateTime(d.dateDepotage)),
                 _row('Volume livré (jauge)', fmtLitres(d.volumeLitres)),

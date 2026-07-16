@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { reserverReferences, formatReference } from '../services/reference.service';
 import { auditLog } from '../services/audit.service';
 import { getNum } from '../services/settings.service';
 import { GE_PARAMS } from '../utils/calculator';
@@ -220,6 +221,21 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
       for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
       return out;
     };
+    // Références lisibles DEP-<année>-<n> : un bloc de numéros est réservé par
+    // année métier (compteur atomique), puis attribué dans l'ordre chronologique.
+    const parAnnee = new Map<number, DepotRow[]>();
+    for (const d of depotages) {
+      const annee = new Date(d.dateDepotage as string | Date).getFullYear();
+      const arr = parAnnee.get(annee) ?? [];
+      arr.push(d);
+      parAnnee.set(annee, arr);
+    }
+    for (const [annee, rows] of parAnnee) {
+      rows.sort((a, b) => new Date(a.dateDepotage as string | Date).getTime() - new Date(b.dateDepotage as string | Date).getTime());
+      const premier = await reserverReferences('DEP', annee, rows.length);
+      rows.forEach((r, i) => { r.reference = formatReference('DEP', annee, premier + i); });
+    }
+
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     if (purge) {
       ops.push(prisma.photo.deleteMany({ where: { entityType: 'depotage' } }));

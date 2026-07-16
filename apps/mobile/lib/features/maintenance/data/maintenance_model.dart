@@ -16,6 +16,7 @@ class GroupeGE {
 /// Maintenance (préventive/curative).
 class Maintenance {
   final String id;
+  final String? reference; // MNT/INC/DEP-année-numéro (lisible)
   final String? siteId;
   final String type;
   final String categorie;
@@ -43,6 +44,7 @@ class Maintenance {
 
   const Maintenance({
     required this.id,
+    this.reference,
     this.siteId,
     required this.type,
     required this.categorie,
@@ -88,6 +90,7 @@ class Maintenance {
         const <String>[];
     return Maintenance(
       id: j['id'] as String,
+      reference: j['reference'] as String?,
       siteId: j['siteId'] as String?,
       type: j['type'] as String,
       categorie: j['categorie'] as String,

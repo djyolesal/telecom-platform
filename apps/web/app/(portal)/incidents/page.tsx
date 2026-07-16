@@ -19,6 +19,7 @@ import { fmtDateTime } from '@/lib/utils';
 
 interface Incident {
   id: string;
+  reference?: string | null;
   type: string;
   severite: string;
   statut: string;
@@ -45,6 +46,7 @@ export default function IncidentsPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Incident>[] = [
+    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
     { key: 'site', header: 'Site', render: (i) => <span className="font-medium text-gray-800">{i.site?.nom ?? i.site?.code ?? "—"}</span> },
     { key: 'type', header: 'Type', render: (i) => TYPES_INCIDENT.find((t) => t.value === i.type)?.label ?? i.type },
     { key: 'severite', header: 'Sévérité', render: (i) => <SeveriteBadge value={i.severite} /> },

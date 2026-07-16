@@ -200,6 +200,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (m.reference != null)
+                Text(m.reference!, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
               Text('${m.siteNom ?? m.siteCode ?? ''} · ${m.equipement}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: Colors.blue),

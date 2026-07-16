@@ -12,15 +12,21 @@ import { differenceInMinutes } from 'date-fns';
 import { assertOnSite } from '../utils/geofence';
 import { publicFileUrl } from '../services/storage.service';
 import { notifierAction } from '../services/sms.service';
+import { genererReference } from '../services/reference.service';
 
 // Photos minimum (prises sur place) pour clôturer un incident.
 const MIN_PHOTOS_INCIDENT = 6;
 
 export async function getIncidents(req: Request, res: Response, next: NextFunction) {
   try {
-    const { type, severite, statut, site_id, technicien_id, region, page = '1', limit = '20' } = req.query as Record<string, string>;
+    const { type, severite, statut, site_id, technicien_id, region, search, page = '1', limit = '20' } = req.query as Record<string, string>;
 
     const where: Record<string, unknown> = {};
+    if (search) where.OR = [
+      { reference: { contains: search, mode: 'insensitive' } },
+      { description: { contains: search, mode: 'insensitive' } },
+      { site: { is: { nom: { contains: search, mode: 'insensitive' } } } },
+    ];
     if (type) where.type = type;
     if (severite) where.severite = severite;
     if (statut) where.statut = statut;
@@ -85,7 +91,11 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
       'siteId', 'type', 'severite', 'description', 'latitude', 'longitude',
     ]);
     const incident = await prisma.incident.create({
-      data: { ...(data as Prisma.IncidentUncheckedCreateInput), declarePar: req.user!.id },
+      data: {
+        ...(data as Prisma.IncidentUncheckedCreateInput),
+        reference: await genererReference(prisma, 'INC', new Date()),
+        declarePar: req.user!.id,
+      },
       include: { site: { select: { nom: true, code: true, region: true } } },
     });
 
@@ -191,6 +201,7 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
     void notifierAction({
       domaine: 'INCIDENT', evenement: 'DEMARRAGE', siteCode: incident.site.code,
       technicienId: incident.technicienId ?? req.user!.id,
+      detail: incident.reference ? `(${incident.reference})` : undefined,
     });
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
@@ -271,6 +282,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
     if (creerMaintenance) {
       await prisma.maintenance.create({
         data: {
+          reference: await genererReference(prisma, 'MNT', dateResol),
           siteId: incident.siteId,
           incidentId: incident.id,
           type: 'CURATIVE',
@@ -291,6 +303,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
     void notifierAction({
       domaine: 'INCIDENT', evenement: 'CLOTURE', siteCode: incident.site.code,
       technicienId: incident.technicienId ?? req.user!.id,
+      detail: incident.reference ? `(${incident.reference})` : undefined,
     });
 
     res.json({ success: true, data: updated });

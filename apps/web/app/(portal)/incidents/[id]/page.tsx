@@ -64,7 +64,7 @@ export default function IncidentDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`Incident — ${inc.site?.nom ?? inc.site?.code ?? ""}`}
+        title={`${inc.reference ?? "Incident"} — ${inc.site?.nom ?? inc.site?.code ?? ""}`}
         subtitle={TYPES_INCIDENT.find((t) => t.value === inc.type)?.label ?? inc.type}
         backHref="/incidents"
         actions={<div className="flex gap-2"><SeveriteBadge value={inc.severite} /><StatutIncidentBadge value={inc.statut} /></div>}

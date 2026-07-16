@@ -17,6 +17,7 @@ import { fmtNumber, fmtDate } from '@/lib/utils';
 
 interface Depotage {
   id: string;
+  reference?: string | null;
   dateDepotage: string;
   volumeLitres: number;
   stockApresLitres?: number;
@@ -43,6 +44,7 @@ function DepotagesPageInner() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Depotage>[] = [
+    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
     { key: 'site', header: 'Site', render: (d) => <span className="font-medium text-gray-800">{d.site?.nom ?? d.site?.code ?? "—"}</span> },
     { key: 'dateDepotage', header: 'Date', render: (d) => fmtDate(d.dateDepotage) },
     { key: 'volumeLitres', header: 'Volume (L)', align: 'right', render: (d) => fmtNumber(Number(d.volumeLitres)) },

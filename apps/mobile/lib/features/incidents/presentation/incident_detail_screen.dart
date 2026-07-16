@@ -171,7 +171,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text('${inc.siteNom ?? inc.siteCode ?? ''} · ${kTypeIncident[inc.type] ?? inc.type}',
+                    child: Text('${inc.reference != null ? '${inc.reference} · ' : ''}${inc.siteNom ?? inc.siteCode ?? ''} · ${kTypeIncident[inc.type] ?? inc.type}',
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                   StatusChip(label: kSeverite[inc.severite] ?? inc.severite, color: AppTheme.severiteColor(inc.severite)),

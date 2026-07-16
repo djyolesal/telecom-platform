@@ -1,6 +1,7 @@
 /// Dépotage (livraison de gasoil).
 class Depotage {
   final String id;
+  final String? reference; // MNT/INC/DEP-année-numéro (lisible)
   final String? siteCode;
   final String? siteNom;
   final DateTime? dateDepotage;
@@ -11,6 +12,7 @@ class Depotage {
 
   const Depotage({
     required this.id,
+    this.reference,
     this.siteCode,
     this.siteNom,
     this.dateDepotage,
@@ -27,6 +29,7 @@ class Depotage {
     final site = j['site'] as Map<String, dynamic>?;
     return Depotage(
       id: j['id'] as String,
+      reference: j['reference'] as String?,
       siteCode: site?['code'] as String?,
       siteNom: site?['nom'] as String?,
       dateDepotage: DateTime.tryParse(j['dateDepotage']?.toString() ?? ''),
@@ -41,6 +44,7 @@ class Depotage {
 /// Détail complet d'un dépotage (réconciliation, heures GE, photos).
 class DepotageDetail {
   final String id;
+  final String? reference;
   final String? siteCode;
   final String? siteNom;
   final DateTime? dateDepotage;
@@ -63,6 +67,7 @@ class DepotageDetail {
 
   const DepotageDetail({
     required this.id,
+    this.reference,
     this.siteCode,
     this.siteNom,
     this.dateDepotage,
@@ -91,6 +96,7 @@ class DepotageDetail {
     final photos = (j['photos'] as List?) ?? const [];
     return DepotageDetail(
       id: j['id'] as String,
+      reference: j['reference'] as String?,
       siteCode: site?['code'] as String?,
       siteNom: site?['nom'] as String?,
       dateDepotage: DateTime.tryParse(j['dateDepotage']?.toString() ?? ''),

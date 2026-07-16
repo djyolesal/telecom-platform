@@ -1,6 +1,7 @@
 /// Incident terrain.
 class Incident {
   final String id;
+  final String? reference; // MNT/INC/DEP-année-numéro (lisible)
   final String? siteId;
   final String? siteCode;
   final String? siteNom;
@@ -20,6 +21,7 @@ class Incident {
 
   const Incident({
     required this.id,
+    this.reference,
     this.siteId,
     this.siteCode,
     this.siteNom,
@@ -48,6 +50,7 @@ class Incident {
         const <String>[];
     return Incident(
       id: j['id'] as String,
+      reference: j['reference'] as String?,
       siteId: j['siteId'] as String?,
       siteCode: site?['code'] as String?,
       siteNom: site?['nom'] as String?,

@@ -1,5 +1,6 @@
 import { addMonths } from 'date-fns';
 import { ScopeMaintenance } from '@prisma/client';
+import { genererReference } from './reference.service';
 import { prisma } from '../config/database';
 import { FREQUENCE_MOIS, tachesPlanifiables, SiteEligibilite } from '../utils/tachesPreventives';
 
@@ -69,6 +70,7 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
   for (const m of aCreer) {
     await prisma.maintenance.create({
       data: {
+        reference: await genererReference(prisma, 'MNT', m.datePlanifiee),
         siteId: m.siteId,
         type: 'PREVENTIVE',
         categorie: m.categorie as never,
