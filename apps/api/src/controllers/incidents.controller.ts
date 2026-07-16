@@ -198,8 +198,9 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
 
 export async function closeIncident(req: Request, res: Response, next: NextFunction) {
   try {
-    const { dateIntervention, dateResolution, causeProbable, actionCorrective, creerMaintenance, latitude, longitude, photos } = req.body as {
+    const { dateIntervention, dateResolution, causeProbable, actionCorrective, creerMaintenance, latitude, longitude, photos, agentPresent } = req.body as {
       dateIntervention?: string;
+      agentPresent?: boolean;
       dateResolution?: string;
       causeProbable?: string;
       actionCorrective?: string;
@@ -262,6 +263,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
         dureeCoupureMinutes: duree > 0 ? duree : 0,
         causeProbable,
         actionCorrective,
+        ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}),
       },
     });
 

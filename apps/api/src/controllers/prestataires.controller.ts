@@ -4,12 +4,27 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 
+/** Rapproche les sites dont la société de gardiennage (texte libre) correspond
+ *  au nom du prestataire (comparaison normalisée) — sans écraser un lien déjà posé. */
+async function rapprocherSitesGardiennage(prestataireId: string, nom: string): Promise<void> {
+  const normNom = (x: string) => x.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
+  const cible = normNom(nom);
+  if (!cible) return;
+  const sites = await prisma.site.findMany({
+    where: { gardiennagePrestataireId: null, societeGardiennage: { not: null } },
+    select: { id: true, societeGardiennage: true },
+  });
+  const ids = sites.filter((s) => normNom(s.societeGardiennage!) === cible).map((s) => s.id);
+  if (ids.length) await prisma.site.updateMany({ where: { id: { in: ids } }, data: { gardiennagePrestataireId: prestataireId } });
+}
+
 export async function getPrestataires(req: Request, res: Response, next: NextFunction) {
   try {
-    const { search, is_active, is_transporteur, page = '1', limit = '20' } = req.query as Record<string, string>;
+    const { search, is_active, is_transporteur, is_gardiennage, page = '1', limit = '20' } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (is_active != null) where.isActive = is_active === 'true';
     if (is_transporteur != null) where.isTransporteur = is_transporteur === 'true';
+    if (is_gardiennage != null) where.isGardiennage = is_gardiennage === 'true';
     if (search) where.OR = [
       { nom: { contains: search, mode: 'insensitive' } },
       { email: { contains: search, mode: 'insensitive' } },
@@ -17,7 +32,7 @@ export async function getPrestataires(req: Request, res: Response, next: NextFun
 
     const { data, meta } = await paginate(
       prisma.prestataire,
-      { where, orderBy: { nom: 'asc' }, include: { _count: { select: { assignments: true } } } },
+      { where, orderBy: { nom: 'asc' }, include: { _count: { select: { assignments: true, sitesGardes: true } } } },
       { page: parseInt(page), limit: parseInt(limit) }
     );
     res.json({ success: true, data, meta });
@@ -42,9 +57,10 @@ export async function getPrestataireById(req: Request, res: Response, next: Next
 
 export async function createPrestataire(req: Request, res: Response, next: NextFunction) {
   try {
-    const { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur } = req.body;
+    const { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur, isGardiennage } = req.body;
     if (!nom) throw new AppError('Le nom est requis', 400);
-    const prestataire = await prisma.prestataire.create({ data: { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur: !!isTransporteur } });
+    const prestataire = await prisma.prestataire.create({ data: { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur: !!isTransporteur, isGardiennage: !!isGardiennage } });
+    if (prestataire.isGardiennage) await rapprocherSitesGardiennage(prestataire.id, prestataire.nom);
     await auditLog(req.user!.id, 'CREATE', 'prestataires', prestataire.id, { nom }, req);
     res.status(201).json({ success: true, data: prestataire });
   } catch (err) { next(err); }
@@ -54,11 +70,12 @@ export async function updatePrestataire(req: Request, res: Response, next: NextF
   try {
     const existing = await prisma.prestataire.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Prestataire introuvable', 404);
-    const { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur } = req.body;
+    const { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur, isGardiennage } = req.body;
     const updated = await prisma.prestataire.update({
       where: { id: req.params.id },
-      data: { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, ...(isTransporteur !== undefined ? { isTransporteur: !!isTransporteur } : {}) },
+      data: { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, ...(isTransporteur !== undefined ? { isTransporteur: !!isTransporteur } : {}), ...(isGardiennage !== undefined ? { isGardiennage: !!isGardiennage } : {}) },
     });
+    if (updated.isGardiennage) await rapprocherSitesGardiennage(updated.id, updated.nom);
     await auditLog(req.user!.id, 'UPDATE', 'prestataires', existing.id, req.body, req);
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }

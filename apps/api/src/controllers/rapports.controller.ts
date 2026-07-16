@@ -531,3 +531,58 @@ export async function getSlaPrestataires(req: Request, res: Response, next: Next
     res.json({ success: true, data: await computeSla({ jours }) });
   } catch (err) { next(err); }
 }
+
+/**
+ * Rapport gardiennage : par société, sites gardés et présence de l'agent lors
+ * des interventions clôturées (déclaration « Agent présent » du technicien).
+ */
+export async function getRapportGardiennage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const jours = Math.max(1, parseInt((req.query.jours as string) ?? '90'));
+    const since = new Date(Date.now() - jours * 86400000);
+
+    const societes = await prisma.prestataire.findMany({
+      where: { isGardiennage: true, isActive: true },
+      select: {
+        id: true, nom: true, contactTechnique: true,
+        sitesGardes: { where: { isActive: true }, select: { id: true, code: true, hasGardien: true } },
+      },
+      orderBy: { nom: 'asc' },
+    });
+
+    const data = await Promise.all(societes.map(async (soc) => {
+      const siteIds = soc.sitesGardes.map((s) => s.id);
+      const [maint, inc] = siteIds.length ? await Promise.all([
+        prisma.maintenance.findMany({
+          where: { siteId: { in: siteIds }, statut: 'TERMINEE', dateFin: { gte: since } },
+          select: { agentPresent: true },
+        }),
+        prisma.incident.findMany({
+          where: { siteId: { in: siteIds }, dateResolution: { gte: since } },
+          select: { agentPresent: true },
+        }),
+      ]) : [[], []];
+      const decls = [...maint, ...inc].map((x) => x.agentPresent);
+      const presents = decls.filter((v) => v === true).length;
+      const absents = decls.filter((v) => v === false).length;
+      const nonRenseigne = decls.filter((v) => v == null).length;
+      const renseignes = presents + absents;
+      return {
+        prestataireId: soc.id,
+        nom: soc.nom,
+        contactTechnique: soc.contactTechnique,
+        nbSites: soc.sitesGardes.length,
+        interventions: decls.length,
+        presents, absents, nonRenseigne,
+        tauxAbsencePct: renseignes ? Math.round((absents / renseignes) * 100) : null,
+      };
+    }));
+
+    // Sites avec gardien déclaré mais sans société rapprochée (reste à normaliser).
+    const orphelins = await prisma.site.count({
+      where: { isActive: true, hasGardien: true, gardiennagePrestataireId: null },
+    });
+
+    res.json({ success: true, data: { periodeJours: jours, societes: data, sitesNonRattaches: orphelins } });
+  } catch (err) { next(err); }
+}

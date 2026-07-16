@@ -179,7 +179,9 @@ model Site {
   cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100)
   // Gardiennage et contact local (préparation d'intervention, litiges manquants)
   hasGardien         Boolean  @default(false) @map("has_gardien")
-  societeGardiennage String?  @map("societe_gardiennage") @db.VarChar(100)
+  societeGardiennage String?  @map("societe_gardiennage") @db.VarChar(100) // texte hérité (affiché tant que non rapproché)
+  // Société de gardiennage NORMALISÉE : lien vers un prestataire isGardiennage.
+  gardiennagePrestataireId String? @map("gardiennage_prestataire_id")
   telephoneSite      String?  @map("telephone_site") @db.VarChar(30)
   isActive         Boolean     @default(true) @map("is_active")
   lotId            String?     @map("lot_id")
@@ -187,6 +189,7 @@ model Site {
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
   lot             Lot?                @relation(fields: [lotId], references: [id])
+  gardiennagePrestataire Prestataire? @relation("GardiennageSites", fields: [gardiennagePrestataireId], references: [id])
   maintenances    Maintenance[]
   depotages       Depotage[]
   releves         ReleveEnergie[]
@@ -199,6 +202,7 @@ model Site {
   @@index([statutGE])
   @@index([powerConfig])
   @@index([lotId])
+  @@index([gardiennagePrestataireId])
   @@map("sites")
 }
 
@@ -265,6 +269,9 @@ model Maintenance {
   dateDebut      DateTime?           @map("date_debut")
   dateFin        DateTime?           @map("date_fin")
   dureeMinutes   Int?                @map("duree_minutes")
+  // Déclaration du technicien à la clôture : agent de gardiennage présent sur
+  // site ? (null = clôturé avant la mise en place / ancien client)
+  agentPresent   Boolean?            @map("agent_present")
   technicienId   String?             @map("technicien_id")
   prestataireId  String?             @map("prestataire_id")
   signaturePath  String?             @map("signature_path")
@@ -440,6 +447,7 @@ model Incident {
   dureeCoupureMinutes      Int?           @map("duree_coupure_minutes")
   technicienId             String?        @map("technicien_id")
   declarePar               String?        @map("declare_par")
+  agentPresent             Boolean?       @map("agent_present") // agent de sécurité présent à l'intervention ?
   causeProbable            String?        @map("cause_probable")
   actionCorrective         String?        @map("action_corrective")
   signaturePath            String?        @map("signature_path")
@@ -564,6 +572,8 @@ model Prestataire {
   logoPath          String?  @map("logo_path")
   // Prestataire de transport carburant (saisit les bons de livraison)
   isTransporteur    Boolean  @default(false) @map("is_transporteur")
+  // Société de gardiennage (agents de sécurité des sites — pas d'accès plateforme)
+  isGardiennage     Boolean  @default(false) @map("is_gardiennage")
   isActive   Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -573,6 +583,7 @@ model Prestataire {
   maintenances   Maintenance[]
   bonsLivraison  BonLivraison[]
   contacts       Contact[]
+  sitesGardes    Site[]          @relation("GardiennageSites")
 
   @@map("prestataires")
 }

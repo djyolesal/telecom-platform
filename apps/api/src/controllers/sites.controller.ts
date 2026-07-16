@@ -137,6 +137,7 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
             },
           },
         },
+        gardiennagePrestataire: { select: { id: true, nom: true, contactTechnique: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
       },
     });
@@ -197,7 +198,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
-      'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite',
+      'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
     const updated = await prisma.site.update({ where: { id: req.params.id }, data });

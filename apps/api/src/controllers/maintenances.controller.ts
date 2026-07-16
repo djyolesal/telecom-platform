@@ -394,8 +394,9 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
 /** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), photos (préventive), PDF. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { observations, pieces, signaturePath, energie, photos, latitude, longitude } = req.body as {
+    const { observations, pieces, signaturePath, energie, photos, latitude, longitude, agentPresent } = req.body as {
       observations?: string;
+      agentPresent?: boolean;
       pieces?: Record<string, unknown>[];
       signaturePath?: string;
       energie?: Record<string, unknown>;
@@ -529,7 +530,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         // count 0 → on abandonne (rejeu idempotent), aucune écriture dupliquée.
         const verrou = await tx.maintenance.updateMany({
           where: { id: req.params.id, statut: 'EN_COURS' },
-          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath },
+          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath, ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}) },
         });
         if (verrou.count === 0) throw Object.assign(new Error('ALREADY_CLOSED'), { alreadyClosed: true });
 

@@ -67,6 +67,7 @@ class IncidentRepository {
   Future<SubmitResult> close({
     required String id,
     required DateTime dateResolution,
+    required bool agentPresent,
     String? causeProbable,
     String? actionCorrective,
     bool creerMaintenance = false,
@@ -79,6 +80,7 @@ class IncidentRepository {
       entityType: 'incident_close',
       payload: {
         'dateResolution': dateResolution.toUtc().toIso8601String(),
+        'agentPresent': agentPresent,
         if (causeProbable != null && causeProbable.isNotEmpty) 'causeProbable': causeProbable,
         if (actionCorrective != null && actionCorrective.isNotEmpty) 'actionCorrective': actionCorrective,
         'creerMaintenance': creerMaintenance,

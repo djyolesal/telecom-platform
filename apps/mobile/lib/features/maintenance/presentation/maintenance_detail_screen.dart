@@ -157,6 +157,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
       final res = await repo.close(
         widget.id,
+        agentPresent: result['agentPresent'] as bool,
         observations: result['observations'] as String?,
         signatureLocalPath: signaturePath,
         energie: result['energie'] as Map<String, dynamic>?,
@@ -356,6 +357,8 @@ class _CloseSheetState extends State<_CloseSheet> {
   // Vidange par GE : choix explicite du technicien (sinon pré-cochage au seuil).
   final Map<String, bool> _vidange = {};
   final Set<String> _vidangeTouched = {};
+  // Déclaration obligatoire : agent de gardiennage présent sur site ?
+  bool? _agentPresent;
   String? _error;
 
   @override
@@ -500,7 +503,52 @@ class _CloseSheetState extends State<_CloseSheet> {
       energie['puissanceKva'] = _num(_puissance);
     }
 
-    Navigator.pop(context, {'observations': _obs.text.trim(), 'energie': energie, 'photos': _photos});
+    if (_agentPresent == null) {
+      setState(() => _error = 'Indiquez si l\'agent de sécurité est présent sur le site.');
+      return;
+    }
+
+    Navigator.pop(context, {
+      'observations': _obs.text.trim(),
+      'energie': energie,
+      'photos': _photos,
+      'agentPresent': _agentPresent,
+    });
+  }
+
+  /// Choix obligatoire Présent/Absent (sans valeur par défaut : une case
+  /// pré-cochée serait validée machinalement et la donnée ne vaudrait rien).
+  Widget _agentSelector() {
+    Widget bouton(bool value, String label, IconData icon, Color color) {
+      final selected = _agentPresent == value;
+      return Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => setState(() => _agentPresent = value),
+          icon: Icon(icon, size: 16, color: selected ? Colors.white : color),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: selected ? color : null,
+            foregroundColor: selected ? Colors.white : color,
+            side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.5)),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        const Text('AGENT DE SÉCURITÉ (GARDIENNAGE)',
+            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+        const SizedBox(height: 6),
+        Row(children: [
+          bouton(true, 'Présent', Icons.verified_user, const Color(0xFF0E7C6B)),
+          const SizedBox(width: 8),
+          bouton(false, 'Absent', Icons.person_off, const Color(0xFFC0392B)),
+        ]),
+      ],
+    );
   }
 
   @override
@@ -640,6 +688,7 @@ class _CloseSheetState extends State<_CloseSheet> {
               const SizedBox(height: 12),
             ],
             TextField(controller: _obs, maxLines: 3, decoration: const InputDecoration(labelText: 'Observations / travaux réalisés')),
+            _agentSelector(),
             if (_error != null)
               Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12))),
             const SizedBox(height: 14),

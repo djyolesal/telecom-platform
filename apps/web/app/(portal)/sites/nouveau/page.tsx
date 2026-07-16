@@ -19,9 +19,14 @@ export default function NouveauSitePage() {
     latitude: '', longitude: '', lotId: '',
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
-    hasGardien: 'false', societeGardiennage: '', telephoneSite: '',
+    hasGardien: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
     marqueGE: '',
   });
+  const { data: societesGardiennage } = useQuery({
+    queryKey: ['prestataires-gardiennage'],
+    queryFn: () => api.get('/prestataires', { params: { is_gardiennage: 'true', is_active: 'true', limit: 200 } }).then((r) => r.data.data as { id: string; nom: string }[]),
+  });
+  const gardiennageOptions = (societesGardiennage ?? []).map((p) => ({ value: p.id, label: p.nom }));
   const [error, setError] = useState('');
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -54,6 +59,7 @@ export default function NouveauSitePage() {
         cuveDimensions: form.cuveDimensions || undefined,
         hasGardien: form.hasGardien === 'true',
         societeGardiennage: form.societeGardiennage || undefined,
+        gardiennagePrestataireId: form.gardiennagePrestataireId || undefined,
         telephoneSite: form.telephoneSite || undefined,
         marqueGE: form.marqueGE || undefined,
       }),
@@ -135,7 +141,10 @@ export default function NouveauSitePage() {
             <Select value={form.hasGardien} onChange={(e) => set('hasGardien', e.target.value)} options={OUI_NON} />
           </Field>
           <Field label="Société de gardiennage">
-            <Input value={form.societeGardiennage} onChange={(e) => set('societeGardiennage', e.target.value)} placeholder="ex: SECURITOGO" />
+            <Select value={form.gardiennagePrestataireId} onChange={(e) => set('gardiennagePrestataireId', e.target.value)} options={gardiennageOptions} placeholder="(aucune)" />
+            {form.societeGardiennage && !form.gardiennagePrestataireId && (
+              <p className="mt-1 text-xs text-amber-600">Saisie libre héritée : « {form.societeGardiennage} » — créez la société dans Administration → Prestataires (case gardiennage) pour la rapprocher.</p>
+            )}
           </Field>
           <Field label="Téléphone du site (gardien / contact local)">
             <Input value={form.telephoneSite} onChange={(e) => set('telephoneSite', e.target.value)} placeholder="+228 90 00 00 00" />

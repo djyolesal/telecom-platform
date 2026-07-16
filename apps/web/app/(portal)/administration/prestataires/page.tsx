@@ -25,8 +25,9 @@ interface Prestataire {
   contactTechnique?: string;
   logoPath?: string;
   isTransporteur?: boolean;
+  isGardiennage?: boolean;
   isActive: boolean;
-  _count?: { assignments: number };
+  _count?: { assignments: number; sitesGardes?: number };
 }
 
 function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire | null; onClose: () => void }) {
@@ -42,6 +43,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isTransporteur, setIsTransporteur] = useState(prestataire?.isTransporteur ?? false);
+  const [isGardiennage, setIsGardiennage] = useState(prestataire?.isGardiennage ?? false);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const uploadLogo = async (file: File) => {
@@ -56,7 +58,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
     finally { setUploading(false); }
   };
 
-  const payload = () => ({ ...Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v || undefined])), isTransporteur });
+  const payload = () => ({ ...Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v || undefined])), isTransporteur, isGardiennage });
   const mutation = useMutation({
     mutationFn: () => editing ? api.put(`/prestataires/${prestataire!.id}`, payload()) : api.post('/prestataires', payload()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['prestataires'] }); onClose(); },
@@ -97,6 +99,10 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
             <input type="checkbox" checked={isTransporteur} onChange={(e) => setIsTransporteur(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
             Prestataire transporteur (carburant) — peut saisir les bons de livraison
           </label>
+          <label className="col-span-2 flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+            <input type="checkbox" checked={isGardiennage} onChange={(e) => setIsGardiennage(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+            Société de gardiennage — les sites qu&apos;elle garde lui sont rattachés (pas d&apos;accès plateforme)
+          </label>
 
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
@@ -129,10 +135,17 @@ export default function PrestatairesPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Prestataire>[] = [
-    { key: 'nom', header: 'Nom', render: (p) => <span className="font-medium text-gray-800">{p.nom}</span> },
+    { key: 'nom', header: 'Nom', render: (p) => (
+      <span className="font-medium text-gray-800">
+        {p.nom}
+        {p.isTransporteur && <Badge className="ml-2 bg-blue-50 text-blue-700">Transporteur</Badge>}
+        {p.isGardiennage && <Badge className="ml-2 bg-amber-50 text-amber-700">Gardiennage</Badge>}
+      </span>
+    ) },
     { key: 'contacts', header: 'Contacts (com. / tech.)', render: (p) => `${p.contactCommercial || '—'} / ${p.contactTechnique || '—'}` },
     { key: 'email', header: 'Email', render: (p) => p.email || '—' },
     { key: 'lots', header: 'Lots attribués', align: 'center', render: (p) => p._count?.assignments ?? 0 },
+    { key: 'sitesGardes', header: 'Sites gardés', align: 'center', render: (p) => p.isGardiennage ? (p._count?.sitesGardes ?? 0) : '—' },
     { key: 'isActive', header: 'Statut', render: (p) => <Badge className={p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>{p.isActive ? 'Actif' : 'Inactif'}</Badge> },
     {
       key: 'actions', header: '', align: 'right', render: (p) => (

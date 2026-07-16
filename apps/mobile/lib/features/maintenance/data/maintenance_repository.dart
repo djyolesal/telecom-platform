@@ -107,6 +107,7 @@ class MaintenanceRepository {
   /// moteur de sync — immédiatement si en ligne, sinon à la reconnexion.
   Future<SubmitResult> close(
     String id, {
+    required bool agentPresent,
     String? observations,
     String? signatureLocalPath,
     Map<String, dynamic>? energie,
@@ -122,6 +123,7 @@ class MaintenanceRepository {
       endpoint: '/maintenances/$id/close',
       entityType: 'maintenance_close',
       payload: {
+        'agentPresent': agentPresent,
         if (observations != null) 'observations': observations,
         if (energie != null && energie.isNotEmpty) 'energie': energie,
         // Position au moment de la clôture (vérification "sur site" côté serveur).

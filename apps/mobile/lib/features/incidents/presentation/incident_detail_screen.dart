@@ -136,6 +136,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         causeProbable: result['causeProbable'] as String?,
         actionCorrective: result['actionCorrective'] as String?,
         creerMaintenance: result['creerMaintenance'] as bool? ?? false,
+        agentPresent: result['agentPresent'] as bool,
         photoPaths: photoPaths,
         latitude: check.lat,
         longitude: check.lng,
@@ -272,6 +273,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
   final _picker = ImagePicker();
   final List<XFile> _photos = [];
   bool _creerMaint = false;
+  // Déclaration obligatoire : agent de gardiennage présent sur site ?
+  bool? _agentPresent;
   String? _error;
 
   @override
@@ -304,12 +307,51 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
           'Au moins $kMinPhotosIncident photos sont requises pour clôturer ($total fournie(s)).');
       return;
     }
+    if (_agentPresent == null) {
+      setState(() => _error = 'Indiquez si l\'agent de sécurité est présent sur le site.');
+      return;
+    }
     Navigator.pop(context, {
       'causeProbable': _cause.text.trim(),
       'actionCorrective': _action.text.trim(),
       'creerMaintenance': _creerMaint,
       'photos': _photos,
+      'agentPresent': _agentPresent,
     });
+  }
+
+  /// Choix obligatoire Présent/Absent (sans valeur par défaut).
+  Widget _agentSelector() {
+    Widget bouton(bool value, String label, IconData icon, Color color) {
+      final selected = _agentPresent == value;
+      return Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => setState(() => _agentPresent = value),
+          icon: Icon(icon, size: 16, color: selected ? Colors.white : color),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: selected ? color : null,
+            foregroundColor: selected ? Colors.white : color,
+            side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.5)),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        const Text('AGENT DE SÉCURITÉ (GARDIENNAGE)',
+            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+        const SizedBox(height: 6),
+        Row(children: [
+          bouton(true, 'Présent', Icons.verified_user, const Color(0xFF0E7C6B)),
+          const SizedBox(width: 8),
+          bouton(false, 'Absent', Icons.person_off, const Color(0xFFC0392B)),
+        ]),
+      ],
+    );
   }
 
   @override
@@ -337,6 +379,7 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
                 onChanged: (v) => setState(() => _creerMaint = v ?? false),
                 title: const Text('Créer une maintenance curative', style: TextStyle(fontSize: 13)),
               ),
+              _agentSelector(),
               const SizedBox(height: 6),
               Container(
                 width: double.infinity,

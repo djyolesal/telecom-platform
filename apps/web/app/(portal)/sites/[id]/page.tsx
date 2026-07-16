@@ -151,7 +151,7 @@ export default function SiteDetailPage() {
           <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '—'} />
           <InfoRow label="Dimensions cuve" value={site.cuveDimensions || '—'} />
           <InfoRow label="Agent de sécurité" value={site.hasGardien ? 'Oui' : 'Non'} />
-          <InfoRow label="Sté gardiennage" value={site.societeGardiennage || '—'} />
+          <InfoRow label="Sté gardiennage" value={site.gardiennagePrestataire?.nom ?? site.societeGardiennage ?? '—'} />
           <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[#2471A3] hover:underline">{site.telephoneSite}</a> : '—'} />
         </div>
         {site.groupes?.length > 0 && (
