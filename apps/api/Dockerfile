@@ -7,7 +7,10 @@ RUN apk add --no-cache openssl libc6-compat
 
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm ci
+# Liaison internet du serveur parfois instable (ETIMEDOUT vers registry.npmjs.org) :
+# retries + timeouts généreux + cache npm persistant entre builds (BuildKit).
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=300000
 
 COPY . .
 RUN npx prisma generate
