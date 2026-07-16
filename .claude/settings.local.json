@@ -203,7 +203,9 @@
       "Bash(~/flutter/bin/flutter --version)",
       "Bash(~/flutter/bin/flutter analyze *)",
       "Bash(grep -rn \"'/close'\\\\|/close\\\\`\" app components lib)",
-      "Bash(grep -n \"_CloseSheet\\\\|Navigator.pop\\(context, {\" lib/features/maintenance/presentation/maintenance_detail_screen.dart)"
+      "Bash(grep -n \"_CloseSheet\\\\|Navigator.pop\\(context, {\" lib/features/maintenance/presentation/maintenance_detail_screen.dart)",
+      "Read(//dev/**)",
+      "Bash(sed -n \"$\\(grep -c '' /dev/null\\)1,30p\")"
     ]
   }
 }
