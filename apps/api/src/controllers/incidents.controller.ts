@@ -174,7 +174,7 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
     const { latitude, longitude } = req.body;
     const incident = await prisma.incident.findUnique({
       where: { id: req.params.id },
-      include: { site: { select: { latitude: true, longitude: true, code: true } } },
+      include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
     });
     if (!incident) throw new AppError('Incident introuvable', 404);
     if (incident.statut === 'RESOLU' || incident.statut === 'CLOS') {
@@ -199,7 +199,7 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
     await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'demarrage', latitude, longitude }, req);
     io.of('/supervision').emit('incident:updated', { id: updated.id, statut: updated.statut });
     void notifierAction({
-      domaine: 'INCIDENT', evenement: 'DEMARRAGE', siteCode: incident.site.code,
+      domaine: 'INCIDENT', evenement: 'DEMARRAGE', siteNom: incident.site.nom ?? incident.site.code,
       technicienId: incident.technicienId ?? req.user!.id,
       detail: incident.reference ? `(${incident.reference})` : undefined,
     });
@@ -222,7 +222,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
     };
     const incident = await prisma.incident.findUnique({
       where: { id: req.params.id },
-      include: { site: { select: { latitude: true, longitude: true, code: true } } },
+      include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
     });
     if (!incident) throw new AppError('Incident introuvable', 404);
 
@@ -301,7 +301,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
     await auditLog(req.user!.id, 'CLOSE', 'incidents', incident.id, { causeProbable, duree }, req);
     io.of('/supervision').emit('incident:resolved', { id: updated.id, dureeCoupureMinutes: duree });
     void notifierAction({
-      domaine: 'INCIDENT', evenement: 'CLOTURE', siteCode: incident.site.code,
+      domaine: 'INCIDENT', evenement: 'CLOTURE', siteNom: incident.site.nom ?? incident.site.code,
       technicienId: incident.technicienId ?? req.user!.id,
       detail: incident.reference ? `(${incident.reference})` : undefined,
     });

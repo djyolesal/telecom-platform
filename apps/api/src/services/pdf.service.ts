@@ -493,14 +493,14 @@ export async function generateEtiquettesQrPdf(d: EtiquettesQrData): Promise<Buff
   const geQrs = await Promise.all(d.ges.map((g) => qrBuffer(`EMOPS:GE:${g.id}`)));
 
   return render((doc) => {
-    header(doc, 'Étiquettes QR', `${d.site.code} — ${d.site.nom}`);
+    header(doc, 'Étiquettes QR', `${d.site.nom} (${d.site.code})`);
 
     // Étiquette SITE (grande, pour l'armoire).
     sectionTitle(doc, 'Site — à coller sur l’armoire');
     const y0 = doc.y;
     try { doc.image(siteQr, 50, y0, { width: 140 }); } catch { /* qr illisible */ }
-    doc.fontSize(15).fillColor('#111').font('Helvetica-Bold').text(d.site.code, 210, y0 + 20);
-    doc.font('Helvetica').fontSize(11).fillColor('#444').text(d.site.nom, 210, y0 + 44, { width: 300 });
+    doc.fontSize(15).fillColor('#111').font('Helvetica-Bold').text(d.site.nom, 210, y0 + 20, { width: 300 });
+    doc.font('Helvetica').fontSize(11).fillColor('#444').text(d.site.code, 210, y0 + 44);
     doc.fontSize(9).fillColor('#888').text(d.site.region, 210, y0 + 62);
     doc.fontSize(8).fillColor('#aaa').text('Scannez ce code dans E&M OpS pour ouvrir le site', 210, y0 + 84, { width: 300 });
     doc.y = y0 + 150;

@@ -108,10 +108,10 @@ export default function ActifDetailPage() {
                 <div className="text-sm">
                   <p className="text-gray-800">
                     {m.natureTravaux === 'DEPLACEMENT' && m.siteSource
-                      ? `${m.siteSource.code} → ${m.site?.code ?? '—'}`
+                      ? `${m.siteSource.nom ?? m.siteSource.code} → ${m.site?.nom ?? '—'}`
                       : m.natureTravaux === 'DESINSTALLATION'
-                        ? `Déposé de ${m.site?.code ?? '—'}`
-                        : `Posé sur ${m.site?.code ?? '—'}`}
+                        ? `Déposé de ${m.site?.nom ?? '—'}`
+                        : `Posé sur ${m.site?.nom ?? '—'}`}
                   </p>
                   <p className="text-xs text-gray-400">
                     {m.statut === 'TERMINEE' ? fmtDateTime(m.dateFin) : `Planifié — ${fmtDateTime(m.datePlanifiee)}`}

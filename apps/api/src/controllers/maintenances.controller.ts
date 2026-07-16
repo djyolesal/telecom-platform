@@ -349,7 +349,7 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
     const { latitude, longitude } = req.body;
     const existing = await prisma.maintenance.findUnique({
       where: { id: req.params.id },
-      include: { site: { select: { latitude: true, longitude: true, code: true } } },
+      include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
     if (existing.statut === 'TERMINEE') throw new AppError('Maintenance déjà terminée', 409);
@@ -371,7 +371,7 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
     if (existing.natureTravaux === 'DEPLACEMENT' && existing.siteSourceId) {
       startSite = await prisma.site.findUnique({
         where: { id: existing.siteSourceId },
-        select: { latitude: true, longitude: true, code: true },
+        select: { latitude: true, longitude: true, code: true, nom: true },
       }) ?? existing.site;
     }
     assertOnSite(startSite, latitude, longitude, 'le démarrage');
@@ -387,7 +387,7 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
       },
     });
     void notifierAction({
-      domaine: 'MAINTENANCE', evenement: 'DEMARRAGE', siteCode: existing.site.code,
+      domaine: 'MAINTENANCE', evenement: 'DEMARRAGE', siteNom: existing.site.nom ?? existing.site.code,
       technicienId,
       detail: `${existing.type === 'PREVENTIVE' ? 'préventive' : 'curative'}${existing.reference ? ` (${existing.reference})` : ''}`,
     });
@@ -413,7 +413,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       include: {
         site: {
           select: {
-            id: true, powerConfig: true, latitude: true, longitude: true, code: true,
+            id: true, powerConfig: true, latitude: true, longitude: true, code: true, nom: true,
             puissanceGEkva: true, statutGE: true,
             groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
           },
@@ -687,7 +687,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
 
     await auditLog(req.user!.id, 'CLOSE', 'maintenances', existing.id, { dureeMinutes }, req);
     void notifierAction({
-      domaine: 'MAINTENANCE', evenement: 'CLOTURE', siteCode: existing.site.code,
+      domaine: 'MAINTENANCE', evenement: 'CLOTURE', siteNom: existing.site.nom ?? existing.site.code,
       technicienId: existing.technicienId ?? req.user!.id,
       detail: `${existing.type === 'PREVENTIVE' ? 'préventive' : 'curative'}${existing.reference ? ` (${existing.reference})` : ''}`,
     });

@@ -18,7 +18,7 @@ import { logger } from '../utils/logger';
 export interface EvenementAction {
   domaine: 'MAINTENANCE' | 'INCIDENT';
   evenement: 'DEMARRAGE' | 'CLOTURE';
-  siteCode: string;
+  siteNom: string;
   /** Utilisateur qui exécute l'action (technicien). */
   technicienId: string;
   /** Précision affichée dans le message (ex: "préventive", "coupure totale"). */
@@ -145,7 +145,7 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
     const societe = technicien.prestataire?.nom ?? 'interne';
     const message =
       `[E&M OpS] ${technicien.prenom} ${technicien.nom} (${societe}) ${verbe} ${objet}` +
-      `${evt.detail ? ` ${evt.detail}` : ''} sur ${evt.siteCode} à ${heure}.`;
+      `${evt.detail ? ` ${evt.detail}` : ''} sur ${evt.siteNom} à ${heure}.`;
 
     const evenement = `${evt.domaine}_${evt.evenement}`;
     const simule = !env.SMS_API_URL;
@@ -166,7 +166,7 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
         data: { telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement, statut, erreur },
       });
     }
-    logger.info(`[sms] ${evenement} ${evt.siteCode} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
+    logger.info(`[sms] ${evenement} ${evt.siteNom} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
   } catch (err) {
     logger.warn('[sms] notification contacts échouée:', err);
   }

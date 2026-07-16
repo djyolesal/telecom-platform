@@ -54,7 +54,7 @@ function SiteDrillModal({ site, bcId, mois, onClose }: { site: ParSite; bcId: st
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-bold text-gray-800">{site.siteCode} — {site.siteNom}</h2>
+          <h2 className="text-lg font-bold text-gray-800">{site.siteNom} <span className="text-sm font-medium text-gray-400">({site.siteCode})</span></h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
         </div>
         <div className="mb-4 flex items-center justify-between">
@@ -130,7 +130,7 @@ export default function ManquantsPage() {
   const regionNationaleNote = region && tab !== 'site';
 
   const colsSite: Column<ParSite>[] = [
-    { key: 'siteCode', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.siteCode}</span> },
+    { key: 'siteCode', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.siteNom}</span> },
     { key: 'siteNom', header: 'Nom', render: (s) => <span className="text-gray-600">{s.siteNom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'prevu', header: 'Prévu (L)', align: 'right', render: (s) => fmtNumber(s.prevu) },

@@ -74,8 +74,8 @@ export default function SiteDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`${site.code} — ${site.nom}`}
-        subtitle={`${site.region}${site.ville ? ' · ' + site.ville : ''}`}
+        title={site.nom}
+        subtitle={`${site.code} · ${site.region}${site.ville ? ' · ' + site.ville : ''}`}
         backHref="/sites"
         actions={
           <>

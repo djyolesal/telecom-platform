@@ -54,8 +54,8 @@ export default function SitesPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Site>[] = [
-    { key: 'code', header: 'Code', render: (s) => <span className="font-medium text-gray-800">{s.code}</span> },
     { key: 'nom', header: 'Nom' },
+    { key: 'code', header: 'Code', render: (s) => <span className="font-medium text-gray-800">{s.code}</span> },
     { key: 'region', header: 'Région' },
     { key: 'ville', header: 'Ville', render: (s) => s.ville || '—' },
     { key: 'powerConfig', header: 'Config énergie', render: (s) => POWER_CONFIGS.find((p) => p.value === s.powerConfig)?.label ?? s.powerConfig },

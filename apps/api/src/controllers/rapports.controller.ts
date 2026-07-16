@@ -149,7 +149,7 @@ export async function getConsoEnergie(req: Request, res: Response, next: NextFun
     const releves = await prisma.releveEnergie.findMany({
       where: { dateReleve: { gte: since }, ...(site_id ? { siteId: site_id } : {}) },
       orderBy: { dateReleve: 'asc' },
-      include: { site: { select: { code: true } } },
+      include: { site: { select: { code: true, nom: true } } },
     });
 
     const totalKwh = releves.reduce((s, r) => s + Number(r.consommationKwh ?? 0), 0);
@@ -165,7 +165,7 @@ export async function getConsoEnergie(req: Request, res: Response, next: NextFun
         totaux: { consoKwh: Math.round(totalKwh), gasoilLitres: Math.round(totalGasoil), heuresGE: Math.round(totalHeuresGE), coutFCFA: coutTotal },
         nbReleves: releves.length,
         releves: releves.map((r) => ({
-          date: r.dateReleve, site: r.site?.code, source: r.source,
+          date: r.dateReleve, site: r.site?.nom ?? r.site?.code, source: r.source,
           consommationKwh: r.consommationKwh != null ? Number(r.consommationKwh) : null,
           gasoilConsommeLitres: r.gasoilConsommeLitres != null ? Number(r.gasoilConsommeLitres) : null,
           heuresFonctGE: r.heuresFonctGE != null ? Number(r.heuresFonctGE) : null,
