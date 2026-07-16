@@ -201,7 +201,9 @@
       "Bash(grep -nA5 \"enum StatutGE\" prisma/schema.prisma)",
       "Bash(grep -nA10 \"enum RoleUser\" apps/api/prisma/schema.prisma)",
       "Bash(~/flutter/bin/flutter --version)",
-      "Bash(~/flutter/bin/flutter analyze *)"
+      "Bash(~/flutter/bin/flutter analyze *)",
+      "Bash(grep -rn \"'/close'\\\\|/close\\\\`\" app components lib)",
+      "Bash(grep -n \"_CloseSheet\\\\|Navigator.pop\\(context, {\" lib/features/maintenance/presentation/maintenance_detail_screen.dart)"
     ]
   }
 }
