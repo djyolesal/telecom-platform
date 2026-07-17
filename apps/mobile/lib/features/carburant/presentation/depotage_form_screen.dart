@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ import '../../../core/widgets/signature_pad.dart';
 import '../../../core/widgets/site_picker.dart';
 import '../data/depotage_model.dart';
 import '../data/depotage_repository.dart';
+import '../data/depotage_draft.dart';
 
 /// Seuil d'écart de livraison (%) au-delà duquel une photo de preuve est exigée.
 /// Aligné sur le réglage serveur `carburant.seuilEcartLivraisonPct` (défaut 5).
@@ -59,19 +61,96 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   List<GroupeGE> _groupes = [];
   final Map<String, TextEditingController> _geIndex = {};
 
+  // Index GE d'un brouillon en attente de restauration (les contrôleurs GE ne
+  // sont créés qu'après le chargement asynchrone des groupes du site).
+  Map<String, String> _pendingGeIndex = {};
+
   @override
   void initState() {
     super.initState();
     _siteId = widget.initialSiteId;
-    if (_siteId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadSiteData(_siteId!));
+    // Recalcule le volume dérivé (après − avant) + sauvegarde le brouillon.
+    _stockAvant.addListener(_onFieldChanged);
+    _stockApres.addListener(_onFieldChanged);
+    for (final c in [_volumeAnnonce, _fournisseur, _bon, _obs, _nomChauffeur, _nomAgent]) {
+      c.addListener(_scheduleDraftSave);
     }
-    // Recalcule le volume dérivé (après − avant) au fil de la saisie.
-    _stockAvant.addListener(_onStockChanged);
-    _stockApres.addListener(_onStockChanged);
+    // Propose de reprendre un brouillon (app tuée pendant la saisie).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _proposerBrouillon());
   }
 
-  void _onStockChanged() => setState(() {});
+  void _onFieldChanged() { setState(() {}); _scheduleDraftSave(); }
+
+  Timer? _draftTimer;
+  void _scheduleDraftSave() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 600), _saveDraft);
+  }
+
+  Future<void> _saveDraft() async {
+    if (!mounted || _saving) return;
+    // Rien de significatif saisi → pas de brouillon (évite un faux « reprendre »).
+    final vide = _siteId == null && _photos.isEmpty && _stockAvant.text.isEmpty && _sigChauffeur == null;
+    if (vide) return;
+    await DepotageDraft.save({
+      'siteId': _siteId, 'ligneLivraisonId': _ligneLivraisonId, 'agentPresent': _agentPresent,
+      'stockAvant': _stockAvant.text, 'stockApres': _stockApres.text, 'volumeAnnonce': _volumeAnnonce.text,
+      'fournisseur': _fournisseur.text, 'bon': _bon.text, 'obs': _obs.text,
+      'nomChauffeur': _nomChauffeur.text, 'nomAgent': _nomAgent.text,
+      'sigChauffeur': _sigChauffeur, 'sigAgent': _sigAgent, 'sigTechnicien': _sigTechnicien,
+      'photos': _photos, 'geIndex': _geIndex.map((k, v) => MapEntry(k, v.text)),
+    });
+  }
+
+  Future<void> _proposerBrouillon() async {
+    final draft = await DepotageDraft.load();
+    if (draft == null || !mounted) {
+      if (_siteId != null) _loadSiteData(_siteId!);
+      return;
+    }
+    final reprendre = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reprendre le dépotage en cours ?'),
+        content: const Text('Une saisie de dépotage non terminée a été retrouvée (jauges, photos, signatures). La reprendre ?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Repartir de zéro')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reprendre')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (reprendre == true) {
+      _restaurerBrouillon(draft);
+    } else {
+      await DepotageDraft.clear();
+      if (_siteId != null) _loadSiteData(_siteId!);
+    }
+  }
+
+  void _restaurerBrouillon(Map<String, dynamic> d) {
+    setState(() {
+      _siteId = d['siteId'] as String? ?? _siteId;
+      _ligneLivraisonId = d['ligneLivraisonId'] as String?;
+      _agentPresent = d['agentPresent'] as bool?;
+      _stockAvant.text = d['stockAvant'] as String? ?? '';
+      _stockApres.text = d['stockApres'] as String? ?? '';
+      _volumeAnnonce.text = d['volumeAnnonce'] as String? ?? '';
+      _fournisseur.text = d['fournisseur'] as String? ?? '';
+      _bon.text = d['bon'] as String? ?? '';
+      _obs.text = d['obs'] as String? ?? '';
+      _nomChauffeur.text = d['nomChauffeur'] as String? ?? '';
+      _nomAgent.text = d['nomAgent'] as String? ?? '';
+      _sigChauffeur = d['sigChauffeur'] as String?;
+      _sigAgent = d['sigAgent'] as String?;
+      _sigTechnicien = d['sigTechnicien'] as String?;
+      _photos
+        ..clear()
+        ..addAll(((d['photos'] as List?) ?? const []).map((e) => e as String));
+      _pendingGeIndex = ((d['geIndex'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, v as String));
+    });
+    if (_siteId != null) _loadSiteData(_siteId!); // recharge plan/GE, puis applique _pendingGeIndex
+  }
 
   Future<void> _onSiteChanged(String? siteId) async {
     setState(() {
@@ -84,6 +163,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       }
       _geIndex.clear();
     });
+    _scheduleDraftSave();
     if (siteId != null) _loadSiteData(siteId);
   }
 
@@ -97,8 +177,11 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         _lignes = results[0] as List<PlanLigne>;
         _groupes = results[1] as List<GroupeGE>;
         for (final g in _groupes) {
-          _geIndex.putIfAbsent(g.id, () => TextEditingController());
+          final c = _geIndex.putIfAbsent(g.id, () => TextEditingController());
+          final saved = _pendingGeIndex[g.id];
+          if (saved != null && saved.isNotEmpty) c.text = saved;
         }
+        _pendingGeIndex = {};
         // Pré-rattachement à la ligne planifiée choisie (bouton intelligent).
         final wanted = widget.initialLigneId;
         if (wanted != null && _ligneLivraisonId == null && _lignes.any((x) => x.id == wanted)) {
@@ -135,8 +218,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
 
   @override
   void dispose() {
-    _stockAvant.removeListener(_onStockChanged);
-    _stockApres.removeListener(_onStockChanged);
+    _draftTimer?.cancel();
+    _stockAvant.removeListener(_onFieldChanged);
+    _stockApres.removeListener(_onFieldChanged);
     for (final c in [_stockAvant, _stockApres, _volumeAnnonce, _fournisseur, _bon, _obs, _nomChauffeur, _nomAgent]) {
       c.dispose();
     }
@@ -164,6 +248,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     final path = await AttachmentStore.persistBytes(bytes, 'depotage-$ts.jpg');
     if (!mounted) return;
     setState(() => _photos.add(path));
+    _scheduleDraftSave();
   }
 
   /// Ouvre le pavé de signature, persiste le PNG localement et renvoie son chemin.
@@ -191,12 +276,15 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     final selected = _agentPresent == value;
     return Expanded(
       child: OutlinedButton.icon(
-        onPressed: () => setState(() {
-          _agentPresent = value;
-          // Passer à « Absent » efface la signature/le nom d'agent éventuels
-          // (sinon agentPresent=false + signature d'agent = contradiction).
-          if (value == false) { _sigAgent = null; _nomAgent.clear(); }
-        }),
+        onPressed: () {
+          setState(() {
+            _agentPresent = value;
+            // Passer à « Absent » efface la signature/le nom d'agent éventuels
+            // (sinon agentPresent=false + signature d'agent = contradiction).
+            if (value == false) { _sigAgent = null; _nomAgent.clear(); }
+          });
+          _scheduleDraftSave();
+        },
         icon: Icon(icon, size: 16, color: selected ? Colors.white : color),
         label: Text(label),
         style: OutlinedButton.styleFrom(
@@ -281,6 +369,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         signatureAgentSecuriteLocalPath: _sigAgent,
         signatureTechnicienLocalPath: _sigTechnicien,
       );
+      await DepotageDraft.clear(); // saisie envoyée (ou en file) → brouillon obsolète
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(
         content: Text(res.isQueued ? 'Hors-ligne : dépotage mis en file de synchronisation' : 'Dépotage enregistré'),
