@@ -60,7 +60,7 @@ export default function SitesPage() {
     { key: 'ville', header: 'Ville', render: (s) => s.ville || '—' },
     { key: 'powerConfig', header: 'Config énergie', render: (s) => POWER_CONFIGS.find((p) => p.value === s.powerConfig)?.label ?? s.powerConfig },
     { key: 'statutGE', header: 'Statut GE', render: (s) => STATUTS_GE.find((p) => p.value === s.statutGE)?.label ?? s.statutGE },
-    { key: 'puissanceGEkva', header: 'kVA', align: 'right', render: (s) => Number(s.puissanceGEkva).toFixed(0) },
+    { key: 'puissanceGEkva', header: 'kVA', align: 'right', render: (s) => s.puissanceGEkva != null && !Number.isNaN(Number(s.puissanceGEkva)) ? Number(s.puissanceGEkva).toFixed(0) : '—' },
   ];
 
   return (

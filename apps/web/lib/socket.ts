@@ -9,7 +9,15 @@ const sockets: Record<string, Socket> = {};
  * authentifié via le token JWT de la session.
  */
 export function getSocket(namespace: '/supervision' | '/notif', token?: string): Socket {
-  if (sockets[namespace]?.connected) return sockets[namespace];
+  // Réutiliser le socket EXISTANT même s'il est en cours de reconnexion (état
+  // `connected=false` transitoire) : sinon chaque rendu en créait un nouveau et
+  // orphelinait l'ancien (événements dupliqués, sockets fantômes).
+  const existing = sockets[namespace];
+  if (existing) {
+    // Rafraîchit le jeton d'auth pour les reconnexions (le JWT expire à 12 h).
+    if (token) existing.auth = { token };
+    return existing;
+  }
 
   const socket = io(`${WS_URL}${namespace}`, {
     path: '/socket.io',
@@ -17,7 +25,8 @@ export function getSocket(namespace: '/supervision' | '/notif', token?: string):
     auth: { token },
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: Infinity,
+    reconnectionDelayMax: 15_000,
   });
 
   sockets[namespace] = socket;

@@ -40,9 +40,12 @@ class LocationService {
         return null;
       }
 
-      // Position connue récente (instantanée), sinon nouvelle mesure avec timeout.
+      // Position connue seulement si RÉCENTE (< 2 min) : une position en cache de
+      // plusieurs heures géotaguerait un dépotage à la position d'un autre site.
       final last = await Geolocator.getLastKnownPosition();
-      if (last != null) return (lat: last.latitude, lng: last.longitude);
+      if (last != null && DateTime.now().difference(last.timestamp).inMinutes < 2) {
+        return (lat: last.latitude, lng: last.longitude);
+      }
 
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,

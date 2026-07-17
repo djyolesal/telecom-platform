@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
@@ -60,7 +61,7 @@ export default function ActifDetailPage() {
       router.push('/actifs');
     },
     onError: (e: { response?: { data?: { error?: string } } }) =>
-      alert(e.response?.data?.error || 'Suppression impossible'),
+      toast(e.response?.data?.error || 'Suppression impossible', 'error'),
   });
 
   if (isLoading) return <Loading />;

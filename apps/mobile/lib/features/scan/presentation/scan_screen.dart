@@ -17,16 +17,36 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-class _ScanScreenState extends State<ScanScreen> {
+class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
+  // detectionSpeed normal (pas noDuplicates) : le ré-scan du MÊME QR après une
+  // erreur (« GE hors-ligne », zone blanche) doit re-déclencher — le doublon est
+  // déjà bloqué par le drapeau _handling. Sinon « Réessayer » restait inopérant.
   final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.normal,
     formats: const [BarcodeFormat.qrCode],
   );
   bool _handling = false;
   String? _erreur;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // Cycle de vie caméra : la relancer au retour d'arrière-plan (sinon flux figé).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _controller.start();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _controller.stop();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Upload, X, MessageSquareText, Search, Send } from 'lucide-react';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/shared/Button';
 import { Field, Input, Select, Textarea } from '@/components/shared/Form';
@@ -68,7 +69,7 @@ export default function ContactsPage() {
   });
   const importer = useMutation({
     mutationFn: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/contacts/import', fd); },
-    onSuccess: (r) => { refresh(); setError(''); alert(`Import : ${r.data.data.crees} créé(s), ${r.data.data.maj} mis à jour, ${r.data.data.ignores} ignoré(s).`); },
+    onSuccess: (r) => { refresh(); setError(''); toast(`Import : ${r.data.data.crees} créé(s), ${r.data.data.maj} mis à jour, ${r.data.data.ignores} ignoré(s).`, 'success'); },
     onError: onErr,
   });
 

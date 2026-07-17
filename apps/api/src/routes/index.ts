@@ -30,8 +30,10 @@ export const router = Router();
 
 // ── Auth (public) ─────────────────────────────────────────────
 // Anti-bruteforce : limite le débit des routes sensibles (par IP + email).
-const loginLimit = rateLimit({ windowSec: 900, max: 10, keyPrefix: 'login' });       // 10 / 15 min
+const loginLimit = rateLimit({ windowSec: 900, max: 10, ipMax: 60, keyPrefix: 'login' }); // 10/compte + 60/IP par 15 min (anti-spraying)
 const resetLimit = rateLimit({ windowSec: 3600, max: 5, keyPrefix: 'pwreset' });      // 5 / h
+// Génération lourde (PDF, exports xlsx/pdf, rapport mensuel) : plafond par IP anti-DoS applicatif.
+const heavyLimit = rateLimit({ windowSec: 60, max: 20, keyPrefix: 'heavy' });
 router.post('/auth/login', loginLimit, authCtrl.login);
 router.post('/auth/refresh-token', authCtrl.refreshToken);
 router.post('/auth/forgot-password', resetLimit, authCtrl.forgotPassword);
@@ -56,6 +58,14 @@ router.use((req, _res, next) => {
   if (req.user?.role !== 'TRANSPORTEUR') return next();
   if (TRANSPORTEUR_ALLOW.some((re) => re.test(req.path))) return next();
   next(new AppError("Accès réservé : un compte transporteur est limité à l'appro carburant.", 403));
+});
+
+// Plafond anti-DoS applicatif sur la génération LOURDE (PDF, exports xlsx/pdf/csv,
+// rapport mensuel) : un utilisateur ne peut pas boucler dessus et saturer le CPU.
+const HEAVY_PATH = /(\/export\/(xlsx|pdf|csv)$|\.pdf$|\.xlsx$|^\/rapports\/mensuel\/)/;
+router.use((req, res, next) => {
+  if (req.method === 'GET' && HEAVY_PATH.test(req.path)) return heavyLimit(req, res, next);
+  next();
 });
 
 router.post('/auth/logout', authCtrl.logout);
