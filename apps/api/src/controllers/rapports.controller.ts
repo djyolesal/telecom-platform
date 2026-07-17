@@ -30,12 +30,22 @@ async function dernierStockParSite(): Promise<Map<string, number>> {
 export async function getDashboard(req: Request, res: Response, next: NextFunction) {
   try {
     const { region } = req.query as Record<string, string>;
-    const siteWhere: Record<string, unknown> = { isActive: true, ...(region ? { region } : {}) };
+
+    // Périmètre prestataire : un utilisateur rattaché à un prestataire
+    // (technicien OU superviseur) ne voit le pouls QUE des sites des lots
+    // attribués à sa société — même règle que la liste des sites. Les internes
+    // voient tout le parc.
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    const perimetre = me?.prestataireId
+      ? { lot: { assignments: { some: { prestataireId: me.prestataireId } } } }
+      : {};
+    const siteScope: Record<string, unknown> = { ...(region ? { region } : {}), ...perimetre };
+    const siteWhere: Record<string, unknown> = { isActive: true, ...siteScope };
 
     const [sites, incidentsOuverts, incidentsCritiques, stockMap] = await Promise.all([
       prisma.site.findMany({ where: siteWhere }),
-      prisma.incident.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, ...(region ? { site: { region } } : {}) } }),
-      prisma.incident.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, severite: 'CRITIQUE', ...(region ? { site: { region } } : {}) } }),
+      prisma.incident.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, site: siteScope } }),
+      prisma.incident.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, severite: 'CRITIQUE', site: siteScope } }),
       dernierStockParSite(),
     ]);
 
@@ -64,7 +74,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     // Conso mensuelle 6 mois (GE vs CEET)
     const sixMoisAgo = startOfMonth(subMonths(new Date(), 5));
     const releves = await prisma.releveEnergie.findMany({
-      where: { dateReleve: { gte: sixMoisAgo }, ...(region ? { site: { region } } : {}) },
+      where: { dateReleve: { gte: sixMoisAgo }, site: siteScope },
       select: { dateReleve: true, source: true, consommationKwh: true },
     });
     const consoMap = new Map<string, { ge: number; ceet: number }>();
@@ -84,7 +94,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
 
     // Incidents récents
     const incidentsRecents = await prisma.incident.findMany({
-      where: region ? { site: { region } } : {},
+      where: { site: siteScope },
       orderBy: { dateOuverture: 'desc' },
       take: 8,
       include: { site: { select: { code: true, nom: true } } },
