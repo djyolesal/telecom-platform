@@ -3,7 +3,8 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
-import { revoquerToutesSessions } from '../services/session.service';
+import { redisClient } from '../config/redis';
+import { env } from '../config/env';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
@@ -50,7 +51,10 @@ export async function getUserById(req: Request, res: Response, next: NextFunctio
 export async function createUser(req: Request, res: Response, next: NextFunction) {
   try {
     const { password, email, ...rest } = req.body;
-    const plain = password || crypto.randomBytes(6).toString('base64url');
+    // Aucun mot de passe en clair par email : le compte naît avec un secret
+    // aléatoire inutilisable, et l'utilisateur définit le sien via un lien à
+    // usage unique. (Un mot de passe explicite fourni par l'admin reste honoré.)
+    const plain = password || crypto.randomBytes(32).toString('hex');
     const passwordHash = await bcrypt.hash(plain, SALT_ROUNDS);
 
     const user = await prisma.user.create({
@@ -59,11 +63,22 @@ export async function createUser(req: Request, res: Response, next: NextFunction
     });
 
     await auditLog(req.user!.id, 'CREATE', 'users', user.id, { email, role: rest.role }, req);
-    await sendEmail({
-      to: user.email,
-      subject: 'Votre compte E&M OpS',
-      html: `<p>Bonjour ${user.prenom},</p><p>Votre compte a été créé. Mot de passe provisoire : <b>${plain}</b></p><p>Merci de le changer dès votre première connexion.</p>`,
-    });
+    if (password) {
+      await sendEmail({
+        to: user.email,
+        subject: 'Votre compte E&M OpS',
+        html: `<p>Bonjour ${user.prenom},</p><p>Votre compte a été créé. Connectez-vous et changez votre mot de passe dès la première connexion.</p>`,
+      });
+    } else {
+      const token = crypto.randomBytes(32).toString('hex');
+      await redisClient.setEx(`reset:${token}`, 60 * 60, user.id);
+      const link = `${env.APP_URL}/reset-password?token=${token}`;
+      await sendEmail({
+        to: user.email,
+        subject: 'Votre compte E&M OpS — définir votre mot de passe',
+        html: `<p>Bonjour ${user.prenom},</p><p>Votre compte a été créé. Cliquez sur ce lien (valable 1 h) pour définir votre mot de passe :</p><p><a href="${link}">${link}</a></p>`,
+      });
+    }
 
     res.status(201).json({ success: true, data: user });
   } catch (err) { next(err); }
@@ -115,20 +130,19 @@ export async function resetUserPassword(req: Request, res: Response, next: NextF
     const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Utilisateur introuvable', 404);
 
-    const plain = crypto.randomBytes(6).toString('base64url');
-    const passwordHash = await bcrypt.hash(plain, SALT_ROUNDS);
-    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
-    // Coupe les sessions actives de l'utilisateur : le provisoire prend effet partout.
-    await revoquerToutesSessions(existing.id);
-
-    await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { field: 'password_reset' }, req);
+    // Envoi d'un LIEN de réinitialisation à usage unique (valable 1 h) — jamais un
+    // mot de passe en clair par email : l'utilisateur choisit lui-même le sien.
+    const token = crypto.randomBytes(32).toString('hex');
+    await redisClient.setEx(`reset:${token}`, 60 * 60, existing.id);
+    const link = `${env.APP_URL}/reset-password?token=${token}`;
+    await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { field: 'password_reset_link' }, req);
     await sendEmail({
       to: existing.email,
       subject: 'Réinitialisation de votre mot de passe E&M OpS',
-      html: `<p>Bonjour ${existing.prenom},</p><p>Votre nouveau mot de passe provisoire : <b>${plain}</b></p>`,
+      html: `<p>Bonjour ${existing.prenom},</p><p>Un administrateur a initié la réinitialisation de votre mot de passe. Cliquez sur ce lien (valable 1 h) pour en définir un nouveau :</p><p><a href="${link}">${link}</a></p>`,
     });
 
-    res.json({ success: true, message: 'Mot de passe réinitialisé et envoyé par email' });
+    res.json({ success: true, message: 'Lien de réinitialisation envoyé par email' });
   } catch (err) { next(err); }
 }
 

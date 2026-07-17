@@ -307,17 +307,23 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
     const prestataireId = data.tachePreventiveKey
       ? await resolvePrestataireIdByScope(data.siteId, 'PASSIVE')
       : await resolvePrestataireId(data.siteId, data.categorie);
-    const maintenance = await prisma.maintenance.create({
-      data: {
-        ...(clientUuid ? { id: clientUuid } : {}),
-        ...(data as Prisma.MaintenanceUncheckedCreateInput),
-        reference: await genererReference(prisma, 'MNT', new Date(data.datePlanifiee)),
-        datePlanifiee: new Date(data.datePlanifiee),
-        technicienId: data.technicienId ?? req.user!.id,
-        prestataireId,
-        ...(pieces?.length ? { pieces: { create: pieces } } : {}),
-      },
-      include: { pieces: true, prestataire: { select: { id: true, nom: true } } },
+    // Référence générée DANS la transaction du create : si le create échoue
+    // (P2002…), l'incrément du compteur est annulé — pas de trou de numérotation.
+    const datePlanifiee = new Date(data.datePlanifiee as string | Date);
+    const maintenance = await prisma.$transaction(async (tx) => {
+      const reference = await genererReference(tx, 'MNT', datePlanifiee);
+      return tx.maintenance.create({
+        data: {
+          ...(clientUuid ? { id: clientUuid } : {}),
+          ...(data as Prisma.MaintenanceUncheckedCreateInput),
+          reference,
+          datePlanifiee,
+          technicienId: data.technicienId ?? req.user!.id,
+          prestataireId,
+          ...(pieces?.length ? { pieces: { create: pieces } } : {}),
+        },
+        include: { pieces: true, prestataire: { select: { id: true, nom: true } } },
+      });
     });
     await auditLog(req.user!.id, 'CREATE', 'maintenances', maintenance.id, data, req);
     res.status(201).json({ success: true, data: maintenance });
@@ -662,6 +668,10 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // numéro GE (P2002), car nextNumeroGE est un read-then-write.
     const runClose = () =>
       prisma.$transaction(async (tx) => {
+        // Verrou consultatif par site : sérialise clôtures et dépotages concurrents
+        // du même site AVANT le calcul de consommation gasoil (évite que deux
+        // clôtures lisent le même relevé précédent → conso comptée deux fois).
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'carb:' + existing.siteId})::bigint)`;
         // VERROU anti-double-clôture concurrente : le passage EN_COURS→TERMINEE
         // est fait EN PREMIER et conditionné. Postgres verrouille la ligne ; une
         // 2e transaction concurrente attend le commit puis voit statut TERMINEE →

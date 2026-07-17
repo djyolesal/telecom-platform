@@ -90,14 +90,15 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
     const data = pick<Prisma.IncidentUncheckedCreateInput>(b, [
       'siteId', 'type', 'severite', 'description', 'latitude', 'longitude',
     ]);
-    const incident = await prisma.incident.create({
+    const incident = await prisma.$transaction(async (tx) => tx.incident.create({
       data: {
         ...(data as Prisma.IncidentUncheckedCreateInput),
-        reference: await genererReference(prisma, 'INC', new Date()),
+        // Réf. dans la transaction du create → pas de trou si le create échoue.
+        reference: await genererReference(tx, 'INC', new Date()),
         declarePar: req.user!.id,
       },
       include: { site: { select: { nom: true, code: true, region: true } } },
-    });
+    }));
 
     await auditLog(req.user!.id, 'CREATE', 'incidents', incident.id, data, req);
 
@@ -280,9 +281,9 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
 
     // Créer maintenance curative si demandé
     if (creerMaintenance) {
-      await prisma.maintenance.create({
+      await prisma.$transaction(async (tx) => tx.maintenance.create({
         data: {
-          reference: await genererReference(prisma, 'MNT', dateResol),
+          reference: await genererReference(tx, 'MNT', dateResol),
           siteId: incident.siteId,
           incidentId: incident.id,
           type: 'CURATIVE',
@@ -295,7 +296,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
           dateFin: dateResol,
           technicienId: incident.technicienId,
         },
-      });
+      }));
     }
 
     await auditLog(req.user!.id, 'CLOSE', 'incidents', incident.id, { causeProbable, duree }, req);

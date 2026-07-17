@@ -68,9 +68,11 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
   }
 
   for (const m of aCreer) {
-    await prisma.maintenance.create({
+    // Réf. + create dans une même transaction : un create en échec n'entame pas
+    // le compteur (pas de trou de numérotation).
+    await prisma.$transaction(async (tx) => tx.maintenance.create({
       data: {
-        reference: await genererReference(prisma, 'MNT', m.datePlanifiee),
+        reference: await genererReference(tx, 'MNT', m.datePlanifiee),
         siteId: m.siteId,
         type: 'PREVENTIVE',
         categorie: m.categorie as never,
@@ -79,7 +81,7 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
         prestataireId: m.prestataireId,
         tachePreventiveKey: m.key,
       },
-    });
+    }));
     crees++;
   }
 

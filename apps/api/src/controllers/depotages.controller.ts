@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { parseISO } from 'date-fns';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { idempotencyKey } from '../utils/idempotency';
@@ -52,6 +53,13 @@ function parseHeuresGE(raw: unknown, siteGroupeIds: Set<string>) {
  * Réconciliation carburant au dépotage : compare le volume jauge à l'annoncé (BL)
  * et la baisse de cuve depuis le dépotage précédent au gasoil attendu (heures × kVA).
  */
+/** Verrou consultatif par site (auto-libéré en fin de transaction) : sérialise
+ *  dépotages et clôtures concurrents d'un MÊME site → plus de double comptage de
+ *  la consommation. N'affecte pas les autres sites (clé dérivée du siteId). */
+async function verrouSiteCarburant(tx: Prisma.TransactionClient, siteId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'carb:' + siteId})::bigint)`;
+}
+
 async function reconcileDepotage(opts: {
   siteId: string;
   stockAvant: number | null;
@@ -59,7 +67,7 @@ async function reconcileDepotage(opts: {
   volumeAnnonce: number | null;
   heuresGE: { groupeId: string; indexHeuresGE: number }[];
   groupes: { id: string; puissanceKva: any; statut: string }[];
-}) {
+}, db: Prisma.TransactionClient | typeof prisma = prisma) {
   const { siteId, stockAvant, volumeReel, volumeAnnonce, heuresGE, groupes } = opts;
   const seuilLivPct = getNum('carburant.seuilEcartLivraisonPct', 5);
   const seuilConsoPct = getNum('maintenance.seuilEcartGasoilPct', 25);
@@ -69,7 +77,7 @@ async function reconcileDepotage(opts: {
   const analyseLiv = analyseLivraison({ volumeReel, volumeAnnonce, seuilPct: seuilLivPct });
 
   // Écart de conso : baisse de cuve depuis le dépotage précédent vs gasoil attendu.
-  const prev = await prisma.depotage.findFirst({
+  const prev = await db.depotage.findFirst({
     where: { siteId, stockApresLitres: { not: null } },
     orderBy: { dateDepotage: 'desc' },
     include: { heuresGE: true },
@@ -236,15 +244,6 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     const heuresGE = parseHeuresGE(b.heuresGE, new Set(groupes.map((g) => g.id)));
     const volumeAnnonce = b.volumeAnnonceLitres != null ? Number(b.volumeAnnonceLitres) : null;
 
-    const recon = await reconcileDepotage({
-      siteId,
-      stockAvant,
-      volumeReel: volume,
-      volumeAnnonce: Number.isFinite(volumeAnnonce as number) ? volumeAnnonce : null,
-      heuresGE,
-      groupes,
-    });
-
     const photosIn = (b.photos as { url?: string; key?: string }[] | undefined) ?? [];
 
     // Preuve terrain : minimum de photos prises sur place (comme les incidents).
@@ -274,6 +273,19 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // échoue, le dépotage est annulé (plus de « sauvé mais erreur 400 » →
     // plus de doublons au réessai de la sync).
     const depotage = await prisma.$transaction(async (tx) => {
+      // Sérialise les opérations carburant du site (verrou auto-libéré au commit),
+      // PUIS réconcilie : deux dépotages/clôtures simultanés ne lisent plus le même
+      // « dépotage précédent » → plus de double comptage de la consommation.
+      await verrouSiteCarburant(tx, siteId);
+      const recon = await reconcileDepotage({
+        siteId,
+        stockAvant,
+        volumeReel: volume,
+        volumeAnnonce: Number.isFinite(volumeAnnonce as number) ? volumeAnnonce : null,
+        heuresGE,
+        groupes,
+      }, tx);
+
       const dep = await tx.depotage.create({
         data: {
           ...(clientUuid ? { id: clientUuid } : {}),
@@ -331,7 +343,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
         siteNom: depotage.site?.nom,
         stockApresLitres: stockApres,
         volumeLitres: Number(depotage.volumeLitres),
-        ecartLivraisonLitres: recon.ecartLivraisonLitres,
+        ecartLivraisonLitres: depotage.ecartLivraisonLitres != null ? Number(depotage.ecartLivraisonLitres) : null,
         photoUrl: firstPhotoKey ? publicFileUrl(firstPhotoKey) : null,
       });
     } catch (e) {
