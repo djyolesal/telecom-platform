@@ -191,7 +191,12 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     final selected = _agentPresent == value;
     return Expanded(
       child: OutlinedButton.icon(
-        onPressed: () => setState(() => _agentPresent = value),
+        onPressed: () => setState(() {
+          _agentPresent = value;
+          // Passer à « Absent » efface la signature/le nom d'agent éventuels
+          // (sinon agentPresent=false + signature d'agent = contradiction).
+          if (value == false) { _sigAgent = null; _nomAgent.clear(); }
+        }),
         icon: Icon(icon, size: 16, color: selected ? Colors.white : color),
         label: Text(label),
         style: OutlinedButton.styleFrom(

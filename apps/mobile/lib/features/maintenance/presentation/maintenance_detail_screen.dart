@@ -119,15 +119,24 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          // Le motif doit faire ≥ 5 caractères ; sinon retour visuel explicite.
           FilledButton(
             onPressed: () {
-              if (ctrl.text.trim().length >= 5) Navigator.pop(ctx, ctrl.text.trim());
+              final v = ctrl.text.trim();
+              if (v.length >= 5) {
+                Navigator.pop(ctx, v);
+              } else {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Motif trop court (5 caractères minimum)')),
+                );
+              }
             },
             child: const Text('Suspendre'),
           ),
         ],
       ),
     );
+    ctrl.dispose(); // évite la fuite du contrôleur à chaque ouverture du dialogue
     if (motif == null || !mounted) return;
     setState(() => _busy = true);
     try {
