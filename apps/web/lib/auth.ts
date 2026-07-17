@@ -92,14 +92,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: token.refreshToken }),
         });
-        if (!res.ok) throw new Error('refresh failed');
-        const json = await res.json();
-        token.accessToken = json.data.accessToken;
-        token.refreshToken = json.data.refreshToken;
-        token.accessTokenExpires = jwtExpiryMs(json.data.accessToken);
-        delete token.error;
+        if (res.ok) {
+          const json = await res.json();
+          token.accessToken = json.data.accessToken;
+          token.refreshToken = json.data.refreshToken;
+          token.accessTokenExpires = jwtExpiryMs(json.data.accessToken);
+          delete token.error;
+        } else if (res.status === 401) {
+          // Refus explicite (refresh révoqué / session prise sur un autre appareil) :
+          // session morte → le client déconnecte.
+          token.error = 'RefreshTokenError';
+        }
+        // Autre statut (5xx, API en cours de redémarrage) : NE PAS déconnecter.
+        // On garde le jeton courant et on retentera à la prochaine requête.
       } catch {
-        token.error = 'RefreshTokenError'; // → la session le signale, le client déconnecte
+        // Erreur RÉSEAU (API injoignable, timeout) : transitoire → on ne
+        // déconnecte pas, le refresh sera retenté au prochain appel.
       }
       return token;
     },

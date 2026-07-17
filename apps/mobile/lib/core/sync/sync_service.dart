@@ -94,6 +94,10 @@ class SyncService {
       return SubmitResult(SubmitOutcome.sent, data);
     } on NetworkException {
       // hors-ligne réel (ou upload des photos impossible) → file d'attente
+    } on UnauthorizedException {
+      // Session invalidée (token expiré non rafraîchissable, ou « ouverte sur un
+      // autre appareil ») : la saisie terrain ne doit PAS être perdue → file
+      // d'attente. Elle repartira après reconnexion, comme le hors-ligne.
     }
 
     await _db.enqueue(OutboxEntriesCompanion.insert(
@@ -122,6 +126,11 @@ class SyncService {
           _logger.i('[sync] ${entry.entityType} envoyé (${entry.endpoint})');
         } on NetworkException {
           break; // réseau coupé → on réessaiera tout plus tard (rien n'est perdu)
+        } on UnauthorizedException {
+          // Session invalidée : on ARRÊTE le drainage sans compter d'essai (sinon
+          // un 401 pendant une oscillation réseau brûlerait les 5 essais de TOUTE
+          // la file). La reconnexion relancera sync() ; rien n'est perdu.
+          break;
         } catch (e) {
           // Erreur SERVEUR (validation, refus…) propre à CETTE entrée : on compte
           // un essai et on CONTINUE avec les suivantes (pas de blocage en tête).

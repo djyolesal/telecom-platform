@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import '../constants/app_constants.dart';
+import '../errors/exceptions.dart';
 import '../storage/secure_storage.dart';
 
 const bool _allowSelfSigned = bool.fromEnvironment('ALLOW_SELF_SIGNED');
@@ -45,7 +46,15 @@ class AuthInterceptor extends Interceptor {
     final isAuthCall = err.requestOptions.path.contains('/auth/');
 
     if (is401 && !isRetry && !isAuthCall) {
-      final refreshed = await _tryRefresh();
+      String? refreshed;
+      try {
+        refreshed = await _tryRefresh();
+      } on NetworkException {
+        // Le refresh a échoué pour cause RÉSEAU (timeout/coupure), pas un refus
+        // serveur : surtout ne pas déconnecter — on laisse l'erreur d'origine
+        // remonter (la couche appelante la traite comme hors-ligne / mise en file).
+        return handler.next(err);
+      }
       if (refreshed != null) {
         final req = err.requestOptions;
         req.extra['__retried'] = true;
@@ -57,6 +66,7 @@ class AuthInterceptor extends Interceptor {
           // tombe dans le rejet ci-dessous
         }
       } else {
+        // refreshed == null → refus explicite du serveur (session révoquée) : logout.
         onSessionExpired?.call();
       }
     }
@@ -73,6 +83,9 @@ class AuthInterceptor extends Interceptor {
     return _refreshing ??= _doRefresh().whenComplete(() => _refreshing = null);
   }
 
+  /// Renvoie un nouveau jeton d'accès, ou null si le serveur REFUSE le refresh
+  /// (session révoquée). Lève NetworkException si l'échec est purement réseau
+  /// (timeout/coupure) → l'appelant ne doit alors PAS déconnecter.
   Future<String?> _doRefresh() async {
     final refresh = await _storage.refreshToken;
     if (refresh == null) return null;
@@ -87,8 +100,15 @@ class AuthInterceptor extends Interceptor {
         await _storage.saveAccessToken(access);
       }
       return access;
-    } catch (_) {
-      return null;
+    } on DioException catch (e) {
+      // Coupure/timeout réseau → pas un refus : on remonte NetworkException.
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        throw const NetworkException();
+      }
+      return null; // 4xx/5xx (refresh révoqué/invalide) → session morte
     }
   }
 }
