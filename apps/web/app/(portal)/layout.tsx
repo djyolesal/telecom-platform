@@ -59,6 +59,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     ...(userRole === 'SUPERVISEUR' && maSociete ? [{ href: '/ma-societe', label: 'Ma société', icon: Building2, roles: ['SUPERVISEUR'] }] : []),
   ];
 
+  // Garde de rôle : la section demandée (préfixe de nav le plus spécifique)
+  // doit autoriser le rôle. Évite le loader infini / le rendu partiel d'une
+  // page interdite quand l'API renvoie 403 (le menu masqué ne suffit pas).
+  const section = [...NAV_ITEMS].sort((a, b) => b.href.length - a.href.length)
+    .find((item) => pathname === item.href || pathname.startsWith(item.href + '/'));
+  const accesRefuse = userRole && section && !section.roles.includes(userRole) && pathname !== '/ma-societe';
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* ── Sidebar ─────────────────────────────────────────── */}
@@ -143,7 +150,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
         {/* Page content */}
         <main className="flex-1 overflow-auto p-6">
-          {children}
+          {accesRefuse ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="rounded-full bg-red-50 p-4"><ShieldAlert size={32} className="text-red-500" /></div>
+              <h2 className="mt-4 text-lg font-semibold text-gray-800">Accès refusé</h2>
+              <p className="mt-1 max-w-sm text-sm text-gray-500">Cette section n&apos;est pas accessible avec votre rôle ({userRole || '—'}).</p>
+              <Link href="/dashboard" className="mt-4 rounded-lg bg-[#1B3F6B] px-4 py-2 text-sm font-medium text-white hover:bg-[#2471A3]">Retour au tableau de bord</Link>
+            </div>
+          ) : children}
         </main>
       </div>
     </div>

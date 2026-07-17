@@ -65,7 +65,7 @@ router.post('/auth/fcm-token', authCtrl.updateFcmToken);
 
 // ── Sites ─────────────────────────────────────────────────────
 router.get('/sites', sitesCtrl.getSites);
-router.get('/sites/geojson', sitesCtrl.getSitesGeoJSON);
+router.get('/sites/geojson', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), sitesCtrl.getSitesGeoJSON);
 router.get('/sites/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
@@ -130,14 +130,14 @@ router.delete('/lots/:id/sites/:siteId', rbac(['MANAGER', 'ADMIN']), lotsCtrl.re
 router.get('/maintenances', maintenanceCtrl.getMaintenances);
 router.get('/maintenances/planning', maintenanceCtrl.getPlanning);
 router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
-router.post('/maintenances', maintenanceCtrl.createMaintenance);
+router.post('/maintenances', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.updateMaintenance);
 router.delete('/maintenances/:id', rbac(['ADMIN']), maintenanceCtrl.deleteMaintenance);
-router.post('/maintenances/:id/start', maintenanceCtrl.startMaintenance);
-router.post('/maintenances/:id/suspend', maintenanceCtrl.suspendMaintenance);
-router.post('/maintenances/:id/resume', maintenanceCtrl.resumeMaintenance);
-router.post('/maintenances/:id/close', maintenanceCtrl.closeMaintenance);
+router.post('/maintenances/:id/start', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.startMaintenance);
+router.post('/maintenances/:id/suspend', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.suspendMaintenance);
+router.post('/maintenances/:id/resume', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.resumeMaintenance);
+router.post('/maintenances/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.closeMaintenance);
 router.get('/maintenances/:id/pdf', maintenanceCtrl.getMaintenancePdf);
 router.get('/maintenances/:id/bon-mouvement.pdf', maintenanceCtrl.getBonMouvementPdf);
 
@@ -214,11 +214,11 @@ router.post('/incidents/:id/close', incidentsCtrl.closeIncident);
 
 // ── Rapports ──────────────────────────────────────────────────
 router.get('/rapports/dashboard', rapportsCtrl.getDashboard);
-router.get('/rapports/stock-carburant', rapportsCtrl.getStockCarburant);
-router.get('/rapports/conso-energie', rapportsCtrl.getConsoEnergie);
-router.get('/rapports/maintenance', rapportsCtrl.getRapportMaintenance);
-router.get('/rapports/incidents', rapportsCtrl.getRapportIncidents);
-router.get('/rapports/conformite', rapportsCtrl.getConformiteMaintenance);
+router.get('/rapports/stock-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
+router.get('/rapports/conso-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConsoEnergie);
+router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMaintenance);
+router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportIncidents);
+router.get('/rapports/conformite', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConformiteMaintenance);
 router.get('/rapports/sla-prestataires', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getSlaPrestataires);
 router.get('/rapports/gardiennage', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportGardiennage);
 router.get('/rapports/mensuel/:annee/:mois', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMensuelPdf);

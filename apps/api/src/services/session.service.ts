@@ -24,6 +24,20 @@ export async function enregistrerSession(userId: string, plt: Plateforme, sid: s
   await redisClient.setEx(cacheKey(plt, userId), CACHE_TTL_SECONDS, sid);
 }
 
+/**
+ * Révoque TOUTES les sessions d'un utilisateur (web + mobile) : à appeler après
+ * un changement/réinitialisation de mot de passe. Efface les sid en base et les
+ * refresh tokens des deux plateformes — les jetons d'accès en cours expirent
+ * d'eux-mêmes (≤ 12 h) puisque leur sid ne correspond plus à aucune session.
+ */
+export async function revoquerToutesSessions(userId: string): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { sessionWebId: null, sessionMobileId: null } });
+  await redisClient.del(cacheKey('WEB', userId));
+  await redisClient.del(cacheKey('MOBILE', userId));
+  await redisClient.del(`refresh:WEB:${userId}`);
+  await redisClient.del(`refresh:MOBILE:${userId}`);
+}
+
 export async function effacerSession(userId: string, plt: Plateforme): Promise<void> {
   await prisma.user.update({
     where: { id: userId },

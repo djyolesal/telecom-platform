@@ -8,7 +8,7 @@ import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
-import { enregistrerSession, effacerSession, sessionValide, Plateforme } from '../services/session.service';
+import { enregistrerSession, effacerSession, sessionValide, revoquerToutesSessions, Plateforme } from '../services/session.service';
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 12;
@@ -173,8 +173,8 @@ export async function updatePassword(req: Request, res: Response, next: NextFunc
     const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hash } });
 
-    // Invalider tous les tokens existants
-    await redisClient.del(`refresh:${user.id}`);
+    // Révoque toutes les sessions (web + mobile) : reconnexion obligatoire partout.
+    await revoquerToutesSessions(user.id);
     await auditLog(user.id, 'UPDATE', 'users', user.id, { field: 'password' }, req);
 
     res.json({ success: true, message: 'Mot de passe mis à jour' });
@@ -240,7 +240,7 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
 
     await redisClient.del(`reset:${token}`);
-    await redisClient.del(`refresh:${userId}`);
+    await revoquerToutesSessions(userId);
     await auditLog(userId, 'UPDATE', 'users', userId, { field: 'password_reset' }, req);
 
     res.json({ success: true, message: 'Mot de passe réinitialisé avec succès' });

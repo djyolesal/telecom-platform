@@ -245,7 +245,16 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
 
 export async function createMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { pieces, ...data } = req.body;
+    // Liste blanche stricte : statut/dateFin/dureeMinutes/reference… sont fixés
+    // par le workflow, jamais par le client (anti mass-assignment).
+    const pieces = req.body?.pieces as Prisma.PieceRechangeCreateWithoutMaintenanceInput[] | undefined;
+    const data = pick<Prisma.MaintenanceUncheckedCreateInput>(req.body, [
+      'siteId', 'type', 'categorie', 'equipement', 'description', 'datePlanifiee',
+      'tachePreventiveKey', 'natureTravaux', 'actifType', 'actifId', 'siteSourceId', 'technicienId',
+    ]);
+    if (!data.siteId || !data.type || !data.categorie || !data.equipement || !data.datePlanifiee) {
+      throw new AppError('Site, type, catégorie, équipement et date planifiée sont requis.', 400);
+    }
     // La date planifiée ne peut pas être dans le passé (tolérance 60s).
     const dp = new Date(data.datePlanifiee);
     if (Number.isNaN(dp.getTime())) throw new AppError('Date planifiée invalide.', 422);
@@ -293,7 +302,7 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
       : await resolvePrestataireId(data.siteId, data.categorie);
     const maintenance = await prisma.maintenance.create({
       data: {
-        ...data,
+        ...(data as Prisma.MaintenanceUncheckedCreateInput),
         reference: await genererReference(prisma, 'MNT', new Date(data.datePlanifiee)),
         datePlanifiee: new Date(data.datePlanifiee),
         technicienId: data.technicienId ?? req.user!.id,
@@ -344,6 +353,18 @@ export async function deleteMaintenance(req: Request, res: Response, next: NextF
 }
 
 /** Démarre une maintenance (passage EN_COURS + horodatage). */
+/**
+ * Un TECHNICIEN ne peut agir (démarrer/suspendre/reprendre/clôturer) que sur une
+ * maintenance qui lui est assignée (ou non encore assignée). Les rôles
+ * SUPERVISEUR et au-dessus ne sont pas restreints.
+ */
+function assertPeutAgir(req: Request, m: { technicienId: string | null }) {
+  if (req.user!.role !== 'TECHNICIEN') return;
+  if (m.technicienId && m.technicienId !== req.user!.id) {
+    throw new AppError('Cette intervention est assignée à un autre technicien.', 403);
+  }
+}
+
 export async function startMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
     const { latitude, longitude } = req.body;
@@ -352,6 +373,7 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
       include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+    assertPeutAgir(req, existing);
     if (existing.statut === 'TERMINEE') throw new AppError('Maintenance déjà terminée', 409);
 
     // Une personne ne peut avoir qu'UNE seule maintenance en cours.
@@ -408,6 +430,7 @@ export async function suspendMaintenance(req: Request, res: Response, next: Next
     }
     const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+    assertPeutAgir(req, existing);
     if (existing.statut === 'SUSPENDUE') {
       return res.json({ success: true, data: existing, idempotent: true }); // rejeu outbox
     }
@@ -436,6 +459,7 @@ export async function resumeMaintenance(req: Request, res: Response, next: NextF
       include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+    assertPeutAgir(req, existing);
     if (existing.statut === 'EN_COURS') {
       return res.json({ success: true, data: existing, idempotent: true }); // rejeu outbox
     }
@@ -504,6 +528,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       },
     });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+    assertPeutAgir(req, existing);
 
     // Rejeu idempotent : une maintenance DÉJÀ clôturée (retry réseau / re-sync)
     // renvoie un succès sans rien réappliquer — le mobile considère l'op terminée.

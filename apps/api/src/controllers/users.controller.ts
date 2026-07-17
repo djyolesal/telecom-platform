@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { revoquerToutesSessions } from '../services/session.service';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
@@ -117,6 +118,8 @@ export async function resetUserPassword(req: Request, res: Response, next: NextF
     const plain = crypto.randomBytes(6).toString('base64url');
     const passwordHash = await bcrypt.hash(plain, SALT_ROUNDS);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
+    // Coupe les sessions actives de l'utilisateur : le provisoire prend effet partout.
+    await revoquerToutesSessions(existing.id);
 
     await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { field: 'password_reset' }, req);
     await sendEmail({
