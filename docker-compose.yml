@@ -252,6 +252,18 @@ services:
     expose: ["9100"]
     networks: [telecom_net]
 
+  # ── BLACKBOX EXPORTER (sondes HTTPS publique + TCP des services) ──
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.26.0
+    container_name: telecom_blackbox
+    logging: *default-logging
+    mem_limit: 64m
+    restart: unless-stopped
+    volumes:
+      - ./infra/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    expose: ["9115"]
+    networks: [telecom_net]
+
   # ── ALERTMANAGER (notifications email des alertes) ────────────
   alertmanager:
     image: prom/alertmanager:v0.27.0

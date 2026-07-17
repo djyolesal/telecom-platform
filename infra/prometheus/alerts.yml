@@ -43,3 +43,65 @@ groups:
         annotations:
           summary: "Sonde node-exporter injoignable"
           description: "Plus de métriques hôte (disque/RAM) — surveillance aveugle."
+
+  - name: disponibilite
+    rules:
+      # Portail public HTTPS inaccessible : nginx tombé, TLS cassé, ou API/web KO
+      # DERRIÈRE nginx (l'API répond à Prometheus en interne mais pas au public).
+      - alert: PortailPublicInjoignable
+        expr: probe_success{job="blackbox-https"} == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "Le portail public https://emops.uk est injoignable"
+          description: "La sonde HTTPS externe échoue depuis 3 min (nginx, TLS ou service derrière nginx). Les techniciens et le portail sont impactés même si l'API répond en interne."
+
+      # Certificat TLS bientôt expiré (Let's Encrypt : renouvellement à ~30 j).
+      - alert: CertificatBientotExpire
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 14
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "Certificat TLS expire dans moins de 14 jours"
+          description: "Le renouvellement Let's Encrypt (certbot) n'a peut-être pas fonctionné. Vérifier `certbot renew` et le montage nginx."
+
+      - alert: CertificatExpireImminent
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 3
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "Certificat TLS expire dans moins de 3 jours — CRITIQUE"
+          description: "Renouveler immédiatement (certbot renew) sous peine de coupure HTTPS totale du portail et du mobile."
+
+      # Bases/stockage internes injoignables (sonde TCP blackbox).
+      - alert: PostgresInjoignable
+        expr: probe_success{job="blackbox-tcp", instance="postgres:5432"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "PostgreSQL injoignable"
+          description: "Le port Postgres ne répond plus (crash, OOM, disque plein). L'API ne peut plus lire/écrire — plateforme HS."
+
+      - alert: RedisInjoignable
+        expr: probe_success{job="blackbox-tcp", instance="redis:6379"} == 0
+        for: 3m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis injoignable"
+          description: "Sessions/refresh tokens et rate-limit dégradés (fail-open). Vérifier le conteneur redis."
+
+      - alert: MinioInjoignable
+        expr: probe_success{job="blackbox-tcp", instance="minio:9000"} == 0
+        for: 3m
+        labels: { severity: warning }
+        annotations:
+          summary: "MinIO injoignable"
+          description: "Upload/consultation des photos, signatures et PDF impossibles. Vérifier le conteneur minio."
+
+      - alert: SondeBlackboxInjoignable
+        expr: up{job="blackbox"} == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Sonde blackbox-exporter injoignable"
+          description: "Plus de sondes HTTPS/TCP externes — angle mort sur la disponibilité publique."

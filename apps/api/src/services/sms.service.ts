@@ -47,7 +47,7 @@ export function telephoneLocal(tel: string): string {
  * Destinataires en numéros LOCAUX (sans +228).
  * NB : si la passerelle attend d'autres noms de champs, seule cette fonction change.
  */
-async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Promise<void> {
+async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Promise<string> {
   let res: Response;
   try {
     res = await fetch(env.SMS_API_URL!, {
@@ -72,8 +72,37 @@ async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Pro
       `Passerelle SMS injoignable${detail ? ` (${detail})` : ''} — vérifier SMS_API_URL et l'accès réseau depuis le conteneur API`
     );
   }
-  // Ne jamais inclure le corps envoyé dans l'erreur : il contient la clé API.
-  if (!res.ok) throw new Error(`Passerelle SMS: HTTP ${res.status} ${(await res.text()).slice(0, 120)}`);
+  const body = await res.text();
+  // Ne jamais inclure le corps ENVOYÉ dans l'erreur : il contient la clé API.
+  if (!res.ok) throw new Error(`Passerelle SMS: HTTP ${res.status} ${body.slice(0, 120)}`);
+  return body; // réponse de la passerelle (pour un statut par numéro éventuel)
+}
+
+/**
+ * Extrait, quand la passerelle le fournit, la liste des numéros LOCAUX en échec
+ * dans sa réponse JSON. Best-effort : on reconnaît les formes courantes
+ * (`failed`/`invalid`/`errors`, ou `results:[{recipient,status}]`). Si le format
+ * est inconnu, on renvoie un Set vide (statut global ENVOYE conservé).
+ */
+export function numerosEnEchec(reponse: string): Set<string> {
+  const out = new Set<string>();
+  let j: unknown;
+  try { j = JSON.parse(reponse); } catch { return out; }
+  const asStr = (v: unknown) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : null);
+  const push = (v: unknown) => { const s = asStr(v); if (s) out.add(telephoneLocal(s)); };
+  const o = j as Record<string, unknown>;
+  for (const cle of ['failed', 'invalid', 'errors', 'echecs']) {
+    const arr = o?.[cle];
+    if (Array.isArray(arr)) arr.forEach((x) => push(typeof x === 'object' && x ? (x as Record<string, unknown>).recipient ?? (x as Record<string, unknown>).to ?? (x as Record<string, unknown>).number : x));
+  }
+  const results = o?.results ?? o?.data;
+  if (Array.isArray(results)) {
+    for (const r of results as Record<string, unknown>[]) {
+      const ok = r.success === true || String(r.status ?? '').toLowerCase().match(/sent|delivered|ok|success|accepted/);
+      if (!ok) push(r.recipient ?? r.to ?? r.number ?? r.msisdn);
+    }
+  }
+  return out;
 }
 
 export interface ResultatEnvoiManuel {
@@ -93,19 +122,26 @@ export async function envoyerSmsManuel(
   message: string
 ): Promise<{ simule: boolean; resultats: ResultatEnvoiManuel[] }> {
   const simule = !env.SMS_API_URL;
-  let statut: ResultatEnvoiManuel['statut'] = simule ? 'SIMULE' : 'ENVOYE';
-  let erreur: string | null = null;
+  let statutLot: ResultatEnvoiManuel['statut'] = simule ? 'SIMULE' : 'ENVOYE';
+  let erreurLot: string | null = null;
+  let echecs = new Set<string>();
   if (!simule && destinataires.length) {
     try {
-      await envoyerSmsBatch(destinataires.map((d) => telephoneLocal(d.telephone)), message);
+      const reponse = await envoyerSmsBatch(destinataires.map((d) => telephoneLocal(d.telephone)), message);
+      echecs = numerosEnEchec(reponse); // numéros rejetés par la passerelle (si signalés)
     } catch (e) {
-      statut = 'ECHEC';
-      erreur = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
+      statutLot = 'ECHEC';
+      erreurLot = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
     }
   }
   const resultats: ResultatEnvoiManuel[] = [];
   for (const d of destinataires) {
     const telephone = normaliserTelephone(d.telephone);
+    // Statut PAR numéro : le lot est ENVOYE, mais un numéro signalé en échec par
+    // la passerelle est marqué ECHEC individuellement (fini le « tout envoyé »).
+    const rejete = statutLot === 'ENVOYE' && echecs.has(telephoneLocal(d.telephone));
+    const statut = rejete ? 'ECHEC' : statutLot;
+    const erreur = rejete ? 'Rejeté par la passerelle' : erreurLot;
     await prisma.smsLog.create({
       data: { telephone, contactId: d.contactId ?? null, message, evenement: 'MANUEL', statut, erreur },
     });
@@ -154,19 +190,26 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
     const simule = !env.SMS_API_URL;
 
     // Un seul POST pour tout le lot (l'API accepte la liste des destinataires).
-    let statut = simule ? 'SIMULE' : 'ENVOYE';
-    let erreur: string | null = null;
+    let statutLot = simule ? 'SIMULE' : 'ENVOYE';
+    let erreurLot: string | null = null;
+    let echecs = new Set<string>();
     if (!simule) {
       try {
-        await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
+        const reponse = await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
+        echecs = numerosEnEchec(reponse);
       } catch (e) {
-        statut = 'ECHEC';
-        erreur = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
+        statutLot = 'ECHEC';
+        erreurLot = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
       }
     }
     for (const c of cibles) {
+      const rejete = statutLot === 'ENVOYE' && echecs.has(telephoneLocal(c.telephone));
       await prisma.smsLog.create({
-        data: { telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement, statut, erreur },
+        data: {
+          telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
+          statut: rejete ? 'ECHEC' : statutLot,
+          erreur: rejete ? 'Rejeté par la passerelle' : erreurLot,
+        },
       });
     }
     logger.info(`[sms] ${evenement} ${evt.siteNom} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);

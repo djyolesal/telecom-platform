@@ -26,3 +26,41 @@ scrape_configs:
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']
+
+  # ── Sondes externes via blackbox-exporter ─────────────────────
+  # Le portail public HTTPS (nginx + certificat). up==0 si nginx tombe ou si
+  # le TLS échoue ; probe_ssl_earliest_cert_expiry alimente l'alerte d'expiration.
+  - job_name: 'blackbox-https'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://emops.uk/api/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Services internes non instrumentés : simple ouverture TCP (vivant ?).
+  - job_name: 'blackbox-tcp'
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets: ['postgres:5432', 'redis:6379', 'minio:9000']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Le blackbox-exporter lui-même (sinon panne de sonde = angle mort).
+  - job_name: 'blackbox'
+    static_configs:
+      - targets: ['blackbox-exporter:9115']

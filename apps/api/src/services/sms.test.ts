@@ -1,4 +1,4 @@
-import { normaliserTelephone, telephoneLocal, envoyerSmsManuel } from './sms.service';
+import { normaliserTelephone, telephoneLocal, envoyerSmsManuel, numerosEnEchec } from './sms.service';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 
@@ -64,7 +64,7 @@ describe('envoyerSmsManuel', () => {
 
   it('avec passerelle : UN SEUL POST JSON, clé en en-tête Authorization: Bearer, destinataires locaux', async () => {
     (env as { SMS_API_URL?: string }).SMS_API_URL = 'https://sms.example/send';
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true, text: () => Promise.resolve('OK') } as unknown as Response);
     const { simule, resultats } = await envoyerSmsManuel(
       [{ telephone: '97589258' }, { telephone: '+22890000000' }],
       'Test é'
@@ -111,5 +111,22 @@ describe('envoyerSmsManuel', () => {
     expect(resultats[0].erreur).toContain('HTTP 401');
     expect(logCreate.mock.calls[0][0].data).toMatchObject({ statut: 'ECHEC' });
     fetchSpy.mockRestore();
+  });
+});
+
+describe('numerosEnEchec (statut SMS par numéro)', () => {
+  it('format inconnu → aucun échec signalé (statut global conservé)', () => {
+    expect(numerosEnEchec('OK').size).toBe(0);
+    expect(numerosEnEchec('{"status":"queued"}').size).toBe(0);
+  });
+  it('liste "failed" de numéros → convertis en local', () => {
+    const s = numerosEnEchec('{"failed":["+22897589258","90000000"]}');
+    expect(s.has('97589258')).toBe(true);
+    expect(s.has('90000000')).toBe(true);
+  });
+  it('results[] avec statut par destinataire', () => {
+    const s = numerosEnEchec('{"results":[{"to":"97589258","status":"delivered"},{"to":"90000000","status":"failed"}]}');
+    expect(s.has('90000000')).toBe(true);
+    expect(s.has('97589258')).toBe(false);
   });
 });
