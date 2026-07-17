@@ -205,7 +205,10 @@
       "Bash(grep -rn \"'/close'\\\\|/close\\\\`\" app components lib)",
       "Bash(grep -n \"_CloseSheet\\\\|Navigator.pop\\(context, {\" lib/features/maintenance/presentation/maintenance_detail_screen.dart)",
       "Read(//dev/**)",
-      "Bash(sed -n \"$\\(grep -c '' /dev/null\\)1,30p\")"
+      "Bash(sed -n \"$\\(grep -c '' /dev/null\\)1,30p\")",
+      "Bash(grep -rn 'queryRawUnsafe\\\\|executeRawUnsafe\\\\|$queryRaw\\\\|$executeRaw' src/)",
+      "Bash(git check-ignore *)",
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/api/src && sed -n '1,40p' services/storage.service.ts; grep -rn \"setBucketPolicy\\\\|anonymous\\\\|mc anonymous\\\\|download\" ../../../infra ../config/*.ts 2>/dev/null | grep -vi \"downloader\\\\|téléchargement\" | head)"
     ]
   }
 }
