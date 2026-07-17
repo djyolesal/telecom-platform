@@ -62,7 +62,9 @@ services:
     logging: *default-logging
     mem_limit: 768m
     restart: unless-stopped
-    env_file: .env
+    # PAS d'env_file : le portail Next.js ne doit recevoir QUE ses variables
+    # (jamais JWT_SECRET, mots de passe Postgres/MinIO…) — une RCE/SSRF côté
+    # front ne doit pas livrer les identifiants root de la base et du stockage.
     environment:
       NODE_ENV: production
       # Next.js standalone écoute sur $HOSTNAME (Docker le fixe à l'ID du conteneur) :
@@ -73,6 +75,7 @@ services:
       NEXT_PUBLIC_WS_URL: wss://${DOMAIN}
       NEXTAUTH_URL: https://${DOMAIN}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      AUTH_SECRET: ${NEXTAUTH_SECRET}
       # Appel API interne (réseau Docker) pour le login côté serveur :
       # évite que NextAuth ne sorte vers le certificat auto-signé via Nginx.
       API_INTERNAL_URL: http://api:3001/v1
@@ -141,7 +144,7 @@ services:
 
   # ── POSTGRESQL + TIMESCALEDB ──────────────────────────────────
   postgres:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:2.17.2-pg16
     container_name: telecom_postgres
     logging: *default-logging
     mem_limit: 3g
@@ -196,7 +199,7 @@ services:
 
   # ── MINIO ─────────────────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
     container_name: telecom_minio
     logging: *default-logging
     mem_limit: 512m
@@ -216,7 +219,7 @@ services:
 
   # ── PROMETHEUS ────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1
     container_name: telecom_prometheus
     logging: *default-logging
     mem_limit: 512m
@@ -265,7 +268,7 @@ services:
 
   # ── GRAFANA ───────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.5.2
     container_name: telecom_grafana
     logging: *default-logging
     mem_limit: 256m
