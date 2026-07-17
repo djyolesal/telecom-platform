@@ -17,6 +17,8 @@ class GroupeGE {
 class Maintenance {
   final String id;
   final String? reference; // MNT/INC/DEP-année-numéro (lisible)
+  final int dureeSuspendueMinutes; // pauses (urgences ailleurs) déjà décomptées
+  final String? motifSuspension;
   final String? siteId;
   final String type;
   final String categorie;
@@ -45,6 +47,8 @@ class Maintenance {
   const Maintenance({
     required this.id,
     this.reference,
+    this.dureeSuspendueMinutes = 0,
+    this.motifSuspension,
     this.siteId,
     required this.type,
     required this.categorie,
@@ -91,6 +95,8 @@ class Maintenance {
     return Maintenance(
       id: j['id'] as String,
       reference: j['reference'] as String?,
+      dureeSuspendueMinutes: (j['dureeSuspendueMinutes'] as num?)?.toInt() ?? 0,
+      motifSuspension: j['motifSuspension'] as String?,
       siteId: j['siteId'] as String?,
       type: j['type'] as String,
       categorie: j['categorie'] as String,

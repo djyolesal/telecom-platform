@@ -19,6 +19,7 @@ const Map<String, String> kNatureTravaux = {
 const Map<String, String> kStatutMaintenance = {
   'PLANIFIEE': 'Planifiée',
   'EN_COURS': 'En cours',
+  'SUSPENDUE': 'Suspendue',
   'TERMINEE': 'Terminée',
   'ANNULEE': 'Annulée',
 };

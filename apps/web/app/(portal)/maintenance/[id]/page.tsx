@@ -98,6 +98,9 @@ export default function MaintenanceDetailPage() {
           <Row label="Début" value={fmtDateTime(m.dateDebut)} />
           <Row label="Fin" value={fmtDateTime(m.dateFin)} />
           <Row label="Durée" value={m.dureeMinutes != null ? `${m.dureeMinutes} min` : '—'} />
+          {(m.dureeSuspendueMinutes > 0 || m.statut === 'SUSPENDUE') && (
+            <Row label="Suspension" value={`${m.dureeSuspendueMinutes > 0 ? `${m.dureeSuspendueMinutes} min décomptées` : 'en cours'}${m.motifSuspension ? ` — ${m.motifSuspension}` : ''}`} />
+          )}
         </div>
 
         <div className="space-y-6">

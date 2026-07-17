@@ -99,6 +99,67 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     }
   }
 
+  /// Suspension : motif obligatoire (urgence sur un autre site). Le verrou
+  /// « une seule maintenance en cours » est libéré côté serveur.
+  Future<void> _suspend(Maintenance m) async {
+    final repo = context.read<MaintenanceRepository>();
+    final ctrl = TextEditingController();
+    final motif = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Suspendre la maintenance'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 200,
+          decoration: const InputDecoration(
+            labelText: 'Motif (obligatoire)',
+            hintText: 'ex. Urgence INC-2026-00112 sur un autre site',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          FilledButton(
+            onPressed: () {
+              if (ctrl.text.trim().length >= 5) Navigator.pop(ctx, ctrl.text.trim());
+            },
+            child: const Text('Suspendre'),
+          ),
+        ],
+      ),
+    );
+    if (motif == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final res = await repo.suspend(widget.id, motif: motif);
+      if (!mounted) return;
+      _snack(res.isQueued ? 'Suspension mise en file — elle partira à la reconnexion' : 'Maintenance suspendue');
+      _reload();
+    } catch (e) {
+      if (mounted) _snack(_errMsg(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Reprise : présence sur site exigée (même vérification GPS qu'un démarrage).
+  Future<void> _resume(Maintenance m) async {
+    final repo = context.read<MaintenanceRepository>();
+    setState(() => _busy = true);
+    try {
+      final check = await _verifyOnSite(m, 'la reprise');
+      if (!check.ok) return;
+      final res = await repo.resume(widget.id, latitude: check.lat, longitude: check.lng);
+      if (!mounted) return;
+      _snack(res.isQueued ? 'Reprise mise en file — elle partira à la reconnexion' : 'Maintenance reprise');
+      _reload();
+    } catch (e) {
+      if (mounted) _snack(_errMsg(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _close(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();
     final navigator = Navigator.of(context);
@@ -109,7 +170,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       _snack('La maintenance doit d\'abord être démarrée.');
       return;
     }
-    final ecoule = DateTime.now().difference(debut).inMinutes;
+    final ecoule = DateTime.now().difference(debut).inMinutes - m.dureeSuspendueMinutes;
     if (ecoule < AppConfig.minDureeClotureMin) {
       _snack('Clôture possible après ${AppConfig.minDureeClotureMin} min de travail (encore ${AppConfig.minDureeClotureMin - ecoule} min).');
       return;
@@ -250,8 +311,34 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
               const SizedBox(height: 16),
               if (m.statut == 'PLANIFIEE')
                 FilledButton.icon(onPressed: _busy ? null : () => _start(m), icon: const Icon(Icons.play_arrow), label: const Text('Démarrer')),
-              if (m.statut == 'EN_COURS')
+              if (m.statut == 'EN_COURS') ...[
                 FilledButton.icon(onPressed: _busy ? null : () => _close(m), icon: const Icon(Icons.check_circle), label: const Text('Clôturer')),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _suspend(m),
+                  icon: const Icon(Icons.pause_circle_outline),
+                  label: const Text('Suspendre (urgence ailleurs)'),
+                ),
+              ],
+              if (m.statut == 'SUSPENDUE') ...[
+                Card(
+                  color: const Color(0xFFFDF3DF),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(children: [
+                      const Icon(Icons.pause_circle, color: Color(0xFFE67E22), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('Suspendue${m.motifSuspension != null ? ' — ${m.motifSuspension}' : ''}', style: const TextStyle(fontSize: 13))),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  onPressed: _busy ? null : () => _resume(m),
+                  icon: const Icon(Icons.play_circle_outline),
+                  label: const Text('Reprendre (sur site)'),
+                ),
+              ],
             ],
           );
         },

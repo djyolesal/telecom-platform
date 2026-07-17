@@ -51,6 +51,7 @@ enum TypeMaintenance {
 enum StatutMaintenance {
   PLANIFIEE
   EN_COURS
+  SUSPENDUE  // interrompue (urgence ailleurs) — reprise exigée avant clôture
   TERMINEE
   ANNULEE
 }
@@ -273,6 +274,11 @@ model Maintenance {
   // Déclaration du technicien à la clôture : agent de gardiennage présent sur
   // site ? (null = clôturé avant la mise en place / ancien client)
   agentPresent   Boolean?            @map("agent_present")
+  // Suspension (urgence sur un autre site) : le temps suspendu est décompté de
+  // la durée travaillée ; dateSuspension non-null = pause en cours.
+  dureeSuspendueMinutes Int          @default(0) @map("duree_suspendue_minutes")
+  dateSuspension        DateTime?    @map("date_suspension")
+  motifSuspension       String?      @map("motif_suspension") @db.VarChar(200)
   technicienId   String?             @map("technicien_id")
   prestataireId  String?             @map("prestataire_id")
   signaturePath  String?             @map("signature_path")

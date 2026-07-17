@@ -19,6 +19,7 @@ export function StatutIncidentBadge({ value }: { value: string }) {
 const STATUT_MAINT: Record<string, string> = {
   PLANIFIEE: 'bg-blue-100 text-blue-700',
   EN_COURS: 'bg-orange-100 text-orange-700',
+  SUSPENDUE: 'bg-amber-200 text-amber-900',
   TERMINEE: 'bg-green-100 text-green-700',
   ANNULEE: 'bg-gray-100 text-gray-500',
 };

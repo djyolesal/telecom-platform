@@ -53,6 +53,7 @@ export const TYPES_MAINTENANCE = [
 export const STATUTS_MAINTENANCE = [
   { value: 'PLANIFIEE', label: 'Planifiée' },
   { value: 'EN_COURS', label: 'En cours' },
+  { value: 'SUSPENDUE', label: 'Suspendue' },
   { value: 'TERMINEE', label: 'Terminée' },
   { value: 'ANNULEE', label: 'Annulée' },
 ];

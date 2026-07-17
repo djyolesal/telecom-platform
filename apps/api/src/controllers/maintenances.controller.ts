@@ -395,6 +395,89 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
   } catch (err) { next(err); }
 }
 
+/**
+ * Suspend une maintenance EN COURS (urgence sur un autre site) : motif
+ * obligatoire, le verrou « une seule maintenance en cours » est libéré. Le
+ * temps suspendu sera décompté de la durée travaillée à la clôture.
+ */
+export async function suspendMaintenance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { motif } = req.body as { motif?: string };
+    if (!motif || motif.trim().length < 5) {
+      throw new AppError('Un motif de suspension est requis (5 caractères minimum).', 422);
+    }
+    const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new AppError('Maintenance introuvable', 404);
+    if (existing.statut === 'SUSPENDUE') {
+      return res.json({ success: true, data: existing, idempotent: true }); // rejeu outbox
+    }
+    if (existing.statut !== 'EN_COURS') {
+      throw new AppError(`Seule une maintenance en cours peut être suspendue (statut : ${existing.statut}).`, 409);
+    }
+    const updated = await prisma.maintenance.update({
+      where: { id: req.params.id },
+      data: { statut: 'SUSPENDUE', dateSuspension: new Date(), motifSuspension: motif.trim().slice(0, 200) },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, { action: 'suspension', motif: motif.trim() }, req);
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Reprend une maintenance SUSPENDUE : présence sur site vérifiée (GPS, comme un
+ * démarrage), temps de pause accumulé, retour EN_COURS. Impossible si le
+ * technicien a une autre maintenance en cours.
+ */
+export async function resumeMaintenance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { latitude, longitude } = req.body;
+    const existing = await prisma.maintenance.findUnique({
+      where: { id: req.params.id },
+      include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
+    });
+    if (!existing) throw new AppError('Maintenance introuvable', 404);
+    if (existing.statut === 'EN_COURS') {
+      return res.json({ success: true, data: existing, idempotent: true }); // rejeu outbox
+    }
+    if (existing.statut !== 'SUSPENDUE') {
+      throw new AppError(`Seule une maintenance suspendue peut être reprise (statut : ${existing.statut}).`, 409);
+    }
+
+    const technicienId = existing.technicienId ?? req.user!.id;
+    const dejaEnCours = await prisma.maintenance.findFirst({
+      where: { statut: 'EN_COURS', technicienId, id: { not: existing.id } },
+      select: { id: true, reference: true },
+    });
+    if (dejaEnCours) {
+      throw new AppError(`Vous avez déjà une maintenance en cours${dejaEnCours.reference ? ` (${dejaEnCours.reference})` : ''}. Clôturez-la avant de reprendre celle-ci.`, 409);
+    }
+
+    // La reprise se fait SUR le site (même exigence qu'un démarrage).
+    let startSite = existing.site;
+    if (existing.natureTravaux === 'DEPLACEMENT' && existing.siteSourceId) {
+      startSite = await prisma.site.findUnique({
+        where: { id: existing.siteSourceId },
+        select: { latitude: true, longitude: true, code: true, nom: true },
+      }) ?? existing.site;
+    }
+    assertOnSite(startSite, latitude, longitude, 'la reprise');
+
+    const pauseMin = existing.dateSuspension
+      ? Math.max(0, differenceInMinutes(new Date(), existing.dateSuspension))
+      : 0;
+    const updated = await prisma.maintenance.update({
+      where: { id: req.params.id },
+      data: {
+        statut: 'EN_COURS',
+        dateSuspension: null,
+        dureeSuspendueMinutes: existing.dureeSuspendueMinutes + pauseMin,
+      },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, { action: 'reprise', pauseMinutes: pauseMin }, req);
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
 /** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), photos (préventive), PDF. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
@@ -433,8 +516,9 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     }
 
     // Une maintenance doit avoir été démarrée et durer au moins 1h avant clôture.
+    // Le temps SUSPENDU (urgence ailleurs) ne compte pas comme du travail.
     if (!existing.dateDebut) throw new AppError('La maintenance doit être démarrée avant clôture.', 409);
-    const ecouleMin = differenceInMinutes(new Date(), existing.dateDebut);
+    const ecouleMin = differenceInMinutes(new Date(), existing.dateDebut) - existing.dureeSuspendueMinutes;
     if (ecouleMin < minDureeClotureMin()) {
       throw new AppError(
         `Une maintenance doit durer au moins 1h avant clôture (démarrée il y a ${ecouleMin} min).`,
@@ -505,7 +589,8 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
 
     const dateFin = new Date();
     const dateDebut = existing.dateDebut ?? dateFin;
-    const dureeMinutes = Math.max(0, differenceInMinutes(dateFin, dateDebut));
+    // Durée TRAVAILLÉE : les suspensions (urgences ailleurs) sont décomptées.
+    const dureeMinutes = Math.max(0, differenceInMinutes(dateFin, dateDebut) - existing.dureeSuspendueMinutes);
 
     // Vidange GE confirmée (case cochée à la clôture) : l'index horaire saisi
     // devient la référence de l'actif, et la fiche/PDF le mentionne.

@@ -101,6 +101,21 @@ class MaintenanceRepository {
         payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
       );
 
+  /// Suspension (urgence sur un autre site) : motif obligatoire, libère le
+  /// verrou « une seule maintenance en cours ».
+  Future<SubmitResult> suspend(String id, {required String motif}) => _sync.submit(
+        endpoint: '/maintenances/$id/suspend',
+        entityType: 'maintenance_suspend',
+        payload: {'motif': motif},
+      );
+
+  /// Reprise sur site (GPS vérifié côté serveur, comme un démarrage).
+  Future<SubmitResult> resume(String id, {double? latitude, double? longitude}) => _sync.submit(
+        endpoint: '/maintenances/$id/resume',
+        entityType: 'maintenance_resume',
+        payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
+      );
+
   /// Clôture offline-first.
   /// [photoPaths] et [signatureLocalPath] sont des chemins de fichiers LOCAUX
   /// (photos prises à la caméra, signature). Ils sont uploadés vers MinIO par le
