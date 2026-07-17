@@ -209,7 +209,8 @@
       "Bash(grep -rn 'queryRawUnsafe\\\\|executeRawUnsafe\\\\|$queryRaw\\\\|$executeRaw' src/)",
       "Bash(git check-ignore *)",
       "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/api/src && sed -n '1,40p' services/storage.service.ts; grep -rn \"setBucketPolicy\\\\|anonymous\\\\|mc anonymous\\\\|download\" ../../../infra ../config/*.ts 2>/dev/null | grep -vi \"downloader\\\\|téléchargement\" | head)",
-      "Bash(python3 -c \"import yaml; yaml.safe_load\\(open\\('infra/prometheus/prometheus.yml'\\)\\); yaml.safe_load\\(open\\('infra/prometheus/alerts.yml'\\)\\); yaml.safe_load\\(open\\('infra/blackbox/blackbox.yml'\\)\\); yaml.safe_load\\(open\\('docker-compose.yml'\\)\\); print\\('YAML OK'\\)\")"
+      "Bash(python3 -c \"import yaml; yaml.safe_load\\(open\\('infra/prometheus/prometheus.yml'\\)\\); yaml.safe_load\\(open\\('infra/prometheus/alerts.yml'\\)\\); yaml.safe_load\\(open\\('infra/blackbox/blackbox.yml'\\)\\); yaml.safe_load\\(open\\('docker-compose.yml'\\)\\); print\\('YAML OK'\\)\")",
+      "Bash(grep -n 'runClose = \\\\|const runClose\\\\|prisma.$transaction\\(async \\(tx\\)\\\\|prevTank' src/controllers/maintenances.controller.ts)"
     ]
   }
 }
