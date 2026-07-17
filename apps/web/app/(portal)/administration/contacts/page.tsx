@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import { Plus, Pencil, Trash2, Upload, X, MessageSquareText, Search, Send } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -41,9 +42,14 @@ export default function ContactsPage() {
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Recherche débouncée : sans ça chaque frappe changeait la clé de requête,
+  // repassait isLoading à vrai, et le <Loading/> remplaçait toute la page (perte
+  // du focus de l'input). keepPreviousData garde la liste affichée pendant la frappe.
+  const debouncedSearch = useDebounce(search);
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['contacts', search, societe],
-    queryFn: () => api.get('/contacts', { params: { search: search || undefined, societe: societe || undefined } }).then((r) => r.data),
+    queryKey: ['contacts', debouncedSearch, societe],
+    queryFn: () => api.get('/contacts', { params: { search: debouncedSearch || undefined, societe: societe || undefined } }).then((r) => r.data),
+    placeholderData: keepPreviousData,
   });
   const { data: journal } = useQuery({
     queryKey: ['sms-logs'],
