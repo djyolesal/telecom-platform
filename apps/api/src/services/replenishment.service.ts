@@ -335,7 +335,14 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
   const out: SiteForecast[] = [];
   for (const site of sites) {
     const hist = parSite.get(site.id) ?? [];
-    const dernier = hist.length ? hist[hist.length - 1] : null;
+    // Niveau de cuve = DERNIER relevé PORTANT un volume. La cuve est partagée au
+    // niveau site ; sur un site multi-GE, la clôture crée plusieurs relevés au
+    // même timestamp dont un seul porte le volume — prendre le tout dernier
+    // (souvent volume null) donnait un faux stock 0 L.
+    let dernier: (typeof hist)[number] | null = null;
+    for (let i = hist.length - 1; i >= 0; i--) {
+      if (hist[i].volumeGasoilLitres != null) { dernier = hist[i]; break; }
+    }
 
     // Stock actuel = dernier niveau de cuve relevé + dépotages POSTÉRIEURS.
     // Sans relevé, on part des dépotages de la fenêtre (meilleure estimation que 0).

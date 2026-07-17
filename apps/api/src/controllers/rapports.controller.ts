@@ -561,7 +561,10 @@ export async function getRapportGardiennage(req: Request, res: Response, next: N
     });
 
     const data = await Promise.all(societes.map(async (soc) => {
-      const siteIds = soc.sitesGardes.map((s) => s.id);
+      // Seuls les sites où un gardien est effectivement déclaré comptent : une
+      // absence sur un site sans poste de gardien ne doit pas pénaliser la société.
+      const sitesAvecGardien = soc.sitesGardes.filter((s) => s.hasGardien);
+      const siteIds = sitesAvecGardien.map((s) => s.id);
       const [maint, inc, deps] = siteIds.length ? await Promise.all([
         prisma.maintenance.findMany({
           where: { siteId: { in: siteIds }, statut: 'TERMINEE', dateFin: { gte: since } },
@@ -585,7 +588,7 @@ export async function getRapportGardiennage(req: Request, res: Response, next: N
         prestataireId: soc.id,
         nom: soc.nom,
         contactTechnique: soc.contactTechnique,
-        nbSites: soc.sitesGardes.length,
+        nbSites: sitesAvecGardien.length,
         interventions: decls.length,
         presents, absents, nonRenseigne,
         tauxAbsencePct: renseignes ? Math.round((absents / renseignes) * 100) : null,

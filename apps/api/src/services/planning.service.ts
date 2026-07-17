@@ -42,9 +42,9 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
   const lastByKey = new Map<string, Date>();
   for (const d of done) if (d.tachePreventiveKey && d._max.dateFin) lastByKey.set(`${d.siteId}:${d.tachePreventiveKey}`, d._max.dateFin);
 
-  // Tickets déjà ouverts (PLANIFIEE/EN_COURS) → ne pas dupliquer.
+  // Tickets déjà ouverts (PLANIFIEE/EN_COURS/SUSPENDUE) → ne pas dupliquer.
   const ouverts = await prisma.maintenance.findMany({
-    where: { statut: { in: ['PLANIFIEE', 'EN_COURS'] }, tachePreventiveKey: { not: null } },
+    where: { statut: { in: ['PLANIFIEE', 'EN_COURS', 'SUSPENDUE'] }, tachePreventiveKey: { not: null } },
     select: { siteId: true, tachePreventiveKey: true },
   });
   const ouvertSet = new Set(ouverts.map((o) => `${o.siteId}:${o.tachePreventiveKey}`));

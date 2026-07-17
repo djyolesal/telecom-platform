@@ -68,14 +68,17 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
   // ── Préventif : réalisé à temps si clôturé avant datePlanifiee + tolérance ──
   const prevs = await prisma.maintenance.findMany({
     where: { type: 'PREVENTIVE', datePlanifiee: { gte: since }, prestataireId: { not: null } },
-    select: { prestataireId: true, prestataire: { select: { nom: true } }, statut: true, datePlanifiee: true, dateFin: true },
+    select: { prestataireId: true, prestataire: { select: { nom: true } }, statut: true, datePlanifiee: true, dateFin: true, dureeSuspendueMinutes: true },
   });
   for (const m of prevs) {
     if (!m.prestataireId) continue;
     const a = ensure(m.prestataireId, m.prestataire?.nom ?? '—');
     a.prevPlan += 1;
     const limite = new Date(m.datePlanifiee.getTime() + toleranceJours * 86400000);
-    if (m.statut === 'TERMINEE' && m.dateFin && m.dateFin <= limite) a.prevTemps += 1;
+    // Le temps SUSPENDU (urgence ordonnée ailleurs) ne compte pas contre le
+    // prestataire : on le retranche de la date de fin avant de juger « à temps ».
+    const finEffective = m.dateFin ? new Date(m.dateFin.getTime() - (m.dureeSuspendueMinutes ?? 0) * 60000) : null;
+    if (m.statut === 'TERMINEE' && finEffective && finEffective <= limite) a.prevTemps += 1;
   }
 
   // ── Incidents résolus : délai de résolution vs seuil ──

@@ -14,6 +14,7 @@ import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { assertOnSite } from '../utils/geofence';
+import { idempotencyKey } from '../utils/idempotency';
 import { notifierAction } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
 
@@ -255,6 +256,12 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
     if (!data.siteId || !data.type || !data.categorie || !data.equipement || !data.datePlanifiee) {
       throw new AppError('Site, type, catégorie, équipement et date planifiée sont requis.', 400);
     }
+    // Idempotence (rejeu de la file offline mobile) : la clé stable devient l'id.
+    const clientUuid = idempotencyKey(req);
+    if (clientUuid) {
+      const deja = await prisma.maintenance.findUnique({ where: { id: clientUuid } });
+      if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
+    }
     // La date planifiée ne peut pas être dans le passé (tolérance 60s).
     const dp = new Date(data.datePlanifiee);
     if (Number.isNaN(dp.getTime())) throw new AppError('Date planifiée invalide.', 422);
@@ -283,7 +290,7 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
       }
       // Anti double-booking : pas de second mouvement ouvert sur le même actif.
       const open = await prisma.maintenance.findFirst({
-        where: { actifId: data.actifId, natureTravaux: { not: 'ENTRETIEN' }, statut: { in: ['PLANIFIEE', 'EN_COURS'] } },
+        where: { actifId: data.actifId, natureTravaux: { not: 'ENTRETIEN' }, statut: { in: ['PLANIFIEE', 'EN_COURS', 'SUSPENDUE'] } },
       });
       if (open) throw new AppError('Un mouvement est déjà planifié ou en cours pour cet actif.', 409);
     } else if (data.actifId) {
@@ -302,6 +309,7 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
       : await resolvePrestataireId(data.siteId, data.categorie);
     const maintenance = await prisma.maintenance.create({
       data: {
+        ...(clientUuid ? { id: clientUuid } : {}),
         ...(data as Prisma.MaintenanceUncheckedCreateInput),
         reference: await genererReference(prisma, 'MNT', new Date(data.datePlanifiee)),
         datePlanifiee: new Date(data.datePlanifiee),
@@ -434,13 +442,20 @@ export async function suspendMaintenance(req: Request, res: Response, next: Next
     if (existing.statut === 'SUSPENDUE') {
       return res.json({ success: true, data: existing, idempotent: true }); // rejeu outbox
     }
-    if (existing.statut !== 'EN_COURS') {
-      throw new AppError(`Seule une maintenance en cours peut être suspendue (statut : ${existing.statut}).`, 409);
-    }
-    const updated = await prisma.maintenance.update({
-      where: { id: req.params.id },
+    // Update CONDITIONNEL (statut EN_COURS) : atomique. Une clôture concurrente
+    // qui aurait déjà commité TERMINEE fait matcher 0 ligne → pas de retour en
+    // arrière possible (fini la course close × suspend qui « ressuscitait » une
+    // maintenance terminée).
+    const res1 = await prisma.maintenance.updateMany({
+      where: { id: req.params.id, statut: 'EN_COURS' },
       data: { statut: 'SUSPENDUE', dateSuspension: new Date(), motifSuspension: motif.trim().slice(0, 200) },
     });
+    if (res1.count === 0) {
+      const fresh = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
+      if (fresh?.statut === 'SUSPENDUE') return res.json({ success: true, data: fresh, idempotent: true });
+      throw new AppError(`Seule une maintenance en cours peut être suspendue (statut : ${fresh?.statut}).`, 409);
+    }
+    const updated = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, { action: 'suspension', motif: motif.trim() }, req);
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
@@ -489,14 +504,23 @@ export async function resumeMaintenance(req: Request, res: Response, next: NextF
     const pauseMin = existing.dateSuspension
       ? Math.max(0, differenceInMinutes(new Date(), existing.dateSuspension))
       : 0;
-    const updated = await prisma.maintenance.update({
-      where: { id: req.params.id },
+    // Update CONDITIONNEL (statut SUSPENDUE + même dateSuspension) : atomique et
+    // idempotent — un rejeu de la même reprise (dateSuspension déjà à null) ne
+    // repasse pas EN_COURS ni ne re-cumule la pause.
+    const res2 = await prisma.maintenance.updateMany({
+      where: { id: req.params.id, statut: 'SUSPENDUE', dateSuspension: existing.dateSuspension },
       data: {
         statut: 'EN_COURS',
         dateSuspension: null,
         dureeSuspendueMinutes: existing.dureeSuspendueMinutes + pauseMin,
       },
     });
+    if (res2.count === 0) {
+      const fresh = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
+      if (fresh?.statut === 'EN_COURS') return res.json({ success: true, data: fresh, idempotent: true });
+      throw new AppError(`Seule une maintenance suspendue peut être reprise (statut : ${fresh?.statut}).`, 409);
+    }
+    const updated = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, { action: 'reprise', pauseMinutes: pauseMin }, req);
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }

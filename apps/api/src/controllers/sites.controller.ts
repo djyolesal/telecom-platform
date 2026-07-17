@@ -172,8 +172,19 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
 export async function createSite(req: Request, res: Response, next: NextFunction) {
   try {
     // marqueGE ne vit pas sur le site : extraite du corps, posée sur le GE n°1.
-    const { marqueGE, ...data } = req.body as Record<string, unknown> & { marqueGE?: string };
-    const site = await prisma.site.create({ data: data as never });
+    const marqueGE = (req.body as { marqueGE?: string }).marqueGE;
+    // Liste blanche stricte (mêmes champs que updateSite) : jamais isActive/
+    // createdAt/relations arbitraires injectés à la création.
+    const data = pick<Prisma.SiteUncheckedCreateInput>(req.body, [
+      'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
+      'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
+      'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
+    ]);
+    if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
+      throw new AppError('Nom, code, région, configuration énergie et statut GE sont requis.', 400);
+    }
+    const site = await prisma.site.create({ data: data as Prisma.SiteUncheckedCreateInput });
     // Crée automatiquement le GE n°1 si le site a un GE (cohérence avec la table dédiée).
     if (site.statutGE !== 'PAS_DE_GE') {
       await prisma.groupeElectrogene.create({
