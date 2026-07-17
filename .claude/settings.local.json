@@ -210,7 +210,18 @@
       "Bash(git check-ignore *)",
       "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/api/src && sed -n '1,40p' services/storage.service.ts; grep -rn \"setBucketPolicy\\\\|anonymous\\\\|mc anonymous\\\\|download\" ../../../infra ../config/*.ts 2>/dev/null | grep -vi \"downloader\\\\|téléchargement\" | head)",
       "Bash(python3 -c \"import yaml; yaml.safe_load\\(open\\('infra/prometheus/prometheus.yml'\\)\\); yaml.safe_load\\(open\\('infra/prometheus/alerts.yml'\\)\\); yaml.safe_load\\(open\\('infra/blackbox/blackbox.yml'\\)\\); yaml.safe_load\\(open\\('docker-compose.yml'\\)\\); print\\('YAML OK'\\)\")",
-      "Bash(grep -n 'runClose = \\\\|const runClose\\\\|prisma.$transaction\\(async \\(tx\\)\\\\|prevTank' src/controllers/maintenances.controller.ts)"
+      "Bash(grep -n 'runClose = \\\\|const runClose\\\\|prisma.$transaction\\(async \\(tx\\)\\\\|prevTank' src/controllers/maintenances.controller.ts)",
+      "Bash(python3 -c \"import cairosvg; print\\('cairosvg OK'\\)\")",
+      "Bash(node -e \"require\\('docx'\\); console.log\\('docx OK'\\)\")",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-yohaness-Downloads-telecom-platform/d9f77179-4b1d-400b-9390-fb9d8efdeb28/scratchpad/guide/mockups)",
+      "Bash(node -e \"console.log\\(require.resolve\\('docx'\\)\\)\")",
+      "Bash(node -e 'process.chdir\\('\\\\''/Users/yohaness/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/7045bed0-4dec-4c2d-9ee9-e298aee68ff9/d7a90f4a-e58d-4fc7-b59e-e99ac03c82fc/skills/docx'\\\\''\\); console.log\\(require.resolve\\('\\\\''docx'\\\\''\\)\\)')",
+      "Bash(python3 __TRACKED_VAR__/scripts/office/soffice.py --headless --version)",
+      "Bash(python3 -c \"import weasyprint; print\\('weasyprint OK', weasyprint.__version__\\)\")",
+      "Bash(python3 -c \"import reportlab; print\\('reportlab OK'\\)\")",
+      "Bash(pip3 --version)",
+      "Read(//Applications/Google Chrome.app/Contents/MacOS/**)",
+      "Read(//Applications/**)"
     ]
   }
 }
