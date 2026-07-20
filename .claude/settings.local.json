@@ -263,7 +263,9 @@
       "Bash(command -v psql)",
       "Bash(echo \"psql: $\\(command -v psql || echo absent\\)\")",
       "Bash(command -v docker)",
-      "Bash(echo \"docker: $\\(command -v docker || echo absent\\)\")"
+      "Bash(echo \"docker: $\\(command -v docker || echo absent\\)\")",
+      "Bash(grep -nE \"^\\\\s{0,2}[a-zA-Z0-9_-]+:$|image:|container_name:|POSTGRES_[A-Z]+|MINIO_[A-Z_]+|volumes:\" docker-compose.yml)",
+      "Bash(git commit -q -m 'fix\\(env\\): guillemets sur SMTP_FROM \\(les caracteres &, < et > cassaient le source .env\\) *)"
     ]
   }
 }
