@@ -228,7 +228,7 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
               itemBuilder: (context, i) {
                 final m = state.items[i];
                 return ListTile(
-                  title: Text('${m.siteNom ?? m.siteCode ?? '—'} · ${m.equipement}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text('${m.siteNom ?? '—'} · ${m.equipement}', style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text(
                     '${kTypeMaintenance[m.type] ?? m.type} · ${fmtDate(m.datePlanifiee)}'
                     '${m.prestataire != null ? '\n${m.prestataire}' : ''}',

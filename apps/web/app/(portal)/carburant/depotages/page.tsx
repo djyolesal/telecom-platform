@@ -45,7 +45,7 @@ function DepotagesPageInner() {
 
   const columns: Column<Depotage>[] = [
     { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
-    { key: 'site', header: 'Site', render: (d) => <span className="font-medium text-gray-800">{d.site?.nom ?? d.site?.code ?? "—"}</span> },
+    { key: 'site', header: 'Site', render: (d) => <span className="font-medium text-gray-800">{d.site?.nom ?? "—"}</span> },
     { key: 'dateDepotage', header: 'Date', render: (d) => fmtDate(d.dateDepotage) },
     { key: 'volumeLitres', header: 'Volume (L)', align: 'right', render: (d) => fmtNumber(Number(d.volumeLitres)) },
     { key: 'stockApresLitres', header: 'Stock après (L)', align: 'right', render: (d) => (d.stockApresLitres != null ? fmtNumber(Number(d.stockApresLitres)) : '—') },
@@ -89,7 +89,7 @@ function DepotagesPageInner() {
 
       {siteId && (
         <div className="mb-3 flex items-center gap-2 text-sm text-blue-700">
-          <span>Filtré sur le site sélectionné{rows[0]?.site ? ` (${rows[0].site.code})` : ''}.</span>
+          <span>Filtré sur le site sélectionné{rows[0]?.site ? ` (${rows[0].site.nom})` : ''}.</span>
           <button onClick={() => router.push('/carburant/depotages')} className="underline hover:no-underline">Voir tous les dépotages</button>
         </div>
       )}

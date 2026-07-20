@@ -64,7 +64,7 @@ export default function IncidentDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`${inc.reference ?? "Incident"} — ${inc.site?.nom ?? inc.site?.code ?? ""}`}
+        title={`${inc.reference ?? "Incident"} — ${inc.site?.nom ?? ""}`}
         subtitle={TYPES_INCIDENT.find((t) => t.value === inc.type)?.label ?? inc.type}
         backHref="/incidents"
         actions={<div className="flex gap-2"><SeveriteBadge value={inc.severite} /><StatutIncidentBadge value={inc.statut} /></div>}
@@ -74,7 +74,7 @@ export default function IncidentDetailPage() {
         <div className="xl:col-span-2 space-y-6">
           <div className="bg-white rounded-xl border border-gray-100 p-5">
             <h3 className="font-semibold text-gray-700 text-sm mb-3">Détails</h3>
-            <Row label="Site" value={inc.site ? `${inc.site.code} — ${inc.site.nom}` : '—'} />
+            <Row label="Site" value={inc.site?.nom ?? '—'} />
             <Row label="Région" value={inc.site?.region} />
             <Row label="Technicien" value={inc.technicien ? `${inc.technicien.prenom} ${inc.technicien.nom}` : '—'} />
             <Row label="Délai intervention" value={inc.delaiInterventionMinutes != null ? `${inc.delaiInterventionMinutes} min` : '—'} />

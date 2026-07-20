@@ -70,7 +70,7 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
   const term = q.trim().toLowerCase();
   const results = term.length >= 1
     ? features
-        .filter((f) => `${f.properties.code} ${f.properties.nom} ${f.properties.region}`.toLowerCase().includes(term))
+        .filter((f) => `${f.properties.nom} ${f.properties.region}`.toLowerCase().includes(term))
         .slice(0, 8)
     : [];
 
@@ -90,7 +90,7 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Rechercher un site (code, nom, région)…"
+          placeholder="Rechercher un site (nom, région)…"
           className="w-full rounded-lg border border-gray-200 bg-white/95 py-2 pl-8 pr-8 text-sm shadow-md outline-none focus:border-[#2471A3]"
         />
         {q && (
@@ -107,8 +107,7 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
                 onClick={() => pick(f)}
                 className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
               >
-                <span className="font-medium text-gray-800">{f.properties.code}</span>
-                <span className="text-gray-600"> — {f.properties.nom}</span>
+                <span className="font-medium text-gray-800">{f.properties.nom}</span>
                 <span className="block text-xs text-gray-400">{f.properties.region}</span>
               </button>
             </li>
@@ -168,7 +167,6 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
             <Popup>
               <div className="text-xs">
                 <p className="font-bold text-gray-800">{f.properties.nom}</p>
-                <p className="text-gray-600">{f.properties.code}</p>
                 <p className="text-gray-500">{f.properties.region}</p>
                 <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
                 {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (() => {

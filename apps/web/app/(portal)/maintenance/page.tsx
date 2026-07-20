@@ -58,7 +58,7 @@ export default function MaintenancePage() {
 
   const columns: Column<Maintenance>[] = [
     { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
-    { key: 'site', header: 'Site', render: (m) => <span className="font-medium text-gray-800">{m.site?.nom ?? m.site?.code ?? '—'}</span> },
+    { key: 'site', header: 'Site', render: (m) => <span className="font-medium text-gray-800">{m.site?.nom ?? '—'}</span> },
     {
       key: 'equipement',
       header: 'Équipement',

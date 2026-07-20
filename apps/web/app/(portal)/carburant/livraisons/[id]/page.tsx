@@ -105,7 +105,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
                   <div className="flex-1">
                     <Select value={l.siteId} onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, siteId: e.target.value } : x))}
                       placeholder="— Choisir un site —"
-                      options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
+                      options={sites.map((s) => ({ value: s.id, label: s.nom }))} />
                   </div>
                   <div className="w-28"><Input type="number" value={l.volume} placeholder="L" onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, volume: e.target.value } : x))} /></div>
                   <button type="button" onClick={() => setLignes((arr) => arr.filter((_, j) => j !== i))} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
@@ -277,7 +277,7 @@ export default function BonLivraisonDetailPage() {
             <tbody>
               {data.lignes.map((l) => (
                 <tr key={l.id} className="border-b last:border-0">
-                  <td className="py-2"><span className="font-medium text-gray-800">{l.site.code}</span> <span className="text-gray-500">{l.site.nom}</span></td>
+                  <td className="py-2"><span className="font-medium text-gray-800">{l.site.nom}</span></td>
                   <td className="text-gray-600">{l.site.region}</td>
                   <td className="text-right">{fmtNumber(Number(l.volumePrevuLitres))}</td>
                   <td className="text-right">{l.volumeLivreReel > 0 ? fmtNumber(l.volumeLivreReel) : '—'}</td>

@@ -53,7 +53,7 @@ export default function MaintenanceDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`${m.reference ?? 'Maintenance'} — ${m.site?.nom ?? m.site?.code ?? ''}`}
+        title={`${m.reference ?? 'Maintenance'} — ${m.site?.nom ?? ''}`}
         subtitle={m.equipement}
         backHref="/maintenance"
         actions={
@@ -89,7 +89,7 @@ export default function MaintenanceDetailPage() {
             <h3 className="font-semibold text-gray-700 text-sm">Détails</h3>
             <StatutMaintBadge value={m.statut} />
           </div>
-          <Row label="Site" value={m.site ? `${m.site.code} — ${m.site.nom}` : '—'} />
+          <Row label="Site" value={m.site?.nom ?? '—'} />
           <Row label="Type" value={TYPES_MAINTENANCE.find((t) => t.value === m.type)?.label ?? m.type} />
           <Row label="Catégorie" value={`${CATEGORIES_EQUIPEMENT.find((c) => c.value === m.categorie)?.label ?? m.categorie}${isPassive ? ' · passive' : ' · active'}`} />
           <Row label="Équipement" value={m.equipement} />

@@ -89,9 +89,11 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
     if (region) where.region = region;
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
+    // Le code du site n'est plus exposé dans l'interface : la recherche porte
+    // sur le nom et la localisation, jamais sur le code.
     if (search) where.OR = [
       { nom: { contains: search, mode: 'insensitive' } },
-      { code: { contains: search, mode: 'insensitive' } },
+      { region: { contains: search, mode: 'insensitive' } },
     ];
 
     // Un technicien PRESTATAIRE ne voit que les sites des lots attribués à son

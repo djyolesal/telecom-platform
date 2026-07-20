@@ -75,7 +75,7 @@ export default function SiteDetailPage() {
     <div>
       <PageHeader
         title={site.nom}
-        subtitle={`${site.code} · ${site.region}${site.ville ? ' · ' + site.ville : ''}`}
+        subtitle={`${site.region}${site.ville ? ' · ' + site.ville : ''}`}
         backHref="/sites"
         actions={
           <>
@@ -104,7 +104,7 @@ export default function SiteDetailPage() {
                 variant="secondary"
                 icon={Trash2}
                 loading={remove.isPending}
-                onClick={() => { if (confirm(`Désactiver le site ${site.code} ? Il n'apparaîtra plus dans les listes.`)) remove.mutate(); }}
+                onClick={() => { if (confirm(`Désactiver le site ${site.nom} ? Il n'apparaîtra plus dans les listes.`)) remove.mutate(); }}
               >
                 Supprimer
               </Button>

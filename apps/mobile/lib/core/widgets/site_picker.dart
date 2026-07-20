@@ -93,7 +93,6 @@ class _SiteSearchSheetState extends State<_SiteSearchSheet> {
         : widget.sites
             .where((s) =>
                 s.nom.toLowerCase().contains(q) ||
-                s.code.toLowerCase().contains(q) ||
                 s.region.toLowerCase().contains(q))
             .toList();
 
@@ -110,7 +109,7 @@ class _SiteSearchSheetState extends State<_SiteSearchSheet> {
               child: TextField(
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Rechercher un site (nom, code, région)…',
+                  hintText: 'Rechercher un site (nom, région)…',
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
                   isDense: true,

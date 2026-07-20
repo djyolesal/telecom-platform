@@ -43,7 +43,7 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               _card('Relevé', [
-                _row('Site', r.siteNom ?? r.siteCode ?? '—'),
+                _row('Site', r.siteNom ?? '—'),
                 _row('Date', fmtDateTime(r.dateReleve)),
                 if (r.provenance != null && r.provenance!.isNotEmpty) _row('Provenance', r.provenance!),
                 _row('Source', r.source),

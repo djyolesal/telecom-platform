@@ -49,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<List<CachedSite>> getCachedSites() =>
-      (select(cachedSites)..orderBy([(t) => OrderingTerm(expression: t.code)])).get();
+      (select(cachedSites)..orderBy([(t) => OrderingTerm(expression: t.nom)])).get();
 
   Future<CachedSite?> getCachedSite(String id) =>
       (select(cachedSites)..where((t) => t.id.equals(id))).getSingleOrNull();

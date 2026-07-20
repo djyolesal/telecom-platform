@@ -63,7 +63,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     final dist = LocationService.distanceMeters(fix.lat, fix.lng, m.siteLatitude!, m.siteLongitude!);
     if (dist > AppConfig.geofenceRadiusM) {
       await _siteDialog('Vous n\'êtes pas sur le site',
-          'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${m.siteNom ?? m.siteCode ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
+          'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${m.siteNom ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
       return (ok: false, lat: null, lng: null);
     }
     return (ok: true, lat: fix.lat, lng: fix.lng);
@@ -272,7 +272,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             children: [
               if (m.reference != null)
                 Text(m.reference!, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-              Text('${m.siteNom ?? m.siteCode ?? ''} · ${m.equipement}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('${m.siteNom ?? ''} · ${m.equipement}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: Colors.blue),
               const SizedBox(height: 16),

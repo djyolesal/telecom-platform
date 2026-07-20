@@ -48,7 +48,7 @@ export default function RelevesPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Releve>[] = [
-    { key: 'site', header: 'Site', render: (r) => <span className="font-medium text-gray-800">{r.site?.nom ?? r.site?.code ?? "—"}</span> },
+    { key: 'site', header: 'Site', render: (r) => <span className="font-medium text-gray-800">{r.site?.nom ?? "—"}</span> },
     { key: 'dateReleve', header: 'Date', render: (r) => fmtDate(r.dateReleve) },
     { key: 'provenance', header: 'Provenance', render: (r) => <Badge className={PROVENANCE_COLOR[r.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{r.provenance ?? '—'}</Badge> },
     { key: 'consommationKwh', header: 'Conso (kWh)', align: 'right', render: (r) => (r.consommationKwh != null ? fmtNumber(Number(r.consommationKwh)) : '—') },

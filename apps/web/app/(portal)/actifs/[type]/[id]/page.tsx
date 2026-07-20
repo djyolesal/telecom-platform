@@ -94,7 +94,7 @@ export default function ActifDetailPage() {
         <Row label="N° série" value={a.numeroSerie} />
         <Row label="Caractéristique" value={a.caracteristique} />
         <Row label="Statut" value={<Badge className={STATUT_COLOR[a.statutActif] || 'bg-gray-100 text-gray-600'}>{STATUT_LABEL[a.statutActif] ?? a.statutActif}</Badge>} />
-        <Row label="Emplacement" value={a.site ? `${a.site.code} — ${a.site.nom}` : 'Dépôt'} />
+        <Row label="Emplacement" value={a.site?.nom ?? 'Dépôt'} />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
@@ -109,7 +109,7 @@ export default function ActifDetailPage() {
                 <div className="text-sm">
                   <p className="text-gray-800">
                     {m.natureTravaux === 'DEPLACEMENT' && m.siteSource
-                      ? `${m.siteSource.nom ?? m.siteSource.code} → ${m.site?.nom ?? '—'}`
+                      ? `${m.siteSource.nom} → ${m.site?.nom ?? '—'}`
                       : m.natureTravaux === 'DESINSTALLATION'
                         ? `Déposé de ${m.site?.nom ?? '—'}`
                         : `Posé sur ${m.site?.nom ?? '—'}`}

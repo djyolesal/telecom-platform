@@ -44,7 +44,7 @@ export default function AlertesPage() {
               {sitesAlerte.map((s: { siteId: string; code: string; nom: string; region: string; stockLitres: number; autonomieJours: number | null; niveauAlerte: string }) => (
                 <button key={s.siteId} onClick={() => router.push(`/sites/${s.siteId}`)} className="w-full text-left bg-white rounded-xl border border-gray-100 p-3 hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800 text-sm">{s.nom ?? s.code}</span>
+                    <span className="font-medium text-gray-800 text-sm">{s.nom}</span>
                     <NiveauStockBadge value={s.niveauAlerte} />
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
@@ -67,7 +67,7 @@ export default function AlertesPage() {
               {incidents.map((i: { id: string; type: string; severite: string; description: string; dateOuverture: string; site?: { code: string; nom: string } }) => (
                 <button key={i.id} onClick={() => router.push(`/incidents/${i.id}`)} className="w-full text-left bg-white rounded-xl border border-gray-100 p-3 hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800 text-sm">{i.site?.nom ?? i.site?.code} — {i.type}</span>
+                    <span className="font-medium text-gray-800 text-sm">{i.site?.nom} — {i.type}</span>
                     <SeveriteBadge value={i.severite} />
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{i.description}</p>

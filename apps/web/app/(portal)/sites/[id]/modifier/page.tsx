@@ -125,7 +125,7 @@ export default function ModifierSitePage() {
 
   return (
     <div>
-      <PageHeader title={`Modifier — ${site.code}`} backHref={`/sites/${id}`} />
+      <PageHeader title={`Modifier — ${site.nom}`} backHref={`/sites/${id}`} />
       <FormCard>
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{error}</div>}
         <form

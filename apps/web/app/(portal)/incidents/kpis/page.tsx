@@ -85,7 +85,7 @@ export default function IncidentKpisPage() {
           <div className="space-y-2">
             {(d.top10Sites ?? []).map((s: { siteId: string; code: string; nom: string; count: number }) => (
               <div key={s.siteId} className="flex items-center gap-3 text-sm">
-                <span className="font-medium text-gray-700 w-40 truncate" title={s.code}>{s.nom ?? s.code}</span>
+                <span className="font-medium text-gray-700 w-40 truncate" title={s.nom}>{s.nom}</span>
                 <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div className="h-full bg-[#C0392B]" style={{ width: `${Math.min(100, (s.count / ((d.top10Sites?.[0]?.count) || 1)) * 100)}%` }} />
                 </div>

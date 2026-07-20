@@ -66,7 +66,6 @@ export default function ReapprovisionnementPage() {
 
   const cols: Column<SiteForecast>[] = [
     { key: 'nom', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },
-    { key: 'code', header: 'Code', render: (s) => <span className="text-xs text-gray-500">{s.code}</span> },
     { key: 'region', header: 'Région' },
     { key: 'stockActuel', header: 'Stock (L)', align: 'right', render: (s) => fmtNumber(s.stockActuel) },
     { key: 'consoJour', header: 'Conso/j (L)', align: 'right', render: (s) => <span title={
@@ -161,7 +160,7 @@ export default function ReapprovisionnementPage() {
                       {tr.sites.map((s, si) => (
                         <li key={`${s.siteId}-${si}`} className="flex justify-between">
                           <span className="text-gray-700">
-                            {s.nom} <span className="text-gray-400">{s.code}</span>
+                            {s.nom}
                             {s.nbPassages && s.nbPassages > 1 && (
                               <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700" title="Ce site nécessite plusieurs camions">passage {s.passage}/{s.nbPassages}</span>
                             )}

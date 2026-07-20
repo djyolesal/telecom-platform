@@ -140,14 +140,14 @@ export default function ActifsPage() {
   const q = search.trim().toLowerCase();
   const bySiteThenNumero = (x: Actif, y: Actif) => {
     if (!!x.site !== !!y.site) return x.site ? -1 : 1; // dépôt en fin de liste
-    const c = (x.site?.code ?? '').localeCompare(y.site?.code ?? '');
+    const c = (x.site?.nom ?? '').localeCompare(y.site?.nom ?? '');
     return c !== 0 ? c : (x.numero ?? 99) - (y.numero ?? 99);
   };
   const rows = parc.filter((a) =>
     (!type || a.actifType === type) &&
     (!statut || a.statutActif === statut) &&
     (!marque || (marque === '__SANS__' ? (a.actifType === 'GE' && !a.marque) : a.marque === marque)) &&
-    (!q || [a.libelle, a.numeroSerie, a.marque, a.site?.code, a.site?.nom]
+    (!q || [a.libelle, a.numeroSerie, a.marque, a.site?.nom]
       .some((v) => v?.toLowerCase().includes(q)))
   ).sort(bySiteThenNumero);
 

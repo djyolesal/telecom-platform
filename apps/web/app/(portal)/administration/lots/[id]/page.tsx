@@ -96,7 +96,7 @@ export default function LotDetailPage() {
             {lot.sites.length === 0 && <EmptyState title="Aucun site" hint="Affectez des sites à ce lot ci-dessous." />}
             {lot.sites.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-lg border border-gray-50 px-3 py-1.5 text-sm">
-                <span><span className="font-medium text-gray-800">{s.nom ?? s.code}</span> <span className="text-gray-500">· {s.region}</span></span>
+                <span><span className="font-medium text-gray-800">{s.nom}</span> <span className="text-gray-500">· {s.region}</span></span>
                 <button onClick={() => removeSite.mutate(s.id)} className="p-1 rounded hover:bg-red-50" title="Retirer du lot">
                   <X size={14} className="text-gray-400" />
                 </button>

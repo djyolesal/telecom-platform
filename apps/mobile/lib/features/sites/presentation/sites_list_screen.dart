@@ -51,7 +51,7 @@ class _SitesViewState extends State<_SitesView> {
             child: TextField(
               controller: _search,
               decoration: InputDecoration(
-                hintText: 'Rechercher (code, nom)…',
+                hintText: 'Rechercher (nom, région)…',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(icon: const Icon(Icons.tune), onPressed: _reload),
               ),
@@ -79,7 +79,7 @@ class _SitesViewState extends State<_SitesView> {
                           child: const Icon(Icons.cell_tower, color: AppColors.brand, size: 20),
                         ),
                         title: Text(s.nom, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text('${s.code} · ${s.region}'),
+                        subtitle: Text(s.region),
                         trailing: Text('${s.puissanceGeKva.toStringAsFixed(0)} kVA',
                             style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                         onTap: () => context.push('/sites/${s.id}'),

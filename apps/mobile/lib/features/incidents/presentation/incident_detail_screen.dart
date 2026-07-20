@@ -68,7 +68,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     final dist = LocationService.distanceMeters(fix.lat, fix.lng, inc.siteLatitude!, inc.siteLongitude!);
     if (dist > AppConfig.geofenceRadiusM) {
       await _siteDialog('Vous n\'êtes pas sur le site',
-          'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${inc.siteNom ?? inc.siteCode ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
+          'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${inc.siteNom ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
       return (ok: false, lat: null, lng: null);
     }
     return (ok: true, lat: fix.lat, lng: fix.lng);
@@ -171,7 +171,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text('${inc.reference != null ? '${inc.reference} · ' : ''}${inc.siteNom ?? inc.siteCode ?? ''} · ${kTypeIncident[inc.type] ?? inc.type}',
+                    child: Text('${inc.reference != null ? '${inc.reference} · ' : ''}${inc.siteNom ?? ''} · ${kTypeIncident[inc.type] ?? inc.type}',
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                   StatusChip(label: kSeverite[inc.severite] ?? inc.severite, color: AppTheme.severiteColor(inc.severite)),

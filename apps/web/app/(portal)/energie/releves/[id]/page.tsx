@@ -41,14 +41,14 @@ export default function ReleveDetailPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={`Relevé énergie — ${r.site?.nom ?? r.site?.code ?? ''}`}
+        title={`Relevé énergie — ${r.site?.nom ?? ''}`}
         subtitle={fmtDateTime(r.dateReleve)}
         backHref="/energie/releves"
         actions={m ? <Button variant="secondary" icon={Wrench} onClick={() => router.push(`/maintenance/${m.id}`)}>Voir la maintenance</Button> : undefined}
       />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
-        <Row label="Site" value={r.site ? `${r.site.code} — ${r.site.nom}` : '—'} />
+        <Row label="Site" value={r.site?.nom ?? '—'} />
         <Row label="Date" value={fmtDateTime(r.dateReleve)} />
         {r.provenance && <Row label="Provenance" value={r.provenance} />}
         <Row label="Source" value={<Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{r.source}</Badge>} />

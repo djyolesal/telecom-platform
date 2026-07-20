@@ -54,8 +54,7 @@ export default function SitesPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Site>[] = [
-    { key: 'nom', header: 'Nom' },
-    { key: 'code', header: 'Code', render: (s) => <span className="font-medium text-gray-800">{s.code}</span> },
+    { key: 'nom', header: 'Nom', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'ville', header: 'Ville', render: (s) => s.ville || '—' },
     { key: 'powerConfig', header: 'Config énergie', render: (s) => POWER_CONFIGS.find((p) => p.value === s.powerConfig)?.label ?? s.powerConfig },
@@ -90,7 +89,7 @@ export default function SitesPage() {
       <FilterBar
         search={search}
         onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Rechercher par nom ou code…"
+        searchPlaceholder="Rechercher par nom ou région…"
         filters={[
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
           { key: 'statut', label: 'Statut GE', value: statutGe, options: STATUTS_GE, onChange: (v) => { setStatutGe(v); setPage(1); } },

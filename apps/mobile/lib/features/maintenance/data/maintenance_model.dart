@@ -151,5 +151,5 @@ class ActifLite {
     );
   }
 
-  String get display => '${libelle ?? categorie}${siteCode != null ? ' — $siteCode' : ' — Dépôt'}';
+  String get display => '${libelle ?? categorie}${siteId != null ? '' : ' — Dépôt'}';
 }

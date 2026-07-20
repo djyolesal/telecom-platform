@@ -137,7 +137,7 @@ export default function DirectionPage() {
               </tr></thead>
               <tbody>
                 {data.topSitesCouteux.map((s: { code: string; nom: string; region: string; coutEnergie: number }) => (
-                  <tr key={s.code} className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-gray-50" onClick={() => router.push(`/sites?search=${s.code}`)}>
+                  <tr key={s.code} className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-gray-50" onClick={() => router.push(`/sites?search=${encodeURIComponent(s.nom)}`)}>
                     <td className="py-2 pr-4 font-medium text-gray-800">{s.nom}</td>
                     <td className="px-3 py-2 text-gray-600">{s.region}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtFCFA(s.coutEnergie)}</td>

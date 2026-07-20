@@ -67,7 +67,7 @@ export default function NouvelleMaintenancePage() {
   const siteOptions = (sites ?? []).map((s: { id: string; nom: string }) => ({ value: s.id, label: s.nom }));
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
   const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: t.libelle }));
-  const actifOptions = (actifs ?? []).map((a) => ({ value: `${a.actifType}:${a.id}`, label: `${a.libelle ?? a.categorie}${a.site ? ` — ${a.site.code}` : ' — Dépôt'}` }));
+  const actifOptions = (actifs ?? []).map((a) => ({ value: `${a.actifType}:${a.id}`, label: `${a.libelle ?? a.categorie}${a.site ? ` — ${a.site.nom}` : ' — Dépôt'}` }));
   const selectedActif = (actifs ?? []).find((a) => `${a.actifType}:${a.id}` === form.actifKey);
 
   const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);

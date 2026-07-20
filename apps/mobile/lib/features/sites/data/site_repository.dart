@@ -41,7 +41,7 @@ class SiteRepository {
     var sites = cached.map(Site.fromCache).toList();
     if (search != null && search.isNotEmpty) {
       final q = search.toLowerCase();
-      sites = sites.where((s) => s.code.toLowerCase().contains(q) || s.nom.toLowerCase().contains(q)).toList();
+      sites = sites.where((s) => s.nom.toLowerCase().contains(q) || s.region.toLowerCase().contains(q)).toList();
     }
     if (region != null && region.isNotEmpty) {
       sites = sites.where((s) => s.region == region).toList();

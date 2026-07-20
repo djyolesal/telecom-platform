@@ -106,7 +106,7 @@ export default function DepotageDetailPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={`${d.reference ?? 'Dépotage'} — ${d.site?.nom ?? d.site?.code ?? ''}`}
+        title={`${d.reference ?? 'Dépotage'} — ${d.site?.nom ?? ''}`}
         subtitle={fmtDateTime(d.dateDepotage)}
         backHref="/carburant/depotages"
         actions={
@@ -118,7 +118,7 @@ export default function DepotageDetailPage() {
       />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
-        <Row label="Site" value={d.site ? `${d.site.code} — ${d.site.nom}` : '—'} />
+        <Row label="Site" value={d.site?.nom ?? '—'} />
         <Row label="Date" value={fmtDateTime(d.dateDepotage)} />
         <Row label="Volume livré (jauge)" value={`${fmtNumber(Number(d.volumeLitres))} L`} />
         <Row label="Stock avant" value={d.stockAvantLitres != null ? `${fmtNumber(Number(d.stockAvantLitres))} L` : '—'} />

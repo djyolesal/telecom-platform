@@ -59,7 +59,7 @@ export default function SupervisionIncidentsPage() {
               className="text-left bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-gray-800 text-sm">{inc.site?.nom ?? inc.site?.code}</span>
+                <span className="font-semibold text-gray-800 text-sm">{inc.site?.nom}</span>
                 <div className="flex gap-1">
                   <SeveriteBadge value={inc.severite} />
                   <StatutIncidentBadge value={inc.statut} />
