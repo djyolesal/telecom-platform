@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { Banknote, Fuel, ShieldAlert, Wrench, Zap, Clock } from 'lucide-react';
+import { Banknote, Fuel, ShieldAlert, Wrench, Zap, Clock, Leaf, Sun } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -57,6 +57,18 @@ export default function DirectionPage() {
         <StatCard title="Curatives" value={String(k.curatives)} subtitle="interventions correctives" icon={Wrench} color="bg-[#F59E0B]" />
         <StatCard title="Durée moy. coupure" value={fmtDuree(k.mttrMinutes)} subtitle="MTTR incidents" icon={Clock} color="bg-[#1B3F6B]" />
         <StatCard title="Délai moy. intervention" value={fmtDuree(k.mttaMinutes)} subtitle={`${k.incidentsOuverts} incident(s) ouvert(s)`} icon={Clock} color="bg-[#2471A3]" />
+      </div>
+
+      {/* ── Empreinte carbone ── */}
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-700">Empreinte carbone</h3>
+        <button onClick={() => router.push('/rapports/empreinte-carbone')} className="text-xs font-medium text-[#0E7C6B] hover:underline">Détail par mois, région et site →</button>
+      </div>
+      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard title="CO₂ émis" value={`${fmtNumber(k.co2TotalTonnes)} t`} subtitle={`sur ${data.periodeMois} mois`} icon={Leaf} color="bg-[#0E7C6B]" />
+        <StatCard title="dont gasoil (GE)" value={`${fmtNumber(k.co2GasoilTonnes)} t`} subtitle="combustion groupes" icon={Fuel} color="bg-[#C0392B]" />
+        <StatCard title="dont réseau CEET" value={`${fmtNumber(k.co2CeetTonnes)} t`} subtitle="électricité réseau" icon={Zap} color="bg-[#2471A3]" />
+        <StatCard title="Évité par le solaire" value={`${fmtNumber(k.co2EviteTonnes)} t`} subtitle="émissions évitées" icon={Sun} color="bg-[#F59E0B]" />
       </div>
 
       {/* ── Tendance des coûts ── */}

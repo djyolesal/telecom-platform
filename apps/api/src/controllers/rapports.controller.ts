@@ -9,6 +9,8 @@ import { computeManquants } from '../services/manquants.service';
 import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
 import { geReliabilityByMarque } from '../services/geReliability.service';
 import { computeSla } from '../services/slaCompliance.service';
+import { computeEmpreinteCarbone, co2GasoilKg, co2ReseauKg } from '../services/carbon.service';
+import { carboneFactors } from '../services/settings.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 
@@ -428,7 +430,7 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
     const [releves, maints, incidents, anomalies, nbSitesActifs] = await Promise.all([
       prisma.releveEnergie.findMany({
         where: { dateReleve: { gte: depuis } },
-        select: { dateReleve: true, source: true, coutEstime: true, gasoilConsommeLitres: true,
+        select: { dateReleve: true, source: true, coutEstime: true, gasoilConsommeLitres: true, consommationKwh: true,
           site: { select: { id: true, code: true, nom: true, region: true } } },
       }),
       prisma.maintenance.findMany({
@@ -448,16 +450,21 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
     for (let i = mois - 1; i >= 0; i--) moisKeys.push(format(subMonths(new Date(), i), 'MMM yy'));
     const serie = new Map(moisKeys.map((k) => [k, { mois: k, coutGasoil: 0, coutCeet: 0, gasoilLitres: 0 }]));
     let coutGasoil = 0, coutCeet = 0, gasoilLitres = 0;
+    // Empreinte carbone dérivée des mêmes relevés (scope 1 GE, scope 2 réseau, solaire évité).
+    const cf = carboneFactors();
+    let co2GeKg = 0, co2CeetKg = 0, solaireKwh = 0;
     const parRegion = new Map<string, { region: string; coutEnergie: number; gasoilLitres: number; incidents: number }>();
     const parSite = new Map<string, { code: string; nom: string; region: string; coutEnergie: number }>();
 
     for (const r of releves) {
       const cout = r.coutEstime != null ? Number(r.coutEstime) : 0;
       const litres = r.gasoilConsommeLitres != null ? Number(r.gasoilConsommeLitres) : 0;
+      const kwh = r.consommationKwh != null ? Number(r.consommationKwh) : 0;
       const key = format(r.dateReleve, 'MMM yy');
       const bucket = serie.get(key);
-      if (r.source === 'GE') { coutGasoil += cout; gasoilLitres += litres; if (bucket) { bucket.coutGasoil += cout; bucket.gasoilLitres += litres; } }
-      else if (r.source === 'CEET') { coutCeet += cout; if (bucket) bucket.coutCeet += cout; }
+      if (r.source === 'GE') { coutGasoil += cout; gasoilLitres += litres; co2GeKg += co2GasoilKg(litres, cf); if (bucket) { bucket.coutGasoil += cout; bucket.gasoilLitres += litres; } }
+      else if (r.source === 'CEET') { coutCeet += cout; co2CeetKg += co2ReseauKg(kwh, cf); if (bucket) bucket.coutCeet += cout; }
+      else if (r.source === 'SOLAIRE') { solaireKwh += kwh; }
 
       const reg = r.site?.region ?? '—';
       const pr = parRegion.get(reg) ?? { region: reg, coutEnergie: 0, gasoilLitres: 0, incidents: 0 };
@@ -509,6 +516,10 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
           incidentsOuverts: incidents.filter((i) => ['OUVERT', 'EN_COURS'].includes(i.statut)).length,
           mttrMinutes: mttr,
           mttaMinutes: mtta,
+          co2TotalTonnes: Math.round(((co2GeKg + co2CeetKg) / 1000) * 10) / 10,
+          co2GasoilTonnes: Math.round((co2GeKg / 1000) * 10) / 10,
+          co2CeetTonnes: Math.round((co2CeetKg / 1000) * 10) / 10,
+          co2EviteTonnes: Math.round(((solaireKwh * cf.reseauKgCO2Kwh) / 1000) * 10) / 10,
         },
         serieMensuelle: Array.from(serie.values()).map((s) => ({
           mois: s.mois, coutGasoil: Math.round(s.coutGasoil), coutCeet: Math.round(s.coutCeet), gasoilLitres: Math.round(s.gasoilLitres),
@@ -522,6 +533,17 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
           .slice(0, 10),
       },
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Empreinte carbone du parc (tCO₂) sur N mois, dérivée des relevés d'énergie :
+ * gasoil GE (scope 1) + réseau CEET (scope 2), et émissions évitées par le solaire.
+ */
+export async function getEmpreinteCarbone(req: Request, res: Response, next: NextFunction) {
+  try {
+    const mois = req.query.mois ? Math.max(1, Math.min(24, parseInt(String(req.query.mois), 10))) : 6;
+    res.json({ success: true, data: await computeEmpreinteCarbone({ mois }) });
   } catch (err) { next(err); }
 }
 

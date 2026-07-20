@@ -194,6 +194,7 @@ router.get('/rapports/reapprovisionnement', rbac(['MANAGER', 'ADMIN', 'SUPERVISE
 router.get('/rapports/anomalies-conso', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getAnomaliesConso);
 router.get('/rapports/anomalies-carburant', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR', 'DIRECTION']), rapportsCtrl.getAnomaliesCarburant);
 router.get('/rapports/dashboard-direction', rbac(['MANAGER', 'ADMIN', 'DIRECTION']), rapportsCtrl.getDashboardDirection);
+router.get('/rapports/empreinte-carbone', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), rapportsCtrl.getEmpreinteCarbone);
 router.get('/rapports/fiabilite-ge', rbac(['MANAGER', 'ADMIN', 'DIRECTION']), rapportsCtrl.getFiabiliteGE);
 router.get('/rapports/synthese-appro', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getSyntheseAppro);
 router.post('/bons-livraison/brouillon', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBrouillonLivraison);

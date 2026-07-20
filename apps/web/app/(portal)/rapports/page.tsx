@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Fuel, Zap, Wrench, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock, FileSpreadsheet , ShieldCheck, Shield } from 'lucide-react';
+import { FileText, Fuel, Zap, Wrench, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock, FileSpreadsheet , ShieldCheck, Shield, Leaf } from 'lucide-react';
 
 const RAPPORTS = [
   { href: '/rapports/mensuel', icon: CalendarRange, title: 'Rapport mensuel', desc: 'Synthèse PDF complète par mois, à consulter ou envoyer par email.' },
@@ -12,6 +12,7 @@ const RAPPORTS = [
   { href: '/rapports/gardiennage', icon: Shield, title: 'Gardiennage', desc: 'Présence des agents de sécurité constatée en intervention, par société.' },
   { href: '/carburant/stock', icon: Fuel, title: 'Stock carburant', desc: 'État du stock et autonomie de chaque site.' },
   { href: '/energie/rapports', icon: Zap, title: 'Consommation énergie', desc: 'Tendances kWh et gasoil sur la période.' },
+  { href: '/rapports/empreinte-carbone', icon: Leaf, title: 'Empreinte carbone', desc: 'Émissions de CO₂ (gasoil GE, réseau CEET) et émissions évitées par le solaire, par mois, région et site.' },
   { href: '/maintenance', icon: Wrench, title: 'Maintenances', desc: 'Suivi des interventions préventives et curatives.' },
   { href: '/incidents/kpis', icon: AlertTriangle, title: 'KPIs incidents', desc: 'MTTR, MTTI et taux de résolution.' },
 ];

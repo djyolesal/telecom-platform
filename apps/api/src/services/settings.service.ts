@@ -81,7 +81,26 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'sla.tolerancePreventifJours', label: 'Tolérance retard préventif', groupe: 'SLA prestataires', unite: 'j', defaut: 7 },
     { key: 'sla.penaliteResolutionFCFA', label: 'Pénalité par incident hors délai', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 50000 },
     { key: 'sla.penalitePreventifFCFA', label: 'Pénalité par point de préventif manquant', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 100000 },
+    // Empreinte carbone — facteurs d'émission (le solaire est à 0 par nature).
+    { key: 'carbone.facteurGasoilKgCO2L', label: 'Facteur d’émission gasoil (combustion GE)', groupe: 'Empreinte carbone', unite: 'kgCO₂/L', defaut: CARBONE_DEFAULTS.gasoilKgCO2L },
+    { key: 'carbone.facteurReseauKgCO2Kwh', label: 'Facteur d’émission réseau CEET', groupe: 'Empreinte carbone', unite: 'kgCO₂/kWh', defaut: CARBONE_DEFAULTS.reseauKgCO2Kwh },
   ];
+}
+
+/** Facteurs d'émission par défaut (modifiables dans SystemSettings). */
+export const CARBONE_DEFAULTS = {
+  // Combustion d'un litre de gasoil ≈ 2,66 kgCO₂ (ordre de grandeur ADEME/DEFRA).
+  gasoilKgCO2L: 2.66,
+  // Réseau CEET (Togo) — mix à dominante thermique ; valeur indicative à ajuster.
+  reseauKgCO2Kwh: 0.55,
+};
+
+/** Facteurs d'émission effectifs (défauts surchargés par SystemSettings). */
+export function carboneFactors() {
+  return {
+    gasoilKgCO2L: getNum('carbone.facteurGasoilKgCO2L', CARBONE_DEFAULTS.gasoilKgCO2L),
+    reseauKgCO2Kwh: getNum('carbone.facteurReseauKgCO2Kwh', CARBONE_DEFAULTS.reseauKgCO2Kwh),
+  };
 }
 
 /** Valeurs effectives (défaut surchargé par la base) pour l'écran d'administration. */
