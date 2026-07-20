@@ -259,7 +259,11 @@
       "Bash(git --no-pager log --oneline -1)",
       "Bash(mkdir -p /private/tmp/claude-501/-Users-yohaness-Downloads-telecom-platform/d9f77179-4b1d-400b-9390-fb9d8efdeb28/scratchpad/ppt)",
       "Bash(command -v flutter)",
-      "Bash(git commit -q -m 'refactor\\(sites\\): retirer le code du site de tous les affichages \\(web + mobile\\) *)"
+      "Bash(git commit -q -m 'refactor\\(sites\\): retirer le code du site de tous les affichages \\(web + mobile\\) *)",
+      "Bash(command -v psql)",
+      "Bash(echo \"psql: $\\(command -v psql || echo absent\\)\")",
+      "Bash(command -v docker)",
+      "Bash(echo \"docker: $\\(command -v docker || echo absent\\)\")"
     ]
   }
 }
