@@ -256,7 +256,10 @@
       "Bash(npx ts-node --transpile-only -e ' *)",
       "Bash(DATABASE_URL=postgresql://x:x@localhost:5432/x MINIO_ACCESS_KEY=x MINIO_SECRET_KEY=x JWT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx JWT_REFRESH_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx npx ts-node --transpile-only -e ' *)",
       "Bash(git commit -q -m 'feat\\(empreinte-carbone\\): module CO2 dérivé des relevés \\(facteurs paramétrables, API, rapport web + Direction\\) *)",
-      "Bash(git --no-pager log --oneline -1)"
+      "Bash(git --no-pager log --oneline -1)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-yohaness-Downloads-telecom-platform/d9f77179-4b1d-400b-9390-fb9d8efdeb28/scratchpad/ppt)",
+      "Bash(command -v flutter)",
+      "Bash(git commit -q -m 'refactor\\(sites\\): retirer le code du site de tous les affichages \\(web + mobile\\) *)"
     ]
   }
 }
