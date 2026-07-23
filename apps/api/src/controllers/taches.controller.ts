@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
 import { ScopeMaintenance } from '@prisma/client';
 import { addMonths } from 'date-fns';
 import { prisma } from '../config/database';
@@ -62,6 +63,7 @@ export async function getCatalogue(_req: Request, res: Response) {
 /** Tâches contractuelles applicables à un site + dernière exécution / prochaine échéance. */
 export async function getTachesForSite(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const site = await prisma.site.findUnique({ where: { id: req.params.id } });
     if (!site) throw new AppError('Site introuvable', 404);
 
@@ -120,8 +122,10 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
     const { prestataire_id, statut: filtreStatut } = req.query as Record<string, string>;
     const now = new Date();
 
+    // Périmètre prestataire : un superviseur prestataire ne voit l'échéancier
+    // que des sites de ses lots (les internes voient tout le parc).
     const sites = await prisma.site.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...(await sitePerimetre(req.user!.id)) },
       include: { lot: { include: { assignments: { where: { scope: { in: SCOPES_PASSIFS } }, include: { prestataire: { select: { id: true, nom: true } } } } } } },
     });
 

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
@@ -821,6 +822,7 @@ export async function createBrouillonLivraison(req: Request, res: Response, next
 /** Lignes de plan de livraison ouvertes pour un site (consommé par le mobile au dépotage). */
 export async function getLignesLivraisonForSite(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const lignes = await prisma.ligneLivraison.findMany({
       where: {
         siteId: req.params.id,

@@ -66,7 +66,6 @@ router.use((req, _res, next) => {
 // accès aux agrégats parc entier (logistique, anomalies, empreinte carbone…) :
 // ses vues par site sont périmétrées, les totaux du parc restent internes.
 const INTERNE_ONLY: RegExp[] = [
-  /^\/rapports\/echeancier-preventif$/,
   /^\/rapports\/fiche-validation$/,
   /^\/rapports\/fiches-validation\/batch$/,
   /^\/rapports\/reapprovisionnement$/,
@@ -76,6 +75,8 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/manquants-livraison(\/|$)/,
   /^\/rapports\/correlation-carburant$/,
   /^\/rapports\/empreinte-carbone$/,
+  /^\/rapports\/mensuel(\/|$)/,
+  /^\/rapports\/gardiennage$/,
 ];
 router.use(async (req, _res, next) => {
   try {
@@ -257,8 +258,8 @@ router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIREC
 router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportIncidents);
 router.get('/rapports/conformite', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConformiteMaintenance);
 router.get('/rapports/sla-prestataires', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getSlaPrestataires);
-router.get('/rapports/gardiennage', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportGardiennage);
-router.get('/rapports/mensuel/:annee/:mois', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMensuelPdf);
+router.get('/rapports/gardiennage', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportGardiennage);
+router.get('/rapports/mensuel/:annee/:mois', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMensuelPdf);
 router.post('/rapports/mensuel/send', rbac(['MANAGER','ADMIN']), rapportsCtrl.sendRapportMensuel);
 
 // ── Utilisateurs ──────────────────────────────────────────────
