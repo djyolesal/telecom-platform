@@ -197,7 +197,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       });
     }
     await auditLog(req.user!.id, 'CREATE', 'sites', site.id, req.body, req);
-    await cacheService.invalidate('sites:geojson');
+    await cacheService.invalidate('sites:geojson*');
     res.status(201).json({ success: true, data: site });
   } catch (err) { next(err); }
 }
@@ -216,7 +216,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
     const updated = await prisma.site.update({ where: { id: req.params.id }, data });
     await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { after: data }, req);
-    await cacheService.invalidate('sites:geojson');
+    await cacheService.invalidate('sites:geojson*');
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }
@@ -270,7 +270,7 @@ export async function replaceSiteGroupes(req: Request, res: Response, next: Next
     });
 
     await auditLog(req.user!.id, 'UPDATE', 'sites', siteId, { groupes }, req);
-    await cacheService.invalidate('sites:geojson');
+    await cacheService.invalidate('sites:geojson*');
     const data = await prisma.groupeElectrogene.findMany({ where: { siteId, isActive: true }, orderBy: { numero: 'asc' } });
     res.json({ success: true, data });
   } catch (err) { next(err); }
@@ -282,7 +282,7 @@ export async function deleteSite(req: Request, res: Response, next: NextFunction
     if (!site) throw new AppError('Site introuvable', 404);
     await prisma.site.update({ where: { id: req.params.id }, data: { isActive: false } });
     await auditLog(req.user!.id, 'DELETE', 'sites', site.id, {}, req);
-    await cacheService.invalidate('sites:geojson');
+    await cacheService.invalidate('sites:geojson*');
     res.json({ success: true, message: 'Site désactivé' });
   } catch (err) { next(err); }
 }
@@ -471,7 +471,7 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
     }
 
     await auditLog(req.user!.id, 'CREATE', 'sites', 'bulk-import', { fichier: req.file.originalname, ...results }, req);
-    await cacheService.invalidate('sites:geojson');
+    await cacheService.invalidate('sites:geojson*');
     res.json({ success: true, data: results });
   } catch (err) { next(err); }
 }
@@ -479,12 +479,20 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
 /** GeoJSON pour Leaflet — avec mise en cache Redis 5min */
 export async function getSitesGeoJSON(req: Request, res: Response, next: NextFunction) {
   try {
-    const cacheKey = 'sites:geojson';
+    // Même périmètre que la liste des sites : un utilisateur rattaché à un
+    // prestataire ne voit sur la carte QUE les sites des lots de sa société.
+    // Le cache est décliné par périmètre pour ne jamais servir la carte
+    // restreinte d'un prestataire à un interne (ni l'inverse).
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    const cacheKey = me?.prestataireId ? `sites:geojson:p:${me.prestataireId}` : 'sites:geojson';
     const cached = await cacheService.get(cacheKey);
     if (cached) return res.json(cached);
 
     const sites = await prisma.site.findMany({
-      where: { isActive: true, latitude: { not: null }, longitude: { not: null } },
+      where: {
+        isActive: true, latitude: { not: null }, longitude: { not: null },
+        ...(me?.prestataireId ? { lot: { assignments: { some: { prestataireId: me.prestataireId } } } } : {}),
+      },
       select: { id: true, nom: true, code: true, region: true, statutGE: true, powerConfig: true, puissanceGEkva: true, latitude: true, longitude: true },
     });
 
