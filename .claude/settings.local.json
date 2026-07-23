@@ -266,7 +266,9 @@
       "Bash(echo \"docker: $\\(command -v docker || echo absent\\)\")",
       "Bash(grep -nE \"^\\\\s{0,2}[a-zA-Z0-9_-]+:$|image:|container_name:|POSTGRES_[A-Z]+|MINIO_[A-Z_]+|volumes:\" docker-compose.yml)",
       "Bash(git commit -q -m 'fix\\(env\\): guillemets sur SMTP_FROM \\(les caracteres &, < et > cassaient le source .env\\) *)",
-      "Bash(git commit -q -m 'fix\\(infra\\): aligner l'\\\\''image postgres sur l'\\\\''extension TimescaleDB du volume \\(2.27.2-pg16\\) *)"
+      "Bash(git commit -q -m 'fix\\(infra\\): aligner l'\\\\''image postgres sur l'\\\\''extension TimescaleDB du volume \\(2.27.2-pg16\\) *)",
+      "Bash(npx next *)",
+      "Bash(DATABASE_URL=\"postgresql://x:x@localhost:5432/x\" npx prisma validate)"
     ]
   }
 }
