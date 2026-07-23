@@ -220,6 +220,7 @@ export default function SiteDetailPage() {
             <EmptyState title="Aucune maintenance" />
           ) : (
             <DataTable<{ statut: string; datePlanifiee: string }>
+              toolbar={false}
               columns={[
                 { key: 'equipement', header: 'Équipement' },
                 { key: 'type', header: 'Type' },
@@ -237,6 +238,7 @@ export default function SiteDetailPage() {
             <EmptyState title="Aucun incident" />
           ) : (
             <DataTable<{ statut: string; dateOuverture: string }>
+              toolbar={false}
               columns={[
                 { key: 'type', header: 'Type' },
                 { key: 'severite', header: 'Sévérité' },

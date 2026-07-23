@@ -83,7 +83,7 @@ export default function StockCarburantPage() {
         ]}
       />
 
-      {sites.length === 0 ? <EmptyState title="Aucun site" /> : <DataTable columns={columns} data={sites} rowKey={(s) => s.siteId} />}
+      {sites.length === 0 ? <EmptyState title="Aucun site" /> : <DataTable columns={columns} data={sites} maxHeight="65vh" rowKey={(s) => s.siteId} />}
     </div>
   );
 }

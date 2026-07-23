@@ -39,6 +39,7 @@ export function DataTable<T>({
   rowClassName,
   emptyMessage = 'Aucune donnée à afficher',
   maxHeight,
+  toolbar = true,
 }: {
   columns: Column<T>[];
   data: T[];
@@ -48,6 +49,8 @@ export function DataTable<T>({
   emptyMessage?: string;
   /** ex. '70vh' : active le défilement interne (l'en-tête épinglé prend alors tout son sens). */
   maxHeight?: string;
+  /** false = masque la barre d'outils (compteur, densité, colonnes) — petits tableaux. */
+  toolbar?: boolean;
 }) {
   // Préférences par page (les clés de colonnes distinguent plusieurs tableaux d'une même page).
   const storageKey = useMemo(
@@ -115,6 +118,7 @@ export function DataTable<T>({
   return (
     <div className="overflow-hidden rounded-xl border border-gray-100 bg-white">
       {/* Barre d'outils du tableau */}
+      {toolbar && (
       <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-1.5">
         <span className="text-xs text-gray-400">
           {data.length} ligne{data.length > 1 ? 's' : ''}
@@ -169,6 +173,7 @@ export function DataTable<T>({
           )}
         </div>
       </div>
+      )}
 
       <div className="overflow-x-auto" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
         <table className="w-full text-sm">

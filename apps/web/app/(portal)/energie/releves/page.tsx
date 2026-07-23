@@ -76,7 +76,7 @@ export default function RelevesPage() {
         <EmptyState title="Aucun relevé" />
       ) : (
         <>
-          <DataTable columns={columns} data={rows} onRowClick={(r) => router.push(`/energie/releves/${r.id}`)} />
+          <DataTable columns={columns} data={rows} maxHeight="65vh" onRowClick={(r) => router.push(`/energie/releves/${r.id}`)} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}

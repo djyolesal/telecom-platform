@@ -102,7 +102,7 @@ function DepotagesPageInner() {
         <EmptyState title="Aucun dépotage" />
       ) : (
         <>
-          <DataTable columns={columns} data={rows} onRowClick={(d) => router.push(`/carburant/${d.id}`)} />
+          <DataTable columns={columns} data={rows} maxHeight="65vh" onRowClick={(d) => router.push(`/carburant/${d.id}`)} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}
