@@ -13,6 +13,7 @@ import { forecastSites } from '../services/replenishment.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
 import { generateEtiquettesQrPdf } from '../services/pdf.service';
+import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
 const IMPORT_COLUMNS = [
@@ -96,18 +97,9 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
       { region: { contains: search, mode: 'insensitive' } },
     ];
 
-    // Un technicien PRESTATAIRE ne voit que les sites des lots attribués à son
-    // entreprise (planification, sélecteurs, liste mobile). Un technicien
-    // interne (sans prestataire) voit tous les sites.
-    if (req.user!.role === 'TECHNICIEN') {
-      const me = await prisma.user.findUnique({
-        where: { id: req.user!.id },
-        select: { prestataireId: true },
-      });
-      if (me?.prestataireId) {
-        where.lot = { assignments: { some: { prestataireId: me.prestataireId } } };
-      }
-    }
+    // Périmètre prestataire : tout utilisateur rattaché à un prestataire
+    // (technicien COMME superviseur) ne voit que les sites de ses lots.
+    Object.assign(where, await sitePerimetre(req.user!.id));
 
     // Mode « tous » (sélecteurs, liste mobile) : pas de pagination (le paginateur
     // plafonne à 200, ce qui tronquerait les sites au-delà).
@@ -128,6 +120,7 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
 
 export async function getSiteById(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const site = await prisma.site.findUnique({
       where: { id: req.params.id },
       include: {
@@ -483,7 +476,9 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
     // prestataire ne voit sur la carte QUE les sites des lots de sa société.
     // Le cache est décliné par périmètre pour ne jamais servir la carte
     // restreinte d'un prestataire à un interne (ni l'inverse).
-    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    const perimetre = await sitePerimetre(req.user!.id);
+    const restreint = Object.keys(perimetre).length > 0;
+    const me = restreint ? await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } }) : null;
     const cacheKey = me?.prestataireId ? `sites:geojson:p:${me.prestataireId}` : 'sites:geojson';
     const cached = await cacheService.get(cacheKey);
     if (cached) return res.json(cached);
@@ -491,7 +486,7 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
     const sites = await prisma.site.findMany({
       where: {
         isActive: true, latitude: { not: null }, longitude: { not: null },
-        ...(me?.prestataireId ? { lot: { assignments: { some: { prestataireId: me.prestataireId } } } } : {}),
+        ...perimetre,
       },
       select: { id: true, nom: true, code: true, region: true, statutGE: true, powerConfig: true, puissanceGEkva: true, latitude: true, longitude: true },
     });
@@ -564,6 +559,7 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
 /** Stock actuel d'un site (dernier relevé gasoil) */
 export async function getSiteStock(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const site = await prisma.site.findUnique({ where: { id: req.params.id } });
     if (!site) throw new AppError('Site introuvable', 404);
 
@@ -579,6 +575,7 @@ export async function getSiteStock(req: Request, res: Response, next: NextFuncti
 
 export async function getSiteMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const { page = '1', limit = '20' } = req.query as Record<string, string>;
     const { data, meta } = await paginate(
       prisma.maintenance,
@@ -591,6 +588,7 @@ export async function getSiteMaintenances(req: Request, res: Response, next: Nex
 
 export async function getSiteDepotages(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const { page = '1', limit = '20' } = req.query as Record<string, string>;
     const { data, meta } = await paginate(
       prisma.depotage,
@@ -603,6 +601,7 @@ export async function getSiteDepotages(req: Request, res: Response, next: NextFu
 
 export async function getSiteIncidents(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const { page = '1', limit = '20' } = req.query as Record<string, string>;
     const { data, meta } = await paginate(
       prisma.incident,
@@ -615,6 +614,7 @@ export async function getSiteIncidents(req: Request, res: Response, next: NextFu
 
 export async function getSiteReleves(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
     const { page = '1', limit = '20', source } = req.query as Record<string, string>;
     const where: Record<string, unknown> = { siteId: req.params.id };
     if (source) where.source = source;

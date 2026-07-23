@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { sitePerimetre, isRestreint } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
@@ -32,6 +33,9 @@ export async function getIncidents(req: Request, res: Response, next: NextFuncti
     if (statut) where.statut = statut;
     if (site_id) where.siteId = site_id;
     if (technicien_id) where.technicienId = technicien_id;
+    // Périmètre prestataire : incidents des sites de ses lots uniquement.
+    const perimetre = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetre)) where.site = { ...(where.site as object ?? {}), ...perimetre };
     if (region) where.site = { region };
 
     const { data, meta } = await paginate(

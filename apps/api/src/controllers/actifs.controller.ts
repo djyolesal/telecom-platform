@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { allowedSiteIds } from '../utils/perimetre';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
@@ -127,7 +128,11 @@ async function fetchActifs(query: Record<string, string>): Promise<ActifDTO[]> {
 
 export async function listActifs(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json({ success: true, data: await fetchActifs(req.query as Record<string, string>) });
+    let data = await fetchActifs(req.query as Record<string, string>);
+    // Périmètre prestataire : actifs de ses sites + dépôt (siteId null) seulement.
+    const ids = await allowedSiteIds(req.user!.id);
+    if (ids) data = data.filter((a) => !a.siteId || ids.has(a.siteId));
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 

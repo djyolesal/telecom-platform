@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { sitePerimetre, isRestreint } from '../utils/perimetre';
 import { parseISO } from 'date-fns';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
@@ -154,6 +155,8 @@ export async function getDepotages(req: Request, res: Response, next: NextFuncti
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
     if (fournisseur) where.fournisseur = { contains: fournisseur, mode: 'insensitive' };
+    const perimetre = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetre)) where.site = perimetre;
     if (date_debut || date_fin) {
       where.dateDepotage = {
         ...(date_debut ? { gte: parseISO(date_debut) } : {}),

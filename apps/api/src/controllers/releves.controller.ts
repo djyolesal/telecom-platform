@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { sitePerimetre, isRestreint } from '../utils/perimetre';
 import { parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
@@ -46,6 +47,8 @@ export async function getReleves(req: Request, res: Response, next: NextFunction
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
     if (source) where.source = source;
+    const perimetre = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetre)) where.site = perimetre;
     if (date_debut || date_fin) {
       where.dateReleve = {
         ...(date_debut ? { gte: parseISO(date_debut) } : {}),

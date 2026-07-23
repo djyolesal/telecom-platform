@@ -13,6 +13,7 @@ import { computeEmpreinteCarbone, co2GasoilKg, co2ReseauKg } from '../services/c
 import { carboneFactors } from '../services/settings.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
+import { sitePerimetre, isRestreint } from '../utils/perimetre';
 
 /** Dernier relevé GE (volume gasoil) par site. */
 async function dernierStockParSite(): Promise<Map<string, number>> {
@@ -128,8 +129,9 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
 export async function getStockCarburant(req: Request, res: Response, next: NextFunction) {
   try {
     const { region } = req.query as Record<string, string>;
+    const perimetre = await sitePerimetre(req.user!.id);
     const sites = await prisma.site.findMany({
-      where: { isActive: true, ...(region ? { region } : {}) },
+      where: { isActive: true, ...(region ? { region } : {}), ...perimetre },
       orderBy: { code: 'asc' },
     });
     const stockMap = await dernierStockParSite();
@@ -159,7 +161,11 @@ export async function getConsoEnergie(req: Request, res: Response, next: NextFun
     const since = new Date(Date.now() - parseInt(periode) * 24 * 60 * 60 * 1000);
 
     const releves = await prisma.releveEnergie.findMany({
-      where: { dateReleve: { gte: since }, ...(site_id ? { siteId: site_id } : {}) },
+      where: {
+        dateReleve: { gte: since },
+        ...(site_id ? { siteId: site_id } : {}),
+        ...await (async () => { const pr = await sitePerimetre(req.user!.id); return isRestreint(pr) ? { site: pr } : {}; })(),
+      },
       orderBy: { dateReleve: 'asc' },
       include: { site: { select: { code: true, nom: true } } },
     });
@@ -192,7 +198,8 @@ export async function getRapportMaintenance(req: Request, res: Response, next: N
   try {
     const { periode = '30', region } = req.query as Record<string, string>;
     const since = new Date(Date.now() - parseInt(periode) * 24 * 60 * 60 * 1000);
-    const where = { datePlanifiee: { gte: since }, ...(region ? { site: { region } } : {}) };
+    const pMnt = await sitePerimetre(req.user!.id);
+    const where = { datePlanifiee: { gte: since }, ...((region || isRestreint(pMnt)) ? { site: { ...(region ? { region } : {}), ...pMnt } } : {}) };
 
     const maintenances = await prisma.maintenance.findMany({ where, select: { type: true, statut: true, categorie: true, dureeMinutes: true } });
 
@@ -226,7 +233,10 @@ export async function getRapportIncidents(req: Request, res: Response, next: Nex
     const { periode = '30', region } = req.query as Record<string, string>;
     const since = new Date(Date.now() - parseInt(periode) * 24 * 60 * 60 * 1000);
     const incidents = await prisma.incident.findMany({
-      where: { dateOuverture: { gte: since }, ...(region ? { site: { region } } : {}) },
+      where: {
+        dateOuverture: { gte: since },
+        ...await (async () => { const pr = await sitePerimetre(req.user!.id); return (region || isRestreint(pr)) ? { site: { ...(region ? { region } : {}), ...pr } } : {}; })(),
+      },
       select: { type: true, severite: true, statut: true, dureeCoupureMinutes: true, delaiInterventionMinutes: true },
     });
 
@@ -344,7 +354,7 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
         categorie: { in: PASSIVE_CATS as never[] },
         dateFin: { gte: since },
         ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
-        ...(region ? { site: { region } } : {}),
+        ...await (async () => { const pr = await sitePerimetre(req.user!.id); return (region || isRestreint(pr)) ? { site: { ...(region ? { region } : {}), ...pr } } : {}; })(),
       },
       select: {
         prestataireId: true,

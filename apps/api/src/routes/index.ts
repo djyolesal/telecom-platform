@@ -3,6 +3,7 @@ import { authMiddleware } from '../middlewares/auth';
 import { AppError } from '../utils/AppError';
 import { rbac } from '../middlewares/rbac';
 import { rateLimit } from '../middlewares/rateLimit';
+import { prisma as _prisma } from '../config/database';
 
 // Controllers
 import * as authCtrl from '../controllers/auth.controller';
@@ -58,6 +59,31 @@ router.use((req, _res, next) => {
   if (req.user?.role !== 'TRANSPORTEUR') return next();
   if (TRANSPORTEUR_ALLOW.some((re) => re.test(req.path))) return next();
   next(new AppError("Accès réservé : un compte transporteur est limité à l'appro carburant.", 403));
+});
+
+// ── Rapports agrégés du parc : équipes INTERNES uniquement ────
+// Un utilisateur rattaché à un prestataire (superviseur ou technicien) n'a pas
+// accès aux agrégats parc entier (logistique, anomalies, empreinte carbone…) :
+// ses vues par site sont périmétrées, les totaux du parc restent internes.
+const INTERNE_ONLY: RegExp[] = [
+  /^\/rapports\/echeancier-preventif$/,
+  /^\/rapports\/fiche-validation$/,
+  /^\/rapports\/fiches-validation\/batch$/,
+  /^\/rapports\/reapprovisionnement$/,
+  /^\/rapports\/anomalies-conso$/,
+  /^\/rapports\/anomalies-carburant$/,
+  /^\/rapports\/synthese-appro$/,
+  /^\/rapports\/manquants-livraison(\/|$)/,
+  /^\/rapports\/correlation-carburant$/,
+  /^\/rapports\/empreinte-carbone$/,
+];
+router.use(async (req, _res, next) => {
+  try {
+    if (!req.user || !INTERNE_ONLY.some((re) => re.test(req.path))) return next();
+    const me = await _prisma.user.findUnique({ where: { id: req.user.id }, select: { prestataireId: true } });
+    if (me?.prestataireId) return next(new AppError('Rapport réservé aux équipes internes.', 403));
+    next();
+  } catch (e) { next(e); }
 });
 
 // Plafond anti-DoS applicatif sur la génération LOURDE (PDF, exports xlsx/pdf/csv,

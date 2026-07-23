@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { sitePerimetre, isRestreint } from '../utils/perimetre';
 import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
@@ -863,10 +864,11 @@ export async function getPlanning(req: Request, res: Response, next: NextFunctio
     const debut = startOfWeek(ref, { weekStartsOn: 1 });
     const fin = endOfWeek(ref, { weekStartsOn: 1 });
 
+    const perimetre = await sitePerimetre(req.user!.id);
     const maintenances = await prisma.maintenance.findMany({
       where: {
         datePlanifiee: { gte: debut, lte: fin },
-        ...(region ? { site: { region } } : {}),
+        ...((region || isRestreint(perimetre)) ? { site: { ...(region ? { region } : {}), ...perimetre } } : {}),
       },
       orderBy: { datePlanifiee: 'asc' },
       include: {
@@ -886,6 +888,8 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
     if (type) where.type = type;
     if (statut) where.statut = statut;
     if (site_id) where.siteId = site_id;
+    const perimetreExp = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetreExp)) where.site = perimetreExp;
 
     const rows = await prisma.maintenance.findMany({
       where,
