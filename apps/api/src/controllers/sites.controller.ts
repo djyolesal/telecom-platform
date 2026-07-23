@@ -110,7 +110,13 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
 
     const { data, meta } = await paginate(
       prisma.site,
-      { where, orderBy: { [sort]: 'asc' } },
+      {
+        where,
+        orderBy: { [sort]: 'asc' },
+        // La marque GE vit sur les groupes (pas sur le site) : nécessaire à la
+        // colonne optionnelle « Marque GE » de la liste web.
+        include: { groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, marque: true } } },
+      },
       { page: parseInt(page), limit: parseInt(limit) }
     );
 

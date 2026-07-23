@@ -15,8 +15,7 @@ export type ColonneOptionnelle = Column<any> & { description: string };
 export interface SiteOptionnel {
   latitude?: number | string | null;
   longitude?: number | string | null;
-  marqueGE?: string | null;
-  marqueGE2?: string | null;
+  groupes?: { numero: number; marque?: string | null }[];
   hasGardien?: boolean | null;
   societeGardiennage?: string | null;
   telephoneSite?: string | null;
@@ -51,8 +50,12 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
       ) : ('—'),
   },
   {
-    key: 'marqueGE', header: 'Marque GE', description: 'Marque du groupe électrogène (GE2 entre parenthèses)',
-    render: (s: SiteOptionnel) => (s.marqueGE ? `${s.marqueGE}${s.marqueGE2 ? ` (${s.marqueGE2})` : ''}` : '—'),
+    key: 'marqueGE', header: 'Marque GE', description: 'Marque des groupes électrogènes du site',
+    sortValue: (s: SiteOptionnel) => s.groupes?.find((g) => g.marque)?.marque ?? null,
+    render: (s: SiteOptionnel) => {
+      const marques = (s.groupes ?? []).map((g) => g.marque).filter((m): m is string => !!m);
+      return marques.length ? [...new Set(marques)].join(' / ') : '—';
+    },
   },
   {
     key: 'gardiennage', header: 'Gardiennage', description: 'Présence d’un gardien et société de gardiennage',
