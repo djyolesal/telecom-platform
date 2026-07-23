@@ -16,7 +16,8 @@ import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/state
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS } from '@/lib/constants';
-import { SITE_COLONNES_OPTIONNELLES, SiteOptionnel } from '@/lib/siteColumns';
+import { SiteOptionnel } from '@/lib/optionalColumns';
+import { useColonnesOptionnelles } from '@/lib/hooks/useColonnesOptionnelles';
 
 interface Site extends SiteOptionnel {
   id: string;
@@ -54,17 +55,7 @@ export default function SitesPage() {
   const sites: Site[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
 
-  // Colonnes optionnelles proposées : catalogue filtré par la liste que
-  // l'administrateur autorise (Administration → Colonnes des tableaux).
-  const { data: appConfig } = useQuery({
-    queryKey: ['app-config'],
-    queryFn: () => api.get('/config').then((r) => r.data.data as { sitesColonnesOptionnelles?: string[] | null }),
-    staleTime: 5 * 60_000,
-  });
-  const autorisees = appConfig?.sitesColonnesOptionnelles ?? null; // null = toutes
-  const colonnesOptionnelles: Column<Site>[] = SITE_COLONNES_OPTIONNELLES
-    .filter((c) => autorisees == null || autorisees.includes(c.key))
-    .map(({ description: _d, ...c }) => ({ ...(c as Column<Site>), defaultHidden: true }));
+  const colonnesOptionnelles = useColonnesOptionnelles<Site>('sites');
 
   const columns: Column<Site>[] = [
     { key: 'nom', header: 'Nom', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },

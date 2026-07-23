@@ -18,6 +18,8 @@ import { TYPES_MAINTENANCE, STATUTS_MAINTENANCE, CATEGORIES_EQUIPEMENT } from '@
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { fmtDateTime } from '@/lib/utils';
 
+import { useColonnesOptionnelles } from '@/lib/hooks/useColonnesOptionnelles';
+
 interface Maintenance {
   id: string;
   reference?: string | null;
@@ -26,6 +28,9 @@ interface Maintenance {
   categorie: string;
   statut: string;
   datePlanifiee: string;
+  dateDebut?: string | null;
+  dateFin?: string | null;
+  dureeMinutes?: number | null;
   site?: { code: string; nom: string; region: string };
   technicien?: { nom: string; prenom: string };
   prestataire?: { id: string; nom: string };
@@ -55,6 +60,7 @@ export default function MaintenancePage() {
 
   const rows: Maintenance[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
+  const colonnesOptionnelles = useColonnesOptionnelles<Maintenance>('maintenances');
 
   const columns: Column<Maintenance>[] = [
     { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
@@ -83,6 +89,7 @@ export default function MaintenancePage() {
     { key: 'statut', header: 'Statut', render: (m) => <StatutMaintBadge value={m.statut} /> },
     { key: 'technicien', header: 'Technicien', render: (m) => (m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—') },
     { key: 'datePlanifiee', header: 'Planifiée', render: (m) => fmtDateTime(m.datePlanifiee) },
+    ...colonnesOptionnelles,
   ];
 
   return (

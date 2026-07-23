@@ -15,11 +15,15 @@ export function getAppConfig(_req: Request, res: Response) {
       minPhotosPreventive: 6,
       minPhotosMouvement: getNum('maintenance.minPhotosMouvement', 2),
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
-      // Colonnes optionnelles de la liste des sites que l'admin autorise à
-      // l'affichage (null = toutes celles du catalogue web).
-      sitesColonnesOptionnelles: (() => {
-        const v = getRaw('web.sitesColonnesOptionnelles');
-        return Array.isArray(v) ? (v as string[]) : null;
+      // Colonnes optionnelles par tableau que l'admin autorise à l'affichage
+      // (null = toutes celles du catalogue web).
+      colonnesOptionnelles: (() => {
+        const arr = (k: string) => { const v = getRaw(k); return Array.isArray(v) ? (v as string[]) : null; };
+        return {
+          sites: arr('web.colonnesOptionnelles.sites'),
+          maintenances: arr('web.colonnesOptionnelles.maintenances'),
+          depotages: arr('web.colonnesOptionnelles.depotages'),
+        };
       })(),
     },
   });

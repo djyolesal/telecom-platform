@@ -7,38 +7,48 @@ import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
-import { SITE_COLONNES_OPTIONNELLES } from '@/lib/siteColumns';
+import { COLONNES_OPTIONNELLES, TableOptionnelle } from '@/lib/optionalColumns';
+
+const TABLES = Object.keys(COLONNES_OPTIONNELLES) as TableOptionnelle[];
 
 /**
- * L'administrateur choisit quelles colonnes OPTIONNELLES de la liste des sites
- * sont proposées aux utilisateurs dans le sélecteur « Colonnes ». La sélection
- * est stockée dans SystemSettings (web.sitesColonnesOptionnelles) et servie via
- * /config — effet immédiat, sans redéploiement.
+ * L'administrateur choisit, tableau par tableau, quelles colonnes OPTIONNELLES
+ * sont proposées aux utilisateurs dans le sélecteur « Colonnes ». Stocké dans
+ * SystemSettings (web.colonnesOptionnelles.<table>) et servi via /config —
+ * effet immédiat, sans redéploiement.
  */
 export default function ColonnesTableauxPage() {
   const queryClient = useQueryClient();
-  const [actives, setActives] = useState<Set<string>>(new Set());
+  const [actives, setActives] = useState<Record<TableOptionnelle, Set<string>>>({
+    sites: new Set(), maintenances: new Set(), depotages: new Set(),
+  });
   const [savedOk, setSavedOk] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['app-config'],
-    queryFn: () => api.get('/config').then((r) => r.data.data as { sitesColonnesOptionnelles?: string[] | null }),
+    queryFn: () => api.get('/config').then((r) => r.data.data as {
+      colonnesOptionnelles?: Partial<Record<TableOptionnelle, string[] | null>> | null;
+    }),
   });
 
   // null = toutes autorisées (défaut).
   useEffect(() => {
     if (data === undefined) return;
-    const autorisees = data.sitesColonnesOptionnelles;
-    setActives(new Set(autorisees ?? SITE_COLONNES_OPTIONNELLES.map((c) => c.key)));
+    const next = {} as Record<TableOptionnelle, Set<string>>;
+    for (const t of TABLES) {
+      const autorisees = data.colonnesOptionnelles?.[t];
+      next[t] = new Set(autorisees ?? COLONNES_OPTIONNELLES[t].colonnes.map((c) => c.key));
+    }
+    setActives(next);
   }, [data]);
 
   const save = useMutation({
     mutationFn: () =>
-      api.put('/admin/settings', [{
-        key: 'web.sitesColonnesOptionnelles',
-        value: SITE_COLONNES_OPTIONNELLES.filter((c) => actives.has(c.key)).map((c) => c.key),
-        description: 'Colonnes optionnelles de la liste des sites proposées aux utilisateurs',
-      }]),
+      api.put('/admin/settings', TABLES.map((t) => ({
+        key: `web.colonnesOptionnelles.${t}`,
+        value: COLONNES_OPTIONNELLES[t].colonnes.filter((c) => actives[t].has(c.key)).map((c) => c.key),
+        description: `Colonnes optionnelles proposées — ${COLONNES_OPTIONNELLES[t].titre}`,
+      }))),
     onSuccess: () => {
       setSavedOk(true);
       queryClient.invalidateQueries({ queryKey: ['app-config'] });
@@ -48,59 +58,70 @@ export default function ColonnesTableauxPage() {
   if (isLoading) return <Loading />;
   if (isError) return <ErrorState message="Configuration indisponible" />;
 
-  const toggle = (key: string) => {
-    const next = new Set(actives);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    setActives(next); setSavedOk(false);
+  const toggle = (table: TableOptionnelle, key: string) => {
+    setActives((prev) => {
+      const next = new Set(prev[table]);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return { ...prev, [table]: next };
+    });
+    setSavedOk(false);
   };
 
   return (
     <div>
       <PageHeader
         title="Colonnes des tableaux"
-        subtitle="Colonnes optionnelles proposées aux utilisateurs dans la liste des sites"
+        subtitle="Colonnes optionnelles proposées aux utilisateurs, tableau par tableau"
         backHref="/administration"
       />
 
-      <div className="max-w-2xl rounded-xl border border-gray-100 bg-white">
-        <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
-          <Columns3 size={16} className="text-[#1B3F6B]" />
-          <span className="text-sm font-semibold text-gray-800">Liste des sites</span>
-          <span className="ml-auto text-xs text-gray-400">{actives.size}/{SITE_COLONNES_OPTIONNELLES.length} proposées</span>
-        </div>
-        <div className="divide-y divide-gray-50">
-          {SITE_COLONNES_OPTIONNELLES.map((c) => (
-            <label key={c.key} className="flex cursor-pointer items-start gap-3 px-5 py-3 hover:bg-gray-50/60">
-              <input
-                type="checkbox"
-                checked={actives.has(c.key)}
-                onChange={() => toggle(c.key)}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#0E7C6B] focus:ring-[#0E7C6B]"
-              />
-              <span>
-                <span className="block text-sm font-medium text-gray-800">{c.header}</span>
-                <span className="block text-xs text-gray-500">{c.description}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 border-t border-gray-100 px-5 py-3">
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? 'Enregistrement…' : 'Enregistrer'}
-          </Button>
-          {savedOk && (
-            <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600">
-              <CheckCircle2 size={16} /> Enregistré — effet immédiat pour tous les utilisateurs
-            </span>
-          )}
-          {save.isError && <span className="text-sm text-red-600">Échec de l’enregistrement</span>}
-        </div>
+      <div className="grid max-w-6xl grid-cols-1 gap-5 lg:grid-cols-3">
+        {TABLES.map((table) => {
+          const def = COLONNES_OPTIONNELLES[table];
+          return (
+            <div key={table} className="rounded-xl border border-gray-100 bg-white">
+              <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
+                <Columns3 size={15} className="text-[#1B3F6B]" />
+                <span className="text-sm font-semibold text-gray-800">{def.titre}</span>
+                <span className="ml-auto text-xs text-gray-400">{actives[table].size}/{def.colonnes.length}</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {def.colonnes.map((c) => (
+                  <label key={c.key} className="flex cursor-pointer items-start gap-3 px-4 py-2.5 hover:bg-gray-50/60">
+                    <input
+                      type="checkbox"
+                      checked={actives[table].has(c.key)}
+                      onChange={() => toggle(table, c.key)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#0E7C6B] focus:ring-[#0E7C6B]"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-gray-800">{c.header}</span>
+                      <span className="block text-xs text-gray-500">{c.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <p className="mt-4 max-w-2xl text-xs text-gray-400">
-        Les colonnes cochées apparaissent dans le menu « Colonnes » de la liste des sites, masquées par défaut :
-        chaque utilisateur active celles qu'il veut, et son choix est mémorisé sur son navigateur. Décocher une
-        colonne ici la retire pour tout le monde.
+      <div className="mt-5 flex max-w-6xl items-center gap-3">
+        <Button onClick={() => save.mutate()} disabled={save.isPending}>
+          {save.isPending ? 'Enregistrement…' : 'Enregistrer'}
+        </Button>
+        {savedOk && (
+          <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600">
+            <CheckCircle2 size={16} /> Enregistré — effet immédiat pour tous les utilisateurs
+          </span>
+        )}
+        {save.isError && <span className="text-sm text-red-600">Échec de l’enregistrement</span>}
+      </div>
+
+      <p className="mt-4 max-w-3xl text-xs text-gray-400">
+        Les colonnes cochées apparaissent dans le menu « Colonnes » du tableau concerné, masquées par défaut :
+        chaque utilisateur active celles qu'il veut, mémorisées sur son navigateur. Décocher une colonne ici la
+        retire du menu pour tout le monde.
       </p>
     </div>
   );

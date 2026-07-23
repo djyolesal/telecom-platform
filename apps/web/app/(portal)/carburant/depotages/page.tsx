@@ -15,6 +15,8 @@ import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/state
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
+import { useColonnesOptionnelles } from '@/lib/hooks/useColonnesOptionnelles';
+
 interface Depotage {
   id: string;
   reference?: string | null;
@@ -24,6 +26,10 @@ interface Depotage {
   ecartLivraisonLitres?: number | null;
   fournisseur?: string;
   photoCount?: number;
+  numeroBonLivraison?: string | null;
+  stockAvantLitres?: number | null;
+  coutTotal?: number | null;
+  technicien?: { nom: string; prenom: string } | null;
   site?: { code: string; nom: string; region: string };
 }
 
@@ -42,6 +48,7 @@ function DepotagesPageInner() {
 
   const rows: Depotage[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
+  const colonnesOptionnelles = useColonnesOptionnelles<Depotage>('depotages');
 
   const columns: Column<Depotage>[] = [
     { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
@@ -72,6 +79,7 @@ function DepotagesPageInner() {
           <span className="text-gray-300">—</span>
         ),
     },
+    ...colonnesOptionnelles,
   ];
 
   return (
