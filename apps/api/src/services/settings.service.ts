@@ -24,6 +24,11 @@ export async function loadSettings(): Promise<void> {
   }
 }
 
+/** Valeur brute d'un paramètre (Json) — null si absente. */
+export function getRaw(key: string): unknown {
+  return cache.get(key) ?? null;
+}
+
 export function getNum(key: string, fallback: number): number {
   const v = cache.get(key);
   if (v == null) return fallback;

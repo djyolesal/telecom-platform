@@ -14,6 +14,8 @@ export interface Column<T> {
   sortable?: boolean;
   /** Valeur de tri pour les colonnes calculées (sinon la donnée brute row[key]). */
   sortValue?: (row: T) => unknown;
+  /** true = masquée au premier affichage (activable via le sélecteur « Colonnes »). */
+  defaultHidden?: boolean;
 }
 
 /** Comparateur tolérant : numérique quand les deux valeurs le sont, sinon texte (fr). */
@@ -57,7 +59,9 @@ export function DataTable<T>({
     () => `datatable:${typeof window !== 'undefined' ? window.location.pathname : ''}:${columns.map((c) => c.key).join('|')}`,
     [columns]
   );
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [hidden, setHidden] = useState<Set<string>>(
+    () => new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key))
+  );
   const [dense, setDense] = useState(false);
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
