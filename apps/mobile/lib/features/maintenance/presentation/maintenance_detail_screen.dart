@@ -175,40 +175,14 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
   Future<void> _suspend(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();
-    final ctrl = TextEditingController();
+    // Le contrôleur du champ appartient au DIALOGUE (State dédié) : le framework
+    // le détruit après le démontage complet. Un dispose() juste après showDialog
+    // tuait le contrôleur pendant l'animation de fermeture (« Annuler ») →
+    // assertion `_dependents.isEmpty` (écran rouge).
     final motif = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Suspendre la maintenance'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          maxLength: 200,
-          decoration: const InputDecoration(
-            labelText: 'Motif (obligatoire)',
-            hintText: 'ex. Urgence INC-2026-00112 sur un autre site',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          // Le motif doit faire ≥ 5 caractères ; sinon retour visuel explicite.
-          FilledButton(
-            onPressed: () {
-              final v = ctrl.text.trim();
-              if (v.length >= 5) {
-                Navigator.pop(ctx, v);
-              } else {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Motif trop court (5 caractères minimum)')),
-                );
-              }
-            },
-            child: const Text('Suspendre'),
-          ),
-        ],
-      ),
+      builder: (_) => const _MotifSuspensionDialog(),
     );
-    ctrl.dispose(); // évite la fuite du contrôleur à chaque ouverture du dialogue
     if (motif == null || !mounted) return;
     setState(() => _busy = true);
     try {
@@ -918,6 +892,57 @@ class _CloseSheetState extends State<_CloseSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Dialogue de motif de suspension : possède SON contrôleur de texte (détruit
+/// par le framework après démontage — jamais pendant l'animation de fermeture).
+class _MotifSuspensionDialog extends StatefulWidget {
+  const _MotifSuspensionDialog();
+  @override
+  State<_MotifSuspensionDialog> createState() => _MotifSuspensionDialogState();
+}
+
+class _MotifSuspensionDialogState extends State<_MotifSuspensionDialog> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Suspendre la maintenance'),
+      content: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        maxLength: 200,
+        decoration: const InputDecoration(
+          labelText: 'Motif (obligatoire)',
+          hintText: 'ex. Urgence INC-2026-00112 sur un autre site',
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        // Le motif doit faire ≥ 5 caractères ; sinon retour visuel explicite.
+        FilledButton(
+          onPressed: () {
+            final v = _ctrl.text.trim();
+            if (v.length >= 5) {
+              Navigator.pop(context, v);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Motif trop court (5 caractères minimum)')),
+              );
+            }
+          },
+          child: const Text('Suspendre'),
+        ),
+      ],
     );
   }
 }
