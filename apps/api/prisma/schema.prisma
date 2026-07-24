@@ -197,6 +197,10 @@ model Site {
   incidents       Incident[]
   groupes         GroupeElectrogene[]
   coupuresReseau  CoupureReseau[]
+  // Topologie de transmission : site AMONT dont dépend le lien de ce site.
+  parentTransmissionId String? @map("parent_transmission_id")
+  parentTransmission   Site?   @relation("TransmissionSite", fields: [parentTransmissionId], references: [id])
+  enfantsTransmission  Site[]  @relation("TransmissionSite")
   equipementsActifs EquipementActif[]
   lignesLivraison LigneLivraison[]
 
@@ -810,10 +814,15 @@ model CoupureReseau {
   typeAlarme          String?   @map("type_alarme") @db.VarChar(10)
   nocEngineer         String?   @map("noc_engineer") @db.VarChar(100)
   observations        String?
+  // LOCALE = cause racine sur ce site ; HERITEE = impact d'une coupure amont.
+  origine             String    @default("LOCALE") @db.VarChar(10)
+  coupureOrigineId    String?   @map("coupure_origine_id")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  site Site @relation(fields: [siteId], references: [id])
+  site           Site            @relation(fields: [siteId], references: [id])
+  coupureOrigine CoupureReseau?  @relation("CoupureHeritee", fields: [coupureOrigineId], references: [id])
+  heritees       CoupureReseau[] @relation("CoupureHeritee")
 
   @@index([siteId])
   @@index([dateDebut])

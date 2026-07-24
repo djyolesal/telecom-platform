@@ -122,6 +122,17 @@ export default function SiteDetailPage() {
 
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
         <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-gray-700"><Building2 size={15} /> Rattachement</h3>
+        {(site.parentTransmission || (site.enfantsTransmission?.length ?? 0) > 0) && (
+          <div className="mb-3 rounded-lg bg-[#EAF1F8] px-4 py-2.5 text-sm">
+            <span className="text-gray-500">Transmission : </span>
+            {site.parentTransmission
+              ? <>dépend de <b className="text-gray-800">{site.parentTransmission.nom}</b></>
+              : <span className="text-gray-700">raccordement direct</span>}
+            {(site.enfantsTransmission?.length ?? 0) > 0 && (
+              <span className="text-gray-600"> · alimente <b>{site.enfantsTransmission.length}</b> site(s) en aval : {site.enfantsTransmission.map((e: { nom: string }) => e.nom).join(', ')}</span>
+            )}
+          </div>
+        )}
         {!site.lot ? (
           <p className="text-sm text-gray-500">Aucun lot rattaché — utilisez « Modifier » pour l&apos;affecter à un lot.</p>
         ) : (

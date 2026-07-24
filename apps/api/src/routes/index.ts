@@ -123,6 +123,7 @@ router.get('/sites/:id', sitesCtrl.getSiteById);
 router.put('/sites/:id', rbac(['MANAGER','ADMIN']), sitesCtrl.updateSite);
 router.put('/sites/:id/groupes', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceSiteGroupes);
 router.delete('/sites/:id', rbac(['ADMIN']), sitesCtrl.deleteSite);
+router.get('/sites/:id/transmission', sitesCtrl.getSiteTransmission);
 router.get('/sites/:id/taches-preventives', tachesCtrl.getTachesForSite);
 router.get('/sites/:id/stock', sitesCtrl.getSiteStock);
 router.get('/sites/:id/maintenances', sitesCtrl.getSiteMaintenances);

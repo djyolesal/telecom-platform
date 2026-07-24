@@ -6,6 +6,7 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
+import { descendantsTransmission } from '../utils/transmission';
 
 export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
 
@@ -37,7 +38,15 @@ export async function getCoupures(req: Request, res: Response, next: NextFunctio
     }
     const { data, meta } = await paginate(
       prisma.coupureReseau,
-      { where, orderBy: { dateDebut: 'desc' }, include: { site: { select: { nom: true, region: true } } } },
+      {
+        where,
+        orderBy: { dateDebut: 'desc' },
+        include: {
+          site: { select: { nom: true, region: true } },
+          coupureOrigine: { select: { id: true, site: { select: { nom: true } } } },
+          _count: { select: { heritees: true } },
+        },
+      },
       { page: parseInt(page), limit: parseInt(limit) }
     );
     res.json({ success: true, data, meta });
@@ -75,8 +84,32 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     const rows = await prisma.$transaction(
       technologies.map((technologie) => prisma.coupureReseau.create({ data: { ...champs, technologie } }))
     );
-    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', rows[0].id, { siteId, technologies }, req);
-    res.status(201).json({ success: true, data: rows });
+
+    // Propagation à l'AVAL de transmission : les descendants perdent leur lien
+    // → une coupure SITE entier « héritée » par site aval, liée à la racine.
+    let sitesImpactes = 0;
+    if (b.propagerAval === true) {
+      const aval = await descendantsTransmission(siteId);
+      if (aval.length) {
+        const racineId = rows[0].id;
+        await prisma.coupureReseau.createMany({
+          data: aval.map((s) => ({
+            siteId: s.id,
+            technologie: 'SITE',
+            dateDebut,
+            cause: champs.cause ?? `Coupure amont — propagation transmission`,
+            typeAlarme: champs.typeAlarme,
+            origine: 'HERITEE',
+            coupureOrigineId: racineId,
+          })),
+          skipDuplicates: true,
+        });
+        sitesImpactes = aval.length;
+      }
+    }
+
+    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', rows[0].id, { siteId, technologies, sitesImpactes }, req);
+    res.status(201).json({ success: true, data: { coupures: rows, sitesImpactes } });
   } catch (err) { next(err); }
 }
 
@@ -107,8 +140,29 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       data.downtimeMinutes = fin ? minutesEntre(existing.dateDebut, fin) : null;
     }
     const updated = await prisma.coupureReseau.update({ where: { id: existing.id }, data });
-    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, { cloture: 'dateFin' in data }, req);
-    res.json({ success: true, data: updated });
+
+    // Clôture en cascade : rétablir la racine rétablit les coupures héritées
+    // encore ouvertes (même heure de fin, downtime calculé pour chacune).
+    let hériteesCloturees = 0;
+    if (data.dateFin instanceof Date && b.cloturerHeritees !== false) {
+      const fin = data.dateFin;
+      const ouvertes = await prisma.coupureReseau.findMany({
+        where: { coupureOrigineId: existing.id, dateFin: null },
+        select: { id: true, dateDebut: true },
+      });
+      if (ouvertes.length) {
+        await prisma.$transaction(ouvertes.map((h) =>
+          prisma.coupureReseau.update({
+            where: { id: h.id },
+            data: { dateFin: fin, downtimeMinutes: minutesEntre(h.dateDebut, fin), actions: (data.actions as string | null) ?? undefined },
+          })
+        ));
+        hériteesCloturees = ouvertes.length;
+      }
+    }
+
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, { cloture: 'dateFin' in data, hériteesCloturees }, req);
+    res.json({ success: true, data: { ...updated, hériteesCloturees } });
   } catch (err) { next(err); }
 }
 

@@ -22,6 +22,7 @@ export default function ModifierSitePage() {
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     hasGardien: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
+    parentTransmissionId: '',
     marqueGE: '',
   });
   const { data: societesGardiennage } = useQuery({
@@ -47,6 +48,13 @@ export default function ModifierSitePage() {
     queryKey: ['lots-select'],
     queryFn: () => api.get('/lots', { params: { limit: 500 } }).then((r) => r.data.data),
   });
+  const { data: tousSites } = useQuery({
+    queryKey: ['sites-all'],
+    queryFn: () => api.get('/sites', { params: { all: 'true' } }).then((r) => r.data.data as { id: string; nom: string }[]),
+    staleTime: 5 * 60_000,
+  });
+  const parentOptions = (tousSites ?? []).filter((s) => s.id !== id).map((s) => ({ value: s.id, label: s.nom }));
+
   const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} — ${l.nom}` }));
 
   useEffect(() => {
@@ -73,6 +81,7 @@ export default function ModifierSitePage() {
       societeGardiennage: site.societeGardiennage ?? '',
       gardiennagePrestataireId: site.gardiennagePrestataireId ?? '',
       telephoneSite: site.telephoneSite ?? '',
+      parentTransmissionId: site.parentTransmissionId ?? '',
       marqueGE: (site.groupes as { numero: number; marque?: string | null }[] | undefined)?.find((g) => g.numero === 1)?.marque ?? '',
     });
     const extras = (site.groupes ?? [])
@@ -103,6 +112,7 @@ export default function ModifierSitePage() {
         societeGardiennage: form.societeGardiennage || null,
         gardiennagePrestataireId: form.gardiennagePrestataireId || null,
         telephoneSite: form.telephoneSite || null,
+        parentTransmissionId: form.parentTransmissionId || null,
       });
       // Synchronise la liste des GE : n°1 = champs ci-dessus, n°2+ = liste supplémentaire.
       const groupes: { numero: number; puissanceKva: number; statut: string; marque?: string }[] = [];
@@ -198,6 +208,9 @@ export default function ModifierSitePage() {
           </Field>
           <Field label="Téléphone du site (gardien / contact local)">
             <Input value={form.telephoneSite} onChange={(e) => set('telephoneSite', e.target.value)} placeholder="+228 90 00 00 00" />
+          </Field>
+          <Field label="Site parent (transmission) — une coupure amont impacte ce site">
+            <Select value={form.parentTransmissionId} onChange={(e) => set('parentTransmissionId', e.target.value)} options={parentOptions} placeholder="Aucun (raccordement direct)" />
           </Field>
 
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">

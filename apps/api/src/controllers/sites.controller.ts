@@ -14,6 +14,7 @@ import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
 import { generateEtiquettesQrPdf } from '../services/pdf.service';
 import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
+import { descendantsTransmission, assertSansCycle } from '../utils/transmission';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
 const IMPORT_COLUMNS = [
@@ -140,6 +141,8 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         },
         gardiennagePrestataire: { select: { id: true, nom: true, contactTechnique: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
+        parentTransmission: { select: { id: true, nom: true } },
+        enfantsTransmission: { where: { isActive: true }, select: { id: true, nom: true }, orderBy: { nom: 'asc' } },
       },
     });
     if (!site) throw new AppError('Site introuvable', 404);
@@ -170,6 +173,20 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
+/** Topologie de transmission d'un site : parent et AVAL complet (récursif). */
+export async function getSiteTransmission(req: Request, res: Response, next: NextFunction) {
+  try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
+    const site = await prisma.site.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, nom: true, parentTransmission: { select: { id: true, nom: true } } },
+    });
+    if (!site) throw new AppError('Site introuvable', 404);
+    const aval = await descendantsTransmission(site.id);
+    res.json({ success: true, data: { parent: site.parentTransmission, aval } });
+  } catch (err) { next(err); }
+}
+
 export async function createSite(req: Request, res: Response, next: NextFunction) {
   try {
     // marqueGE ne vit pas sur le site : extraite du corps, posée sur le GE n°1.
@@ -181,6 +198,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
+      'parentTransmissionId',
     ]);
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
       throw new AppError('Nom, code, région, configuration énergie et statut GE sont requis.', 400);
@@ -211,8 +229,13 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
+      'parentTransmissionId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
+    // Topologie : un parent de transmission ne doit jamais créer de cycle.
+    if (typeof data.parentTransmissionId === 'string' && data.parentTransmissionId) {
+      await assertSansCycle(site.id, data.parentTransmissionId);
+    }
     const updated = await prisma.site.update({ where: { id: req.params.id }, data });
     await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { after: data }, req);
     await cacheService.invalidate('sites:geojson*');

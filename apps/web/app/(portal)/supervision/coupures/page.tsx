@@ -29,6 +29,9 @@ interface Coupure {
   technicienContacte?: string | null;
   intervenants?: string | null;
   observations?: string | null;
+  origine?: string;
+  coupureOrigine?: { id: string; site?: { nom: string } } | null;
+  _count?: { heritees: number };
   site?: { nom: string; region: string };
 }
 
@@ -84,7 +87,24 @@ export default function CoupuresReseauPage() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Coupure>[] = [
-    { key: 'site', header: 'Site', sortValue: (c) => c.site?.nom, render: (c) => <span className="font-medium text-gray-800">{c.site?.nom ?? '—'}</span> },
+    {
+      key: 'site', header: 'Site', sortValue: (c) => c.site?.nom,
+      render: (c) => (
+        <span className="font-medium text-gray-800">
+          {c.site?.nom ?? '—'}
+          {c.origine === 'HERITEE' && (
+            <span className="ml-1.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700" title={`Impact hérité de ${c.coupureOrigine?.site?.nom ?? 'un site amont'}`}>
+              ← {c.coupureOrigine?.site?.nom ?? 'amont'}
+            </span>
+          )}
+          {(c._count?.heritees ?? 0) > 0 && (
+            <span className="ml-1.5 rounded-full bg-[#EAF1F8] px-1.5 py-0.5 text-[10px] font-bold text-[#1B3F6B]" title="Coupure racine : sites impactés en aval">
+              {c._count!.heritees} impacté(s)
+            </span>
+          )}
+        </span>
+      ),
+    },
     { key: 'technologie', header: 'Technologie', render: (c) => <TechnoBadge t={c.technologie} /> },
     { key: 'dateDebut', header: 'Début', render: (c) => fmtDateTime(c.dateDebut) },
     {
@@ -157,11 +177,20 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [cause, setCause] = useState('');
   const [technicien, setTechnicien] = useState('');
   const [observations, setObservations] = useState('');
+  const [propagerAval, setPropagerAval] = useState(true);
+
+  const { data: transmission } = useQuery({
+    queryKey: ['site-transmission', siteId],
+    queryFn: () => api.get(`/sites/${siteId}/transmission`).then((r) => r.data.data as { aval: { id: string; nom: string }[] }),
+    enabled: !!siteId,
+  });
+  const nbAval = transmission?.aval.length ?? 0;
 
   const mutation = useMutation({
     mutationFn: () => api.post('/coupures-reseau', {
       siteId,
       technologies: [...technos],
+      propagerAval: nbAval > 0 && propagerAval,
       dateDebut,
       typeAlarme: typeAlarme || undefined,
       cause: cause || undefined,
@@ -208,6 +237,12 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
       <Field label="Cause constatée"><Input value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" /></Field>
       <Field label="Technicien contacté"><Input value={technicien} onChange={(e) => setTechnicien(e.target.value)} /></Field>
       <Field label="Observations"><Textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} /></Field>
+      {nbAval > 0 && (
+        <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+          <input type="checkbox" checked={propagerAval} onChange={(e) => setPropagerAval(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-amber-300" />
+          <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) — <b>propager la coupure</b> à tout l'aval (coupures « héritées », clôturées en cascade avec celle-ci).</span>
+        </label>
+      )}
       {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Annuler</button>
@@ -228,10 +263,13 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const [actions, setActions] = useState(coupure.actions ?? '');
   const [typeAlarme, setTypeAlarme] = useState(coupure.typeAlarme ?? '');
   const [intervenants, setIntervenants] = useState(coupure.intervenants ?? '');
+  const [cloturerHeritees, setCloturerHeritees] = useState(true);
+  const nbHeritees = coupure._count?.heritees ?? 0;
 
   const mutation = useMutation({
     mutationFn: () => api.put(`/coupures-reseau/${coupure.id}`, {
       dateFin: dateFin || null,
+      cloturerHeritees,
       cause: cause || null,
       actions: actions || null,
       typeAlarme: typeAlarme || null,
@@ -255,6 +293,12 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       </div>
       <Field label="Cause"><Input value={cause} onChange={(e) => setCause(e.target.value)} /></Field>
       <Field label="Actions effectuées"><Input value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" /></Field>
+      {nbHeritees > 0 && dateFin && (
+        <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-[#EAF1F8] p-3 text-sm text-[#1B3F6B]">
+          <input type="checkbox" checked={cloturerHeritees} onChange={(e) => setCloturerHeritees(e.target.checked)} className="mt-0.5 h-4 w-4 rounded" />
+          <span>Clôturer aussi les <b>{nbHeritees} coupure(s) héritée(s)</b> des sites en aval (même heure de rétablissement).</span>
+        </label>
+      )}
       {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Annuler</button>
