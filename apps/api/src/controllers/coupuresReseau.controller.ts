@@ -125,11 +125,29 @@ export async function deleteCoupure(req: Request, res: Response, next: NextFunct
 const norm = (s: unknown) =>
   String(s ?? '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
 
-/** Combine colonnes date + heure du rapport (heure parfois texte « 08:00:00 »). */
+/** Sérial Excel (jours depuis 1899-12-30) → Date JS. */
+function depuisSerialExcel(serial: number): Date {
+  return new Date(Date.UTC(1899, 11, 30) + Math.round(serial * 86_400_000));
+}
+
+/**
+ * Combine colonnes date + heure du rapport (heure parfois texte « 08:00:00 »).
+ * En lecture en flux, les cellules datées arrivent en NUMÉROS DE SÉRIE Excel
+ * (le style de format n'est pas chargé) : new Date('45809') fabriquait
+ * l'an 45809, refusé par Prisma. On convertit le sérial, et toute date hors
+ * d'une plage plausible est rejetée (ligne signalée plutôt qu'insérée fausse).
+ */
 function combiner(dateVal: unknown, heureVal: unknown): Date | null {
   if (dateVal == null || dateVal === 'N/A' || dateVal === '-') return null;
-  const d = dateVal instanceof Date ? new Date(dateVal) : new Date(String(dateVal));
+  let d: Date;
+  if (dateVal instanceof Date) d = new Date(dateVal);
+  else if (typeof dateVal === 'number') d = depuisSerialExcel(dateVal);
+  else if (/^\d{4,6}(\.\d+)?$/.test(String(dateVal).trim())) d = depuisSerialExcel(Number(dateVal));
+  else d = new Date(String(dateVal));
   if (Number.isNaN(d.getTime())) return null;
+  // Garde-fou : le rapport NOC ne peut contenir que des dates « récentes ».
+  const annee = d.getFullYear();
+  if (annee < 2015 || annee > 2035) return null;
   if (heureVal instanceof Date) {
     d.setHours(heureVal.getUTCHours(), heureVal.getUTCMinutes(), 0, 0);
   } else if (typeof heureVal === 'string' && /^\d{1,2}:\d{2}/.test(heureVal.trim())) {
