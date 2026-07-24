@@ -291,8 +291,8 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   return (
     <Modal titre="Importer le rapport de supervision" onClose={onClose}>
       <p className="mb-3 text-sm text-gray-600">
-        Fichier <b>.xlsx</b> du NOC — feuilles <code className="text-xs">Events</code> (coupures par cellule) et{' '}
-        <code className="text-xs">SITES HUAWEI</code> (site entier). Ré-importer le même rapport ne crée pas de doublons.
+        Fichier <b>.xlsx</b> du NOC — seule la feuille <code className="text-xs">Events</code> est importée.
+        Ré-importer le même rapport ne crée pas de doublons.
       </p>
       <input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         className="mb-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1B3F6B] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#16345a]" />

@@ -150,8 +150,7 @@ const cell = (row: { getCell(i: number): { value: unknown } }, i: number): unkno
 };
 
 /**
- * Import des feuilles « Events » (coupures par cellule) et « SITES HUAWEI »
- * (site entier). Idempotent : l'index d'unicité (site, technologie, fréquence,
+ * Import de la feuille « Events » uniquement. Idempotent : l'index d'unicité (site, technologie, fréquence,
  * début) fait qu'un ré-import du rapport cumulatif ne crée pas de doublons.
  */
 export async function importCoupures(req: Request, res: Response, next: NextFunction) {
@@ -213,7 +212,9 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     // déclarée sur toute la grille Excel) — le chargement complet dépassait la
     // limite mémoire du conteneur (1 Go) et faisait tomber l'API (502).
     // Ici : ligne à ligne (~90 Mo de pointe), feuilles inutiles ignorées.
-    const FEUILLES: Record<string, string | null> = { Events: null, 'SITES HUAWEI': 'SITE' };
+    // Seule la feuille « Events » fait foi (décision métier) — les autres
+    // feuilles du classeur sont parcourues sans être importées.
+    const FEUILLES: Record<string, string | null> = { Events: null };
     const lecteur = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(req.file.buffer), {
       entries: 'emit', sharedStrings: 'cache', hyperlinks: 'ignore', styles: 'ignore', worksheets: 'emit',
     });
