@@ -272,7 +272,8 @@
       "Bash(awk '/export async function listActifs/,/^}/' src/controllers/actifs.controller.ts)",
       "mcp__visualize__read_me",
       "mcp__visualize__show_widget",
-      "Bash(git commit -q -m 'fix\\(web\\): colonne Marque GE vide — lire la marque sur les groupes électrogènes *)"
+      "Bash(git commit -q -m 'fix\\(web\\): colonne Marque GE vide — lire la marque sur les groupes électrogènes *)",
+      "Bash(git commit -q -m 'fix\\(coupures-reseau\\): n'\\\\''importer que la feuille Events \\(décision métier\\) *)"
     ]
   }
 }
