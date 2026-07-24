@@ -25,6 +25,7 @@ import * as lotsCtrl from '../controllers/lots.controller';
 import * as tachesCtrl from '../controllers/taches.controller';
 import * as configCtrl from '../controllers/config.controller';
 import * as carburantCtrl from '../controllers/carburantLogistique.controller';
+import * as coupuresCtrl from '../controllers/coupuresReseau.controller';
 import { uploadMiddleware, uploadSpreadsheet } from '../middlewares/upload';
 
 export const router = Router();
@@ -77,6 +78,7 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/empreinte-carbone$/,
   /^\/rapports\/mensuel(\/|$)/,
   /^\/rapports\/gardiennage$/,
+  /^\/rapports\/disponibilite-reseau$/,
 ];
 router.use(async (req, _res, next) => {
   try {
@@ -129,6 +131,14 @@ router.get('/sites/:id/releves', sitesCtrl.getSiteReleves);
 router.get('/sites/:id/incidents', sitesCtrl.getSiteIncidents);
 router.get('/sites/:id/lignes-livraison', carburantCtrl.getLignesLivraisonForSite);
 router.get('/sites/:id/etiquettes-qr.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.getEtiquettesQr);
+
+// ── Coupures réseau (supervision NOC) ─────────────────────────
+router.get('/coupures-reseau', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getCoupures);
+router.post('/coupures-reseau', rbac(['SUPERVISEUR','MANAGER','ADMIN']), coupuresCtrl.createCoupure);
+router.post('/coupures-reseau/import', rbac(['MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
+router.put('/coupures-reseau/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
+router.delete('/coupures-reseau/:id', rbac(['ADMIN']), coupuresCtrl.deleteCoupure);
+router.get('/rapports/disponibilite-reseau', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);
 
 // ── Prestataires ──────────────────────────────────────────────
 // « Ma société » : le superviseur d'un prestataire complète la fiche de SA société.

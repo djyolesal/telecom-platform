@@ -196,6 +196,7 @@ model Site {
   releves         ReleveEnergie[]
   incidents       Incident[]
   groupes         GroupeElectrogene[]
+  coupuresReseau  CoupureReseau[]
   equipementsActifs EquipementActif[]
   lignesLivraison LigneLivraison[]
 
@@ -785,4 +786,38 @@ model LigneLivraison {
   @@index([bonLivraisonId])
   @@index([siteId])
   @@map("lignes_livraison")
+}
+
+// Coupure réseau (supervision NOC) : indisponibilité radio par technologie
+// (2G/3G/4G/5G) ou site entier. Saisie dans l'app ou importée du rapport Excel.
+// NB : l'unicité (site, technologie, frequence, dateDebut) est portée par un
+// index SQL avec COALESCE (migration 0029) — pas exprimable en Prisma.
+model CoupureReseau {
+  id                  String    @id @default(uuid())
+  siteId              String    @map("site_id")
+  technologie         String    @db.VarChar(12) // 2G | 3G | 4G | 5G | SITE
+  frequence           String?   @db.VarChar(30)
+  secteur             String?   @db.VarChar(20)
+  dateDebut           DateTime  @map("date_debut")
+  dateFin             DateTime? @map("date_fin")
+  downtimeMinutes     Int?      @map("downtime_minutes")
+  heureContact        DateTime? @map("heure_contact")
+  technicienContacte  String?   @map("technicien_contacte") @db.VarChar(100)
+  dateArriveeSite     DateTime? @map("date_arrivee_site")
+  intervenants        String?   @db.VarChar(200)
+  cause               String?   @db.VarChar(300)
+  actions             String?   @db.VarChar(300)
+  typeAlarme          String?   @map("type_alarme") @db.VarChar(10)
+  nocEngineer         String?   @map("noc_engineer") @db.VarChar(100)
+  observations        String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@index([siteId])
+  @@index([dateDebut])
+  @@index([dateFin])
+  @@index([typeAlarme])
+  @@map("coupures_reseau")
 }
