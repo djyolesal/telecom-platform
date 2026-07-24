@@ -173,7 +173,20 @@ export default function MaintenanceDetailPage() {
             );
           })()}
 
-          <PhotoGallery photos={m.photos ?? []} />
+          {(() => {
+            const photos = (m.photos ?? []) as { id: string; url: string; phase?: string | null }[];
+            const avant = photos.filter((p) => p.phase === 'AVANT');
+            const apres = photos.filter((p) => p.phase === 'APRES');
+            const autres = photos.filter((p) => !p.phase);
+            if (!avant.length && !apres.length) return <PhotoGallery photos={photos} />;
+            return (
+              <>
+                {avant.length > 0 && <PhotoGallery photos={avant} title={`Avant travaux (${avant.length})`} />}
+                {apres.length > 0 && <PhotoGallery photos={apres} title={`Après travaux (${apres.length})`} />}
+                {autres.length > 0 && <PhotoGallery photos={autres} title={`Autres photos (${autres.length})`} />}
+              </>
+            );
+          })()}
 
           {m.pieces?.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 p-5">

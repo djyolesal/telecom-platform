@@ -40,6 +40,8 @@ class Maintenance {
   final String? analyseEnergie;
   final List<GroupeGE> siteGroupes;
   final List<String> photoUrls;
+  /// Phases alignées sur photoUrls : 'AVANT' / 'APRES' / null (photo historique).
+  final List<String?> photoPhases;
   final int photoCount;
   /// Vrai si la clôture exige les relevés énergie (calculé par l'API selon la tâche).
   final bool requiresEnergie;
@@ -70,6 +72,7 @@ class Maintenance {
     this.analyseEnergie,
     this.siteGroupes = const [],
     this.photoUrls = const [],
+    this.photoPhases = const [],
     this.photoCount = 0,
     this.requiresEnergie = false,
   });
@@ -86,12 +89,13 @@ class Maintenance {
             ?.map((g) => GroupeGE.fromJson(g as Map<String, dynamic>))
             .toList() ??
         const <GroupeGE>[];
-    final photos = (j['photos'] as List?)
-            ?.map((p) => (p as Map)['url']?.toString())
-            .whereType<String>()
-            .where((u) => u.isNotEmpty)
+    final brutesPhotos = (j['photos'] as List?)
+            ?.whereType<Map>()
+            .where((p) => (p['url']?.toString() ?? '').isNotEmpty)
             .toList() ??
-        const <String>[];
+        const <Map>[];
+    final photos = brutesPhotos.map((p) => p['url'].toString()).toList();
+    final phases = brutesPhotos.map((p) => p['phase']?.toString()).toList();
     return Maintenance(
       id: j['id'] as String,
       reference: j['reference'] as String?,
@@ -118,6 +122,7 @@ class Maintenance {
       analyseEnergie: j['analyseEnergie'] as String?,
       siteGroupes: groupes,
       photoUrls: photos,
+      photoPhases: phases,
       // Liste : compteur via _count.photos ; détail : longueur du tableau photos.
       photoCount: (j['_count'] as Map?)?['photos'] as int? ?? photos.length,
       // Détail : fourni par l'API ; repli aligné sur la règle serveur si absent (liste) :

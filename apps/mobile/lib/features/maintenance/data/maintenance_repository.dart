@@ -2,6 +2,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/network/network_info.dart';
 import '../../../core/sync/sync_service.dart';
 import '../../../core/errors/exceptions.dart';
+import 'maintenance_cache.dart';
 import 'maintenance_model.dart';
 
 class MaintenanceRepository {
@@ -12,7 +13,23 @@ class MaintenanceRepository {
   MaintenanceRepository(this._client, this._network, this._sync);
 
   Future<List<Maintenance>> getMaintenances({String? statut, String? type, String? search, String? siteId}) async {
-    if (!await _network.isConnected) return [];
+    // Hors-ligne : dernier instantané connu (filtres appliqués localement) —
+    // le terrain reste utilisable sans réseau.
+    if (!await _network.isConnected) {
+      final brutes = await MaintenanceCache.readList();
+      final q = search?.trim().toLowerCase() ?? '';
+      return brutes
+          .where((m) =>
+              (statut == null || statut.isEmpty || m['statut'] == statut) &&
+              (type == null || type.isEmpty || m['type'] == type) &&
+              (siteId == null || siteId.isEmpty || m['siteId'] == siteId) &&
+              (q.isEmpty ||
+                  '${m['reference'] ?? ''} ${m['equipement'] ?? ''} ${(m['site'] as Map?)?['nom'] ?? ''}'
+                      .toLowerCase()
+                      .contains(q)))
+          .map((e) => Maintenance.fromJson(e))
+          .toList();
+    }
     return _client.request(
       (dio) => dio.get('/maintenances', queryParameters: {
         'limit': 50,
@@ -21,15 +38,31 @@ class MaintenanceRepository {
         if (search != null && search.isNotEmpty) 'search': search,
         if (siteId != null && siteId.isNotEmpty) 'site_id': siteId,
       }),
-      (data) => (data['data'] as List).map((e) => Maintenance.fromJson(e as Map<String, dynamic>)).toList(),
+      (data) {
+        final brutes = (data['data'] as List).whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+        // Instantané complet uniquement (pas de filtres) : c'est LA base du hors-ligne.
+        if ((statut == null || statut.isEmpty) && (type == null || type.isEmpty) &&
+            (search == null || search.isEmpty) && (siteId == null || siteId.isEmpty)) {
+          MaintenanceCache.saveList(brutes); // best effort, non bloquant
+        }
+        return brutes.map(Maintenance.fromJson).toList();
+      },
     );
   }
 
   Future<Maintenance> getMaintenance(String id) async {
-    if (!await _network.isConnected) throw const ServerException('Maintenance indisponible hors-ligne');
+    if (!await _network.isConnected) {
+      final brut = await MaintenanceCache.byId(id);
+      if (brut != null) return Maintenance.fromJson(brut);
+      throw const ServerException('Maintenance indisponible hors-ligne (ouvrez-la une fois en ligne)');
+    }
     return _client.request(
       (dio) => dio.get('/maintenances/$id'),
-      (data) => Maintenance.fromJson(data['data'] as Map<String, dynamic>),
+      (data) {
+        final brut = (data['data'] as Map).cast<String, dynamic>();
+        MaintenanceCache.upsert(brut); // le détail frais alimente le hors-ligne
+        return Maintenance.fromJson(brut);
+      },
     );
   }
 
@@ -95,26 +128,46 @@ class MaintenanceRepository {
     );
   }
 
-  Future<SubmitResult> start(String id, {double? latitude, double? longitude}) => _sync.submit(
-        endpoint: '/maintenances/$id/start',
-        entityType: 'maintenance_start',
-        payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
-      );
+  Future<SubmitResult> start(String id, {double? latitude, double? longitude}) async {
+    final res = await _sync.submit(
+      endpoint: '/maintenances/$id/start',
+      entityType: 'maintenance_start',
+      payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
+    );
+    // Hors-ligne : l'écran doit montrer l'état réel du travail (Clôturer /
+    // Suspendre disponibles) sans attendre la resynchronisation.
+    if (res.isQueued) {
+      await MaintenanceCache.patch(id, {'statut': 'EN_COURS', 'dateDebut': DateTime.now().toIso8601String()});
+    }
+    return res;
+  }
 
   /// Suspension (urgence sur un autre site) : motif obligatoire, libère le
   /// verrou « une seule maintenance en cours ».
-  Future<SubmitResult> suspend(String id, {required String motif}) => _sync.submit(
-        endpoint: '/maintenances/$id/suspend',
-        entityType: 'maintenance_suspend',
-        payload: {'motif': motif},
-      );
+  Future<SubmitResult> suspend(String id, {required String motif}) async {
+    final res = await _sync.submit(
+      endpoint: '/maintenances/$id/suspend',
+      entityType: 'maintenance_suspend',
+      payload: {'motif': motif},
+    );
+    if (res.isQueued) {
+      await MaintenanceCache.patch(id, {'statut': 'SUSPENDUE', 'motifSuspension': motif});
+    }
+    return res;
+  }
 
   /// Reprise sur site (GPS vérifié côté serveur, comme un démarrage).
-  Future<SubmitResult> resume(String id, {double? latitude, double? longitude}) => _sync.submit(
-        endpoint: '/maintenances/$id/resume',
-        entityType: 'maintenance_resume',
-        payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
-      );
+  Future<SubmitResult> resume(String id, {double? latitude, double? longitude}) async {
+    final res = await _sync.submit(
+      endpoint: '/maintenances/$id/resume',
+      entityType: 'maintenance_resume',
+      payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
+    );
+    if (res.isQueued) {
+      await MaintenanceCache.patch(id, {'statut': 'EN_COURS', 'motifSuspension': null});
+    }
+    return res;
+  }
 
   /// Clôture offline-first.
   /// [photoPaths] et [signatureLocalPath] sont des chemins de fichiers LOCAUX
@@ -129,12 +182,12 @@ class MaintenanceRepository {
     List<String> photoPaths = const [],
     double? latitude,
     double? longitude,
-  }) {
+  }) async {
     final attachments = <Map<String, String>>[
       for (final p in photoPaths) {'path': p, 'kind': 'photo'},
       if (signatureLocalPath != null) {'path': signatureLocalPath, 'kind': 'signature'},
     ];
-    return _sync.submit(
+    final res = await _sync.submit(
       endpoint: '/maintenances/$id/close',
       entityType: 'maintenance_close',
       payload: {
@@ -147,5 +200,19 @@ class MaintenanceRepository {
       },
       attachments: attachments,
     );
+    if (res.isQueued) {
+      await MaintenanceCache.patch(id, {'statut': 'TERMINEE', 'dateFin': DateTime.now().toIso8601String()});
+    }
+    return res;
   }
+
+  /// Photos d'intervention hors clôture (état des lieux AVANT travaux) :
+  /// mêmes garanties que la clôture — upload différé, file d'attente hors-ligne.
+  Future<SubmitResult> addPhotos(String id, {required List<String> photoPaths, String phase = 'AVANT'}) =>
+      _sync.submit(
+        endpoint: '/maintenances/$id/photos',
+        entityType: 'maintenance_photos',
+        payload: {'phase': phase},
+        attachments: [for (final p in photoPaths) {'path': p, 'kind': 'photo'}],
+      );
 }

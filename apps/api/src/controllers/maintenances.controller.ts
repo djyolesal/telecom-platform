@@ -380,6 +380,35 @@ function assertPeutAgir(req: Request, m: { technicienId: string | null }) {
   }
 }
 
+/**
+ * Photos d'intervention hors clôture — typiquement l'état des lieux AVANT
+ * travaux, pris juste après le démarrage. La maintenance doit être en cours
+ * (ou suspendue) ; les photos de clôture restent gérées par /close (phase APRES).
+ */
+export async function addMaintenancePhotos(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { photos, phase } = req.body as { photos?: Array<{ url?: string; key?: string }>; phase?: string };
+    const phaseOk = phase === 'AVANT' || phase === 'APRES' ? phase : 'AVANT';
+    if (!Array.isArray(photos) || photos.length === 0) throw new AppError('Aucune photo fournie', 400);
+    if (photos.length > 20) throw new AppError('Trop de photos en une fois (20 max)', 400);
+
+    const m = await prisma.maintenance.findUnique({ where: { id: req.params.id }, select: { id: true, statut: true } });
+    if (!m) throw new AppError('Maintenance introuvable', 404);
+    if (!['EN_COURS', 'SUSPENDUE'].includes(m.statut)) {
+      throw new AppError('Les photos d’intervention s’ajoutent sur une maintenance en cours', 400);
+    }
+
+    const rows = photos
+      .filter((p) => p && p.url && p.key)
+      .map((p) => ({ entityType: 'maintenance', entityId: m.id, url: p.url!, minioKey: p.key!, phase: phaseOk }));
+    if (!rows.length) throw new AppError('Photos invalides', 400);
+    await prisma.photo.createMany({ data: rows });
+
+    await auditLog(req.user!.id, 'UPDATE', 'maintenance', m.id, { photosAjoutees: rows.length, phase: phaseOk }, req);
+    res.status(201).json({ success: true, data: { ajoutees: rows.length, phase: phaseOk } });
+  } catch (err) { next(err); }
+}
+
 export async function startMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
     const { latitude, longitude } = req.body;
@@ -693,7 +722,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
           await tx.photo.createMany({
             data: photos
               .filter((p) => p && p.url && p.key)
-              .map((p) => ({ entityType: 'maintenance', entityId: existing.id, url: p.url, minioKey: p.key })),
+              .map((p) => ({ entityType: 'maintenance', entityId: existing.id, url: p.url, minioKey: p.key, phase: 'APRES' })),
           });
         }
 

@@ -334,6 +334,8 @@ model Photo {
   url        String
   minioKey   String   @map("minio_key")
   createdAt  DateTime @default(now()) @map("created_at")
+  // AVANT (état des lieux au démarrage) / APRES (clôture) — null : non phasée.
+  phase      String?  @map("phase") @db.VarChar(10)
 
   // Table polymorphe (entityType + entityId) : maintenance, dépotage…
   // La contrainte FK DB vers maintenances a été retirée (migration 16) pour

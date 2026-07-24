@@ -28,6 +28,9 @@ class MaintenanceDetailScreen extends StatefulWidget {
 class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   late Future<Maintenance> _future;
   bool _busy = false;
+  // Photos AVANT travaux (état des lieux), prises pendant l'intervention.
+  final _pickerAvant = ImagePicker();
+  final List<XFile> _photosAvant = [];
 
   @override
   void initState() {
@@ -101,6 +104,75 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
   /// Suspension : motif obligatoire (urgence sur un autre site). Le verrou
   /// « une seule maintenance en cours » est libéré côté serveur.
+  /// Sections de photos groupées par phase : Avant travaux / Après travaux /
+  /// non phasées (photos historiques d'avant cette fonctionnalité).
+  List<Widget> _photoSections(Maintenance m) {
+    final avant = <String>[], apres = <String>[], autres = <String>[];
+    for (var i = 0; i < m.photoUrls.length; i++) {
+      final phase = i < m.photoPhases.length ? m.photoPhases[i] : null;
+      (phase == 'AVANT' ? avant : phase == 'APRES' ? apres : autres).add(m.photoUrls[i]);
+    }
+    Widget titre(String txt) => Text(txt,
+        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13));
+    if (avant.isEmpty && apres.isEmpty) {
+      return [titre('Photos (${autres.length})'), const SizedBox(height: 10), PhotoThumbnails(urls: autres)];
+    }
+    return [
+      if (avant.isNotEmpty) ...[
+        titre('Avant travaux (${avant.length})'),
+        const SizedBox(height: 10),
+        PhotoThumbnails(urls: avant),
+      ],
+      if (apres.isNotEmpty) ...[
+        if (avant.isNotEmpty) const SizedBox(height: 12),
+        titre('Après travaux (${apres.length})'),
+        const SizedBox(height: 10),
+        PhotoThumbnails(urls: apres),
+      ],
+      if (autres.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        titre('Autres photos (${autres.length})'),
+        const SizedBox(height: 10),
+        PhotoThumbnails(urls: autres),
+      ],
+    ];
+  }
+
+  /// Photo d'état des lieux AVANT travaux (caméra uniquement, comme la clôture).
+  Future<void> _prendrePhotoAvant() async {
+    try {
+      final img = await _pickerAvant.pickImage(
+        source: ImageSource.camera, maxWidth: 1600, maxHeight: 1600, imageQuality: 70,
+      );
+      if (img != null) setState(() => _photosAvant.add(img));
+    } catch (_) {/* annulé / permission refusée */}
+  }
+
+  Future<void> _envoyerPhotosAvant() async {
+    if (_photosAvant.isEmpty) return;
+    final repo = context.read<MaintenanceRepository>();
+    setState(() => _busy = true);
+    try {
+      // Copie persistante : les fichiers temporaires d'image_picker peuvent être
+      // purgés par l'OS avant la resynchronisation.
+      final paths = <String>[];
+      for (final x in _photosAvant) {
+        paths.add(await AttachmentStore.persistFile(x.path));
+      }
+      final res = await repo.addPhotos(widget.id, photoPaths: paths, phase: 'AVANT');
+      if (!mounted) return;
+      _snack(res.isQueued
+          ? '${paths.length} photo(s) en file — elles partiront à la reconnexion'
+          : '${paths.length} photo(s) envoyée(s)');
+      setState(() => _photosAvant.clear());
+      _reload();
+    } catch (e) {
+      if (mounted) _snack(_errMsg(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _suspend(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();
     final ctrl = TextEditingController();
@@ -307,12 +379,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                     padding: const EdgeInsets.all(14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Photos (${m.photoUrls.length})',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13)),
-                        const SizedBox(height: 10),
-                        PhotoThumbnails(urls: m.photoUrls),
-                      ],
+                      children: _photoSections(m),
                     ),
                   ),
                 ),
@@ -321,6 +388,59 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
               if (m.statut == 'PLANIFIEE')
                 FilledButton.icon(onPressed: _busy ? null : () => _start(m), icon: const Icon(Icons.play_arrow), label: const Text('Démarrer')),
               if (m.statut == 'EN_COURS') ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Photos avant travaux (état des lieux)',
+                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text('Prenez l’état initial dès le démarrage — les photos de fin se prennent à la clôture.',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                        const SizedBox(height: 8),
+                        if (_photosAvant.isNotEmpty)
+                          Wrap(
+                            spacing: 6, runSpacing: 6,
+                            children: List.generate(_photosAvant.length, (i) => Stack(children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.file(File(_photosAvant[i].path), width: 56, height: 56, fit: BoxFit.cover, cacheWidth: 150),
+                              ),
+                              Positioned(
+                                top: -8, right: -8,
+                                child: IconButton(
+                                  icon: const Icon(Icons.cancel, size: 18, color: Colors.red),
+                                  onPressed: () => setState(() => _photosAvant.removeAt(i)),
+                                ),
+                              ),
+                            ])),
+                          ),
+                        Row(children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _busy ? null : _prendrePhotoAvant,
+                              icon: const Icon(Icons.camera_alt, size: 18),
+                              label: const Text('Photo'),
+                            ),
+                          ),
+                          if (_photosAvant.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: _busy ? null : _envoyerPhotosAvant,
+                                icon: const Icon(Icons.cloud_upload, size: 18),
+                                label: Text('Envoyer (${_photosAvant.length})'),
+                              ),
+                            ),
+                          ],
+                        ]),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 FilledButton.icon(onPressed: _busy ? null : () => _close(m), icon: const Icon(Icons.check_circle), label: const Text('Clôturer')),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(

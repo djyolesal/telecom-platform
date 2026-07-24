@@ -172,6 +172,7 @@ router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.updateMaintenance);
 router.delete('/maintenances/:id', rbac(['ADMIN']), maintenanceCtrl.deleteMaintenance);
 router.post('/maintenances/:id/start', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.startMaintenance);
+router.post('/maintenances/:id/photos', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.addMaintenancePhotos);
 router.post('/maintenances/:id/suspend', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.suspendMaintenance);
 router.post('/maintenances/:id/resume', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.resumeMaintenance);
 router.post('/maintenances/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.closeMaintenance);
