@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import ExcelJS from 'exceljs';
+import { Readable } from 'stream';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
@@ -141,7 +142,7 @@ function combiner(dateVal: unknown, heureVal: unknown): Date | null {
   return d;
 }
 
-const cell = (row: ExcelJS.Row, i: number): unknown => {
+const cell = (row: { getCell(i: number): { value: unknown } }, i: number): unknown => {
   const v = row.getCell(i).value;
   if (v && typeof v === 'object' && 'result' in (v as object)) return (v as { result: unknown }).result;
   if (v && typeof v === 'object' && 'text' in (v as object)) return (v as { text: unknown }).text;
@@ -156,8 +157,6 @@ const cell = (row: ExcelJS.Row, i: number): unknown => {
 export async function importCoupures(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.file) throw new AppError('Fichier .xlsx requis', 400);
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
 
     // Rapprochement par nom normalisé (comme l'import de sites).
     const sites = await prisma.site.findMany({ select: { id: true, nom: true, code: true } });
@@ -169,10 +168,11 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     const erreurs: Array<{ feuille: string; ligne: number; message: string }> = [];
     const lots: Array<Record<string, unknown>> = [];
 
-    const lireFeuille = (nomFeuille: string, technoParDefaut: string | null) => {
-      const ws = wb.getWorksheet(nomFeuille);
-      if (!ws) return;
-      ws.eachRow((row, n) => {
+    // Traitement d'une ligne d'une feuille utile (Events / SITES HUAWEI).
+    type LigneXlsx = { getCell(i: number): { value: unknown }; number: number };
+    const traiterLigne = (nomFeuille: string, technoParDefaut: string | null, row: LigneXlsx) => {
+      {
+        const n = row.number;
         if (n === 1) return; // en-têtes
         const siteBrut = cell(row, 1);
         if (!siteBrut || String(siteBrut).trim() === '') return;
@@ -206,11 +206,25 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
           nocEngineer: String(cell(row, 23) ?? '').trim().slice(0, 100) || null,
           observations: String(cell(row, 22) ?? '').trim() || null,
         });
-      });
+      }
     };
 
-    lireFeuille('Events', null);
-    lireFeuille('SITES HUAWEI', 'SITE');
+    // Lecture EN FLUX : le classeur NOC contient des feuilles énormes (« Data »
+    // déclarée sur toute la grille Excel) — le chargement complet dépassait la
+    // limite mémoire du conteneur (1 Go) et faisait tomber l'API (502).
+    // Ici : ligne à ligne (~90 Mo de pointe), feuilles inutiles ignorées.
+    const FEUILLES: Record<string, string | null> = { Events: null, 'SITES HUAWEI': 'SITE' };
+    const lecteur = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(req.file.buffer), {
+      entries: 'emit', sharedStrings: 'cache', hyperlinks: 'ignore', styles: 'ignore', worksheets: 'emit',
+    });
+    for await (const ws of lecteur) {
+      const nomFeuille = (ws as unknown as { name?: string }).name ?? '';
+      const utile = nomFeuille in FEUILLES;
+      for await (const row of ws) {
+        if (!utile) continue; // itération nécessaire pour avancer le flux, rien n'est stocké
+        traiterLigne(nomFeuille, FEUILLES[nomFeuille], row as unknown as LigneXlsx);
+      }
+    }
     if (!lots.length && !nonApparies.size) throw new AppError("Aucune feuille « Events » / « SITES HUAWEI » exploitable", 400);
 
     // Nettoyage des valeurs textuelles parasites du rapport (« - », « N/A », « #N/A »).
