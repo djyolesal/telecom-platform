@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   LayoutDashboard, MapPin, Wrench, Fuel, Zap, AlertTriangle,
-  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2, WifiOff
+  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2, WifiOff, Network
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/supervision/carte',        label: 'Supervision carte', icon: MapPin,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/supervision/incidents',    label: 'Incidents live',    icon: Activity,         roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/supervision/coupures',     label: 'Coupures réseau',   icon: WifiOff,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  { href: '/supervision/topologie',    label: 'Topologie',         icon: Network,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { href: '/sites',                    label: 'Sites',             icon: MapPin,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/maintenance',              label: 'Maintenance',       icon: Wrench,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/actifs',                   label: "Parc d'actifs",     icon: Boxes,            roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
