@@ -149,7 +149,18 @@ export default function ModifierSitePage() {
             <Input value={form.nom} onChange={(e) => set('nom', e.target.value)} required />
           </Field>
           <Field label="Région" required>
-            <Select value={form.region} onChange={(e) => set('region', e.target.value)} required options={regionOptions} placeholder="Sélectionner…" />
+            {/* La région du site peut venir d'un import (« LOME & GOLFE »…) et ne pas
+                figurer au référentiel : on l'ajoute aux options, sinon le champ requis
+                reste vide et la validation navigateur bloque TOUT enregistrement. */}
+            <Select
+              value={form.region}
+              onChange={(e) => set('region', e.target.value)}
+              required
+              options={form.region && !regionOptions.some((o) => o.value === form.region)
+                ? [{ value: form.region, label: form.region }, ...regionOptions]
+                : regionOptions}
+              placeholder="Sélectionner…"
+            />
           </Field>
           <Field label="Ville">
             <Input value={form.ville} onChange={(e) => set('ville', e.target.value)} />
