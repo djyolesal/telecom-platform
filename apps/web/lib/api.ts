@@ -31,7 +31,14 @@ api.interceptors.request.use(async (config) => {
       await signOut({ callbackUrl: '/login' });
       throw new axios.Cancel('Session expirée');
     }
-    const token = session?.accessToken;
+    let token = session?.accessToken;
+    // Trou transitoire (rotation du jeton côté NextAuth) : la session du cache
+    // peut arriver SANS accessToken → la requête partirait sans Authorization
+    // (« Token manquant »). On invalide le cache et on retente une fois.
+    if (!token) {
+      sessionCache = null;
+      token = ((await cachedSession()) as Session | null)?.accessToken;
+    }
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }
   // Pour un envoi FormData (import xlsx, upload photo), on retire le Content-Type
