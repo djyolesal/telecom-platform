@@ -86,6 +86,11 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'sla.tolerancePreventifJours', label: 'Tolérance retard préventif', groupe: 'SLA prestataires', unite: 'j', defaut: 7 },
     { key: 'sla.penaliteResolutionFCFA', label: 'Pénalité par incident hors délai', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 50000 },
     { key: 'sla.penalitePreventifFCFA', label: 'Pénalité par point de préventif manquant', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 100000 },
+    // Vraisemblance des saisies terrain (avertissements à confirmer, pas des blocages)
+    { key: 'vraisemblance.margeCuvePct', label: 'Tolérance au-dessus de la capacité cuve', groupe: 'Vraisemblance saisies', unite: '%', defaut: 2 },
+    { key: 'vraisemblance.maxHeuresGEParJour', label: 'Marche GE max par jour écoulé', groupe: 'Vraisemblance saisies', unite: 'h/j', defaut: 24 },
+    { key: 'vraisemblance.maxKwhParJour', label: 'Consommation CEET max plausible', groupe: 'Vraisemblance saisies', unite: 'kWh/j', defaut: 1000 },
+    { key: 'vraisemblance.margeStockLitres', label: 'Tolérance stock avant vs dernier niveau connu', groupe: 'Vraisemblance saisies', unite: 'L', defaut: 100 },
     // Empreinte carbone — facteurs d'émission (le solaire est à 0 par nature).
     { key: 'carbone.facteurGasoilKgCO2L', label: 'Facteur d’émission gasoil (combustion GE)', groupe: 'Empreinte carbone', unite: 'kgCO₂/L', defaut: CARBONE_DEFAULTS.gasoilKgCO2L },
     { key: 'carbone.facteurReseauKgCO2Kwh', label: 'Facteur d’émission réseau CEET', groupe: 'Empreinte carbone', unite: 'kgCO₂/kWh', defaut: CARBONE_DEFAULTS.reseauKgCO2Kwh },

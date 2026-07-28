@@ -8,7 +8,9 @@ import '../../../core/constants/enums.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/sync/attachment_store.dart';
+import '../../../core/sync/sync_service.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/avertissements_dialog.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/gps_refine_sheet.dart';
 import '../../../core/widgets/photo_gallery.dart';
@@ -271,16 +273,32 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         return;
       }
 
-      final res = await repo.close(
-        widget.id,
-        agentPresent: result['agentPresent'] as bool,
-        observations: result['observations'] as String?,
-        signatureLocalPath: signaturePath,
-        energie: result['energie'] as Map<String, dynamic>?,
-        photoPaths: photoPaths,
-        latitude: check.lat,
-        longitude: check.lng,
-      );
+      Future<SubmitResult> envoyer(bool confirmer) => repo.close(
+            widget.id,
+            agentPresent: result['agentPresent'] as bool,
+            observations: result['observations'] as String?,
+            signatureLocalPath: signaturePath,
+            energie: result['energie'] as Map<String, dynamic>?,
+            photoPaths: photoPaths,
+            latitude: check.lat,
+            longitude: check.lng,
+            confirmerVraisemblance: confirmer,
+          );
+      SubmitResult res;
+      try {
+        res = await envoyer(result['confirmerVraisemblance'] == true);
+      } on ServerException catch (e) {
+        // Le serveur a détecté des valeurs inhabituelles que le pré-contrôle
+        // local ne connaissait pas (données plus fraîches en base) : on repasse
+        // par la confirmation explicite du technicien.
+        if (!e.confirmationRequise || !mounted) rethrow;
+        final ok = await confirmerAvertissements(context, e.avertissements);
+        if (!ok) {
+          if (mounted) setState(() => _busy = false);
+          return;
+        }
+        res = await envoyer(true);
+      }
       if (!mounted) return;
       _snack(res.isQueued
           ? 'Clôture enregistrée hors-ligne — photos envoyées dès la reconnexion'
@@ -572,6 +590,85 @@ class _CloseSheetState extends State<_CloseSheet> {
   double? _num(TextEditingController c) =>
       c.text.trim().isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
 
+  static String _fmtV(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+  static String _fmtDate(DateTime? d) => d == null
+      ? ''
+      : ' le ${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  ContexteSaisie? get _ctx => widget.maintenance.contexteSaisie;
+
+  /// Repère sous le champ jauge : capacité de la cuve + dernier niveau connu.
+  String? _hintGasoil() {
+    final c = _ctx;
+    if (c == null) return null;
+    final parts = <String>[
+      if (c.cuveVolumeLitres != null) 'Capacité cuve : ${_fmtV(c.cuveVolumeLitres!)} L',
+      if (c.dernierNiveauCuve != null)
+        'dernier niveau : ${_fmtV(c.dernierNiveauCuve!.valeur)} L${_fmtDate(c.dernierNiveauCuve!.date)}',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// Repère sous un champ d'index GE : dernier index connu (par groupe ou mono).
+  String? _hintIndexGE(String? groupeId) {
+    final c = _ctx;
+    final v = groupeId != null ? c?.dernierIndexGE[groupeId] : c?.dernierIndexGEMono;
+    return v == null ? null : 'Dernier index connu : ${_fmtV(v.valeur)} h${_fmtDate(v.date)}';
+  }
+
+  String? _hintCeet() {
+    final v = _ctx?.dernierIndexCeet;
+    return v == null ? null : 'Dernier index connu : ${_fmtV(v.valeur)} kWh${_fmtDate(v.date)}';
+  }
+
+  /// Contrôle de vraisemblance LOCAL (miroir des règles serveur) : détection
+  /// immédiate même hors-ligne, à partir des dernières valeurs connues chargées
+  /// avec le détail. Le serveur re-vérifie de toute façon à la réception.
+  List<String> _avertissementsLocaux(Map<String, dynamic> energie) {
+    final c = _ctx;
+    if (c == null) return const [];
+    final avert = <String>[];
+
+    final jauge = energie['volumeGasoilLitres'] as double?;
+    final cuve = c.cuveVolumeLitres;
+    if (jauge != null && cuve != null && cuve > 0 && jauge > cuve * (1 + c.margeCuvePct / 100)) {
+      avert.add('Volume gasoil saisi (${_fmtV(jauge)} L) supérieur à la capacité de la cuve du site (${_fmtV(cuve)} L).');
+    }
+
+    void checkIndexGE(double? saisi, ValeurConnue? dernier, String libelle) {
+      if (saisi == null || dernier == null) return;
+      if (saisi < dernier.valeur) {
+        avert.add(
+            'Index horaire $libelle saisi (${_fmtV(saisi)} h) inférieur au dernier index connu (${_fmtV(dernier.valeur)} h${_fmtDate(dernier.date)}) — un compteur horaire ne recule pas.');
+      } else if (dernier.date != null) {
+        final jours = DateTime.now().difference(dernier.date!).inMinutes / 1440.0;
+        final deltaMax = (jours < 0 ? 0 : jours) * c.maxHeuresGEParJour + 1;
+        if (saisi - dernier.valeur > deltaMax) {
+          avert.add(
+              'Index horaire $libelle : bond de ${_fmtV(saisi - dernier.valeur)} h depuis le dernier relevé (${_fmtV(dernier.valeur)} h${_fmtDate(dernier.date)}), alors que ${_fmtV(deltaMax)} h au maximum ont pu s\'écouler.');
+        }
+      }
+    }
+
+    final geHours = energie['geHours'] as Map<String, dynamic>?;
+    final multi = widget.maintenance.siteGroupes.length > 1;
+    if (geHours != null) {
+      for (final g in widget.maintenance.siteGroupes) {
+        checkIndexGE(geHours[g.id] as double?, c.dernierIndexGE[g.id], multi ? 'GE n°${g.numero}' : 'GE');
+      }
+    } else {
+      checkIndexGE(energie['indexHeuresGE'] as double?, c.dernierIndexGEMono, 'GE');
+    }
+
+    final ceet = energie['indexCompteur'] as double?;
+    final dernierCeet = c.dernierIndexCeet;
+    if (ceet != null && dernierCeet != null && ceet < dernierCeet.valeur) {
+      avert.add(
+          'Index compteur CEET saisi (${_fmtV(ceet)} kWh) inférieur au dernier index connu (${_fmtV(dernierCeet.valeur)} kWh${_fmtDate(dernierCeet.date)}) — un index cumulé ne recule pas.');
+    }
+    return avert;
+  }
+
   /// Heures de marche depuis la dernière vidange, d'après l'index saisi (null si inconnu).
   double? _heuresDepuisVidange(GroupeGE g) {
     final idx = _num(_geCtrls[g.id]!);
@@ -634,7 +731,7 @@ class _CloseSheetState extends State<_CloseSheet> {
     } catch (_) {/* annulé / permission refusée */}
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final m = widget.maintenance;
     final sources = m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
     final energie = <String, dynamic>{};
@@ -700,11 +797,22 @@ class _CloseSheetState extends State<_CloseSheet> {
       return;
     }
 
+    // Pré-contrôle de vraisemblance AVANT envoi/mise en file : le technicien
+    // corrige immédiatement (même hors-ligne) ou confirme explicitement —
+    // la confirmation est tracée côté serveur.
+    var confirme = false;
+    final avert = _avertissementsLocaux(energie);
+    if (avert.isNotEmpty) {
+      confirme = await confirmerAvertissements(context, avert);
+      if (!confirme || !mounted) return;
+    }
+
     Navigator.pop(context, {
       'observations': _obs.text.trim(),
       'energie': energie,
       'photos': _photos,
       'agentPresent': _agentPresent,
+      if (confirme) 'confirmerVraisemblance': true,
     });
   }
 
@@ -787,7 +895,15 @@ class _CloseSheetState extends State<_CloseSheet> {
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue.shade800)),
                     const SizedBox(height: 10),
                     if (sources.contains('GE')) ...[
-                      TextField(controller: _gasoil, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Volume gasoil dans la cuve (L) *')),
+                      TextField(
+                        controller: _gasoil,
+                        keyboardType: numKb,
+                        decoration: InputDecoration(
+                          labelText: 'Volume gasoil dans la cuve (L) *',
+                          helperText: _hintGasoil(),
+                          helperMaxLines: 2,
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       if (m.siteGroupes.isNotEmpty)
                         ...m.siteGroupes.map((g) => Padding(
@@ -800,19 +916,39 @@ class _CloseSheetState extends State<_CloseSheet> {
                                     keyboardType: numKb,
                                     // Recalcule en direct « X h depuis la dernière vidange ».
                                     onChanged: (_) => setState(() {}),
-                                    decoration: InputDecoration(labelText: 'Index horaire GE n°${g.numero} (carte GE) *'),
+                                    decoration: InputDecoration(
+                                      labelText: 'Index horaire GE n°${g.numero} (carte GE) *',
+                                      helperText: _hintIndexGE(g.id),
+                                      helperMaxLines: 2,
+                                    ),
                                   ),
                                   _vidangeTile(g),
                                 ],
                               ),
                             ))
                       else ...[
-                        TextField(controller: _heures, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index horaire GE (carte GE) *')),
+                        TextField(
+                          controller: _heures,
+                          keyboardType: numKb,
+                          decoration: InputDecoration(
+                            labelText: 'Index horaire GE (carte GE) *',
+                            helperText: _hintIndexGE(null),
+                            helperMaxLines: 2,
+                          ),
+                        ),
                         const SizedBox(height: 10),
                       ],
                     ],
                     if (sources.contains('CEET')) ...[
-                      TextField(controller: _index, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Index compteur CEET *')),
+                      TextField(
+                        controller: _index,
+                        keyboardType: numKb,
+                        decoration: InputDecoration(
+                          labelText: 'Index compteur CEET *',
+                          helperText: _hintCeet(),
+                          helperMaxLines: 2,
+                        ),
+                      ),
                       const SizedBox(height: 10),
                     ],
                     if (sources.contains('SOLAIRE'))

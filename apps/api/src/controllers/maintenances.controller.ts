@@ -18,6 +18,7 @@ import { assertOnSite } from '../utils/geofence';
 import { idempotencyKey } from '../utils/idempotency';
 import { notifierAction } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
+import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite } from '../services/vraisemblance.service';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -239,6 +240,9 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
       ...maintenance,
       // Indique au client si la clôture exige les relevés énergie (selon la tâche).
       requiresEnergieReleve: requiresEnergieReleve(maintenance),
+      // Dernières valeurs connues du site : repères affichés sous les champs de
+      // saisie mobile + pré-contrôle de vraisemblance avant mise en file hors-ligne.
+      contexteSaisie: await contexteSaisieSite(maintenance.siteId, (maintenance.site.groupes ?? []).map((g) => g.id)),
       photos: maintenance.photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
     };
     res.json({ success: true, data });
@@ -581,7 +585,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         site: {
           select: {
             id: true, powerConfig: true, latitude: true, longitude: true, code: true, nom: true,
-            puissanceGEkva: true, statutGE: true,
+            puissanceGEkva: true, statutGE: true, cuveVolumeLitres: true,
             groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
           },
         },
@@ -672,6 +676,23 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       }
     }
 
+    // Vraisemblance des relevés : valeurs inhabituelles (jauge > cuve, index qui
+    // recule, bond impossible…) → 422 avec la liste, jusqu'à confirmation
+    // explicite du technicien (confirmerVraisemblance: true). La confirmation
+    // est ensuite tracée dans les observations + le journal d'audit.
+    const confirmeVraisemblance = (req.body as Record<string, unknown>).confirmerVraisemblance === true;
+    const avertissements = passive && sources.length
+      ? await verifierClotureEnergie(existing.site, e, sources, existing.id)
+      : [];
+    if (avertissements.length && !confirmeVraisemblance) {
+      return res.status(422).json({
+        success: false,
+        error: 'Certaines valeurs saisies semblent inhabituelles — vérifiez puis confirmez.',
+        confirmationRequise: true,
+        avertissements,
+      });
+    }
+
     const dateFin = new Date();
     const dateDebut = existing.dateDebut ?? dateFin;
     // Durée TRAVAILLÉE : les suspensions (urgences ailleurs) sont décomptées.
@@ -685,12 +706,12 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       .filter((g) => vidangeIds.has(g.id))
       .map((g) => ({ id: g.id, numero: g.numero, index: num(geHoursBody[g.id]) }))
       .filter((v) => v.index != null);
-    const obsFinal = vidanges.length
-      ? [
-          `Vidange effectuée : ${vidanges.map((v) => `GE n°${v.numero} (index ${v.index} h)`).join(', ')}.`,
-          observations ?? '',
-        ].filter(Boolean).join('\n')
-      : observations;
+    const obsFinal = [
+      vidanges.length ? `Vidange effectuée : ${vidanges.map((v) => `GE n°${v.numero} (index ${v.index} h)`).join(', ')}.` : '',
+      observations ?? '',
+      // Confirmation malgré avertissements de vraisemblance → tracée et visible (fiche + PDF).
+      avertissements.length && confirmeVraisemblance ? traceConfirmation(avertissements) : '',
+    ].filter(Boolean).join('\n') || undefined;
 
     // Écritures ATOMIQUES : pièces, photos, passage TERMINEE, relevés énergie ET
     // mouvement d'actif dans une seule transaction → tout réussit ou tout est annulé
@@ -859,7 +880,10 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       }
     } catch { /* PDF non bloquant : la clôture reste valide */ }
 
-    await auditLog(req.user!.id, 'CLOSE', 'maintenances', existing.id, { dureeMinutes }, req);
+    await auditLog(req.user!.id, 'CLOSE', 'maintenances', existing.id, {
+      dureeMinutes,
+      ...(avertissements.length && confirmeVraisemblance ? { avertissementsConfirmes: avertissements } : {}),
+    }, req);
     void notifierAction({
       domaine: 'MAINTENANCE', evenement: 'CLOTURE', siteNom: existing.site.nom ?? existing.site.code,
       technicienId: existing.technicienId ?? req.user!.id,

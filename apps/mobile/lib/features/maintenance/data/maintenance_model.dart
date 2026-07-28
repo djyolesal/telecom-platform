@@ -46,6 +46,10 @@ class Maintenance {
   /// Vrai si la clôture exige les relevés énergie (calculé par l'API selon la tâche).
   final bool requiresEnergie;
 
+  /// Dernières valeurs connues du site (détail uniquement) : repères affichés
+  /// sous les champs de saisie + pré-contrôle de vraisemblance avant envoi.
+  final ContexteSaisie? contexteSaisie;
+
   const Maintenance({
     required this.id,
     this.reference,
@@ -75,6 +79,7 @@ class Maintenance {
     this.photoPhases = const [],
     this.photoCount = 0,
     this.requiresEnergie = false,
+    this.contexteSaisie,
   });
 
   /// Catégories considérées « passives » (relevés énergie requis à la clôture).
@@ -129,6 +134,65 @@ class Maintenance {
       // jamais de relevé pour un travail de cycle de vie.
       requiresEnergie: (j['requiresEnergieReleve'] as bool?) ??
           ((j['natureTravaux'] as String? ?? 'ENTRETIEN') == 'ENTRETIEN' && passiveCategories.contains(j['categorie'] as String)),
+      contexteSaisie: j['contexteSaisie'] is Map<String, dynamic>
+          ? ContexteSaisie.fromJson(j['contexteSaisie'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+/// Dernière valeur connue d'un compteur/niveau, avec sa date de relevé.
+class ValeurConnue {
+  final double valeur;
+  final DateTime? date;
+  const ValeurConnue({required this.valeur, this.date});
+
+  static ValeurConnue? fromJson(dynamic j) {
+    if (j is! Map) return null;
+    final v = double.tryParse(j['valeur']?.toString() ?? '');
+    if (v == null) return null;
+    return ValeurConnue(valeur: v, date: DateTime.tryParse(j['date']?.toString() ?? ''));
+  }
+}
+
+/// Dernières valeurs connues du site, fournies par l'API avec le détail d'une
+/// maintenance : repères sous les champs de saisie + pré-contrôle de
+/// vraisemblance AVANT mise en file hors-ligne.
+class ContexteSaisie {
+  final double? cuveVolumeLitres;
+  final ValeurConnue? dernierNiveauCuve;
+  final ValeurConnue? dernierIndexCeet;
+  /// Dernier index horaire connu, par id de groupe électrogène.
+  final Map<String, ValeurConnue> dernierIndexGE;
+  /// Cas mono-GE sans groupe déclaré.
+  final ValeurConnue? dernierIndexGEMono;
+  final double maxHeuresGEParJour;
+  final double margeCuvePct;
+
+  const ContexteSaisie({
+    this.cuveVolumeLitres,
+    this.dernierNiveauCuve,
+    this.dernierIndexCeet,
+    this.dernierIndexGE = const {},
+    this.dernierIndexGEMono,
+    this.maxHeuresGEParJour = 24,
+    this.margeCuvePct = 2,
+  });
+
+  factory ContexteSaisie.fromJson(Map<String, dynamic> j) {
+    final parGE = <String, ValeurConnue>{};
+    (j['dernierIndexGE'] as Map?)?.forEach((k, v) {
+      final vc = ValeurConnue.fromJson(v);
+      if (vc != null) parGE[k.toString()] = vc;
+    });
+    return ContexteSaisie(
+      cuveVolumeLitres: double.tryParse(j['cuveVolumeLitres']?.toString() ?? ''),
+      dernierNiveauCuve: ValeurConnue.fromJson(j['dernierNiveauCuve']),
+      dernierIndexCeet: ValeurConnue.fromJson(j['dernierIndexCeet']),
+      dernierIndexGE: parGE,
+      dernierIndexGEMono: ValeurConnue.fromJson(j['dernierIndexGEMono']),
+      maxHeuresGEParJour: double.tryParse(j['maxHeuresGEParJour']?.toString() ?? '') ?? 24,
+      margeCuvePct: double.tryParse(j['margeCuvePct']?.toString() ?? '') ?? 2,
     );
   }
 }

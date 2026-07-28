@@ -182,6 +182,8 @@ class MaintenanceRepository {
     List<String> photoPaths = const [],
     double? latitude,
     double? longitude,
+    // Le technicien a vu les avertissements de vraisemblance et confirme sa saisie.
+    bool confirmerVraisemblance = false,
   }) async {
     final attachments = <Map<String, String>>[
       for (final p in photoPaths) {'path': p, 'kind': 'photo'},
@@ -194,6 +196,7 @@ class MaintenanceRepository {
         'agentPresent': agentPresent,
         if (observations != null) 'observations': observations,
         if (energie != null && energie.isNotEmpty) 'energie': energie,
+        if (confirmerVraisemblance) 'confirmerVraisemblance': true,
         // Position au moment de la clôture (vérification "sur site" côté serveur).
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,

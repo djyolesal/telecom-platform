@@ -14,6 +14,7 @@ import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../u
 import { genererReference } from '../services/reference.service';
 import { getNum } from '../services/settings.service';
 import { publicFileUrl, getObjectBuffer } from '../services/storage.service';
+import { verifierDepotage, traceConfirmation } from '../services/vraisemblance.service';
 import { generateDepotagePdf } from '../services/pdf.service';
 import { logger } from '../utils/logger';
 import { io } from '../server';
@@ -272,6 +273,24 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       }
     }
 
+    // Vraisemblance des niveaux (stocks vs capacité cuve, dernier niveau connu) :
+    // valeurs inhabituelles → 422 avec la liste, jusqu'à confirmation explicite
+    // (confirmerVraisemblance: true). La confirmation est tracée (observations + audit).
+    const confirmeVraisemblance = b.confirmerVraisemblance === true;
+    const avertissements = await verifierDepotage(siteId, { stockAvant, stockApres, volume });
+    if (avertissements.length && !confirmeVraisemblance) {
+      return res.status(422).json({
+        success: false,
+        error: 'Certaines valeurs saisies semblent inhabituelles — vérifiez puis confirmez.',
+        confirmationRequise: true,
+        avertissements,
+      });
+    }
+    const obsDepotage = [
+      b.observations ? String(b.observations) : '',
+      avertissements.length && confirmeVraisemblance ? traceConfirmation(avertissements) : '',
+    ].filter(Boolean).join('\n') || null;
+
     // Dépotage + photos écrits de façon ATOMIQUE : si l'insertion des photos
     // échoue, le dépotage est annulé (plus de « sauvé mais erreur 400 » →
     // plus de doublons au réessai de la sync).
@@ -302,7 +321,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           fournisseur: b.fournisseur ? String(b.fournisseur) : null,
           numeroBonLivraison: b.numeroBonLivraison ? String(b.numeroBonLivraison) : null,
           prixLitre: b.prixLitre != null ? Number(b.prixLitre) : null,
-          observations: b.observations ? String(b.observations) : null,
+          observations: obsDepotage,
           latitude: b.latitude != null ? Number(b.latitude) : null,
           longitude: b.longitude != null ? Number(b.longitude) : null,
           nomChauffeur: b.nomChauffeur ? String(b.nomChauffeur) : null,

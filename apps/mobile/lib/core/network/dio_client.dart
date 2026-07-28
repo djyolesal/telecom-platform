@@ -64,7 +64,15 @@ class DioClient {
       final data = e.response?.data;
       final msg = data is Map && data['error'] != null ? data['error'].toString() : (e.message ?? 'Erreur réseau');
       if (status == 401) throw UnauthorizedException(msg);
-      throw ServerException(msg, statusCode: status);
+      // Avertissements de vraisemblance (422) : conservés pour que l'UI propose
+      // au technicien de vérifier puis confirmer sa saisie.
+      final avert = data is Map && data['avertissements'] is List
+          ? (data['avertissements'] as List)
+              .map((a) => a is Map ? (a['message'] ?? '').toString() : a.toString())
+              .where((m) => m.isNotEmpty)
+              .toList()
+          : const <String>[];
+      throw ServerException(msg, statusCode: status, avertissements: avert);
     }
   }
 }

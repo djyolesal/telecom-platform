@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/errors/exceptions.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/sync/attachment_store.dart';
+import '../../../core/sync/sync_service.dart';
+import '../../../core/widgets/avertissements_dialog.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../../../core/widgets/site_picker.dart';
 import '../data/depotage_model.dart';
@@ -348,27 +351,43 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         for (final g in _groupes)
           if (_num(_geIndex[g.id]!) != null) {'groupeId': g.id, 'indexHeuresGE': _num(_geIndex[g.id]!)},
       ];
-      final res = await repo.create(
-        siteId: _siteId!,
-        volumeLitres: _derivedVolume ?? 0,
-        agentPresent: _agentPresent!,
-        stockAvantLitres: _num(_stockAvant),
-        stockApresLitres: _num(_stockApres),
-        volumeAnnonceLitres: _num(_volumeAnnonce),
-        fournisseur: _fournisseur.text.trim(),
-        numeroBonLivraison: _bon.text.trim(),
-        observations: _obs.text.trim(),
-        latitude: pos?.lat,
-        longitude: pos?.lng,
-        ligneLivraisonId: _ligneLivraisonId,
-        heuresGE: heuresGE,
-        photoPaths: _photos,
-        nomChauffeur: _nomChauffeur.text.trim(),
-        signatureChauffeurLocalPath: _sigChauffeur,
-        nomAgentSecurite: _nomAgent.text.trim(),
-        signatureAgentSecuriteLocalPath: _sigAgent,
-        signatureTechnicienLocalPath: _sigTechnicien,
-      );
+      Future<SubmitResult> envoyer(bool confirmer) => repo.create(
+            siteId: _siteId!,
+            volumeLitres: _derivedVolume ?? 0,
+            agentPresent: _agentPresent!,
+            stockAvantLitres: _num(_stockAvant),
+            stockApresLitres: _num(_stockApres),
+            volumeAnnonceLitres: _num(_volumeAnnonce),
+            fournisseur: _fournisseur.text.trim(),
+            numeroBonLivraison: _bon.text.trim(),
+            observations: _obs.text.trim(),
+            latitude: pos?.lat,
+            longitude: pos?.lng,
+            ligneLivraisonId: _ligneLivraisonId,
+            heuresGE: heuresGE,
+            photoPaths: _photos,
+            nomChauffeur: _nomChauffeur.text.trim(),
+            signatureChauffeurLocalPath: _sigChauffeur,
+            nomAgentSecurite: _nomAgent.text.trim(),
+            signatureAgentSecuriteLocalPath: _sigAgent,
+            signatureTechnicienLocalPath: _sigTechnicien,
+            confirmerVraisemblance: confirmer,
+          );
+      SubmitResult res;
+      try {
+        res = await envoyer(false);
+      } on ServerException catch (e) {
+        // Vraisemblance : le serveur a détecté des niveaux inhabituels (stock >
+        // capacité de cuve, stock avant > dernier niveau connu…). Le technicien
+        // vérifie, puis confirme explicitement — la confirmation est tracée.
+        if (!e.confirmationRequise || !mounted) rethrow;
+        final ok = await confirmerAvertissements(context, e.avertissements);
+        if (!ok) {
+          if (mounted) setState(() => _saving = false);
+          return;
+        }
+        res = await envoyer(true);
+      }
       await DepotageDraft.clear(); // saisie envoyée (ou en file) → brouillon obsolète
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(

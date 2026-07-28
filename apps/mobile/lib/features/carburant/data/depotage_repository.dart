@@ -71,6 +71,8 @@ class DepotageRepository {
     String? nomAgentSecurite,
     String? signatureAgentSecuriteLocalPath,
     String? signatureTechnicienLocalPath,
+    // Le technicien a vu les avertissements de vraisemblance et confirme sa saisie.
+    bool confirmerVraisemblance = false,
   }) {
     final attachments = <Map<String, String>>[
       if (signatureChauffeurLocalPath != null) {'path': signatureChauffeurLocalPath, 'kind': 'signature', 'field': 'signatureChauffeurPath'},
@@ -98,6 +100,7 @@ class DepotageRepository {
         if (heuresGE.isNotEmpty) 'heuresGE': heuresGE,
         if (nomChauffeur != null && nomChauffeur.isNotEmpty) 'nomChauffeur': nomChauffeur,
         if (nomAgentSecurite != null && nomAgentSecurite.isNotEmpty) 'nomAgentSecurite': nomAgentSecurite,
+        if (confirmerVraisemblance) 'confirmerVraisemblance': true,
       },
       attachments: attachments,
     );

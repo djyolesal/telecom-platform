@@ -3,7 +3,16 @@
 class ServerException implements Exception {
   final String message;
   final int? statusCode;
-  const ServerException(this.message, {this.statusCode});
+
+  /// Avertissements de vraisemblance renvoyés par le serveur (422 avec
+  /// `confirmationRequise`) : la saisie est inhabituelle et doit être confirmée
+  /// explicitement (renvoi avec `confirmerVraisemblance: true`).
+  final List<String> avertissements;
+
+  const ServerException(this.message, {this.statusCode, this.avertissements = const []});
+
+  bool get confirmationRequise => avertissements.isNotEmpty;
+
   @override
   String toString() => 'ServerException($statusCode): $message';
 }
