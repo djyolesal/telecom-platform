@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON } from '@/lib/constants';
 
@@ -221,7 +222,13 @@ export default function ModifierSitePage() {
             <Input value={form.telephoneSite} onChange={(e) => set('telephoneSite', e.target.value)} placeholder="+228 90 00 00 00" />
           </Field>
           <Field label="Site parent (transmission) — une coupure amont impacte ce site">
-            <Select value={form.parentTransmissionId} onChange={(e) => set('parentTransmissionId', e.target.value)} options={parentOptions} placeholder="Aucun (raccordement direct)" />
+            <SearchSelect
+              value={form.parentTransmissionId}
+              onChange={(v) => set('parentTransmissionId', v)}
+              options={parentOptions}
+              placeholder="Rechercher un site…"
+              emptyLabel="Aucun (raccordement direct)"
+            />
           </Field>
 
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">

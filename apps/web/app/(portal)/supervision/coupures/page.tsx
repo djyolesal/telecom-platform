@@ -12,6 +12,7 @@ import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
 import { Field, Input, Select, Textarea } from '@/components/shared/Form';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -212,8 +213,12 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
   return (
     <Modal titre="Nouvelle coupure réseau" onClose={onClose}>
       <Field label="Site" required>
-        <Select value={siteId} onChange={(e) => setSiteId(e.target.value)} required
-          options={(sites ?? []).map((s) => ({ value: s.id, label: s.nom }))} placeholder="Choisir un site…" />
+        <SearchSelect
+          value={siteId}
+          onChange={setSiteId}
+          options={(sites ?? []).map((s) => ({ value: s.id, label: s.nom }))}
+          placeholder="Rechercher un site…"
+        />
       </Field>
       <Field label="Portée">
         <div className="flex flex-wrap gap-2">
