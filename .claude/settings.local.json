@@ -277,7 +277,9 @@
       "Bash(git fetch *)",
       "Bash(git --no-pager log --oneline origin/develop..HEAD)",
       "Bash(curl -s -o /dev/null -w \"route transmission : HTTP %{http_code}\\\\n\" \"https://emops.uk/api/v1/sites/test/transmission\")",
-      "Bash(curl -s -o /dev/null -w \"route bidon \\(témoin\\) : HTTP %{http_code}\\\\n\" \"https://emops.uk/api/v1/route-inexistante-xyz\")"
+      "Bash(curl -s -o /dev/null -w \"route bidon \\(témoin\\) : HTTP %{http_code}\\\\n\" \"https://emops.uk/api/v1/route-inexistante-xyz\")",
+      "Bash(git commit -q -m 'fix\\(web\\): jeton parfois non attaché \\(401 « Token manquant » sporadiques\\) *)",
+      "Bash(git push *)"
     ]
   }
 }
