@@ -110,6 +110,8 @@ router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesI
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
 // Topologie de transmission : rattachement en masse site → amont + type de liaison.
 router.post('/sites/import-topologie', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importTopologie);
+// Export des liaisons (xlsx ré-importable / PDF tabulaire).
+router.get('/sites/topologie/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportTopologie);
 
 // ── Config applicative (règles terrain exposées aux apps) ──
 router.get('/config', configCtrl.getAppConfig);

@@ -8,7 +8,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { cacheService } from '../services/cache.service';
 import { calculerStockSite } from '../utils/calculator';
-import { geParams, getNum } from '../services/settings.service';
+import { geParams, getNum, typesLiaison } from '../services/settings.service';
 import { forecastSites } from '../services/replenishment.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
@@ -830,5 +830,55 @@ export async function importTopologie(req: Request, res: Response, next: NextFun
         cyclesIgnores,
       },
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Export de la topologie de transmission : une ligne par liaison site → parent.
+ * L'xlsx garde les colonnes site/parent/type de l'import — le fichier exporté
+ * est donc directement ré-importable ; le PDF est le même tableau mis en page.
+ */
+export async function exportTopologie(req: Request, res: Response, next: NextFunction) {
+  try {
+    const sites = await prisma.site.findMany({
+      where: { isActive: true },
+      select: {
+        id: true, nom: true, region: true, typeLiaison: true, parentTransmissionId: true,
+        parentTransmission: { select: { nom: true } },
+      },
+      orderBy: { nom: 'asc' },
+    });
+    // Nombre de sites directement en aval de chaque site (poids de la liaison).
+    const nbAval = new Map<string, number>();
+    for (const s of sites) {
+      if (s.parentTransmissionId) nbAval.set(s.parentTransmissionId, (nbAval.get(s.parentTransmissionId) ?? 0) + 1);
+    }
+    const ref = new Map(typesLiaison().map((t) => [t.code, t]));
+    const rows = sites
+      .filter((s) => s.parentTransmission)
+      .map((s) => ({
+        site: s.nom,
+        parent: s.parentTransmission!.nom,
+        type: s.typeLiaison ?? '',
+        famille: (s.typeLiaison && ref.get(s.typeLiaison)?.famille) || '',
+        constructeur: (s.typeLiaison && ref.get(s.typeLiaison)?.constructeur) || '',
+        region: s.region,
+        sitesAval: nbAval.get(s.id) ?? 0,
+      }));
+
+    await auditLog(req.user!.id, 'EXPORT', 'sites', undefined, { topologie: rows.length }, req);
+    await sendTabular(res, req.params.format, 'topologie', 'Topologie de transmission', [{
+      name: 'Topologie',
+      columns: [
+        { header: 'site', key: 'site', width: 26 },
+        { header: 'parent', key: 'parent', width: 26 },
+        { header: 'type', key: 'type', width: 10 },
+        { header: 'famille', key: 'famille', width: 10 },
+        { header: 'constructeur', key: 'constructeur', width: 14 },
+        { header: 'region', key: 'region', width: 18 },
+        { header: 'sitesAval', key: 'sitesAval', width: 10 },
+      ],
+      rows,
+    }], `${rows.length} liaison(s) déclarée(s)`);
   } catch (err) { next(err); }
 }

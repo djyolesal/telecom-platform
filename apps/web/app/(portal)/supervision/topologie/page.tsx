@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Network, WifiOff, Radio, ChevronRight, ChevronDown, Upload, X, CheckCircle2, AlertTriangle, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Network, WifiOff, Radio, ChevronRight, ChevronDown, Upload, X, CheckCircle2, AlertTriangle, ZoomIn, ZoomOut, Maximize2, ImageDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
 import { Button } from '@/components/shared/Button';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { couleurLiaison, useTypesLiaison } from '@/lib/liaisons';
 
@@ -149,6 +150,8 @@ export default function TopologiePage() {
             <Upload size={15} /> Importer la topologie
           </button>
         )}
+        {/* Excel ré-importable (colonnes site/parent/type) + PDF tabulaire. */}
+        <ExportButtons base="/sites/topologie/export" name="topologie" />
         <div className="ml-auto flex items-center gap-x-4 gap-y-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#C0392B]" /> En coupure</span>
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#E67E22]" /> Aval d'un site down</span>
@@ -391,6 +394,39 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
   };
   const onPointerUp = () => { drag.current.actif = false; };
   const clicApresGlissement = () => drag.current.distance > 5;
+
+  // Export PNG : le SVG est sérialisé puis rendu sur un canvas (fond blanc).
+  // L'échelle est plafonnée pour que les très grandes chaînes (plusieurs
+  // centaines de sites) restent dans les limites de taille d'un canvas.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const exporterPng = () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const echelle = Math.min(2, 8000 / largeur, 8000 / hauteur);
+    const xml = new XMLSerializer().serializeToString(svg);
+    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(largeur * echelle);
+      canvas.height = Math.round(hauteur * echelle);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(url); return; }
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((b) => {
+        if (!b) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = `topologie-${racine.nom}.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }, 'image/png');
+    };
+    img.src = url;
+  };
   const ajuster = () => {
     const w = boxRef.current?.clientWidth;
     if (w) setZoom(clamp((w - 20) / largeur));
@@ -430,6 +466,10 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
           className="rounded-md border border-gray-200 bg-white px-2 py-1 font-medium text-gray-600 hover:bg-gray-50">
           100 %
         </button>
+        <button type="button" onClick={exporterPng} title="Télécharger cette chaîne en image PNG"
+          className="ml-1 flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 font-medium text-gray-600 hover:bg-gray-50">
+          <ImageDown size={14} /> PNG
+        </button>
       </div>
       <div
         ref={boxRef}
@@ -439,7 +479,7 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
         onPointerCancel={onPointerUp}
         className="max-h-[70vh] cursor-grab touch-pan-x touch-pan-y select-none overflow-auto rounded-lg bg-gray-50/60 p-2 active:cursor-grabbing"
       >
-        <svg viewBox={`0 0 ${largeur} ${hauteur}`} width={largeur * zoom} height={hauteur * zoom} className="block">
+        <svg ref={svgRef} viewBox={`0 0 ${largeur} ${hauteur}`} width={largeur * zoom} height={hauteur * zoom} className="block">
         {/* Arêtes parent → enfant, colorées selon le type de liaison de l'ENFANT. */}
         {ordre.map((s) => {
           if (s.id === racine.id) return null;
