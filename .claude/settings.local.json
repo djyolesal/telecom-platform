@@ -279,7 +279,13 @@
       "Bash(curl -s -o /dev/null -w \"route transmission : HTTP %{http_code}\\\\n\" \"https://emops.uk/api/v1/sites/test/transmission\")",
       "Bash(curl -s -o /dev/null -w \"route bidon \\(témoin\\) : HTTP %{http_code}\\\\n\" \"https://emops.uk/api/v1/route-inexistante-xyz\")",
       "Bash(git commit -q -m 'fix\\(web\\): jeton parfois non attaché \\(401 « Token manquant » sporadiques\\) *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npm test *)",
+      "Bash(~/Library/Android/sdk/platform-tools/adb install *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://emops.uk/api/v1/health)",
+      "Bash(curl -s https://emops.uk/api/v1/health)",
+      "Bash(~/Library/Android/sdk/platform-tools/adb exec-out *)",
+      "Bash(~/Library/Android/sdk/platform-tools/adb shell *)"
     ]
   }
 }
