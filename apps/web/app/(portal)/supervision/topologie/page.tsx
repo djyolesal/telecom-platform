@@ -370,6 +370,27 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
   const [zoom, setZoom] = useState(1);
   const boxRef = useRef<HTMLDivElement>(null);
   const clamp = (z: number) => Math.min(2.5, Math.max(0.15, z));
+
+  // Déplacement à la souris (cliquer-glisser = défilement du cadre). On mémorise
+  // la distance parcourue pour qu'un glissement ne déclenche PAS le clic-fiche.
+  const drag = useRef({ actif: false, x: 0, y: 0, sx: 0, sy: 0, distance: 0 });
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = boxRef.current;
+    if (!el || e.button !== 0) return;
+    drag.current = { actif: true, x: e.clientX, y: e.clientY, sx: el.scrollLeft, sy: el.scrollTop, distance: 0 };
+    el.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = boxRef.current;
+    if (!el || !drag.current.actif) return;
+    const dx = e.clientX - drag.current.x;
+    const dy = e.clientY - drag.current.y;
+    drag.current.distance = Math.max(drag.current.distance, Math.abs(dx) + Math.abs(dy));
+    el.scrollLeft = drag.current.sx - dx;
+    el.scrollTop = drag.current.sy - dy;
+  };
+  const onPointerUp = () => { drag.current.actif = false; };
+  const clicApresGlissement = () => drag.current.distance > 5;
   const ajuster = () => {
     const w = boxRef.current?.clientWidth;
     if (w) setZoom(clamp((w - 20) / largeur));
@@ -410,7 +431,14 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
           100 %
         </button>
       </div>
-      <div ref={boxRef} className="max-h-[70vh] overflow-auto rounded-lg bg-gray-50/60 p-2">
+      <div
+        ref={boxRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="max-h-[70vh] cursor-grab touch-pan-x touch-pan-y select-none overflow-auto rounded-lg bg-gray-50/60 p-2 active:cursor-grabbing"
+      >
         <svg viewBox={`0 0 ${largeur} ${hauteur}`} width={largeur * zoom} height={hauteur * zoom} className="block">
         {/* Arêtes parent → enfant, colorées selon le type de liaison de l'ENFANT. */}
         {ordre.map((s) => {
@@ -446,7 +474,11 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
           const fond = down ? '#FDECEA' : impacte ? '#FEF5E7' : '#FFFFFF';
           const bord = down ? '#C0392B' : impacte ? '#E67E22' : surligne ? '#2471A3' : '#D5DBDB';
           return (
-            <g key={s.id} onClick={() => router.push(`/sites/${s.id}`)} className="cursor-pointer">
+            <g
+              key={s.id}
+              onClick={() => { if (!clicApresGlissement()) router.push(`/sites/${s.id}`); }}
+              className="cursor-pointer"
+            >
               <rect x={x} y={y} width={G.nodeW} height={G.nodeH} rx={13}
                 fill={fond} stroke={bord} strokeWidth={surligne ? 2 : 1.2} />
               <circle cx={x + 13} cy={y + G.nodeH / 2} r={4}
