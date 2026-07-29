@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Network, WifiOff, Radio, ChevronRight, ChevronDown, Upload, X, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Network, WifiOff, Radio, ChevronRight, ChevronDown, Upload, X, CheckCircle2, AlertTriangle, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -366,9 +366,52 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
   const cx = (p: { x: number; y: number }) => p.x * G.colW + 8;
   const cy = (p: { x: number; y: number }) => p.y * G.rowH + 4 + (G.rowH - G.nodeH) / 2;
 
+  // Zoom : boutons +/−/Ajuster, et molette avec Ctrl/⌘ (le SVG reste net, il est vectoriel).
+  const [zoom, setZoom] = useState(1);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const clamp = (z: number) => Math.min(2.5, Math.max(0.15, z));
+  const ajuster = () => {
+    const w = boxRef.current?.clientWidth;
+    if (w) setZoom(clamp((w - 20) / largeur));
+  };
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    // addEventListener explicite : le onWheel React est passif et ne peut pas
+    // bloquer le zoom navigateur (preventDefault y est ignoré).
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setZoom((z) => clamp(z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   return (
-    <div className="max-h-[70vh] overflow-auto rounded-lg bg-gray-50/60 p-2">
-      <svg width={largeur} height={hauteur} className="block">
+    <div>
+      <div className="mb-1.5 flex items-center justify-end gap-1 text-xs text-gray-500">
+        <span className="mr-1 hidden sm:inline">Ctrl + molette pour zoomer</span>
+        <button type="button" onClick={() => setZoom((z) => clamp(z / 1.25))} title="Réduire"
+          className="rounded-md border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50">
+          <ZoomOut size={14} />
+        </button>
+        <span className="w-11 text-center font-medium tabular-nums">{Math.round(zoom * 100)} %</span>
+        <button type="button" onClick={() => setZoom((z) => clamp(z * 1.25))} title="Agrandir"
+          className="rounded-md border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50">
+          <ZoomIn size={14} />
+        </button>
+        <button type="button" onClick={ajuster} title="Ajuster la chaîne à la largeur"
+          className="rounded-md border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50">
+          <Maximize2 size={14} />
+        </button>
+        <button type="button" onClick={() => setZoom(1)} title="Taille réelle"
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 font-medium text-gray-600 hover:bg-gray-50">
+          100 %
+        </button>
+      </div>
+      <div ref={boxRef} className="max-h-[70vh] overflow-auto rounded-lg bg-gray-50/60 p-2">
+        <svg viewBox={`0 0 ${largeur} ${hauteur}`} width={largeur * zoom} height={hauteur * zoom} className="block">
         {/* Arêtes parent → enfant, colorées selon le type de liaison de l'ENFANT. */}
         {ordre.map((s) => {
           if (s.id === racine.id) return null;
@@ -416,7 +459,8 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
             </g>
           );
         })}
-      </svg>
+        </svg>
+      </div>
     </div>
   );
 }
