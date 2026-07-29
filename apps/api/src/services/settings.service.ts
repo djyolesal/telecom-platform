@@ -97,6 +97,22 @@ export function settingsCatalog(): SettingMeta[] {
   ];
 }
 
+/**
+ * Référentiel des types de liaison de transmission (vocabulaire NOC).
+ * Surchargeable sans redéploiement via la clé Json `topologie.typesLiaison`.
+ */
+export const TYPES_LIAISON_DEFAULTS = [
+  { code: 'FIBER', libelle: 'Fibre optique', famille: 'FIBRE', constructeur: 'HUAWEI' },
+  { code: 'TN', libelle: 'Fibre — OptiX TN', famille: 'FIBRE', constructeur: 'HUAWEI' },
+  { code: 'ML', libelle: 'FH — Microwave Link', famille: 'FH', constructeur: 'ERICSSON' },
+  { code: 'RTN', libelle: 'FH — RTN', famille: 'FH', constructeur: 'HUAWEI' },
+];
+
+export function typesLiaison(): typeof TYPES_LIAISON_DEFAULTS {
+  const v = getRaw('topologie.typesLiaison');
+  return Array.isArray(v) && v.length ? (v as typeof TYPES_LIAISON_DEFAULTS) : TYPES_LIAISON_DEFAULTS;
+}
+
 /** Facteurs d'émission par défaut (modifiables dans SystemSettings). */
 export const CARBONE_DEFAULTS = {
   // Combustion d'un litre de gasoil ≈ 2,66 kgCO₂ (ordre de grandeur ADEME/DEFRA).

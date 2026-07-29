@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { env } from '../config/env';
-import { getNum, getRaw } from '../services/settings.service';
+import { getNum, getRaw, typesLiaison } from '../services/settings.service';
 
 /**
  * Paramètres terrain exposés aux applications (mobile/web) pour garder les
@@ -15,6 +15,8 @@ export function getAppConfig(_req: Request, res: Response) {
       minPhotosPreventive: 6,
       minPhotosMouvement: getNum('maintenance.minPhotosMouvement', 2),
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
+      // Référentiel des types de liaison de transmission (badges topologie, fiche site).
+      typesLiaison: typesLiaison(),
       // Colonnes optionnelles par tableau que l'admin autorise à l'affichage
       // (null = toutes celles du catalogue web).
       colonnesOptionnelles: (() => {

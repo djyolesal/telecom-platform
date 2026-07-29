@@ -200,6 +200,9 @@ model Site {
   // Topologie de transmission : site AMONT dont dépend le lien de ce site.
   parentTransmissionId String? @map("parent_transmission_id")
   parentTransmission   Site?   @relation("TransmissionSite", fields: [parentTransmissionId], references: [id])
+  // Type de la liaison vers le site amont (FIBER, TN, ML, RTN…) — le référentiel
+  // (famille fibre/FH, constructeur) est paramétrable dans SystemSettings.
+  typeLiaison          String? @map("type_liaison")
   enfantsTransmission  Site[]  @relation("TransmissionSite")
   equipementsActifs EquipementActif[]
   lignesLivraison LigneLivraison[]

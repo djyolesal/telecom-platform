@@ -108,6 +108,8 @@ router.get('/sites/geojson', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'])
 router.get('/sites/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
+// Topologie de transmission : rattachement en masse site → amont + type de liaison.
+router.post('/sites/import-topologie', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importTopologie);
 
 // ── Config applicative (règles terrain exposées aux apps) ──
 router.get('/config', configCtrl.getAppConfig);

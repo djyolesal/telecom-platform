@@ -198,7 +198,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId',
+      'parentTransmissionId', 'typeLiaison',
     ]);
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
       throw new AppError('Nom, code, région, configuration énergie et statut GE sont requis.', 400);
@@ -229,7 +229,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId',
+      'parentTransmissionId', 'typeLiaison',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
     // Topologie : un parent de transmission ne doit jamais créer de cycle.
@@ -718,5 +718,117 @@ export async function getEtiquettesQr(req: Request, res: Response, next: NextFun
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="etiquettes-qr-${site.code}.pdf"`);
     res.send(pdf);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Import de la topologie de transmission depuis un fichier Excel
+ * (colonnes : site, parent, type). Rattache chaque site à son amont et pose le
+ * type de liaison (FIBER / TN / ML / RTN…). Idempotent : ré-import = mise à jour.
+ * Les cycles et les noms introuvables sont ignorés et rapportés, jamais insérés.
+ */
+export async function importTopologie(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) throw new AppError('Aucun fichier reçu (champ "file").', 400);
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+    const ws = wb.worksheets[0];
+    if (!ws || ws.rowCount < 2) throw new AppError('Fichier vide ou sans données.', 400);
+
+    // En-têtes tolérants (ligne 1) : site/enfant, parent/amont, type/liaison.
+    let colSite = 0, colParent = 0, colType = 0;
+    ws.getRow(1).eachCell((cell, col) => {
+      const h = norm(String(cell.value ?? ''));
+      if (['site', 'enfant', 'nomsite', 'sitename'].includes(h)) colSite = col;
+      else if (['parent', 'amont', 'siteparent', 'parenttransmission'].includes(h)) colParent = col;
+      else if (['type', 'liaison', 'typeliaison', 'typedeliaison'].includes(h)) colType = col;
+    });
+    if (!colSite || !colParent) {
+      throw new AppError('Colonnes "site" et "parent" requises (colonne "type" optionnelle).', 422);
+    }
+
+    const sites = await prisma.site.findMany({
+      where: { isActive: true },
+      select: { id: true, nom: true, parentTransmissionId: true },
+    });
+    const parNom = new Map(sites.map((s) => [norm(s.nom), s]));
+    // Graphe en mémoire : détection de cycles au fil de l'application des lignes
+    // (un aller-retour base par ligne serait inutilement coûteux sur 800 liaisons).
+    const parentDe = new Map<string, string | null>(sites.map((s) => [s.id, s.parentTransmissionId]));
+    const creeCycle = (enfantId: string, parentId: string): boolean => {
+      let cur: string | null = parentId;
+      for (let i = 0; i < 200 && cur; i++) {
+        if (cur === enfantId) return true;
+        cur = parentDe.get(cur) ?? null;
+      }
+      return false;
+    };
+
+    const texte = (row: ExcelJS.Row, col: number): string => {
+      const v = row.getCell(col).value as unknown;
+      const brut = v && typeof v === 'object' && 'result' in (v as Record<string, unknown>)
+        ? (v as { result: unknown }).result : v;
+      return String(brut ?? '').trim();
+    };
+    // Vocabulaire NOC toléré : « RTN HUAWEI » → RTN, « FIBRE/FIBER » → FIBER…
+    const normaliseType = (t: string): string | null => {
+      const u = t.toUpperCase().replace(/\s+/g, ' ').trim();
+      if (!u) return null;
+      if (u.startsWith('RTN')) return 'RTN';
+      if (u.startsWith('FIB')) return 'FIBER';
+      if (u === 'ML' || u.includes('MICROWAVE')) return 'ML';
+      if (u.startsWith('TN')) return 'TN';
+      return u;
+    };
+
+    const sitesIntrouvables: string[] = [];
+    const parentsIntrouvables: string[] = [];
+    const cyclesIgnores: string[] = [];
+    let lignesIncompletes = 0;
+    const maj: { id: string; parentId: string; type: string | null }[] = [];
+
+    for (let r = 2; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      const nomSite = texte(row, colSite);
+      const nomParent = texte(row, colParent);
+      if (!nomSite && !nomParent) continue;
+      if (!nomSite || !nomParent) { lignesIncompletes++; continue; }
+      const enfant = parNom.get(norm(nomSite));
+      if (!enfant) { sitesIntrouvables.push(nomSite); continue; }
+      const parent = parNom.get(norm(nomParent));
+      if (!parent) { parentsIntrouvables.push(nomParent); continue; }
+      if (enfant.id === parent.id || creeCycle(enfant.id, parent.id)) { cyclesIgnores.push(nomSite); continue; }
+      parentDe.set(enfant.id, parent.id);
+      maj.push({ id: enfant.id, parentId: parent.id, type: colType ? normaliseType(texte(row, colType)) : null });
+    }
+
+    // Écritures par lots courts — idempotent, aucune suppression.
+    for (let i = 0; i < maj.length; i += 100) {
+      await prisma.$transaction(
+        maj.slice(i, i + 100).map((m) =>
+          prisma.site.update({
+            where: { id: m.id },
+            data: { parentTransmissionId: m.parentId, ...(m.type ? { typeLiaison: m.type } : {}) },
+          })
+        )
+      );
+    }
+
+    await cacheService.invalidate('sites:geojson*');
+    await auditLog(req.user!.id, 'UPDATE', 'sites', undefined, {
+      topologie: { liaisons: maj.length, sitesIntrouvables: sitesIntrouvables.length, parentsIntrouvables: parentsIntrouvables.length },
+    }, req);
+
+    res.json({
+      success: true,
+      data: {
+        liaisons: maj.length,
+        sitesIntrouvables: [...new Set(sitesIntrouvables)],
+        parentsIntrouvables: [...new Set(parentsIntrouvables)],
+        lignesIncompletes,
+        cyclesIgnores,
+      },
+    });
   } catch (err) { next(err); }
 }

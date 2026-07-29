@@ -14,6 +14,7 @@ import { DataTable } from '@/components/shared/DataTable';
 import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { POWER_CONFIGS, STATUTS_GE, TYPES_PYLONE, FORMES_CUVE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
+import { useTypesLiaison, couleurLiaison } from '@/lib/liaisons';
 
 const SCOPE_LABELS: Record<string, string> = {
   PASSIVE: 'Passive',
@@ -47,6 +48,7 @@ export default function SiteDetailPage() {
     queryKey: ['site', id],
     queryFn: () => api.get(`/sites/${id}`).then((r) => r.data.data),
   });
+  const { parCode: typesLiaisonParCode } = useTypesLiaison();
   const { data: stock } = useQuery({
     queryKey: ['site-stock', id],
     queryFn: () => api.get(`/sites/${id}/stock`).then((r) => r.data.data),
@@ -128,6 +130,15 @@ export default function SiteDetailPage() {
             {site.parentTransmission
               ? <>dépend de <b className="text-gray-800">{site.parentTransmission.nom}</b></>
               : <span className="text-gray-700">raccordement direct</span>}
+            {site.typeLiaison && (
+              <span
+                className="ml-2 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+                style={{ backgroundColor: couleurLiaison(site.typeLiaison) }}
+                title={typesLiaisonParCode.get(site.typeLiaison)?.libelle ?? site.typeLiaison}
+              >
+                {site.typeLiaison}
+              </span>
+            )}
             {(site.enfantsTransmission?.length ?? 0) > 0 && (
               <span className="text-gray-600"> · alimente <b>{site.enfantsTransmission.length}</b> site(s) en aval : {site.enfantsTransmission.map((e: { nom: string }) => e.nom).join(', ')}</span>
             )}

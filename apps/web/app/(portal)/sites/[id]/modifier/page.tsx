@@ -11,6 +11,7 @@ import { Button } from '@/components/shared/Button';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON } from '@/lib/constants';
+import { useTypesLiaison } from '@/lib/liaisons';
 
 export default function ModifierSitePage() {
   const { id } = useParams<{ id: string }>();
@@ -23,7 +24,7 @@ export default function ModifierSitePage() {
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     hasGardien: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
-    parentTransmissionId: '',
+    parentTransmissionId: '', typeLiaison: '',
     marqueGE: '',
   });
   const { data: societesGardiennage } = useQuery({
@@ -56,6 +57,14 @@ export default function ModifierSitePage() {
   });
   const parentOptions = (tousSites ?? []).filter((s) => s.id !== id).map((s) => ({ value: s.id, label: s.nom }));
 
+  // Référentiel des types de liaison ; une valeur héritée hors référentiel reste sélectionnable.
+  const { liste: typesLiaisonRef } = useTypesLiaison();
+  const typeLiaisonOptions = [
+    ...(form.typeLiaison && !typesLiaisonRef.some((t) => t.code === form.typeLiaison)
+      ? [{ value: form.typeLiaison, label: form.typeLiaison }] : []),
+    ...typesLiaisonRef.map((t) => ({ value: t.code, label: `${t.code} — ${t.libelle} (${t.constructeur})` })),
+  ];
+
   const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} — ${l.nom}` }));
 
   useEffect(() => {
@@ -83,6 +92,7 @@ export default function ModifierSitePage() {
       gardiennagePrestataireId: site.gardiennagePrestataireId ?? '',
       telephoneSite: site.telephoneSite ?? '',
       parentTransmissionId: site.parentTransmissionId ?? '',
+      typeLiaison: site.typeLiaison ?? '',
       marqueGE: (site.groupes as { numero: number; marque?: string | null }[] | undefined)?.find((g) => g.numero === 1)?.marque ?? '',
     });
     const extras = (site.groupes ?? [])
@@ -114,6 +124,7 @@ export default function ModifierSitePage() {
         gardiennagePrestataireId: form.gardiennagePrestataireId || null,
         telephoneSite: form.telephoneSite || null,
         parentTransmissionId: form.parentTransmissionId || null,
+        typeLiaison: form.typeLiaison || null,
       });
       // Synchronise la liste des GE : n°1 = champs ci-dessus, n°2+ = liste supplémentaire.
       const groupes: { numero: number; puissanceKva: number; statut: string; marque?: string }[] = [];
@@ -228,6 +239,14 @@ export default function ModifierSitePage() {
               options={parentOptions}
               placeholder="Rechercher un site…"
               emptyLabel="Aucun (raccordement direct)"
+            />
+          </Field>
+          <Field label="Type de liaison vers l'amont">
+            <Select
+              value={form.typeLiaison}
+              onChange={(e) => set('typeLiaison', e.target.value)}
+              options={typeLiaisonOptions}
+              placeholder="(non renseigné)"
             />
           </Field>
 
