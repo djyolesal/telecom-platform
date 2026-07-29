@@ -29,6 +29,7 @@ interface Arbre { racine: SiteNode; taille: number }
  */
 export default function TopologiePage() {
   const [recherche, setRecherche] = useState('');
+  const [vue, setVue] = useState<'graphe' | 'liste'>('graphe');
   const [showImport, setShowImport] = useState(false);
   const { data: session } = useSession();
   const peutImporter = ((session?.user as { role?: string })?.role ?? '') === 'ADMIN';
@@ -126,6 +127,19 @@ export default function TopologiePage() {
           placeholder="Rechercher un site dans les chaînes…"
           className="w-72 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2471A3]"
         />
+        {/* Basculement de représentation : schéma de réseau ou arborescence textuelle. */}
+        <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white text-sm font-medium">
+          {(['graphe', 'liste'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setVue(v)}
+              className={`px-3 py-2 ${vue === v ? 'bg-[#1B3F6B] text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              {v === 'graphe' ? 'Graphe' : 'Liste'}
+            </button>
+          ))}
+        </div>
         {peutImporter && (
           <button
             type="button"
@@ -170,7 +184,7 @@ export default function TopologiePage() {
       ) : (
         <div className="space-y-4">
           {arbresVisibles.map((a) => (
-            <ArbreCard key={a.racine.id} arbre={a} enfants={enfants} sitesDown={sitesDown} sitesImpactes={sitesImpactes} terme={terme} />
+            <ArbreCard key={a.racine.id} arbre={a} enfants={enfants} sitesDown={sitesDown} sitesImpactes={sitesImpactes} terme={terme} vue={vue} />
           ))}
           {arbresVisibles.length === 0 && (
             <div className="rounded-xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-400">
@@ -269,12 +283,13 @@ function ImportTopologieModal({ onClose, onDone }: { onClose: () => void; onDone
   );
 }
 
-function ArbreCard({ arbre, enfants, sitesDown, sitesImpactes, terme }: {
+function ArbreCard({ arbre, enfants, sitesDown, sitesImpactes, terme, vue }: {
   arbre: Arbre;
   enfants: Map<string, SiteNode[]>;
   sitesDown: Set<string>;
   sitesImpactes: Set<string>;
   terme: string;
+  vue: 'graphe' | 'liste';
 }) {
   const [ouvert, setOuvert] = useState(true);
   const touche = sitesDown.has(arbre.racine.id) || [...sitesImpactes].some((id) => sousArbreContientId(arbre.racine.id, id, enfants));
@@ -292,9 +307,116 @@ function ArbreCard({ arbre, enfants, sitesDown, sitesImpactes, terme }: {
       </button>
       {ouvert && (
         <div className="px-4 pb-4">
-          <Noeud site={arbre.racine} enfants={enfants} sitesDown={sitesDown} sitesImpactes={sitesImpactes} terme={terme} profondeur={0} />
+          {vue === 'graphe' ? (
+            <GrapheChaine racine={arbre.racine} enfants={enfants} sitesDown={sitesDown} sitesImpactes={sitesImpactes} terme={terme} />
+          ) : (
+            <Noeud site={arbre.racine} enfants={enfants} sitesDown={sitesDown} sitesImpactes={sitesImpactes} terme={terme} profondeur={0} />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Vue graphe : schéma de réseau SVG (racine à gauche, aval vers la droite) ─
+
+const G = { colW: 200, rowH: 36, nodeW: 158, nodeH: 26 };
+
+/**
+ * Disposition « tidy tree » : chaque feuille occupe une rangée, chaque parent
+ * se centre sur ses enfants. Résultat : positions (colonne, rangée) par site.
+ */
+function layoutChaine(racine: SiteNode, enfants: Map<string, SiteNode[]>) {
+  const pos = new Map<string, { x: number; y: number }>();
+  const ordre: SiteNode[] = [];
+  let rangee = 0;
+  let maxProfondeur = 0;
+  const visites = new Set<string>();
+  const walk = (site: SiteNode, profondeur: number): number => {
+    if (visites.has(site.id)) return rangee; // garde-fou (les cycles sont refusés côté serveur)
+    visites.add(site.id);
+    ordre.push(site);
+    maxProfondeur = Math.max(maxProfondeur, profondeur);
+    const fils = enfants.get(site.id) ?? [];
+    let y: number;
+    if (fils.length === 0) {
+      y = rangee++;
+    } else {
+      const ys = fils.map((f) => walk(f, profondeur + 1));
+      y = (Math.min(...ys) + Math.max(...ys)) / 2;
+    }
+    pos.set(site.id, { x: profondeur, y });
+    return y;
+  };
+  walk(racine, 0);
+  return { pos, ordre, rangees: Math.max(rangee, 1), colonnes: maxProfondeur + 1 };
+}
+
+function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
+  racine: SiteNode;
+  enfants: Map<string, SiteNode[]>;
+  sitesDown: Set<string>;
+  sitesImpactes: Set<string>;
+  terme: string;
+}) {
+  const router = useRouter();
+  const { pos, ordre, rangees, colonnes } = useMemo(() => layoutChaine(racine, enfants), [racine, enfants]);
+  const largeur = (colonnes - 1) * G.colW + G.nodeW + 16;
+  const hauteur = rangees * G.rowH + 8;
+  const cx = (p: { x: number; y: number }) => p.x * G.colW + 8;
+  const cy = (p: { x: number; y: number }) => p.y * G.rowH + 4 + (G.rowH - G.nodeH) / 2;
+
+  return (
+    <div className="max-h-[70vh] overflow-auto rounded-lg bg-gray-50/60 p-2">
+      <svg width={largeur} height={hauteur} className="block">
+        {/* Arêtes parent → enfant, colorées selon le type de liaison de l'ENFANT. */}
+        {ordre.map((s) => {
+          if (s.id === racine.id) return null;
+          const pp = s.parentTransmissionId ? pos.get(s.parentTransmissionId) : undefined;
+          const pe = pos.get(s.id);
+          if (!pp || !pe) return null;
+          const x1 = cx(pp) + G.nodeW, y1 = cy(pp) + G.nodeH / 2;
+          const x2 = cx(pe), y2 = cy(pe) + G.nodeH / 2;
+          const mi = (x1 + x2) / 2;
+          const enDefaut = sitesDown.has(s.id) || sitesImpactes.has(s.id);
+          return (
+            <path
+              key={`e-${s.id}`}
+              d={`M ${x1} ${y1} C ${mi} ${y1}, ${mi} ${y2}, ${x2} ${y2}`}
+              fill="none"
+              stroke={couleurLiaison(s.typeLiaison)}
+              strokeWidth={1.6}
+              strokeDasharray={enDefaut ? '4 3' : undefined}
+              opacity={0.85}
+            >
+              <title>{`${s.nom} ← liaison ${s.typeLiaison ?? 'non renseignée'}`}</title>
+            </path>
+          );
+        })}
+        {/* Nœuds : pastille d'état + nom, clic → fiche site. */}
+        {ordre.map((s) => {
+          const p = pos.get(s.id)!;
+          const x = cx(p), y = cy(p);
+          const down = sitesDown.has(s.id);
+          const impacte = !down && sitesImpactes.has(s.id);
+          const surligne = terme && s.nom.toLowerCase().includes(terme);
+          const fond = down ? '#FDECEA' : impacte ? '#FEF5E7' : '#FFFFFF';
+          const bord = down ? '#C0392B' : impacte ? '#E67E22' : surligne ? '#2471A3' : '#D5DBDB';
+          return (
+            <g key={s.id} onClick={() => router.push(`/sites/${s.id}`)} className="cursor-pointer">
+              <rect x={x} y={y} width={G.nodeW} height={G.nodeH} rx={13}
+                fill={fond} stroke={bord} strokeWidth={surligne ? 2 : 1.2} />
+              <circle cx={x + 13} cy={y + G.nodeH / 2} r={4}
+                fill={down ? '#C0392B' : impacte ? '#E67E22' : '#0E7C6B'} />
+              <text x={x + 24} y={y + G.nodeH / 2 + 3.5} fontSize={11.5} fontWeight={600}
+                fill={down ? '#922B21' : impacte ? '#9C640C' : '#2C3E50'}>
+                {s.nom.length > 18 ? `${s.nom.slice(0, 17)}…` : s.nom}
+              </text>
+              <title>{`${s.nom} · ${s.region}${s.typeLiaison ? ` · liaison ${s.typeLiaison}` : ''}${down ? ' — EN COUPURE' : impacte ? " — aval d'un site en coupure" : ''}`}</title>
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
