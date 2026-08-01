@@ -347,6 +347,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 
 interface ImportResult {
   lignes: number; crees: number; doublonsIgnores: number;
+  clotureesParImport?: number;
+  incidentsCrees?: number;
   sitesNonApparies: { site: string; lignes: number }[];
   erreurs: { feuille: string; ligne: number; message: string }[];
 }
@@ -377,6 +379,12 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       {result && (
         <div className="mb-3 rounded-lg bg-gray-50 p-3 text-sm">
           <p className="flex items-center gap-1.5 font-medium text-emerald-700"><CheckCircle2 size={15} /> {result.crees} coupure(s) créée(s) · {result.doublonsIgnores} déjà connue(s) sur {result.lignes} lignes</p>
+          {(result.clotureesParImport ?? 0) > 0 && (
+            <p className="mt-1 text-emerald-700">{result.clotureesParImport} coupure(s) ouverte(s) clôturée(s) par le rapport (apurement).</p>
+          )}
+          {(result.incidentsCrees ?? 0) > 0 && (
+            <p className="mt-1 text-[#1B3F6B]">{result.incidentsCrees} incident(s) terrain créé(s) et dispatché(s) pour les sites entiers encore hors service.</p>
+          )}
           {result.sitesNonApparies.length > 0 && (
             <div className="mt-2 text-amber-700">
               <p className="flex items-center gap-1.5 font-medium"><AlertTriangle size={14} /> Sites non reconnus ({result.sitesNonApparies.length}) :</p>

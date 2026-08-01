@@ -455,17 +455,57 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     }
     doublons = lots.length - crees;
 
+    // Apurement au ré-import : une coupure déjà en base ENCORE OUVERTE dont le
+    // rapport apporte désormais la date de rétablissement est CLÔTURÉE (fin +
+    // downtime recalculé, infos d'intervention reprises). Le stock d'obsolètes
+    // se résorbe donc en ré-important simplement le dernier rapport NOC.
+    let clotureesParImport = 0;
+    const avecFin = lots.filter((l) => l.dateFin instanceof Date);
+    if (avecFin.length) {
+      const ouvertes = await prisma.coupureReseau.findMany({
+        where: { dateFin: null, siteId: { in: [...new Set(avecFin.map((l) => String(l.siteId)))] } },
+        select: { id: true, siteId: true, technologie: true, frequence: true, dateDebut: true },
+      });
+      const cleDe = (siteId: string, techno: string, freq: string | null, debut: Date) =>
+        `${siteId}|${techno}|${freq ?? '-'}|${debut.getTime()}`;
+      const parCle = new Map(ouvertes.map((o) => [cleDe(o.siteId, o.technologie, o.frequence, o.dateDebut), o.id]));
+      const maj: { id: string; data: Record<string, unknown> }[] = [];
+      for (const l of avecFin) {
+        const id = parCle.get(cleDe(String(l.siteId), String(l.technologie), (l.frequence as string | null), l.dateDebut as Date));
+        if (!id) continue;
+        parCle.delete(cleDe(String(l.siteId), String(l.technologie), (l.frequence as string | null), l.dateDebut as Date));
+        maj.push({
+          id,
+          data: {
+            dateFin: l.dateFin,
+            downtimeMinutes: minutesEntre(l.dateDebut as Date, l.dateFin as Date),
+            ...(l.cause ? { cause: l.cause } : {}),
+            ...(l.actions ? { actions: l.actions } : {}),
+            ...(l.intervenants ? { intervenants: l.intervenants } : {}),
+            ...(l.dateArriveeSite ? { dateArriveeSite: l.dateArriveeSite } : {}),
+          },
+        });
+      }
+      for (let i = 0; i < maj.length; i += 100) {
+        await prisma.$transaction(
+          maj.slice(i, i + 100).map((m) => prisma.coupureReseau.update({ where: { id: m.id }, data: m.data }))
+        );
+      }
+      clotureesParImport = maj.length;
+    }
+
     // Les coupures importées ENCORE EN COURS obtiennent leur incident terrain
     // (groupé par site) — l'historique déjà rétabli n'en crée jamais.
     const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id);
 
-    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, incidentsCrees }, req);
+    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, clotureesParImport, incidentsCrees }, req);
     res.json({
       success: true,
       data: {
         lignes: lots.length,
         crees,
         doublonsIgnores: doublons,
+        clotureesParImport,
         incidentsCrees,
         sitesNonApparies: [...nonApparies.entries()].map(([site, lignes]) => ({ site, lignes })).sort((a, b) => b.lignes - a.lignes),
         erreurs: erreurs.slice(0, 50),
