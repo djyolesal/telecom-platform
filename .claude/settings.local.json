@@ -285,7 +285,9 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://emops.uk/api/v1/health)",
       "Bash(curl -s https://emops.uk/api/v1/health)",
       "Bash(~/Library/Android/sdk/platform-tools/adb exec-out *)",
-      "Bash(~/Library/Android/sdk/platform-tools/adb shell *)"
+      "Bash(~/Library/Android/sdk/platform-tools/adb shell *)",
+      "Bash(git config *)",
+      "Bash(gh auth *)"
     ]
   }
 }
