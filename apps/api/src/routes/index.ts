@@ -104,14 +104,14 @@ router.post('/auth/fcm-token', authCtrl.updateFcmToken);
 
 // ── Sites ─────────────────────────────────────────────────────
 router.get('/sites', sitesCtrl.getSites);
-router.get('/sites/geojson', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), sitesCtrl.getSitesGeoJSON);
+router.get('/sites/geojson', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), sitesCtrl.getSitesGeoJSON);
 router.get('/sites/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
 // Topologie de transmission : rattachement en masse site → amont + type de liaison.
-router.post('/sites/import-topologie', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importTopologie);
+router.post('/sites/import-topologie', rbac(['NOC','ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importTopologie);
 // Export des liaisons (xlsx ré-importable / PDF tabulaire).
-router.get('/sites/topologie/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportTopologie);
+router.get('/sites/topologie/export/:format(xlsx|pdf)', rbac(['NOC','MANAGER','ADMIN']), sitesCtrl.exportTopologie);
 
 // ── Config applicative (règles terrain exposées aux apps) ──
 router.get('/config', configCtrl.getAppConfig);
@@ -138,10 +138,12 @@ router.get('/sites/:id/lignes-livraison', carburantCtrl.getLignesLivraisonForSit
 router.get('/sites/:id/etiquettes-qr.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.getEtiquettesQr);
 
 // ── Coupures réseau (supervision NOC) ─────────────────────────
-router.get('/coupures-reseau', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getCoupures);
-router.post('/coupures-reseau', rbac(['SUPERVISEUR','MANAGER','ADMIN']), coupuresCtrl.createCoupure);
-router.post('/coupures-reseau/import', rbac(['MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
-router.put('/coupures-reseau/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
+// Lecture large (supervision) ; ÉCRITURE réservée au NOC/manager/admin — les
+// techniciens agissent via les incidents, jamais directement sur les coupures.
+router.get('/coupures-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getCoupures);
+router.post('/coupures-reseau', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.createCoupure);
+router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
+router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
 router.delete('/coupures-reseau/:id', rbac(['ADMIN']), coupuresCtrl.deleteCoupure);
 router.get('/rapports/disponibilite-reseau', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);
 

@@ -33,7 +33,7 @@ export default function TopologiePage() {
   const [vue, setVue] = useState<'graphe' | 'liste'>('graphe');
   const [showImport, setShowImport] = useState(false);
   const { data: session } = useSession();
-  const peutImporter = ((session?.user as { role?: string })?.role ?? '') === 'ADMIN';
+  const peutImporter = ['ADMIN', 'NOC'].includes((session?.user as { role?: string })?.role ?? '');
   const queryClient = useQueryClient();
   const { parCode: typesLiaisonParCode } = useTypesLiaison();
 

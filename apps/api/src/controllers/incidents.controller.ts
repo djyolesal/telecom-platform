@@ -214,12 +214,14 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
 
 export async function closeIncident(req: Request, res: Response, next: NextFunction) {
   try {
-    const { dateIntervention, dateResolution, causeProbable, actionCorrective, creerMaintenance, latitude, longitude, photos, agentPresent } = req.body as {
+    const { dateIntervention, dateResolution, causeProbable, actionCorrective, causeCategorie, creerMaintenance, latitude, longitude, photos, agentPresent } = req.body as {
       dateIntervention?: string;
       agentPresent?: boolean;
       dateResolution?: string;
       causeProbable?: string;
       actionCorrective?: string;
+      /** Classement de l'indisponibilité constaté par le technicien : ACTIF | PASSIF. */
+      causeCategorie?: string;
       creerMaintenance?: boolean;
       latitude?: number;
       longitude?: number;
@@ -303,7 +305,46 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
       }));
     }
 
-    await auditLog(req.user!.id, 'CLOSE', 'incidents', incident.id, { causeProbable, duree }, req);
+    // La résolution terrain CLÔT automatiquement les coupures réseau liées
+    // (et leur cascade héritée en aval) — le NOC garde la main pour rouvrir.
+    const coupureLiees = await prisma.coupureReseau.findMany({
+      where: { incidentId: incident.id, dateFin: null },
+      select: { id: true, dateDebut: true },
+    });
+    let coupuresCloturees = 0;
+    if (coupureLiees.length) {
+      const minutes = (d: Date) => Math.max(0, Math.round((dateResol.getTime() - d.getTime()) / 60_000));
+      const cc = causeCategorie && ['ACTIF', 'PASSIF'].includes(causeCategorie.toUpperCase())
+        ? causeCategorie.toUpperCase() : undefined;
+      await prisma.$transaction(coupureLiees.map((c) =>
+        prisma.coupureReseau.update({
+          where: { id: c.id },
+          data: {
+            dateFin: dateResol,
+            downtimeMinutes: minutes(c.dateDebut),
+            ...(causeProbable ? { cause: causeProbable.slice(0, 300) } : {}),
+            ...(actionCorrective ? { actions: actionCorrective.slice(0, 300) } : {}),
+            ...(cc ? { causeCategorie: cc } : {}),
+          },
+        })
+      ));
+      // Cascade : les coupures héritées (aval) de ces coupures racines.
+      const heritees = await prisma.coupureReseau.findMany({
+        where: { coupureOrigineId: { in: coupureLiees.map((c) => c.id) }, dateFin: null },
+        select: { id: true, dateDebut: true },
+      });
+      if (heritees.length) {
+        await prisma.$transaction(heritees.map((h) =>
+          prisma.coupureReseau.update({
+            where: { id: h.id },
+            data: { dateFin: dateResol, downtimeMinutes: minutes(h.dateDebut) },
+          })
+        ));
+      }
+      coupuresCloturees = coupureLiees.length + heritees.length;
+    }
+
+    await auditLog(req.user!.id, 'CLOSE', 'incidents', incident.id, { causeProbable, duree, coupuresCloturees }, req);
     io.of('/supervision').emit('incident:resolved', { id: updated.id, dureeCoupureMinutes: duree });
     void notifierAction({
       domaine: 'INCIDENT', evenement: 'CLOTURE', siteNom: incident.site.nom ?? incident.site.code,

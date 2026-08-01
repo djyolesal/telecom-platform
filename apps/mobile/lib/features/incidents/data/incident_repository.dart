@@ -70,6 +70,8 @@ class IncidentRepository {
     required bool agentPresent,
     String? causeProbable,
     String? actionCorrective,
+    // Classement de la panne : 'ACTIF' (radio/transmission) ou 'PASSIF' (énergie).
+    String? causeCategorie,
     bool creerMaintenance = false,
     List<String> photoPaths = const [],
     double? latitude,
@@ -83,6 +85,7 @@ class IncidentRepository {
         'agentPresent': agentPresent,
         if (causeProbable != null && causeProbable.isNotEmpty) 'causeProbable': causeProbable,
         if (actionCorrective != null && actionCorrective.isNotEmpty) 'actionCorrective': actionCorrective,
+        if (causeCategorie != null && causeCategorie.isNotEmpty) 'causeCategorie': causeCategorie,
         'creerMaintenance': creerMaintenance,
         // Position au moment de la clôture (vérification « sur site » côté serveur).
         if (latitude != null) 'latitude': latitude,

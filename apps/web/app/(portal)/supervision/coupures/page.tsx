@@ -32,6 +32,8 @@ interface Coupure {
   observations?: string | null;
   origine?: string;
   coupureOrigine?: { id: string; site?: { nom: string } } | null;
+  incident?: { id: string; reference?: string | null; statut: string } | null;
+  causeCategorie?: string | null;
   _count?: { heritees: number };
   site?: { nom: string; region: string };
 }
@@ -60,8 +62,10 @@ const TechnoBadge = ({ t }: { t: string }) => (
 export default function CoupuresReseauPage() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role;
-  const peutEcrire = ['SUPERVISEUR', 'MANAGER', 'ADMIN'].includes(role ?? '');
-  const peutImporter = ['MANAGER', 'ADMIN'].includes(role ?? '');
+  // Écriture réservée au NOC/manager/admin — les techniciens passent par les
+  // incidents, les superviseurs et prestataires consultent.
+  const peutEcrire = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
+  const peutImporter = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
 
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -268,8 +272,12 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const [actions, setActions] = useState(coupure.actions ?? '');
   const [typeAlarme, setTypeAlarme] = useState(coupure.typeAlarme ?? '');
   const [intervenants, setIntervenants] = useState(coupure.intervenants ?? '');
+  const [causeCategorie, setCauseCategorie] = useState(coupure.causeCategorie ?? '');
   const [cloturerHeritees, setCloturerHeritees] = useState(true);
   const nbHeritees = coupure._count?.heritees ?? 0;
+  // Retirer la date de fin d'une coupure clôturée = réouverture : l'incident
+  // lié (s'il a été résolu) sera rouvert côté serveur et le prestataire notifié.
+  const reouverture = !!coupure.dateFin && !dateFin;
 
   const mutation = useMutation({
     mutationFn: () => api.put(`/coupures-reseau/${coupure.id}`, {
@@ -279,6 +287,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       actions: actions || null,
       typeAlarme: typeAlarme || null,
       intervenants: intervenants || null,
+      causeCategorie: causeCategorie || null,
     }),
     onSuccess: () => { onDone(); onClose(); },
   });
@@ -296,8 +305,27 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         </Field>
         <Field label="Intervenant(s)"><Input value={intervenants} onChange={(e) => setIntervenants(e.target.value)} /></Field>
       </div>
-      <Field label="Cause"><Input value={cause} onChange={(e) => setCause(e.target.value)} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Cause"><Input value={cause} onChange={(e) => setCause(e.target.value)} /></Field>
+        <Field label="Classement (actif/passif)">
+          <Select
+            value={causeCategorie}
+            onChange={(e) => setCauseCategorie(e.target.value)}
+            options={[
+              { value: 'ACTIF', label: 'Actif — radio/transmission' },
+              { value: 'PASSIF', label: 'Passif — énergie/environnement' },
+            ]}
+            placeholder="(non classé)"
+          />
+        </Field>
+      </div>
       <Field label="Actions effectuées"><Input value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" /></Field>
+      {coupure.incident && (
+        <p className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          Incident lié : <b>{coupure.incident.reference ?? coupure.incident.id.slice(0, 8)}</b> ({coupure.incident.statut})
+          {reouverture && <span className="text-amber-700"> — la réouverture rouvrira cet incident et notifiera le prestataire.</span>}
+        </p>
+      )}
       {nbHeritees > 0 && dateFin && (
         <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-[#EAF1F8] p-3 text-sm text-[#1B3F6B]">
           <input type="checkbox" checked={cloturerHeritees} onChange={(e) => setCloturerHeritees(e.target.checked)} className="mt-0.5 h-4 w-4 rounded" />

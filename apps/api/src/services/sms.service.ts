@@ -217,3 +217,51 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
     logger.warn('[sms] notification contacts échouée:', err);
   }
 }
+
+/**
+ * Notification SMS liée à une coupure réseau (incident auto créé/rouvert par le
+ * NOC) : cible les contacts « incidents » du/des prestataires en charge du site
+ * (assignations du lot), plus les contacts « toutes sociétés » (supervision interne).
+ */
+export async function notifierIncidentCoupure(siteId: string, message: string, evenement: string): Promise<void> {
+  try {
+    const site = await prisma.site.findUnique({
+      where: { id: siteId },
+      select: { lot: { select: { assignments: { select: { prestataireId: true } } } } },
+    });
+    const prestataires = new Set((site?.lot?.assignments ?? []).map((a) => a.prestataireId));
+
+    const contacts = await prisma.contact.findMany({ where: { actif: true, notifIncidents: true } });
+    const cibles = contacts.filter(
+      (c) => c.toutesSocietes || (c.prestataireId != null && prestataires.has(c.prestataireId))
+    );
+    if (!cibles.length) return;
+
+    const simule = !env.SMS_API_URL;
+    let statutLot = simule ? 'SIMULE' : 'ENVOYE';
+    let erreurLot: string | null = null;
+    let echecs = new Set<string>();
+    if (!simule) {
+      try {
+        const reponse = await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
+        echecs = numerosEnEchec(reponse);
+      } catch (e) {
+        statutLot = 'ECHEC';
+        erreurLot = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
+      }
+    }
+    for (const c of cibles) {
+      const rejete = statutLot === 'ENVOYE' && echecs.has(telephoneLocal(c.telephone));
+      await prisma.smsLog.create({
+        data: {
+          telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
+          statut: rejete ? 'ECHEC' : statutLot,
+          erreur: rejete ? 'Rejeté par la passerelle' : erreurLot,
+        },
+      });
+    }
+    logger.info(`[sms] ${evenement} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
+  } catch (err) {
+    logger.warn('[sms] notification incident-coupure échouée:', err);
+  }
+}

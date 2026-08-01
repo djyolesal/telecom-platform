@@ -135,6 +135,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         dateResolution: DateTime.now(),
         causeProbable: result['causeProbable'] as String?,
         actionCorrective: result['actionCorrective'] as String?,
+        causeCategorie: result['causeCategorie'] as String?,
         creerMaintenance: result['creerMaintenance'] as bool? ?? false,
         agentPresent: result['agentPresent'] as bool,
         photoPaths: photoPaths,
@@ -275,6 +276,9 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
   bool _creerMaint = false;
   // Déclaration obligatoire : agent de gardiennage présent sur site ?
   bool? _agentPresent;
+  // Classement de l'indisponibilité constaté sur place (optionnel) :
+  // ACTIF = équipement radio/transmission ; PASSIF = énergie/environnement.
+  String? _causeCategorie;
   String? _error;
 
   @override
@@ -317,7 +321,40 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
       'creerMaintenance': _creerMaint,
       'photos': _photos,
       'agentPresent': _agentPresent,
+      if (_causeCategorie != null) 'causeCategorie': _causeCategorie,
     });
+  }
+
+  /// Choix (optionnel) du classement de la panne : actif ou passif.
+  Widget _categorieSelector() {
+    Widget chip(String value, String label) {
+      final selected = _causeCategorie == value;
+      return Expanded(
+        child: OutlinedButton(
+          onPressed: () => setState(() => _causeCategorie = selected ? null : value),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: selected ? const Color(0xFF1B3F6B) : null,
+            foregroundColor: selected ? Colors.white : const Color(0xFF1B3F6B),
+          ),
+          child: Text(label, style: const TextStyle(fontSize: 12)),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        const Text('NATURE DE LA PANNE (OPTIONNEL)',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey)),
+        const SizedBox(height: 6),
+        Row(children: [
+          chip('ACTIF', 'Actif — radio/transmission'),
+          const SizedBox(width: 8),
+          chip('PASSIF', 'Passif — énergie'),
+        ]),
+      ],
+    );
   }
 
   /// Choix obligatoire Présent/Absent (sans valeur par défaut).
@@ -372,6 +409,7 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
               TextField(controller: _cause, decoration: const InputDecoration(labelText: 'Cause probable')),
               const SizedBox(height: 10),
               TextField(controller: _action, decoration: const InputDecoration(labelText: 'Action corrective')),
+              _categorieSelector(),
               const SizedBox(height: 6),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,

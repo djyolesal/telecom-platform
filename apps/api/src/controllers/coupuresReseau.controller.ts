@@ -7,10 +7,85 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission } from '../utils/transmission';
+import { genererReference } from '../services/reference.service';
+import { notifierIncidentCoupure } from '../services/sms.service';
+import { io } from '../server';
 
 export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
 
 const minutesEntre = (debut: Date, fin: Date) => Math.max(0, Math.round((fin.getTime() - debut.getTime()) / 60_000));
+
+// Alarmes « énergie » (AE/GE/EN) → indisponibilité pré-classée PASSIF
+// (environnement/énergie, responsabilité O&M) ; le technicien affine à la résolution.
+const ALARMES_ENERGIE = new Set(['AE', 'GE', 'EN']);
+
+/**
+ * Crée (ou rattache) les incidents terrain pour les coupures LOCALES encore en
+ * cours sans incident : UN incident par site — les technologies d'un même site
+ * rejoignent l'incident déjà ouvert au lieu d'en créer un par ligne. Les
+ * coupures héritées (impact aval) ne génèrent jamais d'incident : le travail
+ * est sur le site origine. Chaque création est dispatchée par SMS aux contacts
+ * du prestataire en charge du site.
+ */
+export async function rattacherIncidentsCoupures(userId: string): Promise<number> {
+  const orphelines = await prisma.coupureReseau.findMany({
+    where: { dateFin: null, origine: 'LOCALE', incidentId: null },
+    include: { site: { select: { nom: true } } },
+    orderBy: { dateDebut: 'asc' },
+  });
+  if (!orphelines.length) return 0;
+
+  const parSite = new Map<string, typeof orphelines>();
+  for (const c of orphelines) {
+    const l = parSite.get(c.siteId) ?? [];
+    l.push(c);
+    parSite.set(c.siteId, l);
+  }
+
+  let crees = 0;
+  for (const [siteId, coupures] of parSite) {
+    // Incident auto déjà ouvert pour ce site (créé par une coupure précédente) ?
+    let incident = await prisma.incident.findFirst({
+      where: { siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: {} } },
+      select: { id: true, reference: true },
+    });
+    const technos = coupures.map((c) => c.technologie);
+    if (!incident) {
+      const siteEntier = technos.includes('SITE');
+      incident = await prisma.$transaction(async (tx) => tx.incident.create({
+        data: {
+          reference: await genererReference(tx, 'INC', new Date()),
+          siteId,
+          type: siteEntier ? 'COUPURE_TOTALE' : 'ALARME',
+          severite: siteEntier ? 'CRITIQUE' : 'MAJEUR',
+          description: `Coupure réseau ${[...new Set(technos)].join('/')} signalée par le NOC${coupures[0].typeAlarme ? ` (alarme ${coupures[0].typeAlarme})` : ''}.`,
+          declarePar: userId,
+        },
+        select: { id: true, reference: true },
+      }));
+      crees++;
+      io.of('/supervision').emit('incident:created', { id: incident.id, siteId });
+      await notifierIncidentCoupure(
+        siteId,
+        `[E&M OpS] NOC : coupure ${[...new Set(technos)].join('/')} sur ${coupures[0].site.nom}. Incident ${incident.reference ?? ''} à traiter.`,
+        'INCIDENT_COUPURE_NOC'
+      );
+    }
+    await prisma.coupureReseau.updateMany({
+      where: { id: { in: coupures.map((c) => c.id) } },
+      data: { incidentId: incident.id },
+    });
+    // Pré-classement : alarme énergie → PASSIF (affinable à la résolution).
+    const passives = coupures.filter((c) => c.typeAlarme && ALARMES_ENERGIE.has(c.typeAlarme));
+    if (passives.length) {
+      await prisma.coupureReseau.updateMany({
+        where: { id: { in: passives.map((c) => c.id) }, causeCategorie: null },
+        data: { causeCategorie: 'PASSIF' },
+      });
+    }
+  }
+  return crees;
+}
 
 /** Liste paginée, filtrable ; périmètre prestataire appliqué comme partout. */
 export async function getCoupures(req: Request, res: Response, next: NextFunction) {
@@ -44,6 +119,7 @@ export async function getCoupures(req: Request, res: Response, next: NextFunctio
         include: {
           site: { select: { nom: true, region: true } },
           coupureOrigine: { select: { id: true, site: { select: { nom: true } } } },
+          incident: { select: { id: true, reference: true, statut: true } },
           _count: { select: { heritees: true } },
         },
       },
@@ -108,8 +184,12 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
       }
     }
 
-    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', rows[0].id, { siteId, technologies, sitesImpactes }, req);
-    res.status(201).json({ success: true, data: { coupures: rows, sitesImpactes } });
+    // Incident terrain automatique (groupé par site) + dispatch SMS prestataire,
+    // uniquement pour une coupure encore EN COURS (pas la saisie d'historique).
+    const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id);
+
+    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', rows[0].id, { siteId, technologies, sitesImpactes, incidentsCrees }, req);
+    res.status(201).json({ success: true, data: { coupures: rows, sitesImpactes, incidentsCrees } });
   } catch (err) { next(err); }
 }
 
@@ -126,6 +206,12 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       if (k in b) data[k] = b[k] == null || b[k] === '' ? null : String(b[k]);
     }
     if (typeof data.typeAlarme === 'string') data.typeAlarme = data.typeAlarme.slice(0, 10).toUpperCase();
+    // Classement de l'indisponibilité (corrigeable par le NOC) : ACTIF ou PASSIF.
+    if ('causeCategorie' in b) {
+      const cc = b.causeCategorie == null || b.causeCategorie === '' ? null : String(b.causeCategorie).toUpperCase();
+      if (cc != null && !['ACTIF', 'PASSIF'].includes(cc)) throw new AppError('causeCategorie invalide (ACTIF ou PASSIF)', 400);
+      data.causeCategorie = cc;
+    }
     for (const k of ['heureContact', 'dateArriveeSite', 'dateFin'] as const) {
       if (k in b) {
         const d = b[k] ? new Date(String(b[k])) : null;
@@ -161,8 +247,31 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       }
     }
 
-    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, { cloture: 'dateFin' in data, hériteesCloturees }, req);
-    res.json({ success: true, data: { ...updated, hériteesCloturees } });
+    // Réouverture par le NOC (dateFin retirée) : si l'incident lié a été résolu
+    // par le technicien, il est ROUVERT — le terrain doit repasser. Tracé + SMS.
+    let incidentRouvert = false;
+    if ('dateFin' in data && data.dateFin === null && existing.dateFin !== null && existing.incidentId) {
+      const incident = await prisma.incident.findUnique({
+        where: { id: existing.incidentId },
+        select: { id: true, reference: true, statut: true, site: { select: { nom: true } } },
+      });
+      if (incident && (incident.statut === 'RESOLU' || incident.statut === 'CLOS')) {
+        await prisma.incident.update({
+          where: { id: incident.id },
+          data: { statut: 'EN_COURS', dateResolution: null, dureeCoupureMinutes: null },
+        });
+        incidentRouvert = true;
+        await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'reouverture_noc', coupureId: existing.id }, req);
+        await notifierIncidentCoupure(
+          existing.siteId,
+          `[E&M OpS] NOC : coupure toujours constatée sur ${incident.site.nom} — incident ${incident.reference ?? ''} ROUVERT, merci de repasser.`,
+          'INCIDENT_ROUVERT_NOC'
+        );
+      }
+    }
+
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, { cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert }, req);
+    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert } });
   } catch (err) { next(err); }
 }
 
@@ -318,13 +427,18 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     }
     doublons = lots.length - crees;
 
-    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons }, req);
+    // Les coupures importées ENCORE EN COURS obtiennent leur incident terrain
+    // (groupé par site) — l'historique déjà rétabli n'en crée jamais.
+    const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id);
+
+    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, incidentsCrees }, req);
     res.json({
       success: true,
       data: {
         lignes: lots.length,
         crees,
         doublonsIgnores: doublons,
+        incidentsCrees,
         sitesNonApparies: [...nonApparies.entries()].map(([site, lignes]) => ({ site, lignes })).sort((a, b) => b.lignes - a.lignes),
         erreurs: erreurs.slice(0, 50),
       },
