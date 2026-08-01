@@ -20,12 +20,14 @@ const minutesEntre = (debut: Date, fin: Date) => Math.max(0, Math.round((fin.get
 const ALARMES_ENERGIE = new Set(['AE', 'GE', 'EN']);
 
 /**
- * Crée (ou rattache) les incidents terrain pour les coupures LOCALES encore en
- * cours sans incident : UN incident par site — les technologies d'un même site
- * rejoignent l'incident déjà ouvert au lieu d'en créer un par ligne. Les
- * coupures héritées (impact aval) ne génèrent jamais d'incident : le travail
- * est sur le site origine. Chaque création est dispatchée par SMS aux contacts
- * du prestataire en charge du site.
+ * Aiguillage des coupures LOCALES encore en cours, site par site :
+ * — SITE ENTIER tombé (ligne SITE, ou les 4 technos down) → l'énergie est la
+ *   cause probable : UN incident terrain (groupé par site) dispatché par SMS
+ *   aux contacts du prestataire PASSIF du lot ;
+ * — coupure PARTIELLE (le site est alimenté) → pas d'incident : simple
+ *   notification SMS aux équipes ACTIVES (radio/transmission), une seule fois.
+ * Les coupures héritées (impact aval) ne génèrent ni incident ni notification :
+ * le travail est sur le site origine.
  */
 export async function rattacherIncidentsCoupures(userId: string): Promise<number> {
   const orphelines = await prisma.coupureReseau.findMany({
@@ -44,21 +46,45 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
 
   let crees = 0;
   for (const [siteId, coupures] of parSite) {
+    const technos = [...new Set(coupures.map((c) => c.technologie))];
+    const siteEntier = technos.includes('SITE')
+      || ['2G', '3G', '4G', '5G'].every((t) => technos.includes(t));
+
+    if (!siteEntier) {
+      // Partiel → ACTIF par nature (le site est alimenté). Notification unique.
+      await prisma.coupureReseau.updateMany({
+        where: { id: { in: coupures.map((c) => c.id) }, causeCategorie: null, typeAlarme: { notIn: [...ALARMES_ENERGIE] } },
+        data: { causeCategorie: 'ACTIF' },
+      });
+      const aNotifier = coupures.filter((c) => !c.notifieeActif);
+      if (aNotifier.length) {
+        await notifierIncidentCoupure(
+          siteId,
+          `[E&M OpS] NOC : coupure ${technos.join('/')} sur ${coupures[0].site.nom} (site alimenté) — à traiter côté actif (radio/transmission).`,
+          'COUPURE_PARTIELLE_NOC',
+          'ACTIVE'
+        );
+        await prisma.coupureReseau.updateMany({
+          where: { id: { in: aNotifier.map((c) => c.id) } },
+          data: { notifieeActif: true },
+        });
+      }
+      continue;
+    }
+
     // Incident auto déjà ouvert pour ce site (créé par une coupure précédente) ?
     let incident = await prisma.incident.findFirst({
       where: { siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: {} } },
       select: { id: true, reference: true },
     });
-    const technos = coupures.map((c) => c.technologie);
     if (!incident) {
-      const siteEntier = technos.includes('SITE');
       incident = await prisma.$transaction(async (tx) => tx.incident.create({
         data: {
           reference: await genererReference(tx, 'INC', new Date()),
           siteId,
-          type: siteEntier ? 'COUPURE_TOTALE' : 'ALARME',
-          severite: siteEntier ? 'CRITIQUE' : 'MAJEUR',
-          description: `Coupure réseau ${[...new Set(technos)].join('/')} signalée par le NOC${coupures[0].typeAlarme ? ` (alarme ${coupures[0].typeAlarme})` : ''}.`,
+          type: 'COUPURE_TOTALE',
+          severite: 'CRITIQUE',
+          description: `Site entier hors service (coupure ${technos.join('/')}) signalé par le NOC${coupures[0].typeAlarme ? ` — alarme ${coupures[0].typeAlarme}` : ''}.`,
           declarePar: userId,
         },
         select: { id: true, reference: true },
@@ -67,8 +93,9 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
       io.of('/supervision').emit('incident:created', { id: incident.id, siteId });
       await notifierIncidentCoupure(
         siteId,
-        `[E&M OpS] NOC : coupure ${[...new Set(technos)].join('/')} sur ${coupures[0].site.nom}. Incident ${incident.reference ?? ''} à traiter.`,
-        'INCIDENT_COUPURE_NOC'
+        `[E&M OpS] NOC : site ${coupures[0].site.nom} entièrement hors service. Incident ${incident.reference ?? ''} — intervention terrain requise.`,
+        'INCIDENT_COUPURE_NOC',
+        'PASSIVE'
       );
     }
     await prisma.coupureReseau.updateMany({

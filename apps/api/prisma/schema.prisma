@@ -827,6 +827,9 @@ model CoupureReseau {
   // Classement de l'indisponibilité : ACTIF (équipement radio/transmission)
   // ou PASSIF (énergie/environnement — responsabilité O&M du prestataire).
   causeCategorie      String?   @map("cause_categorie") @db.VarChar(10)
+  // Coupure PARTIELLE déjà notifiée aux équipes actives (pas d'incident terrain :
+  // le site est alimenté, le défaut se traite côté radio/transmission).
+  notifieeActif       Boolean   @default(false) @map("notifiee_actif")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 

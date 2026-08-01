@@ -219,17 +219,28 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
 }
 
 /**
- * Notification SMS liée à une coupure réseau (incident auto créé/rouvert par le
- * NOC) : cible les contacts « incidents » du/des prestataires en charge du site
- * (assignations du lot), plus les contacts « toutes sociétés » (supervision interne).
+ * Notification SMS liée à une coupure réseau : cible les contacts « incidents »
+ * des prestataires du lot du site selon le PÉRIMÈTRE CONTRACTUEL de l'événement
+ * — PASSIVE (site entier tombé → énergie, intervention terrain) ou ACTIVE
+ * (coupure partielle → radio/transmission) — plus les contacts « toutes
+ * sociétés » (supervision interne), qui reçoivent tout.
  */
-export async function notifierIncidentCoupure(siteId: string, message: string, evenement: string): Promise<void> {
+export async function notifierIncidentCoupure(
+  siteId: string,
+  message: string,
+  evenement: string,
+  scope: 'PASSIVE' | 'ACTIVE' = 'PASSIVE'
+): Promise<void> {
   try {
     const site = await prisma.site.findUnique({
       where: { id: siteId },
-      select: { lot: { select: { assignments: { select: { prestataireId: true } } } } },
+      select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
     });
-    const prestataires = new Set((site?.lot?.assignments ?? []).map((a) => a.prestataireId));
+    const prestataires = new Set(
+      (site?.lot?.assignments ?? [])
+        .filter((a) => a.scope === scope || a.scope === 'LES_DEUX')
+        .map((a) => a.prestataireId)
+    );
 
     const contacts = await prisma.contact.findMany({ where: { actif: true, notifIncidents: true } });
     const cibles = contacts.filter(

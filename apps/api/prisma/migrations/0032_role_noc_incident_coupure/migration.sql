@@ -7,6 +7,7 @@ ALTER TYPE "RoleUser" ADD VALUE 'NOC';
 -- et classement de l'indisponibilité (ACTIF radio/transmission, PASSIF énergie).
 ALTER TABLE "coupures_reseau" ADD COLUMN "incident_id" TEXT;
 ALTER TABLE "coupures_reseau" ADD COLUMN "cause_categorie" VARCHAR(10);
+ALTER TABLE "coupures_reseau" ADD COLUMN "notifiee_actif" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "coupures_reseau" ADD CONSTRAINT "coupures_reseau_incident_id_fkey"
   FOREIGN KEY ("incident_id") REFERENCES "incidents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 CREATE INDEX "coupures_reseau_incident_id_idx" ON "coupures_reseau"("incident_id");
