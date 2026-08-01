@@ -29,6 +29,19 @@ export function getRaw(key: string): unknown {
   return cache.get(key) ?? null;
 }
 
+/**
+ * Écriture d'un paramètre technique (ex. horodatage du dernier envoi de la
+ * situation périodique) : persiste en base ET met le cache à jour.
+ */
+export async function setRaw(key: string, value: unknown): Promise<void> {
+  await prisma.systemSettings.upsert({
+    where: { key },
+    update: { value: value as never },
+    create: { key, value: value as never },
+  });
+  cache.set(key, value);
+}
+
 export function getNum(key: string, fallback: number): number {
   const v = cache.get(key);
   if (v == null) return fallback;
@@ -86,6 +99,9 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'sla.tolerancePreventifJours', label: 'Tolérance retard préventif', groupe: 'SLA prestataires', unite: 'j', defaut: 7 },
     { key: 'sla.penaliteResolutionFCFA', label: 'Pénalité par incident hors délai', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 50000 },
     { key: 'sla.penalitePreventifFCFA', label: 'Pénalité par point de préventif manquant', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 100000 },
+    // Notifications — situation périodique des dépassements (0 h d'intervalle = désactivée)
+    { key: 'notifications.situationIntervalleH', label: 'Intervalle de la situation périodique', groupe: 'Notifications', unite: 'h', defaut: 3 },
+    { key: 'notifications.situationSeuilH', label: 'Seuil de dépassement signalé', groupe: 'Notifications', unite: 'h', defaut: 1 },
     // Vraisemblance des saisies terrain (avertissements à confirmer, pas des blocages)
     { key: 'vraisemblance.margeCuvePct', label: 'Tolérance au-dessus de la capacité cuve', groupe: 'Vraisemblance saisies', unite: '%', defaut: 2 },
     { key: 'vraisemblance.maxHeuresGEParJour', label: 'Marche GE max par jour écoulé', groupe: 'Vraisemblance saisies', unite: 'h/j', defaut: 24 },

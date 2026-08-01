@@ -7,6 +7,7 @@ import { incidentEscalationJob } from './incident-escalation';
 import { preventivePlanJob } from './preventive-plan';
 import { manquantAlertJob } from './manquant-alert';
 import { vidangeAlertJob } from './vidange-alert';
+import { situationPeriodiqueJob } from './situation-periodique';
 
 export function setupCronJobs() {
   // ── Vérif stock carburant — tous les jours à 8h ─────────────
@@ -57,5 +58,11 @@ export function setupCronJobs() {
     try { await vidangeAlertJob(); } catch (e) { logger.error('[CRON] vidangeAlert error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 7 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
+  // ── Situation périodique incidents/coupures — vérifiée tous les quarts d'heure,
+  //    émise seulement quand l'intervalle paramétré (défaut 3 h) est écoulé.
+  cron.schedule('*/15 * * * *', async () => {
+    try { await situationPeriodiqueJob(); } catch (e) { logger.error('[CRON] situationPeriodique error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
+  logger.info('✅ 8 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
 }

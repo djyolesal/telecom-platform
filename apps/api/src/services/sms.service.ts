@@ -186,50 +186,62 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
       `[E&M OpS] ${technicien.prenom} ${technicien.nom} (${societe}) ${verbe} ${objet}` +
       `${evt.detail ? ` ${evt.detail}` : ''} sur ${evt.siteNom} à ${heure}.`;
 
-    const evenement = `${evt.domaine}_${evt.evenement}`;
-    const simule = !env.SMS_API_URL;
-
-    // Un seul POST pour tout le lot (l'API accepte la liste des destinataires).
-    let statutLot = simule ? 'SIMULE' : 'ENVOYE';
-    let erreurLot: string | null = null;
-    let echecs = new Set<string>();
-    if (!simule) {
-      try {
-        const reponse = await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
-        echecs = numerosEnEchec(reponse);
-      } catch (e) {
-        statutLot = 'ECHEC';
-        erreurLot = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
-      }
-    }
-    for (const c of cibles) {
-      const rejete = statutLot === 'ENVOYE' && echecs.has(telephoneLocal(c.telephone));
-      await prisma.smsLog.create({
-        data: {
-          telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
-          statut: rejete ? 'ECHEC' : statutLot,
-          erreur: rejete ? 'Rejeté par la passerelle' : erreurLot,
-        },
-      });
-    }
-    logger.info(`[sms] ${evenement} ${evt.siteNom} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
+    await envoyerLotContacts(cibles, message, `${evt.domaine}_${evt.evenement}`);
   } catch (err) {
     logger.warn('[sms] notification contacts échouée:', err);
   }
 }
 
 /**
- * Notification SMS liée à une coupure réseau : cible les contacts « incidents »
- * des prestataires du lot du site selon le PÉRIMÈTRE CONTRACTUEL de l'événement
- * — PASSIVE (site entier tombé → énergie, intervention terrain) ou ACTIVE
+ * Envoi groupé + journalisation pour une liste de contacts DÉJÀ ciblée
+ * (un seul POST passerelle pour le lot, un SmsLog par contact).
+ */
+export async function envoyerLotContacts(
+  cibles: { id: string; telephone: string }[],
+  message: string,
+  evenement: string
+): Promise<void> {
+  if (!cibles.length) return;
+  const simule = !env.SMS_API_URL;
+  let statutLot = simule ? 'SIMULE' : 'ENVOYE';
+  let erreurLot: string | null = null;
+  let echecs = new Set<string>();
+  if (!simule) {
+    try {
+      const reponse = await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
+      echecs = numerosEnEchec(reponse);
+    } catch (e) {
+      statutLot = 'ECHEC';
+      erreurLot = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
+    }
+  }
+  for (const c of cibles) {
+    const rejete = statutLot === 'ENVOYE' && echecs.has(telephoneLocal(c.telephone));
+    await prisma.smsLog.create({
+      data: {
+        telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
+        statut: rejete ? 'ECHEC' : statutLot,
+        erreur: rejete ? 'Rejeté par la passerelle' : erreurLot,
+      },
+    });
+  }
+  logger.info(`[sms] ${evenement} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
+}
+
+/**
+ * Notification SMS liée à une coupure réseau : cible les contacts abonnés
+ * (`notifIncidents` pour un incident terrain, `notifCoupures` pour une coupure
+ * partielle) des prestataires du lot du site selon le PÉRIMÈTRE CONTRACTUEL —
+ * PASSIVE (site entier tombé → énergie, intervention terrain) ou ACTIVE
  * (coupure partielle → radio/transmission) — plus les contacts « toutes
- * sociétés » (supervision interne), qui reçoivent tout.
+ * sociétés » (supervision interne).
  */
 export async function notifierIncidentCoupure(
   siteId: string,
   message: string,
   evenement: string,
-  scope: 'PASSIVE' | 'ACTIVE' = 'PASSIVE'
+  scope: 'PASSIVE' | 'ACTIVE' = 'PASSIVE',
+  pref: 'incidents' | 'coupures' = 'incidents'
 ): Promise<void> {
   try {
     const site = await prisma.site.findUnique({
@@ -242,36 +254,13 @@ export async function notifierIncidentCoupure(
         .map((a) => a.prestataireId)
     );
 
-    const contacts = await prisma.contact.findMany({ where: { actif: true, notifIncidents: true } });
+    const contacts = await prisma.contact.findMany({
+      where: { actif: true, ...(pref === 'coupures' ? { notifCoupures: true } : { notifIncidents: true }) },
+    });
     const cibles = contacts.filter(
       (c) => c.toutesSocietes || (c.prestataireId != null && prestataires.has(c.prestataireId))
     );
-    if (!cibles.length) return;
-
-    const simule = !env.SMS_API_URL;
-    let statutLot = simule ? 'SIMULE' : 'ENVOYE';
-    let erreurLot: string | null = null;
-    let echecs = new Set<string>();
-    if (!simule) {
-      try {
-        const reponse = await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
-        echecs = numerosEnEchec(reponse);
-      } catch (e) {
-        statutLot = 'ECHEC';
-        erreurLot = e instanceof Error ? e.message.slice(0, 200) : 'Erreur inconnue';
-      }
-    }
-    for (const c of cibles) {
-      const rejete = statutLot === 'ENVOYE' && echecs.has(telephoneLocal(c.telephone));
-      await prisma.smsLog.create({
-        data: {
-          telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
-          statut: rejete ? 'ECHEC' : statutLot,
-          erreur: rejete ? 'Rejeté par la passerelle' : erreurLot,
-        },
-      });
-    }
-    logger.info(`[sms] ${evenement} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
+    await envoyerLotContacts(cibles, message, evenement);
   } catch (err) {
     logger.warn('[sms] notification incident-coupure échouée:', err);
   }

@@ -62,7 +62,8 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
           siteId,
           `[E&M OpS] NOC : coupure ${technos.join('/')} sur ${coupures[0].site.nom} (site alimenté) — à traiter côté actif (radio/transmission).`,
           'COUPURE_PARTIELLE_NOC',
-          'ACTIVE'
+          'ACTIVE',
+          'coupures'
         );
         await prisma.coupureReseau.updateMany({
           where: { id: { in: aNotifier.map((c) => c.id) } },

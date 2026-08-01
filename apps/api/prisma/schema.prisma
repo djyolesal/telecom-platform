@@ -627,6 +627,10 @@ model Contact {
   notifCloture      Boolean @default(true) @map("notif_cloture")
   notifMaintenances Boolean @default(true) @map("notif_maintenances")
   notifIncidents    Boolean @default(true) @map("notif_incidents")
+  // Coupures partielles (site alimenté, défaut radio/transmission) — équipes actives.
+  notifCoupures     Boolean @default(true) @map("notif_coupures")
+  // Situation périodique (récap des incidents/coupures dépassant le seuil).
+  notifSituations   Boolean @default(true) @map("notif_situations")
   // true : reçoit les actions de toutes les sociétés ; false : uniquement celles
   // de sa société (technicien du même prestataire, ou interne si contact interne).
   toutesSocietes Boolean @default(false) @map("toutes_societes")

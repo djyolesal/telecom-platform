@@ -16,13 +16,15 @@ interface Contact {
   id: string; nom: string; prenom: string; telephone: string; email: string | null;
   societe: string; actif: boolean;
   notifDemarrage: boolean; notifCloture: boolean; notifMaintenances: boolean; notifIncidents: boolean;
+  notifCoupures: boolean; notifSituations: boolean;
   toutesSocietes: boolean;
 }
 interface SmsLog { id: string; telephone: string; message: string; evenement: string; statut: string; erreur: string | null; createdAt: string }
 
 const VIDE: Omit<Contact, 'id'> = {
   nom: '', prenom: '', telephone: '', email: '', societe: '', actif: true,
-  notifDemarrage: true, notifCloture: true, notifMaintenances: true, notifIncidents: true, toutesSocietes: false,
+  notifDemarrage: true, notifCloture: true, notifMaintenances: true, notifIncidents: true,
+  notifCoupures: true, notifSituations: true, toutesSocietes: false,
 };
 
 /**
@@ -202,6 +204,8 @@ export default function ContactsPage() {
                       {c.notifCloture && <Chip>Clôtures</Chip>}
                       {!c.notifMaintenances && <Chip off>Sans maint.</Chip>}
                       {!c.notifIncidents && <Chip off>Sans incidents</Chip>}
+                      {!c.notifCoupures && <Chip off>Sans coupures</Chip>}
+                      {!c.notifSituations && <Chip off>Sans situations</Chip>}
                       <Chip accent={c.toutesSocietes}>{c.toutesSocietes ? 'Toutes sociétés' : 'Sa société'}</Chip>
                     </div>
                   </td>
@@ -364,6 +368,8 @@ function ContactForm({ initial, societes, loading, onCancel, onSubmit }: {
         <Check label="Clôtures" value={f.notifCloture} onChange={(v) => set({ notifCloture: v })} />
         <Check label="Maintenances" value={f.notifMaintenances} onChange={(v) => set({ notifMaintenances: v })} />
         <Check label="Incidents" value={f.notifIncidents} onChange={(v) => set({ notifIncidents: v })} />
+        <Check label="Coupures partielles (équipes actives)" value={f.notifCoupures} onChange={(v) => set({ notifCoupures: v })} />
+        <Check label="Situations périodiques (récap dépassements)" value={f.notifSituations} onChange={(v) => set({ notifSituations: v })} />
         <Check label="Toutes les sociétés (sinon : la sienne uniquement)" value={f.toutesSocietes} onChange={(v) => set({ toutesSocietes: v })} />
       </div>
       <div className="mt-4 flex justify-end gap-2">
