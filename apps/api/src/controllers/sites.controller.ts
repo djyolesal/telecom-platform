@@ -711,6 +711,7 @@ export async function getEtiquettesQr(req: Request, res: Response, next: NextFun
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { id: true, numero: true, puissanceKva: true } } },
     });
     if (!site) throw new AppError('Site introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, site.id);
     const pdf = await generateEtiquettesQrPdf({
       site: { id: site.id, code: site.code, nom: site.nom, region: site.region },
       ges: site.groupes.map((g) => ({ id: g.id, numero: g.numero, puissanceKva: Number(g.puissanceKva) })),

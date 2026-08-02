@@ -62,6 +62,32 @@ router.use((req, _res, next) => {
   next(new AppError("Accès réservé : un compte transporteur est limité à l'appro carburant.", 403));
 });
 
+// Express route en casse-INSENSIBLE et tolère le slash final : sans
+// normalisation, `/RAPPORTS/MENSUEL/` ou `/rapports/gardiennage/` échappaient à
+// la deny-list tout en atteignant la route. On normalise donc avant de tester.
+const cheminNormalise = (p: string) => p.toLowerCase().replace(/\/+$/, '') || '/';
+
+// ── Périmètre NOC ─────────────────────────────────────────────
+// Le centre de supervision réseau surveille et qualifie les indisponibilités :
+// coupures et topologie en écriture, supervision en lecture. Il ne fait NI
+// l'O&M terrain (maintenances, dépotages, relevés), NI l'administration.
+// Sans cette liste, NOC héritait de toutes les routes dépourvues de rbac().
+const NOC_ALLOW: RegExp[] = [
+  /^\/auth\//,
+  /^\/config$/,
+  /^\/notifications(\/|$)/,
+  /^\/sites(\/|$)/,                    // consultation du parc + import/export topologie
+  /^\/coupures-reseau(\/|$)/,
+  /^\/incidents(\/|$)/,                // suivi et déclaration ; la clôture reste terrain
+  /^\/rapports\/(dashboard|disponibilite-reseau|stock-carburant|incidents)$/,
+  /^\/types-pylone(\/|$)/,
+];
+router.use((req, _res, next) => {
+  if (req.user?.role !== 'NOC') return next();
+  if (NOC_ALLOW.some((re) => re.test(cheminNormalise(req.path)))) return next();
+  next(new AppError('Accès réservé : un compte NOC est limité à la supervision réseau.', 403));
+});
+
 // ── Rapports agrégés du parc : équipes INTERNES uniquement ────
 // Un utilisateur rattaché à un prestataire (superviseur ou technicien) n'a pas
 // accès aux agrégats parc entier (logistique, anomalies, empreinte carbone…) :
@@ -78,12 +104,17 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/empreinte-carbone$/,
   /^\/rapports\/mensuel(\/|$)/,
   /^\/rapports\/gardiennage$/,
+  // Rapports consolidés du parc : jamais accessibles à un compte prestataire,
+  // même si son rôle (MANAGER/DIRECTION) figure dans le rbac de la route.
+  /^\/rapports\/dashboard-direction$/,
+  /^\/rapports\/fiabilite-ge$/,
+  /^\/rapports\/sla-prestataires$/,
   // /rapports/disponibilite-reseau : OUVERT aux prestataires depuis la phase D —
   // le contrôleur applique le périmètre (chacun ne voit que ses lots).
 ];
 router.use(async (req, _res, next) => {
   try {
-    if (!req.user || !INTERNE_ONLY.some((re) => re.test(req.path))) return next();
+    if (!req.user || !INTERNE_ONLY.some((re) => re.test(cheminNormalise(req.path)))) return next();
     const me = await _prisma.user.findUnique({ where: { id: req.user.id }, select: { prestataireId: true } });
     if (me?.prestataireId) return next(new AppError('Rapport réservé aux équipes internes.', 403));
     next();
@@ -92,9 +123,9 @@ router.use(async (req, _res, next) => {
 
 // Plafond anti-DoS applicatif sur la génération LOURDE (PDF, exports xlsx/pdf/csv,
 // rapport mensuel) : un utilisateur ne peut pas boucler dessus et saturer le CPU.
-const HEAVY_PATH = /(\/export\/(xlsx|pdf|csv)$|\.pdf$|\.xlsx$|^\/rapports\/mensuel\/)/;
+const HEAVY_PATH = /(\/export\/(xlsx|pdf|csv)$|\.pdf$|\.xlsx$|^\/rapports\/(mensuel\/|disponibilite-reseau$|dashboard$|dashboard-direction$|stock-carburant$|sla-prestataires$|fiabilite-ge$|correlation-carburant$))/;
 router.use((req, res, next) => {
-  if (req.method === 'GET' && HEAVY_PATH.test(req.path)) return heavyLimit(req, res, next);
+  if (req.method === 'GET' && HEAVY_PATH.test(cheminNormalise(req.path))) return heavyLimit(req, res, next);
   next();
 });
 
@@ -154,7 +185,7 @@ router.get('/rapports/disponibilite-reseau', rbac(['NOC','SUPERVISEUR','MANAGER'
 router.get('/ma-societe', prestatairesCtrl.getMaSociete);
 router.put('/ma-societe', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN']), prestatairesCtrl.updateMaSociete);
 
-router.get('/prestataires', prestatairesCtrl.getPrestataires);
+router.get('/prestataires', rbac(['MANAGER','ADMIN']), prestatairesCtrl.getPrestataires);
 router.post('/prestataires', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.createPrestataire);
 
 // ── Contacts à notifier (SMS) — gestion admin ──
@@ -166,15 +197,15 @@ router.get('/contacts/sms-logs', rbac(['ADMIN']), contactsCtrl.getSmsLogs);
 router.post('/sms/send', rbac(['ADMIN']), rateLimit({ windowSec: 3600, max: 30, keyPrefix: 'smssend' }), contactsCtrl.sendSms);
 router.put('/contacts/:id', rbac(['ADMIN']), contactsCtrl.updateContact);
 router.delete('/contacts/:id', rbac(['ADMIN']), contactsCtrl.deleteContact);
-router.get('/prestataires/:id', prestatairesCtrl.getPrestataireById);
+router.get('/prestataires/:id', rbac(['MANAGER','ADMIN']), prestatairesCtrl.getPrestataireById);
 router.put('/prestataires/:id', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.updatePrestataire);
 router.post('/prestataires/:id/toggle-active', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.togglePrestataire);
 router.delete('/prestataires/:id', rbac(['ADMIN']), prestatairesCtrl.deletePrestataire);
 
 // ── Lots de maintenance ───────────────────────────────────────
-router.get('/lots', lotsCtrl.getLots);
+router.get('/lots', rbac(['MANAGER','ADMIN']), lotsCtrl.getLots);
 router.post('/lots', rbac(['MANAGER', 'ADMIN']), lotsCtrl.createLot);
-router.get('/lots/:id', lotsCtrl.getLotById);
+router.get('/lots/:id', rbac(['MANAGER','ADMIN']), lotsCtrl.getLotById);
 router.put('/lots/:id', rbac(['MANAGER', 'ADMIN']), lotsCtrl.updateLot);
 router.delete('/lots/:id', rbac(['ADMIN']), lotsCtrl.deleteLot);
 router.post('/lots/:id/assignments', rbac(['MANAGER', 'ADMIN']), lotsCtrl.addAssignment);
@@ -208,7 +239,7 @@ router.delete('/actifs/:type/:id', rbac(['ADMIN']), actifsCtrl.deleteActif);
 // ── Dépotages ─────────────────────────────────────────────────
 router.get('/depotages', depotagesCtrl.getDepotages);
 router.get('/depotages/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), depotagesCtrl.exportDepotages);
-router.post('/depotages', depotagesCtrl.createDepotage);
+router.post('/depotages', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), depotagesCtrl.createDepotage);
 router.get('/depotages/:id/bordereau.pdf', depotagesCtrl.exportDepotagePdf);
 router.get('/depotages/:id', depotagesCtrl.getDepotageById);
 router.put('/depotages/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), depotagesCtrl.updateDepotage);
@@ -254,25 +285,25 @@ router.get('/rapports/manquants-livraison/site/:id', rbac(['SUPERVISEUR', 'MANAG
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);
 router.get('/releves/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), relevesCtrl.exportReleves);
-router.post('/releves', relevesCtrl.createReleve);
+router.post('/releves', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), relevesCtrl.createReleve);
 router.post('/releves/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), relevesImportCtrl.importReleves);
 router.get('/releves/:id', relevesCtrl.getReleveById);
 
 // ── Incidents ─────────────────────────────────────────────────
 router.get('/incidents', incidentsCtrl.getIncidents);
-router.get('/incidents/kpis', incidentsCtrl.getIncidentKPIs);
+router.get('/incidents/kpis', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC']), incidentsCtrl.getIncidentKPIs);
 router.get('/incidents/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
-router.post('/incidents', incidentsCtrl.createIncident);
+router.post('/incidents', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC']), incidentsCtrl.createIncident);
 router.get('/incidents/:id', incidentsCtrl.getIncidentById);
 router.put('/incidents/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.updateIncident);
 router.delete('/incidents/:id', rbac(['ADMIN']), incidentsCtrl.deleteIncident);
 router.post('/incidents/:id/assign', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.assignIncident);
-router.post('/incidents/:id/demarrer', incidentsCtrl.startIncident);
-router.post('/incidents/:id/close', incidentsCtrl.closeIncident);
+router.post('/incidents/:id/demarrer', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.startIncident);
+router.post('/incidents/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.closeIncident);
 
 // ── Rapports ──────────────────────────────────────────────────
 router.get('/rapports/dashboard', rapportsCtrl.getDashboard);
-router.get('/rapports/stock-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
+router.get('/rapports/stock-carburant', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
 router.get('/rapports/conso-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConsoEnergie);
 router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMaintenance);
 router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportIncidents);

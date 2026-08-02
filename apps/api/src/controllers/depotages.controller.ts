@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { sitePerimetre, isRestreint } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { parseISO } from 'date-fns';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
-import { idempotencyKey } from '../utils/idempotency';
+import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
@@ -201,6 +201,7 @@ export async function getDepotageById(req: Request, res: Response, next: NextFun
       },
     });
     if (!depotage) throw new AppError('Dépotage introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, depotage.siteId);
     // Photos rattachées (modèle générique entityType/entityId) → URL recalculée depuis MinIO.
     const photos = await prisma.photo.findMany({
       where: { entityType: 'depotage', entityId: depotage.id },
@@ -220,6 +221,9 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     const b = req.body as Record<string, unknown>;
     const siteId = String(b.siteId ?? '');
     if (!siteId) throw new AppError('Site requis', 400);
+    // Sans ce contrôle, un technicien pouvait injecter un dépotage sur le site
+    // d'un concurrent et corrompre sa réconciliation carburant.
+    await assertSiteInPerimetre(req.user!.id, siteId);
     const ligneLivraisonId = b.ligneLivraisonId ? String(b.ligneLivraisonId) : null;
 
     // Idempotence : le mobile envoie un UUID stable via le header Idempotency-Key,
@@ -227,7 +231,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // sur réseau lent) retrouve le dépotage déjà créé et le renvoie sans doublon.
     const clientUuid = idempotencyKey(req);
     if (clientUuid) {
-      const deja = await prisma.depotage.findUnique({ where: { id: clientUuid } });
+      const deja = memeAuteur(await prisma.depotage.findUnique({ where: { id: clientUuid } }), req.user!.id);
       if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
     }
 
@@ -380,7 +384,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // la 1re ne soit visible → collision de PK. On renvoie le dépotage existant.
     const key = idempotencyKey(req);
     if ((err as { code?: string }).code === 'P2002' && key) {
-      const deja = await prisma.depotage.findUnique({ where: { id: key } });
+      const deja = memeAuteur(await prisma.depotage.findUnique({ where: { id: key } }), req.user!.id);
       if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
     }
     next(err);
@@ -393,8 +397,12 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
     if (!existing) throw new AppError('Dépotage introuvable', 404);
 
     // Liste blanche : jamais de technicienId/isSynced/ligneLivraisonId arbitraires.
+    await assertSiteInPerimetre(req.user!.id, existing.siteId);
+    // `siteId` RETIRÉ de la liste blanche : déplacer un dépotage d'un site à un
+    // autre faussait la réconciliation carburant des deux sites (aucun recalcul
+    // n'était refait). Une erreur de site se corrige par suppression + resaisie.
     const data = pick<Record<string, unknown>>(req.body, [
-      'siteId', 'dateDepotage', 'stockAvantLitres', 'stockApresLitres', 'volumeLitres',
+      'dateDepotage', 'stockAvantLitres', 'stockApresLitres', 'volumeLitres',
       'fournisseur', 'numeroBonLivraison', 'observations', 'latitude', 'longitude',
     ]);
     const { volume, stockApres } = deriveVolume({ ...existing, ...data });

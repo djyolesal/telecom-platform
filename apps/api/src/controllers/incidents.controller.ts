@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { sitePerimetre, isRestreint } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
@@ -36,7 +36,7 @@ export async function getIncidents(req: Request, res: Response, next: NextFuncti
     // Périmètre prestataire : incidents des sites de ses lots uniquement.
     const perimetre = await sitePerimetre(req.user!.id);
     if (isRestreint(perimetre)) where.site = { ...(where.site as object ?? {}), ...perimetre };
-    if (region) where.site = { region };
+    if (region) where.site = { ...(where.site as object ?? {}), region };
 
     const { data, meta } = await paginate(
       prisma.incident,
@@ -67,6 +67,7 @@ export async function getIncidentById(req: Request, res: Response, next: NextFun
       },
     });
     if (!incident) throw new AppError('Incident introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, incident.siteId);
 
     // Photos terrain (table polymorphe) — URL recalculée depuis la clé MinIO.
     const photos = await prisma.photo.findMany({
@@ -89,6 +90,9 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
     if (!b.siteId || !b.type || !b.severite || !b.description) {
       throw new AppError('Site, type, sévérité et description sont requis.', 400);
     }
+    // Un compte prestataire ne déclare que sur SES sites (sinon : incident
+    // fantôme chez un concurrent, avec notification à ses superviseurs).
+    await assertSiteInPerimetre(req.user!.id, String(b.siteId));
     // Liste blanche : statut/dates/technicien fixés par le workflow, declarePar
     // toujours l'utilisateur courant (jamais usurpé depuis le client).
     const data = pick<Prisma.IncidentUncheckedCreateInput>(b, [
@@ -132,6 +136,7 @@ export async function updateIncident(req: Request, res: Response, next: NextFunc
   try {
     const incident = await prisma.incident.findUnique({ where: { id: req.params.id } });
     if (!incident) throw new AppError('Incident introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, incident.siteId);
 
     // Liste blanche : le workflow (statut, dates, technicien) passe par assign/
     // demarrer/close. Ce PUT ne modifie que la description du problème.
@@ -182,6 +187,7 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
       include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
     });
     if (!incident) throw new AppError('Incident introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, incident.siteId);
     if (incident.statut === 'RESOLU' || incident.statut === 'CLOS') {
       throw new AppError(`Cet incident est déjà ${incident.statut === 'RESOLU' ? 'résolu' : 'clos'}.`, 409);
     }
@@ -232,6 +238,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
       include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
     });
     if (!incident) throw new AppError('Incident introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, incident.siteId);
 
     // Anti re-clôture : seul un incident EN COURS (intervention démarrée) se clôture.
     if (incident.statut !== 'EN_COURS' || !incident.dateIntervention) {
@@ -360,6 +367,7 @@ export async function deleteIncident(req: Request, res: Response, next: NextFunc
   try {
     const incident = await prisma.incident.findUnique({ where: { id: req.params.id } });
     if (!incident) throw new AppError('Incident introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, incident.siteId);
     // Détacher les maintenances liées avant suppression
     await prisma.maintenance.updateMany({ where: { incidentId: incident.id }, data: { incidentId: null } });
     await prisma.incident.delete({ where: { id: req.params.id } });
@@ -376,7 +384,7 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
     if (severite) where.severite = severite;
     if (statut) where.statut = statut;
     if (site_id) where.siteId = site_id;
-    if (region) where.site = { region };
+    if (region) where.site = { ...(where.site as object ?? {}), region };
 
     const rows = await prisma.incident.findMany({
       where,
@@ -419,10 +427,17 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
 export async function getIncidentKPIs(req: Request, res: Response, next: NextFunction) {
   try {
     const { periode = '30', region } = req.query as Record<string, string>;
-    const days = parseInt(periode);
+    // parseInt non validé → NaN → fenêtre invalide → 500 Prisma.
+    const brut = parseInt(periode, 10);
+    const days = Number.isFinite(brut) ? Math.max(1, Math.min(730, brut)) : 30;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const siteFilter = region ? { site: { region } } : {};
+    // Périmètre prestataire : les KPI (dont le top 10 des sites les plus
+    // problématiques) exposaient tout le parc, concurrents compris.
+    const perimetre = await sitePerimetre(req.user!.id);
+    const siteFilter = (region || isRestreint(perimetre))
+      ? { site: { ...(isRestreint(perimetre) ? perimetre : {}), ...(region ? { region } : {}) } }
+      : {};
 
     // Incidents de la période
     const incidents = await prisma.incident.findMany({

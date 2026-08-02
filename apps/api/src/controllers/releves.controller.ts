@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { sitePerimetre, isRestreint } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
-import { idempotencyKey } from '../utils/idempotency';
+import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
@@ -90,6 +90,7 @@ export async function getReleveById(req: Request, res: Response, next: NextFunct
       },
     });
     if (!releve) throw new AppError('Relevé introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, releve.siteId);
     res.json({ success: true, data: { ...releve, provenance: provenanceReleve(releve.maintenance) } });
   } catch (err) { next(err); }
 }
@@ -99,6 +100,9 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
     const b = req.body as Record<string, unknown>;
     if (!b.siteId) throw new AppError('Site requis', 400);
     if (!b.source) throw new AppError('Source requise', 400);
+    // Un relevé devient LE stock/index de référence du site (carte, prévisions,
+    // alertes) : le réserver au périmètre de l'auteur.
+    await assertSiteInPerimetre(req.user!.id, String(b.siteId));
 
     // Bornes : mêmes capacités que les colonnes Decimal (cf. import historique) —
     // évite qu'une saisie aberrante devienne le stock/index courant du site.
@@ -110,7 +114,7 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
     // Idempotence (header Idempotency-Key → id) : un rejeu retrouve le relevé créé.
     const clientUuid = idempotencyKey(req);
     if (clientUuid) {
-      const deja = await prisma.releveEnergie.findUnique({ where: { id: clientUuid } });
+      const deja = memeAuteur(await prisma.releveEnergie.findUnique({ where: { id: clientUuid } }), req.user!.id);
       if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
     }
 

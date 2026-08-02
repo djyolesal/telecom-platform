@@ -28,10 +28,10 @@ const NAV_ITEMS = [
   { href: '/sites',                    label: 'Sites',             icon: MapPin,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { href: '/maintenance',              label: 'Maintenance',       icon: Wrench,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/actifs',                   label: "Parc d'actifs",     icon: Boxes,            roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
-  { href: '/carburant/stock',          label: 'Carburant',         icon: Fuel,             roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
+  { href: '/carburant/stock',          label: 'Carburant',         icon: Fuel,             roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/carburant/commandes',       label: 'Appro. carburant',  icon: Truck,            roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
   { href: '/carburant/pertes',         label: 'Pertes carburant',  icon: ShieldAlert,      roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
-  { href: '/energie',                  label: 'Énergie',           icon: Zap,              roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
+  { href: '/energie',                  label: 'Énergie',           icon: Zap,              roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/incidents',                label: 'Incidents',         icon: AlertTriangle,    roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { href: '/rapports',                 label: 'Rapports',          icon: BarChart3,        roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { href: '/administration',           label: 'Administration',    icon: Settings,         roles: ['ADMIN'] },
@@ -64,12 +64,23 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     ...(userRole === 'SUPERVISEUR' && maSociete ? [{ href: '/ma-societe', label: 'Ma société', icon: Building2, roles: ['SUPERVISEUR'] }] : []),
   ];
 
-  // Garde de rôle : la section demandée (préfixe de nav le plus spécifique)
-  // doit autoriser le rôle. Évite le loader infini / le rendu partiel d'une
-  // page interdite quand l'API renvoie 403 (le menu masqué ne suffit pas).
-  const section = [...NAV_ITEMS].sort((a, b) => b.href.length - a.href.length)
-    .find((item) => pathname === item.href || pathname.startsWith(item.href + '/'));
-  const accesRefuse = userRole && section && !section.roles.includes(userRole) && pathname !== '/ma-societe';
+  // Garde de rôle. La déduction par préfixe de menu laissait SANS AUCUNE GARDE
+  // les pages qu'aucune entrée ne préfixe (/carburant/depotages, /carburant/
+  // livraisons, /supervision/alertes…) : elles étaient ouvertes à tout rôle
+  // connecté. Cette table couvre explicitement ces sections orphelines, et le
+  // menu sert de repli pour le reste.
+  const SECTIONS_HORS_MENU: Array<{ prefixe: string; roles: string[] }> = [
+    { prefixe: '/carburant', roles: ['TECHNICIEN', 'SUPERVISEUR', 'MANAGER', 'ADMIN'] },
+    { prefixe: '/supervision', roles: ['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION', 'NOC'] },
+    { prefixe: '/energie', roles: ['TECHNICIEN', 'SUPERVISEUR', 'MANAGER', 'ADMIN'] },
+    { prefixe: '/rapports', roles: ['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION', 'NOC'] },
+    { prefixe: '/administration', roles: ['ADMIN'] },
+  ];
+  const correspond = (href: string) => pathname === href || pathname.startsWith(href + '/');
+  const section = [...NAV_ITEMS].sort((a, b) => b.href.length - a.href.length).find((item) => correspond(item.href));
+  const horsMenu = SECTIONS_HORS_MENU.find((s) => correspond(s.prefixe));
+  const rolesAutorises = section?.roles ?? horsMenu?.roles;
+  const accesRefuse = userRole && rolesAutorises && !rolesAutorises.includes(userRole) && pathname !== '/ma-societe';
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">

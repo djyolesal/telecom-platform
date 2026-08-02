@@ -113,6 +113,12 @@ export async function getBonCommandeById(req: Request, res: Response, next: Next
       },
     });
     if (!bc) throw new AppError('Bon de commande introuvable', 404);
+    // Un transporteur ne doit voir QUE ses propres chargements : le détail du BC
+    // exposait les BL de tous les transporteurs (camions, volumes, statuts).
+    if (req.user!.role === 'TRANSPORTEUR') {
+      const moi = await userPrestataireId(req.user!.id);
+      bc.bonsLivraison = bc.bonsLivraison.filter((bl) => bl.transporteurId === moi);
+    }
 
     // Suivi commandé vs livré, par mois.
     const charge = new Map<number, number>();
@@ -349,7 +355,10 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     const volume = n(volumeChargeLitres);
     if (volume <= 0) throw new AppError('Volume chargé doit être > 0', 400);
     // Le plan est optionnel à la création (le manager le génère/édite ensuite).
-    const lignes = parseLignes(req.body.lignes);
+    // Le TRANSPORTEUR ne peut pas le poser — même règle qu'à la modification
+    // (sinon il s'auto-affectait des sites qu'il ne dessert pas).
+    const estTransporteur = req.user!.role === 'TRANSPORTEUR';
+    const lignes = estTransporteur ? [] : parseLignes(req.body.lignes);
     const { warnings } = await validatePlan(bonCommandeId, m, volume, lignes);
 
     const bl = await prisma.bonLivraison.create({

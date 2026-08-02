@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { redisClient } from '../config/redis';
 import { env } from '../config/env';
+import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
@@ -23,6 +25,11 @@ export async function getUsers(req: Request, res: Response, next: NextFunction) 
   try {
     const { role, region, is_active, search, page = '1', limit = '20' } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
+    // Un compte rattaché à un prestataire ne voit que SES collègues : sans cela,
+    // l'annuaire complet (emails, téléphones, rôles, y compris les ADMIN) était
+    // lisible par tout superviseur — base idéale de hameçonnage ciblé.
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    if (moi?.prestataireId) where.prestataireId = moi.prestataireId;
     if (role) where.role = role;
     if (region) where.region = region;
     if (is_active != null) where.isActive = is_active === 'true';
@@ -43,15 +50,22 @@ export async function getUsers(req: Request, res: Response, next: NextFunction) 
 
 export async function getUserById(req: Request, res: Response, next: NextFunction) {
   try {
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
     const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: SAFE_SELECT });
-    if (!user) throw new AppError('Utilisateur introuvable', 404);
+    // 404 (et non 403) hors périmètre : pas d'énumération de comptes.
+    if (!user || (moi?.prestataireId && user.prestataireId !== moi.prestataireId)) {
+      throw new AppError('Utilisateur introuvable', 404);
+    }
     res.json({ success: true, data: user });
   } catch (err) { next(err); }
 }
 
 export async function createUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const { password, email, ...rest } = req.body;
+    const { password, email } = req.body as { password?: string; email?: string };
+    const rest = pick<Prisma.UserUncheckedCreateInput>(req.body, [
+      'nom', 'prenom', 'telephone', 'role', 'region', 'isActive', 'prestataireId', 'equipe',
+    ]);
     // Aucun mot de passe en clair par email : le compte naît avec un secret
     // aléatoire inutilisable, et l'utilisateur définit le sien via un lien à
     // usage unique. (Un mot de passe explicite fourni par l'admin reste honoré.)
@@ -59,7 +73,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
     const passwordHash = await bcrypt.hash(plain, SALT_ROUNDS);
 
     const user = await prisma.user.create({
-      data: { ...rest, email: String(email).toLowerCase(), passwordHash },
+      data: { ...rest, email: String(email).toLowerCase(), passwordHash } as Prisma.UserUncheckedCreateInput,
       select: SAFE_SELECT,
     });
 
@@ -90,12 +104,20 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
     const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Utilisateur introuvable', 404);
 
-    const { password, passwordHash: _ph, email, ...data } = req.body;
+    // Liste BLANCHE (et non liste noire) : le reste du corps partait tel quel
+    // dans Prisma — appareilId, sessionWebId et même des écritures imbriquées
+    // étaient injectables.
+    const data = pick<Prisma.UserUncheckedUpdateInput>(req.body, [
+      'nom', 'prenom', 'telephone', 'role', 'region', 'isActive', 'prestataireId', 'equipe',
+    ]);
+    const { password, email } = req.body as { password?: string; email?: string };
     if (email) data.email = String(email).toLowerCase();
     if (password) data.passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     const user = await prisma.user.update({ where: { id: req.params.id }, data, select: SAFE_SELECT });
-    await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, data, req);
+    // Jamais le hash en clair dans le journal d'audit (lisible via /admin/audit
+    // et présent dans toutes les sauvegardes).
+    await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { champs: Object.keys(data) }, req);
     res.json({ success: true, data: user });
   } catch (err) { next(err); }
 }

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { sitePerimetre, isRestreint } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
@@ -15,7 +15,7 @@ import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { assertOnSite } from '../utils/geofence';
-import { idempotencyKey } from '../utils/idempotency';
+import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { notifierAction } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
 import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite } from '../services/vraisemblance.service';
@@ -156,6 +156,9 @@ async function resolvePrestataireIdByScope(siteId: string, scope: 'PASSIVE' | 'A
 
 export async function getMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
+    // Périmètre prestataire (la liste était le seul endpoint maintenance à ne
+    // pas l'appliquer, alors que planning et export le faisaient déjà).
+    const perimetreListe = await sitePerimetre(req.user!.id);
     const { type, statut, site_id, technicien_id, prestataire_id, categorie, date_debut, date_fin, search, page = '1', limit = '20' } =
       req.query as Record<string, string>;
 
@@ -200,6 +203,8 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       };
     }
 
+    if (isRestreint(perimetreListe)) where.site = { ...(where.site as object ?? {}), ...perimetreListe };
+
     const { data, meta } = await paginate(
       prisma.maintenance,
       {
@@ -234,6 +239,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
       },
     });
     if (!maintenance) throw new AppError('Maintenance introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, maintenance.siteId);
     // URL des photos recalculée depuis la clé MinIO (jamais figée en base) :
     // robuste si l'IP/domaine (APP_URL) change après l'upload.
     const data = {
@@ -261,10 +267,14 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
     if (!data.siteId || !data.type || !data.categorie || !data.equipement || !data.datePlanifiee) {
       throw new AppError('Site, type, catégorie, équipement et date planifiée sont requis.', 400);
     }
+    // Périmètre : destination ET origine du mouvement d'actif — sans quoi une
+    // intervention était imputable au prestataire d'un lot concurrent.
+    await assertSiteInPerimetre(req.user!.id, String(data.siteId));
+    if (data.siteSourceId) await assertSiteInPerimetre(req.user!.id, String(data.siteSourceId));
     // Idempotence (rejeu de la file offline mobile) : la clé stable devient l'id.
     const clientUuid = idempotencyKey(req);
     if (clientUuid) {
-      const deja = await prisma.maintenance.findUnique({ where: { id: clientUuid } });
+      const deja = memeAuteur(await prisma.maintenance.findUnique({ where: { id: clientUuid } }), req.user!.id);
       if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
     }
     // La date planifiée ne peut pas être dans le passé (tolérance 60s).
@@ -339,14 +349,20 @@ export async function updateMaintenance(req: Request, res: Response, next: NextF
   try {
     const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Maintenance introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, existing.siteId);
 
     // Liste blanche : la clôture/démarrage/mouvement passent par leurs endpoints
     // dédiés (avec geofence, photos, transaction). Ce PUT ne modifie QUE les
     // méta de planification — jamais statut/dateDebut/dateFin/dureeMinutes/actif*.
     const data = pick<Prisma.MaintenanceUncheckedUpdateInput>(req.body, [
       'equipement', 'categorie', 'description', 'observations',
-      'datePlanifiee', 'technicienId', 'prestataireId', 'tachePreventiveKey',
+      'datePlanifiee', 'technicienId', 'tachePreventiveKey',
     ]);
+    // La réattribution du prestataire pilote directement conformité et SLA :
+    // réservée aux internes MANAGER/ADMIN, jamais à un superviseur prestataire.
+    if (req.body?.prestataireId !== undefined && ['MANAGER', 'ADMIN'].includes(req.user!.role)) {
+      (data as Record<string, unknown>).prestataireId = req.body.prestataireId || null;
+    }
     if (data.datePlanifiee) data.datePlanifiee = new Date(data.datePlanifiee as string);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
 
@@ -396,11 +412,19 @@ export async function addMaintenancePhotos(req: Request, res: Response, next: Ne
     if (!Array.isArray(photos) || photos.length === 0) throw new AppError('Aucune photo fournie', 400);
     if (photos.length > 20) throw new AppError('Trop de photos en une fois (20 max)', 400);
 
-    const m = await prisma.maintenance.findUnique({ where: { id: req.params.id }, select: { id: true, statut: true } });
+    const m = await prisma.maintenance.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, statut: true, siteId: true, technicienId: true },
+    });
     if (!m) throw new AppError('Maintenance introuvable', 404);
     if (!['EN_COURS', 'SUSPENDUE'].includes(m.statut)) {
       throw new AppError('Les photos d’intervention s’ajoutent sur une maintenance en cours', 400);
     }
+    // Preuve terrain : seul l'intervenant assigné, et dans son périmètre, peut
+    // verser des photos (sinon : dossier d'un tiers pollué, ou clôture
+    // préventive débloquée artificiellement en atteignant le quota de 6).
+    assertPeutAgir(req, m);
+    await assertSiteInPerimetre(req.user!.id, m.siteId);
 
     const rows = photos
       .filter((p) => p && p.url && p.key)
