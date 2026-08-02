@@ -9,6 +9,7 @@ import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/peri
 import { descendantsTransmission } from '../utils/transmission';
 import { genererReference } from '../services/reference.service';
 import { notifierIncidentCoupure } from '../services/sms.service';
+import { sendTabular } from '../utils/exporter';
 import { io } from '../server';
 
 export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
@@ -116,29 +117,37 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
 }
 
 /** Liste paginée, filtrable ; périmètre prestataire appliqué comme partout. */
+/** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
+async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
+  const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search } =
+    req.query as Record<string, string>;
+  const where: Record<string, unknown> = {};
+  if (site_id) where.siteId = site_id;
+  if (technologie) where.technologie = technologie;
+  if (type_alarme) where.typeAlarme = type_alarme;
+  if (statut === 'EN_COURS') where.dateFin = null;
+  if (statut === 'TERMINEE') where.dateFin = { not: null };
+  if (date_debut || date_fin) {
+    where.dateDebut = {
+      ...(date_debut ? { gte: new Date(date_debut) } : {}),
+      // Une date « au » sans heure (YYYY-MM-DD) couvre la journée ENTIÈRE.
+      ...(date_fin ? { lte: new Date(date_fin.length === 10 ? `${date_fin}T23:59:59` : date_fin) } : {}),
+    };
+  }
+  const perimetre = await sitePerimetre(req.user!.id);
+  if (search || isRestreint(perimetre)) {
+    where.site = {
+      ...(isRestreint(perimetre) ? perimetre : {}),
+      ...(search ? { nom: { contains: search, mode: 'insensitive' } } : {}),
+    };
+  }
+  return where;
+}
+
 export async function getCoupures(req: Request, res: Response, next: NextFunction) {
   try {
-    const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search, page = '1', limit = '20' } =
-      req.query as Record<string, string>;
-    const where: Record<string, unknown> = {};
-    if (site_id) where.siteId = site_id;
-    if (technologie) where.technologie = technologie;
-    if (type_alarme) where.typeAlarme = type_alarme;
-    if (statut === 'EN_COURS') where.dateFin = null;
-    if (statut === 'TERMINEE') where.dateFin = { not: null };
-    if (date_debut || date_fin) {
-      where.dateDebut = {
-        ...(date_debut ? { gte: new Date(date_debut) } : {}),
-        ...(date_fin ? { lte: new Date(date_fin) } : {}),
-      };
-    }
-    const perimetre = await sitePerimetre(req.user!.id);
-    if (search || isRestreint(perimetre)) {
-      where.site = {
-        ...(isRestreint(perimetre) ? perimetre : {}),
-        ...(search ? { nom: { contains: search, mode: 'insensitive' } } : {}),
-      };
-    }
+    const { page = '1', limit = '20' } = req.query as Record<string, string>;
+    const where = await whereCoupures(req);
     const { data, meta } = await paginate(
       prisma.coupureReseau,
       {
@@ -645,5 +654,67 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
           .sort((a, b) => b.downtimeHeures - a.downtimeHeures),
       },
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Export des coupures (xlsx / PDF tabulaire) avec les MÊMES filtres que la
+ * liste : période (date_debut/date_fin), statut, technologie, alarme,
+ * recherche — et le périmètre prestataire appliqué comme partout.
+ */
+export async function exportCoupures(req: Request, res: Response, next: NextFunction) {
+  try {
+    const where = await whereCoupures(req);
+    const rows = await prisma.coupureReseau.findMany({
+      where,
+      orderBy: { dateDebut: 'desc' },
+      take: 20000,
+      include: {
+        site: { select: { nom: true, region: true } },
+        incident: { select: { reference: true } },
+      },
+    });
+
+    const fmtDh = (d: Date | null) =>
+      d ? d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' }) : '';
+    const { date_debut, date_fin } = req.query as Record<string, string>;
+    const periode = date_debut || date_fin
+      ? `Période : ${date_debut || '…'} → ${date_fin || '…'}`
+      : 'Toutes périodes';
+
+    await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { count: rows.length }, req);
+    await sendTabular(res, req.params.format, 'coupures-reseau', 'Coupures réseau', [{
+      name: 'Coupures',
+      columns: [
+        { header: 'Site', key: 'site', width: 24 },
+        { header: 'Région', key: 'region', width: 16 },
+        { header: 'Technologie', key: 'technologie', width: 12 },
+        { header: 'Début', key: 'debut', width: 18 },
+        { header: 'Fin', key: 'fin', width: 18 },
+        { header: 'Downtime (min)', key: 'downtimeMin', width: 14 },
+        { header: 'Alarme', key: 'alarme', width: 9 },
+        { header: 'Catégorie', key: 'categorie', width: 10 },
+        { header: 'Origine', key: 'origine', width: 10 },
+        { header: 'Incident', key: 'incident', width: 16 },
+        { header: 'Cause', key: 'cause', width: 34 },
+        { header: 'Actions', key: 'actions', width: 34 },
+        { header: 'Intervenant(s)', key: 'intervenants', width: 22 },
+      ],
+      rows: rows.map((c) => ({
+        site: c.site.nom,
+        region: c.site.region,
+        technologie: c.technologie === 'SITE' ? 'Site entier' : c.technologie,
+        debut: fmtDh(c.dateDebut),
+        fin: c.dateFin ? fmtDh(c.dateFin) : 'EN COURS',
+        downtimeMin: c.downtimeMinutes ?? '',
+        alarme: c.typeAlarme ?? '',
+        categorie: c.causeCategorie ?? '',
+        origine: c.origine === 'HERITEE' ? 'Héritée' : 'Locale',
+        incident: c.incident?.reference ?? '',
+        cause: c.cause ?? '',
+        actions: c.actions ?? '',
+        intervenants: c.intervenants ?? '',
+      })),
+    }], `${rows.length} coupure(s) · ${periode}`);
   } catch (err) { next(err); }
 }

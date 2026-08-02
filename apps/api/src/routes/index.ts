@@ -142,6 +142,7 @@ router.get('/sites/:id/etiquettes-qr.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN'
 // Lecture large (supervision) ; ÉCRITURE réservée au NOC/manager/admin — les
 // techniciens agissent via les incidents, jamais directement sur les coupures.
 router.get('/coupures-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getCoupures);
+router.get('/coupures-reseau/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.exportCoupures);
 router.post('/coupures-reseau', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.createCoupure);
 router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);

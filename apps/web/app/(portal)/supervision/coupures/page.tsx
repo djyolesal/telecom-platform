@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Upload, X, CheckCircle2, AlertTriangle, WifiOff } from 'lucide-react';
 import { api } from '@/lib/api';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { DataTable, Column } from '@/components/shared/DataTable';
@@ -73,21 +74,34 @@ export default function CoupuresReseauPage() {
   const [statut, setStatut] = useState('');
   const [technologie, setTechnologie] = useState('');
   const [typeAlarme, setTypeAlarme] = useState('');
+  const [du, setDu] = useState('');
+  const [au, setAu] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [edition, setEdition] = useState<Coupure | null>(null);
   const debounced = useDebounce(search);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme }],
+    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, du, au }],
     queryFn: () => api.get('/coupures-reseau', {
       params: {
         page, limit: 20,
         search: debounced || undefined, statut: statut || undefined,
         technologie: technologie || undefined, type_alarme: typeAlarme || undefined,
+        date_debut: du || undefined, date_fin: au || undefined,
       },
     }).then((r) => r.data),
   });
+
+  // Export xlsx/PDF avec EXACTEMENT les filtres affichés (période comprise).
+  const exportQuery = [
+    debounced && `search=${encodeURIComponent(debounced)}`,
+    statut && `statut=${statut}`,
+    technologie && `technologie=${technologie}`,
+    typeAlarme && `type_alarme=${typeAlarme}`,
+    du && `date_debut=${du}`,
+    au && `date_fin=${au}`,
+  ].filter(Boolean).join('&');
   const rows: Coupure[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
 
@@ -135,6 +149,7 @@ export default function CoupuresReseauPage() {
               </button>
             )}
             {peutEcrire && <Button icon={Plus} onClick={() => setShowCreate(true)}>Nouvelle coupure</Button>}
+            <ExportButtons base="/coupures-reseau/export" name="coupures-reseau" query={exportQuery || undefined} />
           </>
         }
       />
@@ -149,6 +164,20 @@ export default function CoupuresReseauPage() {
           { key: 'alarme', label: 'Toutes alarmes', value: typeAlarme, options: TYPES_ALARME, onChange: (v) => { setTypeAlarme(v); setPage(1); } },
         ]}
       />
+
+      {/* Période (début de coupure) : borne les données affichées ET les exports. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">Période :</span>
+        <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+        <span className="text-gray-400">→</span>
+        <input type="date" value={au} onChange={(e) => { setAu(e.target.value); setPage(1); }}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+        {(du || au) && (
+          <button type="button" onClick={() => { setDu(''); setAu(''); setPage(1); }}
+            className="text-xs font-medium text-[#2471A3] hover:underline">Effacer</button>
+        )}
+      </div>
 
       {isLoading ? <TableSkeleton cols={7} />
         : isError ? <ErrorState />
