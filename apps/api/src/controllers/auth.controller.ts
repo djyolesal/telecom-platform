@@ -70,6 +70,31 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     // Session unique par plateforme : ce login devient LA session web (ou mobile)
     // du compte — les jetons de l'ancienne session seront rejetés.
     const plt = plateformeDe(req.body);
+
+    // Verrou d'appareil des comptes terrain : le compte se lie au PREMIER mobile
+    // qui se connecte ; tout autre appareil est refusé jusqu'à déliaison admin.
+    // Compatibilité : une ancienne app qui n'envoie pas deviceId n'est ni liée
+    // ni bloquée — le verrou s'arme à la première connexion de l'app à jour.
+    if (plt === 'MOBILE' && (user.role === 'TECHNICIEN' || user.role === 'TRANSPORTEUR')) {
+      const deviceId = String((req.body as { deviceId?: unknown }).deviceId ?? '').slice(0, 100);
+      const deviceLabel = String((req.body as { deviceLabel?: unknown }).deviceLabel ?? '').slice(0, 80);
+      if (deviceId) {
+        if (!user.appareilId) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { appareilId: deviceId, appareilLabel: deviceLabel || null, appareilLieLe: new Date() },
+          });
+          await auditLog(user.id, 'LOGIN', 'auth', undefined, { appareilLie: deviceLabel || deviceId }, req);
+        } else if (user.appareilId !== deviceId) {
+          await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: false, appareilRefuse: deviceLabel || deviceId }, req);
+          throw new AppError(
+            `Ce compte est lié à un autre appareil (${user.appareilLabel ?? 'appareil enregistré'}). ` +
+            'Contactez votre superviseur pour délier l\'ancien téléphone.',
+            403
+          );
+        }
+      }
+    }
     const sid = crypto.randomUUID();
     const accessToken = signAccess(user.id, user.role, sid, plt);
     const refreshToken = signRefresh(user.id, sid, plt);

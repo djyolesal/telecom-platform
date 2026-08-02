@@ -15,6 +15,7 @@ const SAFE_SELECT = {
   id: true, nom: true, prenom: true, email: true, telephone: true,
   role: true, region: true, isActive: true, lastLoginAt: true, createdAt: true,
   prestataireId: true, equipe: true,
+  appareilLabel: true, appareilLieLe: true,
   prestataire: { select: { id: true, nom: true } },
 };
 
@@ -187,5 +188,22 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
         connexion: u.lastLoginAt ? u.lastLoginAt.toLocaleString('fr-FR') : '',
       })),
     }]);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Délie l'appareil mobile d'un compte terrain (remplacement/perte de téléphone) :
+ * le prochain login mobile du compte liera le nouvel appareil.
+ */
+export async function delierAppareil(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, appareilLabel: true } });
+    if (!user) throw new AppError('Utilisateur introuvable', 404);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { appareilId: null, appareilLabel: null, appareilLieLe: null },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'users', user.id, { action: 'delier_appareil', ancien: user.appareilLabel }, req);
+    res.json({ success: true });
   } catch (err) { next(err); }
 }

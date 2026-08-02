@@ -291,6 +291,8 @@ router.put('/users/:id', rbac(['ADMIN']), usersCtrl.updateUser);
 router.delete('/users/:id', rbac(['ADMIN']), usersCtrl.deleteUser);
 router.post('/users/:id/toggle-active', rbac(['ADMIN']), usersCtrl.toggleActive);
 router.post('/users/:id/reset-password', rbac(['ADMIN']), usersCtrl.resetUserPassword);
+// Verrou d'appareil terrain : déliaison lors d'un remplacement de téléphone.
+router.post('/users/:id/delier-appareil', rbac(['ADMIN']), usersCtrl.delierAppareil);
 
 // ── Administration ────────────────────────────────────────────
 // Référentiel types de pylône : lecture pour tous (formulaires), édition admin.

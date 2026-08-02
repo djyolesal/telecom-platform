@@ -135,6 +135,11 @@ model User {
   role          RoleUser
   region        String?            @db.VarChar(50)
   passwordHash  String             @map("password_hash")
+  // Verrou d'appareil (terrain) : le compte se lie au PREMIER mobile connecté ;
+  // tout autre appareil est refusé jusqu'à déliaison par un admin.
+  appareilId    String?            @map("appareil_id") @db.VarChar(100)
+  appareilLabel String?            @map("appareil_label") @db.VarChar(80)
+  appareilLieLe DateTime?          @map("appareil_lie_le")
   fcmToken      String?            @map("fcm_token")
   isActive      Boolean            @default(true) @map("is_active")
   lastLoginAt   DateTime?          @map("last_login_at")

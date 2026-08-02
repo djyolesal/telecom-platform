@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Download, Power, KeyRound, Pencil, X } from 'lucide-react';
+import { Plus, Download, Power, KeyRound, Pencil, X, SmartphoneNfc } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -27,6 +27,8 @@ interface User {
   region?: string;
   isActive: boolean;
   lastLoginAt?: string;
+  appareilLabel?: string | null;
+  appareilLieLe?: string | null;
   equipe?: string;
   prestataire?: { id: string; nom: string };
 }
@@ -167,6 +169,10 @@ export default function UtilisateursPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
   const reset = useMutation({ mutationFn: (id: string) => api.post(`/users/${id}/reset-password`) });
+  const delier = useMutation({
+    mutationFn: (id: string) => api.post(`/users/${id}/delier-appareil`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
 
   const rows: User[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
@@ -180,11 +186,26 @@ export default function UtilisateursPage() {
     { key: 'isActive', header: 'Statut', render: (u) => <Badge className={u.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>{u.isActive ? 'Actif' : 'Inactif'}</Badge> },
     { key: 'lastLoginAt', header: 'Dernière connexion', render: (u) => fmtDateTime(u.lastLoginAt) },
     {
+      key: 'appareil', header: 'Appareil lié',
+      render: (u) => u.appareilLabel
+        ? <span className="text-xs text-gray-600" title={`Lié le ${fmtDateTime(u.appareilLieLe)}`}>{u.appareilLabel}</span>
+        : <span className="text-xs text-gray-300">—</span>,
+    },
+    {
       key: 'actions', header: '', align: 'right', render: (u) => (
         <div className="flex justify-end gap-1">
           <button onClick={() => setEditUser(u)} title="Modifier" className="p-1.5 rounded hover:bg-gray-100"><Pencil size={15} className="text-gray-500" /></button>
           <button onClick={() => toggle.mutate(u.id)} title={u.isActive ? 'Désactiver' : 'Activer'} className="p-1.5 rounded hover:bg-gray-100"><Power size={15} className={u.isActive ? 'text-green-600' : 'text-gray-400'} /></button>
           <button onClick={() => { if (confirm(`Réinitialiser le mot de passe de ${u.prenom} ${u.nom} ?`)) reset.mutate(u.id); }} title="Réinitialiser le mot de passe" className="p-1.5 rounded hover:bg-gray-100"><KeyRound size={15} className="text-gray-500" /></button>
+          {u.appareilLabel && (
+            <button
+              onClick={() => { if (confirm(`Délier l'appareil « ${u.appareilLabel} » de ${u.prenom} ${u.nom} ?\nLe prochain téléphone qui se connectera deviendra le nouvel appareil lié.`)) delier.mutate(u.id); }}
+              title={`Délier l'appareil (${u.appareilLabel})`}
+              className="p-1.5 rounded hover:bg-gray-100"
+            >
+              <SmartphoneNfc size={15} className="text-[#7D3C98]" />
+            </button>
+          )}
         </div>
       ),
     },

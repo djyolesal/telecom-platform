@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:local_auth/local_auth.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
@@ -13,10 +15,34 @@ class AuthRepository {
   AuthRepository(this._client, this._storage, [LocalAuthentication? localAuth])
       : _localAuth = localAuth ?? LocalAuthentication();
 
+  /// Identifiant stable de l'appareil (verrou du compte terrain sur le premier
+  /// mobile connecté) : Android ID, ou identifierForVendor côté iOS.
+  Future<({String? id, String? label})> _appareil() async {
+    try {
+      final plugin = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final info = await plugin.androidInfo;
+        return (id: info.id, label: '${info.manufacturer} ${info.model}'.trim());
+      }
+      if (Platform.isIOS) {
+        final info = await plugin.iosInfo;
+        return (id: info.identifierForVendor, label: info.utsname.machine);
+      }
+    } catch (_) {/* identité indisponible → le serveur n'arme pas le verrou */}
+    return (id: null, label: null);
+  }
+
   /// Connexion par email/mot de passe. Stocke les jetons et l'utilisateur.
   Future<User> login(String email, String password) async {
+    final appareil = await _appareil();
     final user = await _client.request(
-      (dio) => dio.post('/auth/login', data: {'email': email, 'password': password, 'platform': 'MOBILE'}),
+      (dio) => dio.post('/auth/login', data: {
+        'email': email,
+        'password': password,
+        'platform': 'MOBILE',
+        if (appareil.id != null) 'deviceId': appareil.id,
+        if (appareil.label != null) 'deviceLabel': appareil.label,
+      }),
       (data) {
         final d = data['data'] as Map<String, dynamic>;
         return (
