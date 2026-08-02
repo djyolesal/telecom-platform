@@ -377,6 +377,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 interface ImportResult {
   lignes: number; crees: number; doublonsIgnores: number;
   clotureesParImport?: number;
+  heriteesDetectees?: number;
   incidentsCrees?: number;
   sitesNonApparies: { site: string; lignes: number }[];
   erreurs: { feuille: string; ligne: number; message: string }[];
@@ -410,6 +411,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           <p className="flex items-center gap-1.5 font-medium text-emerald-700"><CheckCircle2 size={15} /> {result.crees} coupure(s) créée(s) · {result.doublonsIgnores} déjà connue(s) sur {result.lignes} lignes</p>
           {(result.clotureesParImport ?? 0) > 0 && (
             <p className="mt-1 text-emerald-700">{result.clotureesParImport} coupure(s) ouverte(s) clôturée(s) par le rapport (apurement).</p>
+          )}
+          {(result.heriteesDetectees ?? 0) > 0 && (
+            <p className="mt-1 text-purple-700">{result.heriteesDetectees} coupure(s) reclassée(s) « héritée(s) » via la topologie (impact d&apos;une panne amont — pas d&apos;incident ni d&apos;imputation aval).</p>
           )}
           {(result.incidentsCrees ?? 0) > 0 && (
             <p className="mt-1 text-[#1B3F6B]">{result.incidentsCrees} incident(s) terrain créé(s) et dispatché(s) pour les sites entiers encore hors service.</p>

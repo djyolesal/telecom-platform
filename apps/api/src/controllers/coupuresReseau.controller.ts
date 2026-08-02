@@ -116,7 +116,70 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
   return crees;
 }
 
-/** Liste paginée, filtrable ; périmètre prestataire appliqué comme partout. */
+/**
+ * Détection des coupures HÉRITÉES à l'import : le rapport NOC liste chaque site
+ * impacté sur sa propre ligne — les lignes qui partagent EXACTEMENT les mêmes
+ * début/fin sont groupées, et si un site du groupe est l'ancêtre de transmission
+ * des autres (topologie), les descendants sont reclassés HERITEE, liés à la
+ * ligne racine. Elles sortent alors du circuit incident/SMS et de l'imputation
+ * SLA. Une ligne déjà rattachée à un incident n'est jamais reclassée (pas
+ * d'incident orphelin) ; une topologie incomplète laisse simplement les lignes
+ * locales — jamais pire que l'existant.
+ */
+async function detecterHeriteesImport(): Promise<number> {
+  const [candidates, sites] = await Promise.all([
+    prisma.coupureReseau.findMany({
+      where: { origine: 'LOCALE' },
+      select: { id: true, siteId: true, technologie: true, dateDebut: true, dateFin: true, incidentId: true },
+    }),
+    prisma.site.findMany({ where: { isActive: true }, select: { id: true, parentTransmissionId: true } }),
+  ]);
+  const parentDe = new Map(sites.map((s) => [s.id, s.parentTransmissionId]));
+
+  // Groupes par fenêtre exacte (le rapport duplique début/fin à la minute près).
+  const groupes = new Map<string, typeof candidates>();
+  for (const c of candidates) {
+    const cle = `${c.dateDebut.getTime()}|${c.dateFin ? c.dateFin.getTime() : 'ouverte'}`;
+    groupes.set(cle, [...(groupes.get(cle) ?? []), c]);
+  }
+
+  const maj: { id: string; coupureOrigineId: string }[] = [];
+  for (const groupe of groupes.values()) {
+    const parSite = new Map<string, typeof candidates>();
+    for (const c of groupe) parSite.set(c.siteId, [...(parSite.get(c.siteId) ?? []), c]);
+    if (parSite.size < 2) continue;
+
+    for (const [siteId, lignes] of parSite) {
+      // Ancêtre de transmission le plus proche présent dans le même groupe.
+      let racineSiteId: string | null = null;
+      let cur = parentDe.get(siteId) ?? null;
+      for (let i = 0; i < 100 && cur; i++) {
+        if (parSite.has(cur)) { racineSiteId = cur; break; }
+        cur = parentDe.get(cur) ?? null;
+      }
+      if (!racineSiteId) continue;
+      const lignesRacine = parSite.get(racineSiteId)!;
+      const racine = lignesRacine.find((l) => l.technologie === 'SITE') ?? lignesRacine[0];
+      for (const l of lignes) {
+        if (l.incidentId) continue; // incident déjà dispatché → on ne réécrit pas l'histoire
+        maj.push({ id: l.id, coupureOrigineId: racine.id });
+      }
+    }
+  }
+
+  for (let i = 0; i < maj.length; i += 100) {
+    await prisma.$transaction(
+      maj.slice(i, i + 100).map((m) =>
+        prisma.coupureReseau.update({
+          where: { id: m.id },
+          data: { origine: 'HERITEE', coupureOrigineId: m.coupureOrigineId },
+        })
+      )
+    );
+  }
+  return maj.length;
+}
+
 /** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
 async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search } =
@@ -503,11 +566,16 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
       clotureesParImport = maj.length;
     }
 
+    // Reclassement des impacts d'aval AVANT le rattachement : les lignes de même
+    // fenêtre dont un site amont figure dans le groupe deviennent HÉRITÉES →
+    // un seul incident sera créé, sur le site origine.
+    const heriteesDetectees = await detecterHeriteesImport();
+
     // Les coupures importées ENCORE EN COURS obtiennent leur incident terrain
     // (groupé par site) — l'historique déjà rétabli n'en crée jamais.
     const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id);
 
-    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, clotureesParImport, incidentsCrees }, req);
+    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, clotureesParImport, heriteesDetectees, incidentsCrees }, req);
     res.json({
       success: true,
       data: {
@@ -515,6 +583,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
         crees,
         doublonsIgnores: doublons,
         clotureesParImport,
+        heriteesDetectees,
         incidentsCrees,
         sitesNonApparies: [...nonApparies.entries()].map(([site, lignes]) => ({ site, lignes })).sort((a, b) => b.lignes - a.lignes),
         erreurs: erreurs.slice(0, 50),
@@ -597,7 +666,10 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       const pa = parAlarme.get(ta) ?? { type: ta, coupures: 0, downtime: 0 };
       pa.coupures += 1; pa.downtime += dt; parAlarme.set(ta, pa);
 
-      if (c.site.lotId) {
+      // L'imputation par prestataire EXCLUT les coupures héritées : l'aval d'une
+      // panne amont n'est pas de la responsabilité du prestataire du site aval
+      // (le downtime global, lui, les compte — l'indisponibilité est réelle).
+      if (c.site.lotId && c.origine !== 'HERITEE') {
         for (const { prestataireId } of prestasDuLot.get(c.site.lotId) ?? []) {
           const e = parPresta.get(prestataireId);
           if (!e) continue;

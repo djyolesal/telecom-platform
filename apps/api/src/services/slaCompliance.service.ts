@@ -112,8 +112,10 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
   //    alimenté par les alarmes énergie, le technicien et le NOC).
   const maintenant = new Date();
   const fenetreMin = Math.round((maintenant.getTime() - since.getTime()) / 60000);
+  // Les coupures HÉRITÉES (impact d'une panne amont) ne pèsent jamais sur le
+  // prestataire du site aval — seules les pannes locales comptent.
   const coupuresPassives = await prisma.coupureReseau.findMany({
-    where: { causeCategorie: 'PASSIF', OR: [{ dateFin: null }, { dateFin: { gte: since } }] },
+    where: { causeCategorie: 'PASSIF', origine: 'LOCALE', OR: [{ dateFin: null }, { dateFin: { gte: since } }] },
     select: { siteId: true, dateDebut: true, dateFin: true },
   });
   for (const c of coupuresPassives) {
