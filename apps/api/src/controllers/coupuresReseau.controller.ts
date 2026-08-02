@@ -10,6 +10,8 @@ import { descendantsTransmission } from '../utils/transmission';
 import { genererReference } from '../services/reference.service';
 import { notifierIncidentCoupure } from '../services/sms.service';
 import { sendTabular } from '../utils/exporter';
+import { setXlsxHeaders } from '../utils/excel';
+import { construireClasseurCoupures, COLONNES_DETAIL } from '../services/coupuresExport.service';
 import { io } from '../server';
 
 export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
@@ -736,6 +738,14 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
  */
 export async function exportCoupures(req: Request, res: Response, next: NextFunction) {
   try {
+    // Sélecteur de colonnes du web : liste des colonnes disponibles (feuille Détail).
+    if (req.query.colonnes === '?') {
+      return res.json({
+        success: true,
+        data: [{ feuille: 'Détail', colonnes: COLONNES_DETAIL.map((c) => ({ key: c.key, header: c.header })) }],
+      });
+    }
+
     const where = await whereCoupures(req);
     const rows = await prisma.coupureReseau.findMany({
       where,
@@ -744,17 +754,52 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
       include: {
         site: { select: { nom: true, region: true } },
         incident: { select: { reference: true } },
+        coupureOrigine: { select: { site: { select: { nom: true } } } },
       },
     });
 
-    const fmtDh = (d: Date | null) =>
-      d ? d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' }) : '';
     const { date_debut, date_fin } = req.query as Record<string, string>;
-    const periode = date_debut || date_fin
+    const periodeTexte = date_debut || date_fin
       ? `Période : ${date_debut || '…'} → ${date_fin || '…'}`
       : 'Toutes périodes';
 
-    await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { count: rows.length }, req);
+    // Format xlsx → classeur designé (Synthèse + Détail) ; PDF → tableau simple.
+    if (req.params.format === 'xlsx') {
+      const restreint = isRestreint(await sitePerimetre(req.user!.id));
+      const colonnesQ = typeof req.query.colonnes === 'string' && req.query.colonnes
+        ? new Set(req.query.colonnes.split(',').map((x) => x.trim()).filter(Boolean))
+        : null;
+      const wb = construireClasseurCoupures({
+        lignes: rows.map((c) => ({
+          siteNom: c.site.nom,
+          region: c.site.region,
+          technologie: c.technologie,
+          dateDebut: c.dateDebut,
+          dateFin: c.dateFin,
+          downtimeMinutes: c.downtimeMinutes,
+          typeAlarme: c.typeAlarme,
+          causeCategorie: c.causeCategorie,
+          origine: c.origine,
+          origineSiteNom: c.coupureOrigine?.site?.nom ?? null,
+          incidentRef: c.incident?.reference ?? null,
+          cause: c.cause,
+          actions: c.actions,
+          intervenants: c.intervenants,
+        })),
+        periodeTexte,
+        perimetreTexte: restreint ? 'vos lots' : 'réseau entier',
+        colonnes: colonnesQ && colonnesQ.size ? colonnesQ : null,
+      });
+      await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { count: rows.length, format: 'xlsx' }, req);
+      setXlsxHeaders(res, 'coupures-reseau.xlsx');
+      await wb.xlsx.write(res);
+      return res.end();
+    }
+
+    const fmtDh = (d: Date | null) =>
+      d ? d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' }) : '';
+
+    await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { count: rows.length, format: 'pdf' }, req);
     await sendTabular(res, req.params.format, 'coupures-reseau', 'Coupures réseau', [{
       name: 'Coupures',
       columns: [
@@ -787,6 +832,6 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         actions: c.actions ?? '',
         intervenants: c.intervenants ?? '',
       })),
-    }], `${rows.length} coupure(s) · ${periode}`);
+    }], `${rows.length} coupure(s) · ${periodeTexte}`);
   } catch (err) { next(err); }
 }
