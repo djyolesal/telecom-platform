@@ -20,15 +20,20 @@ export interface SlaPrestataire {
   incidentsResolus: number;
   incidentsHorsDelai: number;
   delaiResolutionMoyenH: number | null;
+  // Disponibilité passive (coupures classées PASSIF sur les sites de ses lots) :
+  // la responsabilité énergie/environnement du prestataire O&M.
+  nbSites: number;
+  downtimePassifHeures: number;
+  dispoPassivePct: number;        // % à une décimale
   // Synthèse
-  scoreSla: number;               // 0-100 (moyenne respect préventif + résolution)
+  scoreSla: number;               // 0-100 (moyenne préventif + résolution + dispo passive)
   penaliteFCFA: number;
   conforme: boolean;              // respecte tous les seuils
 }
 
 export interface SlaReport {
   periodeJours: number;
-  seuils: { delaiResolutionMaxH: number; tauxPreventifMinPct: number };
+  seuils: { delaiResolutionMaxH: number; tauxPreventifMinPct: number; dispoPassiveMinPct: number };
   parPrestataire: SlaPrestataire[];
   penaliteTotaleFCFA: number;
 }
@@ -42,6 +47,8 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
   const toleranceJours = getNum('sla.tolerancePreventifJours', 7);
   const penaliteResolution = getNum('sla.penaliteResolutionFCFA', 50000);
   const penalitePreventif = getNum('sla.penalitePreventifFCFA', 100000);
+  const dispoMin = getNum('sla.dispoPassiveMinPct', 99);
+  const penaliteDispo = getNum('sla.penaliteDispoDixiemeFCFA', 50000);
 
   // site → prestataire (via lot → attribution passive/les-deux).
   const [assignments, sites] = await Promise.all([
@@ -61,9 +68,13 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
     if (s.lotId && prestataireParLot.has(s.lotId)) prestataireParSite.set(s.id, prestataireParLot.get(s.lotId)!);
   }
 
-  type Acc = { nom: string; prevPlan: number; prevTemps: number; incResolus: number; incHorsDelai: number; sommeDelaiMin: number };
+  type Acc = { nom: string; prevPlan: number; prevTemps: number; incResolus: number; incHorsDelai: number; sommeDelaiMin: number; nbSites: number; downtimePassifMin: number };
   const acc = new Map<string, Acc>();
-  const ensure = (id: string, nom: string) => acc.get(id) ?? acc.set(id, { nom, prevPlan: 0, prevTemps: 0, incResolus: 0, incHorsDelai: 0, sommeDelaiMin: 0 }).get(id)!;
+  const ensure = (id: string, nom: string) => acc.get(id) ?? acc.set(id, { nom, prevPlan: 0, prevTemps: 0, incResolus: 0, incHorsDelai: 0, sommeDelaiMin: 0, nbSites: 0, downtimePassifMin: 0 }).get(id)!;
+
+  // Tout prestataire passif entre dans l'évaluation, même sans activité sur la
+  // période (dispo 100 %, conforme) — l'absence de données n'est pas un angle mort.
+  for (const p of prestataireParSite.values()) ensure(p.id, p.nom).nbSites += 1;
 
   // ── Préventif : réalisé à temps si clôturé avant datePlanifiee + tolérance ──
   const prevs = await prisma.maintenance.findMany({
@@ -96,13 +107,38 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
     if (delaiMin > delaiMaxH * 60) a.incHorsDelai += 1;
   }
 
+  // ── Disponibilité passive : downtime des coupures classées PASSIF, borné à la
+  //    fenêtre, imputé au prestataire passif du site (le split actif/passif est
+  //    alimenté par les alarmes énergie, le technicien et le NOC).
+  const maintenant = new Date();
+  const fenetreMin = Math.round((maintenant.getTime() - since.getTime()) / 60000);
+  const coupuresPassives = await prisma.coupureReseau.findMany({
+    where: { causeCategorie: 'PASSIF', OR: [{ dateFin: null }, { dateFin: { gte: since } }] },
+    select: { siteId: true, dateDebut: true, dateFin: true },
+  });
+  for (const c of coupuresPassives) {
+    const p = prestataireParSite.get(c.siteId);
+    if (!p) continue;
+    const debut = c.dateDebut < since ? since : c.dateDebut;
+    const fin = c.dateFin ?? maintenant;
+    if (fin <= since) continue;
+    ensure(p.id, p.nom).downtimePassifMin += Math.max(0, Math.round((fin.getTime() - debut.getTime()) / 60000));
+  }
+
   const parPrestataire: SlaPrestataire[] = [...acc.entries()].map(([id, a]) => {
     const tauxPreventif = a.prevPlan ? Math.round((a.prevTemps / a.prevPlan) * 100) : 100;
     const tauxResolution = a.incResolus ? Math.round(((a.incResolus - a.incHorsDelai) / a.incResolus) * 100) : 100;
-    const scoreSla = Math.round((tauxPreventif + tauxResolution) / 2);
+    const dispoPassivePct = a.nbSites > 0
+      ? Math.max(0, Math.round((1 - a.downtimePassifMin / (fenetreMin * a.nbSites)) * 1000) / 10)
+      : 100;
+    // Pénalité de disponibilité : par dixième de point sous l'engagement.
+    const dixiemesManquants = Math.max(0, Math.round((dispoMin - dispoPassivePct) * 10));
+    const scoreDispo = Math.min(100, Math.round((dispoPassivePct / dispoMin) * 100));
+    const scoreSla = Math.round((tauxPreventif + tauxResolution + scoreDispo) / 3);
     const penalite =
       a.incHorsDelai * penaliteResolution +
-      Math.max(0, tauxMin - tauxPreventif) * penalitePreventif;
+      Math.max(0, tauxMin - tauxPreventif) * penalitePreventif +
+      dixiemesManquants * penaliteDispo;
     return {
       prestataireId: id,
       prestataireNom: a.nom,
@@ -112,15 +148,18 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
       incidentsResolus: a.incResolus,
       incidentsHorsDelai: a.incHorsDelai,
       delaiResolutionMoyenH: a.incResolus ? Math.round((a.sommeDelaiMin / a.incResolus / 60) * 10) / 10 : null,
+      nbSites: a.nbSites,
+      downtimePassifHeures: Math.round(a.downtimePassifMin / 60),
+      dispoPassivePct,
       scoreSla,
       penaliteFCFA: Math.round(penalite),
-      conforme: tauxPreventif >= tauxMin && a.incHorsDelai === 0,
+      conforme: tauxPreventif >= tauxMin && a.incHorsDelai === 0 && dispoPassivePct >= dispoMin,
     };
   }).sort((x, y) => y.penaliteFCFA - x.penaliteFCFA || x.scoreSla - y.scoreSla);
 
   return {
     periodeJours: jours,
-    seuils: { delaiResolutionMaxH: delaiMaxH, tauxPreventifMinPct: tauxMin },
+    seuils: { delaiResolutionMaxH: delaiMaxH, tauxPreventifMinPct: tauxMin, dispoPassiveMinPct: dispoMin },
     parPrestataire,
     penaliteTotaleFCFA: parPrestataire.reduce((s, p) => s + p.penaliteFCFA, 0),
   };

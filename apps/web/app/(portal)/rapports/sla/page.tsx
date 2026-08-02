@@ -14,11 +14,12 @@ interface Sla {
   prestataireId: string; prestataireNom: string;
   preventivesPlanifiees: number; preventivesATemps: number; tauxPreventif: number;
   incidentsResolus: number; incidentsHorsDelai: number; delaiResolutionMoyenH: number | null;
+  nbSites: number; downtimePassifHeures: number; dispoPassivePct: number;
   scoreSla: number; penaliteFCFA: number; conforme: boolean;
 }
 interface Report {
   periodeJours: number;
-  seuils: { delaiResolutionMaxH: number; tauxPreventifMinPct: number };
+  seuils: { delaiResolutionMaxH: number; tauxPreventifMinPct: number; dispoPassiveMinPct: number };
   parPrestataire: Sla[];
   penaliteTotaleFCFA: number;
 }
@@ -54,7 +55,7 @@ export default function SlaPage() {
         <StatCard title="Prestataires suivis" value={String(data.parPrestataire.length)} icon={ShieldCheck} color="bg-[#1B3F6B]" />
         <StatCard title="Hors SLA" value={String(nonConformes)} icon={AlertTriangle} color="bg-[#DC2626]" />
         <StatCard title="Pénalités estimées" value={fmtFCFA(data.penaliteTotaleFCFA)} icon={Banknote} color="bg-[#F59E0B]" />
-        <StatCard title="Seuils" value={`${data.seuils.tauxPreventifMinPct}% · ${data.seuils.delaiResolutionMaxH}h`} subtitle="préventif min · résolution max" icon={Timer} color="bg-[#2471A3]" />
+        <StatCard title="Seuils" value={`${data.seuils.tauxPreventifMinPct}% · ${data.seuils.delaiResolutionMaxH}h · ${data.seuils.dispoPassiveMinPct}%`} subtitle="préventif min · résolution max · dispo passive min" icon={Timer} color="bg-[#2471A3]" />
       </div>
 
       {data.parPrestataire.length === 0 ? (
@@ -68,6 +69,7 @@ export default function SlaPage() {
               <th className="px-3 py-3 text-right font-medium">Préventif à temps</th>
               <th className="px-3 py-3 text-right font-medium">Incidents (hors délai)</th>
               <th className="px-3 py-3 text-right font-medium">Résolution moy.</th>
+              <th className="px-3 py-3 text-right font-medium">Dispo passive</th>
               <th className="px-3 py-3 text-right font-medium">Score SLA</th>
               <th className="px-3 py-3 pr-5 text-right font-medium">Pénalité</th>
             </tr></thead>
@@ -89,6 +91,10 @@ export default function SlaPage() {
                     {p.incidentsHorsDelai > 0 && <span className="ml-1 font-semibold text-red-600">({p.incidentsHorsDelai} ⚠)</span>}
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-gray-600">{p.delaiResolutionMoyenH != null ? `${p.delaiResolutionMoyenH} h` : '—'}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    <span className={(p.dispoPassivePct ?? 100) >= data.seuils.dispoPassiveMinPct ? 'text-gray-700' : 'font-semibold text-red-600'}>{p.dispoPassivePct ?? 100}%</span>
+                    <span className="ml-1 text-xs text-gray-400">({p.downtimePassifHeures ?? 0} h / {p.nbSites ?? 0} sites)</span>
+                  </td>
                   <td className={`px-3 py-3 text-right tabular-nums font-semibold ${scoreColor(p.scoreSla)}`}>{p.scoreSla}</td>
                   <td className="px-3 py-3 pr-5 text-right tabular-nums">{p.penaliteFCFA > 0 ? <span className="font-semibold text-amber-700">{fmtFCFA(p.penaliteFCFA)}</span> : <span className="text-gray-300">—</span>}</td>
                 </tr>

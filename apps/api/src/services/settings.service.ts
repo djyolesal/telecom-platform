@@ -99,6 +99,8 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'sla.tolerancePreventifJours', label: 'Tolérance retard préventif', groupe: 'SLA prestataires', unite: 'j', defaut: 7 },
     { key: 'sla.penaliteResolutionFCFA', label: 'Pénalité par incident hors délai', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 50000 },
     { key: 'sla.penalitePreventifFCFA', label: 'Pénalité par point de préventif manquant', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 100000 },
+    { key: 'sla.dispoPassiveMinPct', label: 'Disponibilité passive minimale (coupures énergie)', groupe: 'SLA prestataires', unite: '%', defaut: 99 },
+    { key: 'sla.penaliteDispoDixiemeFCFA', label: 'Pénalité par dixième de point de dispo manquant', groupe: 'SLA prestataires', unite: 'FCFA', defaut: 50000 },
     // Notifications — situation périodique des dépassements (0 h d'intervalle = désactivée)
     { key: 'notifications.situationIntervalleH', label: 'Intervalle de la situation périodique', groupe: 'Notifications', unite: 'h', defaut: 3 },
     { key: 'notifications.situationSeuilH', label: 'Seuil de dépassement signalé', groupe: 'Notifications', unite: 'h', defaut: 1 },
