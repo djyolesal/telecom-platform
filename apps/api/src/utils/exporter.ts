@@ -60,8 +60,8 @@ export async function sendTabular(
     return;
   }
   const buffer = finalSheets.length === 1
-    ? await buildXlsx(finalSheets[0].name, finalSheets[0].columns, finalSheets[0].rows)
-    : await buildXlsxMulti(finalSheets);
+    ? await buildXlsx(finalSheets[0].name, finalSheets[0].columns, finalSheets[0].rows, { title, subtitle })
+    : await buildXlsxMulti(finalSheets, { title, subtitle });
   setXlsxHeaders(res, `${baseName}.xlsx`);
   res.send(buffer);
 }
