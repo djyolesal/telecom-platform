@@ -14,6 +14,11 @@ import { fmtNumber } from '@/lib/utils';
 
 interface SiteRow { nom: string; region: string; coupures: number; enCours: number; downtimeHeures: number; dispoPct: number }
 interface AlarmeRow { type: string; coupures: number; downtimeHeures: number }
+interface PrestaRow {
+  nom: string; nbSites: number; coupures: number; enCours: number; sitesTouches: number;
+  downtimeHeures: number; downtimeActifHeures: number; downtimePassifHeures: number; downtimeNonClasseHeures: number;
+  dispoPct: number;
+}
 
 export default function DisponibiliteReseauPage() {
   const router = useRouter();
@@ -32,7 +37,9 @@ export default function DisponibiliteReseauPage() {
     <div>
       <PageHeader
         title="Disponibilité réseau"
-        subtitle="Coupures radio (supervision NOC) : downtime, sites touchés et part imputable à l'énergie"
+        subtitle={data.perimetreRestreint
+          ? 'Votre périmètre : downtime, sites touchés et répartition actif/passif de vos lots'
+          : "Coupures radio (supervision NOC) : downtime, sites touchés, répartition actif/passif et évaluation par prestataire"}
         backHref="/rapports"
       />
 
@@ -45,11 +52,18 @@ export default function DisponibiliteReseauPage() {
         }]}
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <StatCard title="Coupures" value={fmtNumber(k.coupures)} subtitle={`${k.sitesTouches}/${k.nbSites} sites touchés`} icon={WifiOff} color="bg-[#1B3F6B]" />
         <StatCard title="En cours" value={fmtNumber(k.enCours)} subtitle="non rétablies" icon={Activity} color="bg-[#C0392B]" />
         <StatCard title="Downtime cumulé" value={`${fmtNumber(k.downtimeHeures)} h`} subtitle={`sur ${data.periodeMois} mois`} icon={RadioTower} color="bg-[#E67E22]" />
         <StatCard title="Part énergie" value={`${k.partEnergiePct}%`} subtitle="alarmes AE / GE / EN" icon={Zap} color="bg-[#0E7C6B]" />
+        <StatCard
+          title="Part passif"
+          value={`${k.partPassifPct ?? 0}%`}
+          subtitle={`actif ${fmtNumber(k.downtimeActifHeures ?? 0)} h · passif ${fmtNumber(k.downtimePassifHeures ?? 0)} h · n.c. ${fmtNumber(k.downtimeNonClasseHeures ?? 0)} h`}
+          icon={Zap}
+          color="bg-[#7D3C98]"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -97,6 +111,50 @@ export default function DisponibiliteReseauPage() {
           <p className="mt-2 text-xs text-gray-400">AE / GE / EN = causes énergie · FO = fibre · TX = transmission · RA = radio (référentiel NOC).</p>
         </div>
       </div>
+
+      {/* Vue interne : évaluation de chaque prestataire sur le périmètre de ses lots.
+          Le downtime PASSIF (énergie/environnement) est sa responsabilité O&M directe. */}
+      {(data.parPrestataire?.length ?? 0) > 0 && (
+        <div className="mt-6 rounded-xl border border-gray-100 bg-white p-5">
+          <h3 className="mb-1 text-sm font-semibold text-gray-700">Évaluation par prestataire</h3>
+          <p className="mb-3 text-xs text-gray-400">
+            Downtime des sites de leurs lots sur la période — le <b>passif</b> (énergie/environnement) relève de leur responsabilité O&M,
+            l'<b>actif</b> (radio/transmission) des équipes réseau.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-gray-100 text-left text-xs text-gray-500">
+                <th className="py-2 pr-4 font-medium">Prestataire</th>
+                <th className="px-3 py-2 text-right font-medium">Sites</th>
+                <th className="px-3 py-2 text-right font-medium">Coupures</th>
+                <th className="px-3 py-2 text-right font-medium">Sites touchés</th>
+                <th className="px-3 py-2 text-right font-medium">Downtime</th>
+                <th className="px-3 py-2 text-right font-medium">Passif</th>
+                <th className="px-3 py-2 text-right font-medium">Actif</th>
+                <th className="px-3 py-2 text-right font-medium">Non classé</th>
+                <th className="px-3 py-2 text-right font-medium">Dispo moyenne</th>
+              </tr></thead>
+              <tbody>
+                {data.parPrestataire.map((p: PrestaRow) => (
+                  <tr key={p.nom} className="border-b border-gray-50 last:border-0">
+                    <td className="py-2 pr-4 font-medium text-gray-800">
+                      {p.nom}{p.enCours > 0 && <span className="ml-1.5 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{p.enCours} en cours</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.nbSites}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.coupures}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.sitesTouches}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtNumber(p.downtimeHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#7D3C98]">{fmtNumber(p.downtimePassifHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[#2471A3]">{fmtNumber(p.downtimeActifHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-gray-500">{fmtNumber(p.downtimeNonClasseHeures)} h</td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${p.dispoPct < 95 ? 'text-red-600' : p.dispoPct < 99 ? 'text-amber-600' : 'text-emerald-600'}`}>{p.dispoPct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

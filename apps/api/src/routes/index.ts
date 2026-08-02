@@ -78,7 +78,8 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/empreinte-carbone$/,
   /^\/rapports\/mensuel(\/|$)/,
   /^\/rapports\/gardiennage$/,
-  /^\/rapports\/disponibilite-reseau$/,
+  // /rapports/disponibilite-reseau : OUVERT aux prestataires depuis la phase D —
+  // le contrôleur applique le périmètre (chacun ne voit que ses lots).
 ];
 router.use(async (req, _res, next) => {
   try {
@@ -145,7 +146,7 @@ router.post('/coupures-reseau', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.cr
 router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
 router.delete('/coupures-reseau/:id', rbac(['ADMIN']), coupuresCtrl.deleteCoupure);
-router.get('/rapports/disponibilite-reseau', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);
+router.get('/rapports/disponibilite-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);
 
 // ── Prestataires ──────────────────────────────────────────────
 // « Ma société » : le superviseur d'un prestataire complète la fiche de SA société.

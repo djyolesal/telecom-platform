@@ -523,19 +523,50 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
     const maintenant = new Date();
     const fenetreMin = minutesEntre(depuis, maintenant);
 
-    const [coupures, nbSites] = await Promise.all([
+    // Périmètre : un prestataire ne voit que la disponibilité de SES lots ;
+    // les internes (NOC/direction) voient tout + la déclinaison par prestataire.
+    const perimetre = await sitePerimetre(req.user!.id);
+    const restreint = isRestreint(perimetre);
+    const whereSite = { isActive: true, ...(restreint ? perimetre : {}) };
+
+    const [coupures, nbSites, lots] = await Promise.all([
       prisma.coupureReseau.findMany({
-        where: { OR: [{ dateFin: null }, { dateFin: { gte: depuis } }] },
-        include: { site: { select: { id: true, nom: true, region: true } } },
+        where: {
+          OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
+          ...(restreint ? { site: perimetre } : {}),
+        },
+        include: { site: { select: { id: true, nom: true, region: true, lotId: true } } },
       }),
-      prisma.site.count({ where: { isActive: true } }),
+      prisma.site.count({ where: whereSite }),
+      restreint ? Promise.resolve([]) : prisma.lot.findMany({
+        select: {
+          id: true,
+          _count: { select: { sites: { where: { isActive: true } } } },
+          assignments: { select: { prestataireId: true, scope: true, prestataire: { select: { nom: true } } } },
+        },
+      }),
     ]);
 
-    let downtimeTotal = 0, downtimeEnergie = 0;
+    let downtimeTotal = 0, downtimeEnergie = 0, downtimeActif = 0, downtimePassif = 0;
     const parSite = new Map<string, { nom: string; region: string; downtime: number; coupures: number; enCours: number }>();
     const parAlarme = new Map<string, { type: string; coupures: number; downtime: number }>();
     const ENERGIE = new Set(['AE', 'GE', 'EN']);
     let enCours = 0;
+
+    // Évaluation par prestataire (vue interne) : agrégats sur les sites de ses lots.
+    interface EvalPresta { nom: string; nbSites: number; coupures: number; enCours: number; downtime: number; downtimeActif: number; downtimePassif: number; nonClasse: number; sitesTouches: Set<string> }
+    const parPresta = new Map<string, EvalPresta>();
+    const prestasDuLot = new Map<string, { prestataireId: string; nom: string }[]>();
+    for (const lot of lots) {
+      const uniques = new Map<string, string>();
+      for (const a of lot.assignments) uniques.set(a.prestataireId, a.prestataire.nom);
+      prestasDuLot.set(lot.id, [...uniques.entries()].map(([prestataireId, nom]) => ({ prestataireId, nom })));
+      for (const [prestataireId, nom] of uniques) {
+        const e = parPresta.get(prestataireId) ?? { nom, nbSites: 0, coupures: 0, enCours: 0, downtime: 0, downtimeActif: 0, downtimePassif: 0, nonClasse: 0, sitesTouches: new Set<string>() };
+        e.nbSites += lot._count.sites;
+        parPresta.set(prestataireId, e);
+      }
+    }
 
     for (const c of coupures) {
       // Downtime borné à la fenêtre d'analyse (une coupure ouverte court jusqu'à maintenant).
@@ -546,6 +577,8 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       if (!c.dateFin) enCours++;
       downtimeTotal += dt;
       if (c.typeAlarme && ENERGIE.has(c.typeAlarme)) downtimeEnergie += dt;
+      if (c.causeCategorie === 'ACTIF') downtimeActif += dt;
+      else if (c.causeCategorie === 'PASSIF') downtimePassif += dt;
 
       const ps = parSite.get(c.siteId) ?? { nom: c.site.nom, region: c.site.region, downtime: 0, coupures: 0, enCours: 0 };
       ps.downtime += dt; ps.coupures += 1; if (!c.dateFin) ps.enCours += 1;
@@ -554,17 +587,36 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       const ta = c.typeAlarme ?? '—';
       const pa = parAlarme.get(ta) ?? { type: ta, coupures: 0, downtime: 0 };
       pa.coupures += 1; pa.downtime += dt; parAlarme.set(ta, pa);
+
+      if (c.site.lotId) {
+        for (const { prestataireId } of prestasDuLot.get(c.site.lotId) ?? []) {
+          const e = parPresta.get(prestataireId);
+          if (!e) continue;
+          e.coupures += 1; e.downtime += dt; if (!c.dateFin) e.enCours += 1;
+          if (c.causeCategorie === 'ACTIF') e.downtimeActif += dt;
+          else if (c.causeCategorie === 'PASSIF') e.downtimePassif += dt;
+          else e.nonClasse += dt;
+          e.sitesTouches.add(c.siteId);
+        }
+      }
     }
 
+    const nonClasse = downtimeTotal - downtimeActif - downtimePassif;
     res.json({
       success: true,
       data: {
         periodeMois: mois,
+        perimetreRestreint: restreint,
         kpis: {
           coupures: coupures.filter((c) => (c.dateFin ?? maintenant) > depuis).length,
           enCours,
           downtimeHeures: Math.round(downtimeTotal / 60),
           partEnergiePct: downtimeTotal > 0 ? Math.round((downtimeEnergie / downtimeTotal) * 100) : 0,
+          // Split par responsabilité : ACTIF (radio/transmission), PASSIF (énergie/environnement).
+          downtimeActifHeures: Math.round(downtimeActif / 60),
+          downtimePassifHeures: Math.round(downtimePassif / 60),
+          downtimeNonClasseHeures: Math.round(nonClasse / 60),
+          partPassifPct: downtimeTotal > 0 ? Math.round((downtimePassif / downtimeTotal) * 100) : 0,
           sitesTouches: parSite.size,
           nbSites,
         },
@@ -575,6 +627,22 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
         parTypeAlarme: [...parAlarme.values()]
           .map((a) => ({ ...a, downtimeHeures: Math.round(a.downtime / 60) }))
           .sort((a, b) => b.downtime - a.downtime),
+        // Vue interne uniquement : évaluation de chaque prestataire sur son périmètre.
+        parPrestataire: restreint ? undefined : [...parPresta.values()]
+          .map((e) => ({
+            nom: e.nom,
+            nbSites: e.nbSites,
+            coupures: e.coupures,
+            enCours: e.enCours,
+            sitesTouches: e.sitesTouches.size,
+            downtimeHeures: Math.round(e.downtime / 60),
+            downtimeActifHeures: Math.round(e.downtimeActif / 60),
+            downtimePassifHeures: Math.round(e.downtimePassif / 60),
+            downtimeNonClasseHeures: Math.round(e.nonClasse / 60),
+            // Dispo moyenne du parc du prestataire (minutes site×fenêtre).
+            dispoPct: e.nbSites > 0 ? Math.max(0, Math.round((1 - e.downtime / (fenetreMin * e.nbSites)) * 1000) / 10) : 100,
+          }))
+          .sort((a, b) => b.downtimeHeures - a.downtimeHeures),
       },
     });
   } catch (err) { next(err); }

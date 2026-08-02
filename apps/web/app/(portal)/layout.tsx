@@ -22,6 +22,9 @@ const NAV_ITEMS = [
   { href: '/supervision/incidents',    label: 'Incidents live',    icon: Activity,         roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { href: '/supervision/coupures',     label: 'Coupures réseau',   icon: WifiOff,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
   { href: '/supervision/topologie',    label: 'Topologie',         icon: Network,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
+  // Entrée directe pour le NOC (les autres rôles y accèdent via la page Rapports :
+  // `menu` restreint l'affichage dans la barre, `roles` reste la liste d'accès).
+  { href: '/rapports/disponibilite-reseau', label: 'Dispo réseau',  icon: BarChart3,        roles: ['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION'], menu: ['NOC'] },
   { href: '/sites',                    label: 'Sites',             icon: MapPin,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { href: '/maintenance',              label: 'Maintenance',       icon: Wrench,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/actifs',                   label: "Parc d'actifs",     icon: Boxes,            roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
@@ -57,7 +60,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }, [userRole, maSociete, pathname, router]);
 
   const visibleItems = [
-    ...NAV_ITEMS.filter(item => item.roles.includes(userRole)),
+    ...NAV_ITEMS.filter(item => ((item as { menu?: string[] }).menu ?? item.roles).includes(userRole)),
     ...(userRole === 'SUPERVISEUR' && maSociete ? [{ href: '/ma-societe', label: 'Ma société', icon: Building2, roles: ['SUPERVISEUR'] }] : []),
   ];
 
