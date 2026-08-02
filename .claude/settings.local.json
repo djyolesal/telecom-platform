@@ -292,7 +292,16 @@
       "Bash(python3 \"/Users/yohaness/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/7045bed0-4dec-4c2d-9ee9-e298aee68ff9/d7a90f4a-e58d-4fc7-b59e-e99ac03c82fc/skills/pptx/scripts/office/soffice.py\" --headless --convert-to pdf maquette-export-coupures.xlsx)",
       "Bash(rm -f apercu-*.png)",
       "Bash(pdftoppm -png -r 110 maquette-export-coupures.pdf apercu)",
-      "Bash(qlmanage -t -s 1400 -o . maquette-export-coupures.xlsx)"
+      "Bash(qlmanage -t -s 1400 -o . maquette-export-coupures.xlsx)",
+      "Bash(qlmanage -t -s 1200 -o . demo-generique.xlsx)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST https://emops.uk/api/v1/users/test/delier-appareil)",
+      "Bash(grep -rn '\\\\$queryRaw\\\\|\\\\$executeRaw\\\\|\\\\$queryRawUnsafe\\\\|\\\\$executeRawUnsafe' .)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(sed -n '/export async function getDepotageById/,/^}/p' depotages.controller.ts)",
+      "Bash(sed -n '/export async function exportDepotagePdf/,/^}/p' depotages.controller.ts)",
+      "Bash(sed -n '/export async function getReleveById/,/^}/p' releves.controller.ts)",
+      "Bash(sed -n '/export async function createReleve/,/^}/p' releves.controller.ts)",
+      "Bash(grep -rn \"io.of\\('/supervision'\\).emit\\\\|io.of\\('/notif'\\)\\\\|\\\\.to\\(\\\\`role:\" .)"
     ]
   }
 }
