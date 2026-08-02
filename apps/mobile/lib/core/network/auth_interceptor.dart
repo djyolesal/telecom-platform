@@ -62,8 +62,14 @@ class AuthInterceptor extends Interceptor {
         try {
           final clone = await _refreshDio.fetch(req);
           return handler.resolve(clone);
+        } on DioException catch (e2) {
+          // Le rejeu a bien atteint le serveur, qui a répondu autre chose (422
+          // vraisemblance, 409, 500…) : propager CETTE erreur. Renvoyer le 401
+          // d'origine faisait passer une saisie valide pour une session expirée
+          // — l'opération partait en file au lieu d'ouvrir la confirmation.
+          if (e2.response != null && e2.response!.statusCode != 401) return handler.next(e2);
         } catch (_) {
-          // tombe dans le rejet ci-dessous
+          // rejeu impossible (FormData déjà consommée…) → rejet ci-dessous
         }
       } else {
         // refreshed == null → refus explicite du serveur (session révoquée) : logout.

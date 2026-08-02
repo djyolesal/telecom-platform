@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
 
@@ -25,6 +26,19 @@ class SecureStorage {
   Future<void> saveUserJson(String json) =>
       _storage.write(key: AppConstants.kUserJson, value: json);
   Future<String?> get userJson => _storage.read(key: AppConstants.kUserJson);
+
+  /// Identifiant de l'utilisateur connecté (cloisonnement de la file d'attente
+  /// sur un téléphone de service partagé). Null si aucune session.
+  Future<String?> readUserId() async {
+    final brut = await userJson;
+    if (brut == null) return null;
+    try {
+      final m = jsonDecode(brut);
+      return m is Map && m['id'] != null ? m['id'].toString() : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> setBiometricEnabled(bool enabled) =>
       _storage.write(key: AppConstants.kBiometricEnabled, value: enabled.toString());

@@ -47,7 +47,7 @@ class Injection {
     dioClient = DioClient(secureStorage, onSessionExpired: () => onSessionExpired?.call());
     uploadService = UploadService(dioClient);
     configService = ConfigService(dioClient);
-    syncService = SyncService(database, dioClient, networkInfo, uploadService)..start();
+    syncService = SyncService(database, dioClient, networkInfo, uploadService, secureStorage)..start();
 
     authRepository = AuthRepository(dioClient, secureStorage);
     siteRepository = SiteRepository(dioClient, database, networkInfo);

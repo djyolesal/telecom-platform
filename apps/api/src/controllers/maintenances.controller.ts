@@ -6,6 +6,7 @@ import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
+import { dateBornee } from '../utils/dates';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf, generateBonMouvementPdf } from '../services/pdf.service';
@@ -470,11 +471,22 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
     }
     assertOnSite(startSite, latitude, longitude, 'le démarrage');
 
+    // Idempotent : un rejeu de la file offline ne doit PAS réécrire dateDebut
+    // (le chrono d'intervention repartait de zéro et la clôture était refusée).
+    if (existing.statut === 'EN_COURS' && existing.dateDebut) {
+      return res.json({ success: true, data: existing, idempotent: true });
+    }
+
+    // Horodatage TERRAIN (borné) plutôt que l'heure de rejeu : une maintenance
+    // démarrée hors couverture et synchronisée plus tard était datée du rejeu,
+    // ce qui rendait sa clôture impossible (durée minimale jamais atteinte).
+    const debutReel = dateBornee((req.body as { dateDebut?: unknown }).dateDebut);
+
     const updated = await prisma.maintenance.update({
       where: { id: req.params.id },
       data: {
         statut: 'EN_COURS',
-        dateDebut: new Date(),
+        dateDebut: debutReel,
         technicienId: existing.technicienId ?? req.user!.id,
         latitudeDebut: latitude ?? undefined,
         longitudeDebut: longitude ?? undefined,
@@ -631,7 +643,10 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // Une maintenance doit avoir été démarrée et durer au moins 1h avant clôture.
     // Le temps SUSPENDU (urgence ailleurs) ne compte pas comme du travail.
     if (!existing.dateDebut) throw new AppError('La maintenance doit être démarrée avant clôture.', 409);
-    const ecouleMin = differenceInMinutes(new Date(), existing.dateDebut) - existing.dureeSuspendueMinutes;
+    // Heure de fin TERRAIN (bornée) : sur une clôture rejouée depuis la file, la
+    // durée doit se mesurer entre le début et la fin réels de l'intervention.
+    const finReelle = dateBornee((req.body as { dateFin?: unknown }).dateFin);
+    const ecouleMin = differenceInMinutes(finReelle, existing.dateDebut) - existing.dureeSuspendueMinutes;
     if (ecouleMin < minDureeClotureMin()) {
       throw new AppError(
         `Une maintenance doit durer au moins 1h avant clôture (démarrée il y a ${ecouleMin} min).`,
@@ -717,7 +732,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       });
     }
 
-    const dateFin = new Date();
+    const dateFin = finReelle;
     const dateDebut = existing.dateDebut ?? dateFin;
     // Durée TRAVAILLÉE : les suspensions (urgences ailleurs) sont décomptées.
     const dureeMinutes = Math.max(0, differenceInMinutes(dateFin, dateDebut) - existing.dureeSuspendueMinutes);

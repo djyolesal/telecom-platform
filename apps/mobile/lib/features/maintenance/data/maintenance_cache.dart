@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -8,22 +9,41 @@ import 'package:path_provider/path_provider.dart';
 /// reprise, clôture) sont appliquées OPTIMISTEMENT ici pour que l'écran reflète
 /// l'état réel du travail — le serveur reste la vérité à la resynchronisation.
 class MaintenanceCache {
-  static Future<File> _file() async {
+  /// Toutes les écritures passent par cette file : `saveList` (rafraîchissement
+  /// de liste) et `patch` (transition optimiste) sont des read-modify-write sur
+  /// le MÊME fichier — concurrents, l'un écrasait l'autre.
+  static Future<void> _chaine = Future.value();
+  static Future<T> _serialise<T>(Future<T> Function() action) {
+    final resultat = _chaine.then((_) => action());
+    _chaine = resultat.then((_) {}, onError: (_) {});
+    return resultat;
+  }
+
+  /// Écriture ATOMIQUE (fichier temporaire puis rename) : une app tuée en plein
+  /// writeAsString laissait un JSON tronqué — au prochain démarrage le cache
+  /// était illisible et le technicien partait en tournée sans aucune donnée.
+  static Future<void> _ecrire(Map<String, dynamic> contenu) async {
+    final f = await _fichier();
+    final tmp = File('${f.path}.tmp');
+    await tmp.writeAsString(jsonEncode(contenu), flush: true);
+    await tmp.rename(f.path);
+  }
+
+  static Future<File> _fichier() async {
     final dir = await getApplicationDocumentsDirectory();
     return File('${dir.path}/maintenances_cache.json');
   }
 
   /// Remplace l'instantané (appelé après chaque liste rechargée en ligne).
-  static Future<void> saveList(List<Map<String, dynamic>> raw) async {
-    try {
-      final f = await _file();
-      await f.writeAsString(jsonEncode({'savedAt': DateTime.now().toIso8601String(), 'items': raw}));
-    } catch (_) {/* cache = confort, jamais bloquant */}
-  }
+  static Future<void> saveList(List<Map<String, dynamic>> raw) => _serialise(() async {
+        try {
+          await _ecrire({'savedAt': DateTime.now().toIso8601String(), 'items': raw});
+        } catch (_) {/* cache = confort, jamais bloquant */}
+      });
 
   static Future<List<Map<String, dynamic>>> readList() async {
     try {
-      final f = await _file();
+      final f = await _fichier();
       if (!await f.exists()) return const [];
       final raw = jsonDecode(await f.readAsString());
       final items = (raw is Map ? raw['items'] : null) as List?;
@@ -42,25 +62,29 @@ class MaintenanceCache {
   }
 
   /// Fusionne un détail frais (en ligne) dans l'instantané, sans en changer l'ordre.
-  static Future<void> upsert(Map<String, dynamic> item) async {
-    final items = await readList();
-    final i = items.indexWhere((m) => m['id'] == item['id']);
-    if (i >= 0) {
-      items[i] = item;
-    } else {
-      items.insert(0, item);
-    }
-    await saveList(items);
-  }
+  static Future<void> upsert(Map<String, dynamic> item) => _serialise(() async {
+        try {
+          final items = await readList();
+          final i = items.indexWhere((m) => m['id'] == item['id']);
+          if (i >= 0) {
+            items[i] = item;
+          } else {
+            items.insert(0, item);
+          }
+          await _ecrire({'savedAt': DateTime.now().toIso8601String(), 'items': items});
+        } catch (_) {/* best effort */}
+      });
 
   /// Transition optimiste d'une opération MISE EN FILE (hors-ligne) : l'écran
   /// doit montrer l'état réel du travail (boutons Clôturer/Suspendre après un
   /// démarrage hors réseau, etc.).
-  static Future<void> patch(String id, Map<String, dynamic> champs) async {
-    final items = await readList();
-    final i = items.indexWhere((m) => m['id'] == id);
-    if (i < 0) return;
-    items[i] = {...items[i], ...champs};
-    await saveList(items);
-  }
+  static Future<void> patch(String id, Map<String, dynamic> champs) => _serialise(() async {
+        try {
+          final items = await readList();
+          final i = items.indexWhere((m) => m['id'] == id);
+          if (i < 0) return;
+          items[i] = {...items[i], ...champs};
+          await _ecrire({'savedAt': DateTime.now().toIso8601String(), 'items': items});
+        } catch (_) {/* best effort */}
+      });
 }

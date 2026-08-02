@@ -15,6 +15,9 @@ class MaintenanceRepository {
   Future<List<Maintenance>> getMaintenances({String? statut, String? type, String? search, String? siteId}) async {
     // Hors-ligne : dernier instantané connu (filtres appliqués localement) —
     // le terrain reste utilisable sans réseau.
+    // `isConnected` ne teste que l'interface : un WiFi de chantier sans
+    // backhaul le donne « connecté ». Le repli cache doit donc aussi couvrir
+    // l'échec réseau réel (cf. try/catch autour de l'appel en ligne).
     if (!await _network.isConnected) {
       final brutes = await MaintenanceCache.readList();
       final q = search?.trim().toLowerCase() ?? '';
@@ -132,7 +135,15 @@ class MaintenanceRepository {
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/start',
       entityType: 'maintenance_start',
-      payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
+      entityRef: 'maintenance:$id',
+      payload: {
+        // Heure RÉELLE du démarrage terrain : sans elle, une maintenance
+        // démarrée hors couverture était datée de l'instant du rejeu et sa
+        // clôture devenait impossible (durée minimale jamais atteinte).
+        'dateDebut': DateTime.now().toUtc().toIso8601String(),
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      },
     );
     // Hors-ligne : l'écran doit montrer l'état réel du travail (Clôturer /
     // Suspendre disponibles) sans attendre la resynchronisation.
@@ -148,6 +159,7 @@ class MaintenanceRepository {
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/suspend',
       entityType: 'maintenance_suspend',
+      entityRef: 'maintenance:$id',
       payload: {'motif': motif},
     );
     if (res.isQueued) {
@@ -161,6 +173,7 @@ class MaintenanceRepository {
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/resume',
       entityType: 'maintenance_resume',
+      entityRef: 'maintenance:$id',
       payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
     );
     if (res.isQueued) {
@@ -192,8 +205,12 @@ class MaintenanceRepository {
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/close',
       entityType: 'maintenance_close',
+      entityRef: 'maintenance:$id',
       payload: {
         'agentPresent': agentPresent,
+        // Heure RÉELLE de fin : la durée minimale se mesure sur le terrain,
+        // pas sur l'heure de synchronisation.
+        'dateFin': DateTime.now().toUtc().toIso8601String(),
         if (observations != null) 'observations': observations,
         if (energie != null && energie.isNotEmpty) 'energie': energie,
         if (confirmerVraisemblance) 'confirmerVraisemblance': true,

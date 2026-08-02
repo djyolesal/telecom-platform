@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { cloturerHeriteesRecursif } from './coupuresReseau.controller';
 import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
@@ -99,8 +100,18 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
     const data = pick<Prisma.IncidentUncheckedCreateInput>(b, [
       'siteId', 'type', 'severite', 'description', 'latitude', 'longitude',
     ]);
+    // Idempotence (rejeu de la file offline) : la clé stable devient l'id —
+    // sans elle, une réponse perdue produisait un SECOND incident, une seconde
+    // notification CRITIQUE et un MTTR faussé.
+    const clientUuid = idempotencyKey(req);
+    if (clientUuid) {
+      const deja = memeAuteur(await prisma.incident.findUnique({ where: { id: clientUuid } }), req.user!.id);
+      if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
+    }
+
     const incident = await prisma.$transaction(async (tx) => tx.incident.create({
       data: {
+        ...(clientUuid ? { id: clientUuid } : {}),
         ...(data as Prisma.IncidentUncheckedCreateInput),
         // Réf. dans la transaction du create → pas de trou si le create échoue.
         reference: await genererReference(tx, 'INC', new Date()),

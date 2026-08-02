@@ -6,6 +6,7 @@ import 'package:drift/drift.dart';
 import 'package:logger/logger.dart';
 import 'package:uuid/uuid.dart';
 import '../database/app_database.dart';
+import '../storage/secure_storage.dart';
 import '../network/dio_client.dart';
 import '../network/network_info.dart';
 import '../services/upload_service.dart';
@@ -29,13 +30,14 @@ class SyncService {
   final DioClient _client;
   final NetworkInfo _network;
   final UploadService _upload;
+  final SecureStorage _storage;
   final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
   final _uuid = const Uuid();
 
   StreamSubscription<bool>? _connSub;
   bool _syncing = false;
 
-  SyncService(this._db, this._client, this._network, this._upload);
+  SyncService(this._db, this._client, this._network, this._upload, this._storage);
 
   /// Démarre l'écoute de la connectivité pour synchroniser automatiquement.
   void start() {
@@ -71,6 +73,9 @@ class SyncService {
     required Map<String, dynamic> payload,
     String method = 'POST',
     List<Map<String, String>>? attachments,
+    /// Entité visée (« maintenance:<id> ») : sert à révoquer le patch optimiste
+    /// du cache si l'opération finit par être refusée.
+    String? entityRef,
   }) async {
     // clientUuid : STABLE entre l'envoi direct et un éventuel rejeu depuis la file.
     // Transmis au serveur via le header `Idempotency-Key` (clé réservée `_idem`
@@ -106,6 +111,10 @@ class SyncService {
       payload: jsonEncode(body),
       entityType: entityType,
       clientUuid: clientUuid,
+      // Auteur : la file d'un technicien ne doit jamais être rejouée avec le
+      // jeton d'un autre (téléphone de service partagé).
+      userId: Value(await _storage.readUserId()),
+      entityRef: Value(entityRef),
     ));
     return const SubmitResult(SubmitOutcome.queued);
   }
@@ -117,11 +126,11 @@ class SyncService {
     // chaque envoi qui échoue pour cause réseau interrompt la boucle (réessai plus tard).
     _syncing = true;
     try {
-      final pending = await _db.pendingOutbox();
+      final pending = await _db.pendingOutbox(userId: await _storage.readUserId());
       for (final entry in pending) {
         try {
           final payload = jsonDecode(entry.payload) as Map<String, dynamic>;
-          await _process(entry.endpoint, entry.method, payload);
+          await _process(entry.endpoint, entry.method, payload, localId: entry.localId);
           await _db.removeOutbox(entry.localId);
           _logger.i('[sync] ${entry.entityType} envoyé (${entry.endpoint})');
         } on NetworkException {
@@ -131,6 +140,20 @@ class SyncService {
           // un 401 pendant une oscillation réseau brûlerait les 5 essais de TOUTE
           // la file). La reconnexion relancera sync() ; rien n'est perdu.
           break;
+        } on ServerException catch (e) {
+          // 422 « valeurs inhabituelles » : l'opération est VALIDE, elle attend
+          // seulement l'accord du technicien. La rejouer jusqu'à l'échec
+          // définitif la condamnait sans aucun recours possible.
+          if (e.confirmationRequise) {
+            await _db.marquerConfirmationRequise(entry.localId, e.avertissements.join('\n'));
+            _logger.w('[sync] ${entry.entityType} en attente de confirmation');
+            continue;
+          }
+          final retries = entry.retries + 1;
+          await _db.markOutboxError(entry.localId, retries, e.toString());
+          if (retries >= AppDatabase.kMaxRetries) {
+            _logger.w('[sync] ${entry.entityType} en échec (${entry.endpoint}) — conservé pour revue manuelle');
+          }
         } catch (e) {
           // Erreur SERVEUR (validation, refus…) propre à CETTE entrée : on compte
           // un essai et on CONTINUE avec les suivantes (pas de blocage en tête).
@@ -152,15 +175,27 @@ class SyncService {
   /// Prépare et envoie une opération : uploade d'abord les pièces jointes locales
   /// (`_attachments`) vers MinIO, injecte les clés dans le corps, puis POST.
   /// En cas d'échec d'upload (hors-ligne), lève NetworkException → mise en file.
-  Future<Map<String, dynamic>?> _process(String endpoint, String method, Map<String, dynamic> body) async {
+  /// [localId] : quand l'opération vient de la FILE, chaque pièce jointe envoyée
+  /// est retirée du payload stocké et sa clé MinIO y est injectée. Sans ce point
+  /// de reprise, une coupure à la 8e photo faisait tout recommencer à la 1re :
+  /// sur un lien qui ne tient pas 5 minutes, l'opération ne partait JAMAIS.
+  Future<Map<String, dynamic>?> _process(
+    String endpoint,
+    String method,
+    Map<String, dynamic> body, {
+    int? localId,
+  }) async {
     final idempotencyKey = body.remove('_idem') as String?;
-    final atts = (body.remove('_attachments') as List?) ?? const [];
+    final atts = List<dynamic>.from((body.remove('_attachments') as List?) ?? const []);
     final uploadedPaths = <String>[];
+    var manquantes = 0;
 
     if (atts.isNotEmpty) {
-      final photos = <Map<String, String>>[];
-      for (final raw in atts) {
-        final a = (raw as Map).cast<String, dynamic>();
+      final photos = List<Map<String, dynamic>>.from(
+        (body['photos'] as List?)?.map((e) => (e as Map).cast<String, dynamic>()) ?? const [],
+      );
+      while (atts.isNotEmpty) {
+        final a = (atts.first as Map).cast<String, dynamic>();
         final path = a['path'] as String;
         final kind = (a['kind'] as String?) ?? 'photo';
         // `field` cible une clé arbitraire du corps (ex: signatureChauffeurPath,
@@ -168,7 +203,13 @@ class SyncService {
         final field = a['field'] as String?;
         final folder = (a['folder'] as String?) ?? (kind == 'signature' ? 'signatures' : 'photos');
         final file = File(path);
-        if (!await file.exists()) continue; // fichier perdu → on ignore
+        if (!await file.exists()) {
+          // Fichier disparu (nettoyage système, restauration) : on le compte —
+          // partir amputé sans le dire ferait perdre la preuve terrain en silence.
+          manquantes++;
+          atts.removeAt(0);
+          continue;
+        }
         final up = await _upload.uploadImage(
           await file.readAsBytes(),
           path.split('/').last,
@@ -186,8 +227,20 @@ class SyncService {
           photos.add(up.toJson());
         }
         uploadedPaths.add(path);
+        atts.removeAt(0);
+        // Point de reprise : ce qui est envoyé ne le sera plus jamais deux fois.
+        if (localId != null) {
+          final restant = Map<String, dynamic>.from(body);
+          if (photos.isNotEmpty) restant['photos'] = photos;
+          if (idempotencyKey != null) restant['_idem'] = idempotencyKey;
+          if (atts.isNotEmpty) restant['_attachments'] = atts;
+          await _db.updateOutboxPayload(localId, jsonEncode(restant));
+        }
       }
       if (photos.isNotEmpty) body['photos'] = photos;
+      if (manquantes > 0) {
+        _logger.w('[sync] $manquantes pièce(s) jointe(s) introuvable(s) — opération envoyée sans elles');
+      }
     }
 
     final data = await _send(endpoint, method, body, idempotencyKey);

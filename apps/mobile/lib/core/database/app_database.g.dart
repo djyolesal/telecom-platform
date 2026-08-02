@@ -610,6 +610,33 @@ class $OutboxEntriesTable extends OutboxEntries
   late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
       'last_error', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+      'user_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _entityRefMeta =
+      const VerificationMeta('entityRef');
+  @override
+  late final GeneratedColumn<String> entityRef = GeneratedColumn<String>(
+      'entity_ref', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _besoinConfirmationMeta =
+      const VerificationMeta('besoinConfirmation');
+  @override
+  late final GeneratedColumn<bool> besoinConfirmation = GeneratedColumn<bool>(
+      'besoin_confirmation', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("besoin_confirmation" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _avertissementsMeta =
+      const VerificationMeta('avertissements');
+  @override
+  late final GeneratedColumn<String> avertissements = GeneratedColumn<String>(
+      'avertissements', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -628,6 +655,10 @@ class $OutboxEntriesTable extends OutboxEntries
         clientUuid,
         retries,
         lastError,
+        userId,
+        entityRef,
+        besoinConfirmation,
+        avertissements,
         createdAt
       ];
   @override
@@ -684,6 +715,26 @@ class $OutboxEntriesTable extends OutboxEntries
       context.handle(_lastErrorMeta,
           lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta));
     }
+    if (data.containsKey('user_id')) {
+      context.handle(_userIdMeta,
+          userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta));
+    }
+    if (data.containsKey('entity_ref')) {
+      context.handle(_entityRefMeta,
+          entityRef.isAcceptableOrUnknown(data['entity_ref']!, _entityRefMeta));
+    }
+    if (data.containsKey('besoin_confirmation')) {
+      context.handle(
+          _besoinConfirmationMeta,
+          besoinConfirmation.isAcceptableOrUnknown(
+              data['besoin_confirmation']!, _besoinConfirmationMeta));
+    }
+    if (data.containsKey('avertissements')) {
+      context.handle(
+          _avertissementsMeta,
+          avertissements.isAcceptableOrUnknown(
+              data['avertissements']!, _avertissementsMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -713,6 +764,14 @@ class $OutboxEntriesTable extends OutboxEntries
           .read(DriftSqlType.int, data['${effectivePrefix}retries'])!,
       lastError: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}last_error']),
+      userId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}user_id']),
+      entityRef: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}entity_ref']),
+      besoinConfirmation: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool, data['${effectivePrefix}besoin_confirmation'])!,
+      avertissements: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}avertissements']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -733,6 +792,10 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
   final String clientUuid;
   final int retries;
   final String? lastError;
+  final String? userId;
+  final String? entityRef;
+  final bool besoinConfirmation;
+  final String? avertissements;
   final DateTime createdAt;
   const OutboxEntry(
       {required this.localId,
@@ -743,6 +806,10 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       required this.clientUuid,
       required this.retries,
       this.lastError,
+      this.userId,
+      this.entityRef,
+      required this.besoinConfirmation,
+      this.avertissements,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -756,6 +823,16 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
     map['retries'] = Variable<int>(retries);
     if (!nullToAbsent || lastError != null) {
       map['last_error'] = Variable<String>(lastError);
+    }
+    if (!nullToAbsent || userId != null) {
+      map['user_id'] = Variable<String>(userId);
+    }
+    if (!nullToAbsent || entityRef != null) {
+      map['entity_ref'] = Variable<String>(entityRef);
+    }
+    map['besoin_confirmation'] = Variable<bool>(besoinConfirmation);
+    if (!nullToAbsent || avertissements != null) {
+      map['avertissements'] = Variable<String>(avertissements);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -773,6 +850,15 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       lastError: lastError == null && nullToAbsent
           ? const Value.absent()
           : Value(lastError),
+      userId:
+          userId == null && nullToAbsent ? const Value.absent() : Value(userId),
+      entityRef: entityRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(entityRef),
+      besoinConfirmation: Value(besoinConfirmation),
+      avertissements: avertissements == null && nullToAbsent
+          ? const Value.absent()
+          : Value(avertissements),
       createdAt: Value(createdAt),
     );
   }
@@ -789,6 +875,10 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       clientUuid: serializer.fromJson<String>(json['clientUuid']),
       retries: serializer.fromJson<int>(json['retries']),
       lastError: serializer.fromJson<String?>(json['lastError']),
+      userId: serializer.fromJson<String?>(json['userId']),
+      entityRef: serializer.fromJson<String?>(json['entityRef']),
+      besoinConfirmation: serializer.fromJson<bool>(json['besoinConfirmation']),
+      avertissements: serializer.fromJson<String?>(json['avertissements']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -804,6 +894,10 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       'clientUuid': serializer.toJson<String>(clientUuid),
       'retries': serializer.toJson<int>(retries),
       'lastError': serializer.toJson<String?>(lastError),
+      'userId': serializer.toJson<String?>(userId),
+      'entityRef': serializer.toJson<String?>(entityRef),
+      'besoinConfirmation': serializer.toJson<bool>(besoinConfirmation),
+      'avertissements': serializer.toJson<String?>(avertissements),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -817,6 +911,10 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           String? clientUuid,
           int? retries,
           Value<String?> lastError = const Value.absent(),
+          Value<String?> userId = const Value.absent(),
+          Value<String?> entityRef = const Value.absent(),
+          bool? besoinConfirmation,
+          Value<String?> avertissements = const Value.absent(),
           DateTime? createdAt}) =>
       OutboxEntry(
         localId: localId ?? this.localId,
@@ -827,6 +925,11 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
         clientUuid: clientUuid ?? this.clientUuid,
         retries: retries ?? this.retries,
         lastError: lastError.present ? lastError.value : this.lastError,
+        userId: userId.present ? userId.value : this.userId,
+        entityRef: entityRef.present ? entityRef.value : this.entityRef,
+        besoinConfirmation: besoinConfirmation ?? this.besoinConfirmation,
+        avertissements:
+            avertissements.present ? avertissements.value : this.avertissements,
         createdAt: createdAt ?? this.createdAt,
       );
   OutboxEntry copyWithCompanion(OutboxEntriesCompanion data) {
@@ -841,6 +944,14 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           data.clientUuid.present ? data.clientUuid.value : this.clientUuid,
       retries: data.retries.present ? data.retries.value : this.retries,
       lastError: data.lastError.present ? data.lastError.value : this.lastError,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      entityRef: data.entityRef.present ? data.entityRef.value : this.entityRef,
+      besoinConfirmation: data.besoinConfirmation.present
+          ? data.besoinConfirmation.value
+          : this.besoinConfirmation,
+      avertissements: data.avertissements.present
+          ? data.avertissements.value
+          : this.avertissements,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -856,14 +967,30 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           ..write('clientUuid: $clientUuid, ')
           ..write('retries: $retries, ')
           ..write('lastError: $lastError, ')
+          ..write('userId: $userId, ')
+          ..write('entityRef: $entityRef, ')
+          ..write('besoinConfirmation: $besoinConfirmation, ')
+          ..write('avertissements: $avertissements, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(localId, endpoint, method, payload,
-      entityType, clientUuid, retries, lastError, createdAt);
+  int get hashCode => Object.hash(
+      localId,
+      endpoint,
+      method,
+      payload,
+      entityType,
+      clientUuid,
+      retries,
+      lastError,
+      userId,
+      entityRef,
+      besoinConfirmation,
+      avertissements,
+      createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -876,6 +1003,10 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           other.clientUuid == this.clientUuid &&
           other.retries == this.retries &&
           other.lastError == this.lastError &&
+          other.userId == this.userId &&
+          other.entityRef == this.entityRef &&
+          other.besoinConfirmation == this.besoinConfirmation &&
+          other.avertissements == this.avertissements &&
           other.createdAt == this.createdAt);
 }
 
@@ -888,6 +1019,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
   final Value<String> clientUuid;
   final Value<int> retries;
   final Value<String?> lastError;
+  final Value<String?> userId;
+  final Value<String?> entityRef;
+  final Value<bool> besoinConfirmation;
+  final Value<String?> avertissements;
   final Value<DateTime> createdAt;
   const OutboxEntriesCompanion({
     this.localId = const Value.absent(),
@@ -898,6 +1033,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     this.clientUuid = const Value.absent(),
     this.retries = const Value.absent(),
     this.lastError = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.entityRef = const Value.absent(),
+    this.besoinConfirmation = const Value.absent(),
+    this.avertissements = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   OutboxEntriesCompanion.insert({
@@ -909,6 +1048,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     required String clientUuid,
     this.retries = const Value.absent(),
     this.lastError = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.entityRef = const Value.absent(),
+    this.besoinConfirmation = const Value.absent(),
+    this.avertissements = const Value.absent(),
     this.createdAt = const Value.absent(),
   })  : endpoint = Value(endpoint),
         payload = Value(payload),
@@ -923,6 +1066,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     Expression<String>? clientUuid,
     Expression<int>? retries,
     Expression<String>? lastError,
+    Expression<String>? userId,
+    Expression<String>? entityRef,
+    Expression<bool>? besoinConfirmation,
+    Expression<String>? avertissements,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -934,6 +1081,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       if (clientUuid != null) 'client_uuid': clientUuid,
       if (retries != null) 'retries': retries,
       if (lastError != null) 'last_error': lastError,
+      if (userId != null) 'user_id': userId,
+      if (entityRef != null) 'entity_ref': entityRef,
+      if (besoinConfirmation != null) 'besoin_confirmation': besoinConfirmation,
+      if (avertissements != null) 'avertissements': avertissements,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -947,6 +1098,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       Value<String>? clientUuid,
       Value<int>? retries,
       Value<String?>? lastError,
+      Value<String?>? userId,
+      Value<String?>? entityRef,
+      Value<bool>? besoinConfirmation,
+      Value<String?>? avertissements,
       Value<DateTime>? createdAt}) {
     return OutboxEntriesCompanion(
       localId: localId ?? this.localId,
@@ -957,6 +1112,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       clientUuid: clientUuid ?? this.clientUuid,
       retries: retries ?? this.retries,
       lastError: lastError ?? this.lastError,
+      userId: userId ?? this.userId,
+      entityRef: entityRef ?? this.entityRef,
+      besoinConfirmation: besoinConfirmation ?? this.besoinConfirmation,
+      avertissements: avertissements ?? this.avertissements,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -988,6 +1147,18 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     if (lastError.present) {
       map['last_error'] = Variable<String>(lastError.value);
     }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (entityRef.present) {
+      map['entity_ref'] = Variable<String>(entityRef.value);
+    }
+    if (besoinConfirmation.present) {
+      map['besoin_confirmation'] = Variable<bool>(besoinConfirmation.value);
+    }
+    if (avertissements.present) {
+      map['avertissements'] = Variable<String>(avertissements.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1005,6 +1176,10 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
           ..write('clientUuid: $clientUuid, ')
           ..write('retries: $retries, ')
           ..write('lastError: $lastError, ')
+          ..write('userId: $userId, ')
+          ..write('entityRef: $entityRef, ')
+          ..write('besoinConfirmation: $besoinConfirmation, ')
+          ..write('avertissements: $avertissements, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1293,6 +1468,10 @@ typedef $$OutboxEntriesTableCreateCompanionBuilder = OutboxEntriesCompanion
   required String clientUuid,
   Value<int> retries,
   Value<String?> lastError,
+  Value<String?> userId,
+  Value<String?> entityRef,
+  Value<bool> besoinConfirmation,
+  Value<String?> avertissements,
   Value<DateTime> createdAt,
 });
 typedef $$OutboxEntriesTableUpdateCompanionBuilder = OutboxEntriesCompanion
@@ -1305,6 +1484,10 @@ typedef $$OutboxEntriesTableUpdateCompanionBuilder = OutboxEntriesCompanion
   Value<String> clientUuid,
   Value<int> retries,
   Value<String?> lastError,
+  Value<String?> userId,
+  Value<String?> entityRef,
+  Value<bool> besoinConfirmation,
+  Value<String?> avertissements,
   Value<DateTime> createdAt,
 });
 
@@ -1340,6 +1523,20 @@ class $$OutboxEntriesTableFilterComposer
 
   ColumnFilters<String> get lastError => $composableBuilder(
       column: $table.lastError, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get entityRef => $composableBuilder(
+      column: $table.entityRef, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get besoinConfirmation => $composableBuilder(
+      column: $table.besoinConfirmation,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get avertissements => $composableBuilder(
+      column: $table.avertissements,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -1378,6 +1575,20 @@ class $$OutboxEntriesTableOrderingComposer
   ColumnOrderings<String> get lastError => $composableBuilder(
       column: $table.lastError, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get entityRef => $composableBuilder(
+      column: $table.entityRef, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get besoinConfirmation => $composableBuilder(
+      column: $table.besoinConfirmation,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get avertissements => $composableBuilder(
+      column: $table.avertissements,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -1414,6 +1625,18 @@ class $$OutboxEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get lastError =>
       $composableBuilder(column: $table.lastError, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get entityRef =>
+      $composableBuilder(column: $table.entityRef, builder: (column) => column);
+
+  GeneratedColumn<bool> get besoinConfirmation => $composableBuilder(
+      column: $table.besoinConfirmation, builder: (column) => column);
+
+  GeneratedColumn<String> get avertissements => $composableBuilder(
+      column: $table.avertissements, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -1453,6 +1676,10 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             Value<String> clientUuid = const Value.absent(),
             Value<int> retries = const Value.absent(),
             Value<String?> lastError = const Value.absent(),
+            Value<String?> userId = const Value.absent(),
+            Value<String?> entityRef = const Value.absent(),
+            Value<bool> besoinConfirmation = const Value.absent(),
+            Value<String?> avertissements = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               OutboxEntriesCompanion(
@@ -1464,6 +1691,10 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             clientUuid: clientUuid,
             retries: retries,
             lastError: lastError,
+            userId: userId,
+            entityRef: entityRef,
+            besoinConfirmation: besoinConfirmation,
+            avertissements: avertissements,
             createdAt: createdAt,
           ),
           createCompanionCallback: ({
@@ -1475,6 +1706,10 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             required String clientUuid,
             Value<int> retries = const Value.absent(),
             Value<String?> lastError = const Value.absent(),
+            Value<String?> userId = const Value.absent(),
+            Value<String?> entityRef = const Value.absent(),
+            Value<bool> besoinConfirmation = const Value.absent(),
+            Value<String?> avertissements = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               OutboxEntriesCompanion.insert(
@@ -1486,6 +1721,10 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             clientUuid: clientUuid,
             retries: retries,
             lastError: lastError,
+            userId: userId,
+            entityRef: entityRef,
+            besoinConfirmation: besoinConfirmation,
+            avertissements: avertissements,
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
