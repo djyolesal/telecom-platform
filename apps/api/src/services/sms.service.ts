@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
+import { getNum } from './settings.service';
 
 /**
  * Notifications SMS vers le carnet de contacts (personnel interne, prestataires,
@@ -122,6 +123,11 @@ export async function envoyerSmsManuel(
   message: string
 ): Promise<{ simule: boolean; resultats: ResultatEnvoiManuel[] }> {
   const simule = !env.SMS_API_URL;
+  // Même plafond journalier que les notifications automatiques.
+  if (!simule && destinataires.length) {
+    const blocage = await verifierPlafond(destinataires.length);
+    if (blocage) throw new Error(blocage);
+  }
   let statutLot: ResultatEnvoiManuel['statut'] = simule ? 'SIMULE' : 'ENVOYE';
   let erreurLot: string | null = null;
   let echecs = new Set<string>();
@@ -192,6 +198,28 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
   }
 }
 
+/** SMS réellement partis depuis minuit (heure de Lomé = UTC) — pour le plafond. */
+export async function smsEnvoyesAujourdhui(): Promise<number> {
+  const minuit = new Date();
+  minuit.setUTCHours(0, 0, 0, 0);
+  return prisma.smsLog.count({ where: { statut: 'ENVOYE', createdAt: { gte: minuit } } });
+}
+
+/**
+ * Garde-fou budgétaire : plafond de SMS réels par jour (paramétrable, 0 =
+ * illimité). Retourne le motif de blocage, ou null si l'envoi peut partir.
+ * Le mode SIMULE n'est jamais ni compté ni bloqué.
+ */
+async function verifierPlafond(nbAEnvoyer: number): Promise<string | null> {
+  const plafond = getNum('sms.plafondJournalier', 200);
+  if (plafond <= 0) return null;
+  const envoyes = await smsEnvoyesAujourdhui();
+  if (envoyes + nbAEnvoyer > plafond) {
+    return `Plafond journalier SMS atteint (${envoyes}/${plafond}) — envoi de ${nbAEnvoyer} SMS bloqué.`;
+  }
+  return null;
+}
+
 /**
  * Envoi groupé + journalisation pour une liste de contacts DÉJÀ ciblée
  * (un seul POST passerelle pour le lot, un SmsLog par contact).
@@ -203,6 +231,24 @@ export async function envoyerLotContacts(
 ): Promise<void> {
   if (!cibles.length) return;
   const simule = !env.SMS_API_URL;
+
+  // Plafond journalier : le lot est journalisé PLAFOND (visible dans le journal
+  // et l'audit) mais rien ne part — protection contre les rafales et la facture.
+  if (!simule) {
+    const blocage = await verifierPlafond(cibles.length);
+    if (blocage) {
+      logger.warn(`[sms] ${evenement} bloqué : ${blocage}`);
+      for (const c of cibles) {
+        await prisma.smsLog.create({
+          data: {
+            telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
+            statut: 'PLAFOND', erreur: blocage,
+          },
+        });
+      }
+      return;
+    }
+  }
   let statutLot = simule ? 'SIMULE' : 'ENVOYE';
   let erreurLot: string | null = null;
   let echecs = new Set<string>();

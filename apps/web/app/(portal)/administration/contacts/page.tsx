@@ -110,13 +110,27 @@ export default function ContactsPage() {
 
       {journalOpen && (
         <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-gray-700">Derniers SMS</p>
-            {journal && !journal.smsActive && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                Mode simulation — passerelle SMS non configurée, rien n&apos;est réellement envoyé
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {journal?.jour && journal.smsActive && (
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    journal.jour.plafond > 0 && journal.jour.envoyes >= journal.jour.plafond * 0.8
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-[#EAF1F8] text-[#1B3F6B]'
+                  }`}
+                  title="Consommation du jour vs plafond (réglable dans Paramètres → Notifications)"
+                >
+                  Aujourd&apos;hui : {journal.jour.envoyes}{journal.jour.plafond > 0 ? ` / ${journal.jour.plafond}` : ''} SMS
+                </span>
+              )}
+              {journal && !journal.smsActive && (
+                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                  Mode simulation — passerelle SMS non configurée, rien n&apos;est réellement envoyé
+                </span>
+              )}
+            </div>
           </div>
           {(journal?.data ?? []).length === 0 ? (
             <p className="py-4 text-center text-sm text-gray-400">Aucun SMS pour l&apos;instant.</p>

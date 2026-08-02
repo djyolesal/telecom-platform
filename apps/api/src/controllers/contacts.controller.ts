@@ -4,7 +4,8 @@ import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
-import { normaliserTelephone, envoyerSmsManuel } from '../services/sms.service';
+import { normaliserTelephone, envoyerSmsManuel, smsEnvoyesAujourdhui } from '../services/sms.service';
+import { getNum } from '../services/settings.service';
 
 /**
  * Carnet de contacts à notifier par SMS (personnel interne, prestataires,
@@ -218,6 +219,8 @@ export async function sendSms(req: Request, res: Response, next: NextFunction) {
 export async function getSmsLogs(req: Request, res: Response, next: NextFunction) {
   try {
     const logs = await prisma.smsLog.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
-    res.json({ success: true, data: logs, smsActive: !!env.SMS_API_URL });
+    // Consommation du jour vs plafond (garde-fou budgétaire paramétrable).
+    const [envoyesJour, plafond] = [await smsEnvoyesAujourdhui(), getNum('sms.plafondJournalier', 200)];
+    res.json({ success: true, data: logs, smsActive: !!env.SMS_API_URL, jour: { envoyes: envoyesJour, plafond } });
   } catch (err) { next(err); }
 }

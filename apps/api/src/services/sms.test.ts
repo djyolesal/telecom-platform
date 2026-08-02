@@ -3,7 +3,7 @@ import { prisma } from '../config/database';
 import { env } from '../config/env';
 
 jest.mock('../config/database', () => ({
-  prisma: { smsLog: { create: jest.fn().mockResolvedValue({}) } },
+  prisma: { smsLog: { create: jest.fn().mockResolvedValue({}), count: jest.fn().mockResolvedValue(0) } },
 }));
 jest.mock('../config/env', () => ({
   env: { SMS_API_URL: undefined, SMS_API_KEY: 'cle-secrete', SMS_SENDER: 'EMOPS' },

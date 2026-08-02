@@ -9,6 +9,7 @@ import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/peri
 import { descendantsTransmission } from '../utils/transmission';
 import { genererReference } from '../services/reference.service';
 import { notifierIncidentCoupure } from '../services/sms.service';
+import { notificationService } from '../services/notifications.service';
 import { sendTabular } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
 import { construireClasseurCoupures, COLONNES_DETAIL } from '../services/coupuresExport.service';
@@ -101,6 +102,30 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
         'INCIDENT_COUPURE_NOC',
         'PASSIVE'
       );
+      // Push in-app/FCM aux TECHNICIENS passifs du lot : gratuit, lien direct
+      // vers l'incident — double le SMS sans coût passerelle.
+      try {
+        const lot = await prisma.site.findUnique({
+          where: { id: siteId },
+          select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
+        });
+        const prestas = (lot?.lot?.assignments ?? [])
+          .filter((a) => a.scope !== 'ACTIVE')
+          .map((a) => a.prestataireId);
+        if (prestas.length) {
+          const techs = await prisma.user.findMany({
+            where: { role: 'TECHNICIEN', isActive: true, prestataireId: { in: prestas } },
+            select: { id: true },
+          });
+          await Promise.all(techs.map((t) => notificationService.sendToUser(t.id, {
+            title: `🔴 ${coupures[0].site.nom} hors service`,
+            body: `Incident ${incident!.reference ?? ''} créé par le NOC — intervention terrain requise.`,
+            data: { incidentId: incident!.id, type: 'incident' },
+          })));
+        }
+      } catch (e) {
+        // Le push ne doit jamais faire échouer la création de l'incident.
+      }
     }
     await prisma.coupureReseau.updateMany({
       where: { id: { in: coupures.map((c) => c.id) } },

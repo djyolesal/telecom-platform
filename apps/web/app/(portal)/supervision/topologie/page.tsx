@@ -51,7 +51,7 @@ export default function TopologiePage() {
     refetchInterval: 60_000,
   });
 
-  const { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes } = useMemo(() => {
+  const { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes, liaisonsCritiques } = useMemo(() => {
     const tous = sites ?? [];
     const enfants = new Map<string, SiteNode[]>();
     const parId = new Map(tous.map((s) => [s.id, s]));
@@ -83,7 +83,16 @@ export default function TopologiePage() {
     };
     sitesDown.forEach(marquerAval);
 
-    return { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes };
+    // Liaisons critiques (SPOF) : poids = le site + tout ce qui est suspendu à
+    // sa liaison amont — les plus lourdes, surtout en FH, sont candidates à
+    // une sécurisation (bouclage fibre, lien de secours).
+    const liaisonsCritiques = tous
+      .filter((s) => s.parentTransmissionId && parId.has(s.parentTransmissionId))
+      .map((s) => ({ site: s, parent: parId.get(s.parentTransmissionId!)!, poids: 1 + taille(s.id) }))
+      .sort((a, b) => b.poids - a.poids)
+      .slice(0, 8);
+
+    return { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes, liaisonsCritiques };
   }, [sites, coupures]);
 
   // Comptage des liaisons déclarées par type (seuls les sites AVEC parent comptent).
@@ -158,6 +167,49 @@ export default function TopologiePage() {
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> En service</span>
         </div>
       </div>
+
+      {/* Liaisons critiques : les points de défaillance uniques les plus lourds. */}
+      {liaisonsCritiques.length > 0 && (
+        <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4">
+          <h3 className="mb-1 text-sm font-semibold text-gray-700">Liaisons critiques (points de défaillance uniques)</h3>
+          <p className="mb-3 text-xs text-gray-400">
+            Nombre de sites suspendus à chaque liaison amont — les plus lourdes en <b>FH</b> sont candidates à une sécurisation (bouclage fibre, lien de secours).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-gray-100 text-left text-xs text-gray-500">
+                <th className="py-1.5 pr-4 font-medium">Liaison</th>
+                <th className="px-3 py-1.5 font-medium">Type</th>
+                <th className="px-3 py-1.5 text-right font-medium">Sites suspendus</th>
+                <th className="px-3 py-1.5 font-medium"></th>
+              </tr></thead>
+              <tbody>
+                {liaisonsCritiques.map(({ site, parent, poids }) => {
+                  const familleFH = typesLiaisonParCode.get(site.typeLiaison ?? '')?.famille === 'FH';
+                  return (
+                    <tr key={site.id} className="border-b border-gray-50 last:border-0">
+                      <td className="py-1.5 pr-4 font-medium text-gray-800">{parent.nom} → {site.nom}</td>
+                      <td className="px-3 py-1.5">
+                        {site.typeLiaison ? (
+                          <span className="rounded px-1.5 py-px text-[10px] font-bold text-white" style={{ backgroundColor: couleurLiaison(site.typeLiaison) }}>
+                            {site.typeLiaison}
+                          </span>
+                        ) : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{poids}</td>
+                      <td className="px-3 py-1.5">
+                        {familleFH && poids >= 5 && (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">FH — à sécuriser</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Répartition des liaisons déclarées par type (FIBER / TN / ML / RTN…). */}
       {repartitionTypes.length > 0 && (
