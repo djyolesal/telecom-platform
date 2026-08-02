@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { cloturerHeriteesRecursif } from './coupuresReseau.controller';
 import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
@@ -274,7 +275,14 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
 
     // Date d'intervention figée au démarrage ; le corps reste accepté en repli.
     const dateInterv = incident.dateIntervention ?? new Date(dateIntervention ?? Date.now());
-    const dateResol = dateResolution ? new Date(dateResolution) : new Date();
+    // La date de résolution vient du mobile (rejeu offline) : bornée à
+    // [dateIntervention, maintenant] — sinon `dateResolution = dateOuverture`
+    // donnait 0 min de délai (SLA falsifiable) et une date future gonflait le MTTR.
+    const maintenantRes = new Date();
+    const brutRes = dateResolution ? new Date(dateResolution) : maintenantRes;
+    const dateResol = !Number.isFinite(brutRes.getTime()) || brutRes > maintenantRes
+      ? maintenantRes
+      : brutRes < dateInterv ? dateInterv : brutRes;
     const delai = differenceInMinutes(dateInterv, incident.dateOuverture);
     const duree = differenceInMinutes(dateResol, incident.dateOuverture);
 
@@ -335,20 +343,12 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
           },
         })
       ));
-      // Cascade : les coupures héritées (aval) de ces coupures racines.
-      const heritees = await prisma.coupureReseau.findMany({
-        where: { coupureOrigineId: { in: coupureLiees.map((c) => c.id) }, dateFin: null },
-        select: { id: true, dateDebut: true },
-      });
-      if (heritees.length) {
-        await prisma.$transaction(heritees.map((h) =>
-          prisma.coupureReseau.update({
-            where: { id: h.id },
-            data: { dateFin: dateResol, downtimeMinutes: minutes(h.dateDebut) },
-          })
-        ));
-      }
-      coupuresCloturees = coupureLiees.length + heritees.length;
+      // Cascade RÉCURSIVE : les chaînes A→B→C laissaient les héritées de second
+      // rang ouvertes à vie (downtime qui dérive indéfiniment).
+      const heritees = await prisma.$transaction((tx) =>
+        cloturerHeriteesRecursif(tx, coupureLiees.map((c) => c.id), dateResol, actionCorrective ?? null)
+      );
+      coupuresCloturees = coupureLiees.length + heritees;
     }
 
     await auditLog(req.user!.id, 'CLOSE', 'incidents', incident.id, { causeProbable, duree, coupuresCloturees }, req);

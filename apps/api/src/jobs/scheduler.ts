@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { stockAlertJob } from './stock-alert';
 import { maintenanceReminderJob } from './maintenance-reminder';
@@ -9,23 +10,43 @@ import { manquantAlertJob } from './manquant-alert';
 import { vidangeAlertJob } from './vidange-alert';
 import { situationPeriodiqueJob } from './situation-periodique';
 
+/**
+ * Verrou Postgres par job : `node-cron` n'attend pas la fin d'un callback async
+ * (une exécution longue chevauchait la suivante) et plusieurs réplicas
+ * exécuteraient le même job. `pg_try_advisory_lock` échoue immédiatement si le
+ * job tourne déjà — la durée est journalisée pour repérer les dérives.
+ */
+async function avecVerrou(nom: string, fn: () => Promise<void>): Promise<void> {
+  const cle = `job:${nom}`;
+  const [{ pris }] = await prisma.$queryRaw<{ pris: boolean }[]>`
+    SELECT pg_try_advisory_lock(hashtext(${cle})::bigint) AS pris`;
+  if (!pris) { logger.warn(`[CRON] ${nom} déjà en cours (verrou) — exécution ignorée`); return; }
+  const t0 = Date.now();
+  try {
+    await fn();
+    logger.info(`[CRON] ${nom} terminé en ${Math.round((Date.now() - t0) / 1000)}s`);
+  } finally {
+    await prisma.$queryRaw`SELECT pg_advisory_unlock(hashtext(${cle})::bigint)`;
+  }
+}
+
 export function setupCronJobs() {
   // ── Vérif stock carburant — tous les jours à 8h ─────────────
   cron.schedule('0 8 * * *', async () => {
     logger.info('[CRON] Démarrage job vérification stock carburant');
-    try { await stockAlertJob(); } catch (e) { logger.error('[CRON] stockAlert error:', e); }
+    try { await avecVerrou('stockAlert', stockAlertJob); } catch (e) { logger.error('[CRON] stockAlert error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Rappels maintenances — tous les jours à 7h ──────────────
   cron.schedule('0 7 * * *', async () => {
     logger.info('[CRON] Démarrage job rappels maintenances');
-    try { await maintenanceReminderJob(); } catch (e) { logger.error('[CRON] maintenanceReminder error:', e); }
+    try { await avecVerrou('maintenanceReminder', maintenanceReminderJob); } catch (e) { logger.error('[CRON] maintenanceReminder error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Rapport mensuel — 1er du mois à 6h ─────────────────────
   cron.schedule('0 6 1 * *', async () => {
     logger.info('[CRON] Démarrage rapport mensuel automatique');
-    try { await monthlyReportJob(); } catch (e) { logger.error('[CRON] monthlyReport error:', e); }
+    try { await avecVerrou('monthlyReport', monthlyReportJob); } catch (e) { logger.error('[CRON] monthlyReport error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Sauvegarde : PAS ici. La sauvegarde complète (base + fichiers MinIO +
@@ -37,31 +58,31 @@ export function setupCronJobs() {
   // ── Escalade incidents — toutes les heures ──────────────────
   cron.schedule('0 * * * *', async () => {
     logger.info('[CRON] Vérification escalade incidents');
-    try { await incidentEscalationJob(); } catch (e) { logger.error('[CRON] escalation error:', e); }
+    try { await avecVerrou('escalation', incidentEscalationJob); } catch (e) { logger.error('[CRON] escalation error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Planning préventif contractuel — 1er du mois à 5h ──────
   cron.schedule('0 5 1 * *', async () => {
     logger.info('[CRON] Génération du planning préventif mensuel');
-    try { await preventivePlanJob(); } catch (e) { logger.error('[CRON] preventivePlan error:', e); }
+    try { await avecVerrou('preventivePlan', preventivePlanJob); } catch (e) { logger.error('[CRON] preventivePlan error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Manquants de livraison — tous les jours à 9h ────────────
   cron.schedule('0 9 * * *', async () => {
     logger.info('[CRON] Vérification des manquants de livraison');
-    try { await manquantAlertJob(); } catch (e) { logger.error('[CRON] manquantAlert error:', e); }
+    try { await avecVerrou('manquantAlert', manquantAlertJob); } catch (e) { logger.error('[CRON] manquantAlert error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Vidanges GE dues (≥ seuil d'heures) — tous les jours à 7h30 ──
   cron.schedule('30 7 * * *', async () => {
     logger.info('[CRON] Vérification des vidanges GE dues');
-    try { await vidangeAlertJob(); } catch (e) { logger.error('[CRON] vidangeAlert error:', e); }
+    try { await avecVerrou('vidangeAlert', vidangeAlertJob); } catch (e) { logger.error('[CRON] vidangeAlert error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Situation périodique incidents/coupures — vérifiée tous les quarts d'heure,
   //    émise seulement quand l'intervalle paramétré (défaut 3 h) est écoulé.
   cron.schedule('*/15 * * * *', async () => {
-    try { await situationPeriodiqueJob(); } catch (e) { logger.error('[CRON] situationPeriodique error:', e); }
+    try { await avecVerrou('situationPeriodique', situationPeriodiqueJob); } catch (e) { logger.error('[CRON] situationPeriodique error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   logger.info('✅ 8 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');

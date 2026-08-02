@@ -4,6 +4,7 @@ import { parseISO } from 'date-fns';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { dateBornee } from '../utils/dates';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
@@ -318,7 +319,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           reference: await genererReference(tx, 'DEP', b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date()),
           siteId,
           ligneLivraisonId,
-          dateDepotage: b.dateDepotage ? new Date(String(b.dateDepotage)) : new Date(),
+          dateDepotage: dateBornee(b.dateDepotage),
           technicienId: req.user!.id, // toujours l'utilisateur courant, jamais le client
           volumeLitres: volume,
           stockAvantLitres: stockAvant,

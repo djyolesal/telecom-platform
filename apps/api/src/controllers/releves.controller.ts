@@ -3,6 +3,7 @@ import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/peri
 import { parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { dateBornee } from '../utils/dates';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
@@ -126,7 +127,7 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
         ...(clientUuid ? { id: clientUuid } : {}),
         siteId: String(b.siteId),
         source: b.source as never,
-        dateReleve: b.dateReleve ? new Date(String(b.dateReleve)) : new Date(),
+        dateReleve: dateBornee(b.dateReleve),
         technicienId: req.user!.id, // toujours l'utilisateur courant
         groupeId: b.groupeId ? String(b.groupeId) : null,
         indexCompteur: bounded(b.indexCompteur, 1e8),

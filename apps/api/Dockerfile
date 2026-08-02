@@ -22,6 +22,10 @@ RUN npm run build:seed
 FROM node:20-alpine AS production
 WORKDIR /app
 
+# Fuseau FIXÉ : sans lui, les dates du rapport NOC (construites avec des
+# setters locaux) glissaient selon le fuseau de l'hôte — la clé d'unicité
+# de l'import ne matchait plus et le ré-import dupliquait au lieu d'apurer.
+ENV TZ=Africa/Lome
 ENV NODE_ENV=production
 
 # curl pour le healthcheck ; openssl + libc6-compat pour les engines Prisma (migrate + client)

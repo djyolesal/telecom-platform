@@ -58,7 +58,7 @@ export async function situationPeriodiqueJob(): Promise<void> {
     const item = { nom: i.site.nom, h: heuresDepuis(i.dateOuverture) };
     incGlobal.push(item);
     for (const p of prestatairesDe(i.site.lot, 'PASSIVE')) {
-      incParPresta.set(p, [...(incParPresta.get(p) ?? []), item]);
+      const l = incParPresta.get(p); if (l) l.push(item); else incParPresta.set(p, [item]);
     }
   }
   const coupParPresta = new Map<string, { nom: string; h: number }[]>();
@@ -67,7 +67,7 @@ export async function situationPeriodiqueJob(): Promise<void> {
     const item = { nom: `${c.site.nom} (${c.technologie})`, h: heuresDepuis(c.dateDebut) };
     coupGlobal.push(item);
     for (const p of prestatairesDe(c.site.lot, 'ACTIVE')) {
-      coupParPresta.set(p, [...(coupParPresta.get(p) ?? []), item]);
+      const l = coupParPresta.get(p); if (l) l.push(item); else coupParPresta.set(p, [item]);
     }
   }
 
@@ -90,12 +90,15 @@ export async function situationPeriodiqueJob(): Promise<void> {
         ? composer(incParPresta.get(c.prestataireId) ?? [], coupParPresta.get(c.prestataireId) ?? [])
         : null; // contact interne sans « toutes sociétés » : pas de périmètre → rien
     if (!message) continue;
-    parMessage.set(message, [...(parMessage.get(message) ?? []), c]);
+    const l = parMessage.get(message); if (l) l.push(c); else parMessage.set(message, [c]);
   }
+  // Horodatage AVANT la boucle d'envoi : la passerelle peut prendre plusieurs
+  // minutes par lot, et le cron suivant (15 min) repassait alors le garde et
+  // réémettait TOUTE la situation — SMS payants en double.
+  await setRaw('notifications.situationDernierEnvoi', new Date().toISOString());
+
   for (const [message, cibles] of parMessage) {
     await envoyerLotContacts(cibles, message, 'SITUATION_PERIODIQUE');
   }
-
-  await setRaw('notifications.situationDernierEnvoi', new Date().toISOString());
   logger.info(`[situation] ${incidents.length} incident(s), ${partielles.length} coupure(s) partielle(s) → ${[...parMessage.values()].flat().length} contact(s)`);
 }

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import ExcelJS from 'exceljs';
 import { Readable } from 'stream';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
@@ -35,9 +36,15 @@ const ALARMES_ENERGIE = new Set(['AE', 'GE', 'EN']);
  * Les coupures héritées (impact aval) ne génèrent ni incident ni notification :
  * le travail est sur le site origine.
  */
-export async function rattacherIncidentsCoupures(userId: string): Promise<number> {
+export async function rattacherIncidentsCoupures(userId: string, siteIds?: string[]): Promise<number> {
+  // Scopé aux sites RÉELLEMENT touchés par l'opération courante : sans cela une
+  // simple saisie balayait tout le parc (incidents et SMS sur des sites tiers,
+  // hors périmètre de l'auteur, et N+1 sur des centaines de sites).
   const orphelines = await prisma.coupureReseau.findMany({
-    where: { dateFin: null, origine: 'LOCALE', incidentId: null },
+    where: {
+      dateFin: null, origine: 'LOCALE', incidentId: null,
+      ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
+    },
     include: { site: { select: { nom: true } } },
     orderBy: { dateDebut: 'asc' },
   });
@@ -79,13 +86,24 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
       continue;
     }
 
-    // Incident auto déjà ouvert pour ce site (créé par une coupure précédente) ?
-    let incident = await prisma.incident.findFirst({
-      where: { siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: {} } },
-      select: { id: true, reference: true },
-    });
-    if (!incident) {
-      incident = await prisma.$transaction(async (tx) => tx.incident.create({
+    // Lecture + création + rattachement sous VERROU consultatif par site, dans
+    // une seule transaction : sinon deux imports concurrents créaient deux
+    // incidents CRITIQUE pour la même panne, et le second updateMany laissait le
+    // premier incident OUVERT sans aucune coupure — jamais clôturable.
+    const { incident, cree } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + siteId})::bigint)`;
+      // `some: { dateFin: null }` : un incident dont toutes les coupures sont
+      // rétablies ne doit PAS être recyclé (sa dateOuverture ferait exploser le
+      // MTTR et les pénalités de délai).
+      const existant = await tx.incident.findFirst({
+        where: { siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: { dateFin: null } } },
+        select: { id: true, reference: true },
+      });
+      if (existant) {
+        await tx.coupureReseau.updateMany({ where: { id: { in: coupures.map((c) => c.id) } }, data: { incidentId: existant.id } });
+        return { incident: existant, cree: false };
+      }
+      const nouveau = await tx.incident.create({
         data: {
           reference: await genererReference(tx, 'INC', new Date()),
           siteId,
@@ -95,7 +113,12 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
           declarePar: userId,
         },
         select: { id: true, reference: true },
-      }));
+      });
+      await tx.coupureReseau.updateMany({ where: { id: { in: coupures.map((c) => c.id) } }, data: { incidentId: nouveau.id } });
+      return { incident: nouveau, cree: true };
+    });
+
+    if (cree) {
       crees++;
       io.of('/supervision').emit('incident:created', { id: incident.id, siteId });
       await notifierIncidentCoupure(
@@ -131,10 +154,6 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
         logger.warn('[coupures] push technicien échoué:', e);
       }
     }
-    await prisma.coupureReseau.updateMany({
-      where: { id: { in: coupures.map((c) => c.id) } },
-      data: { incidentId: incident.id },
-    });
     // Pré-classement : alarme énergie → PASSIF (affinable à la résolution).
     const passives = coupures.filter((c) => c.typeAlarme && ALARMES_ENERGIE.has(c.typeAlarme));
     if (passives.length) {
@@ -157,10 +176,14 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
  * d'incident orphelin) ; une topologie incomplète laisse simplement les lignes
  * locales — jamais pire que l'existant.
  */
-async function detecterHeriteesImport(): Promise<number> {
+async function detecterHeriteesImport(depuis?: Date): Promise<number> {
   const [candidates, sites] = await Promise.all([
     prisma.coupureReseau.findMany({
-      where: { origine: 'LOCALE' },
+      // Bornée à la fenêtre RÉELLEMENT importée : sans borne, chaque import
+      // rejouait le classement sur toute la table — un mois déjà facturé
+      // changeait de pénalités (reclassement HERITEE rétroactif), et le scan
+      // intégral devenait le point chaud de l'import.
+      where: { origine: 'LOCALE', ...(depuis ? { dateDebut: { gte: depuis } } : {}) },
       select: { id: true, siteId: true, technologie: true, dateDebut: true, dateFin: true, incidentId: true },
     }),
     prisma.site.findMany({ where: { isActive: true }, select: { id: true, parentTransmissionId: true } }),
@@ -171,13 +194,13 @@ async function detecterHeriteesImport(): Promise<number> {
   const groupes = new Map<string, typeof candidates>();
   for (const c of candidates) {
     const cle = `${c.dateDebut.getTime()}|${c.dateFin ? c.dateFin.getTime() : 'ouverte'}`;
-    groupes.set(cle, [...(groupes.get(cle) ?? []), c]);
+    const g = groupes.get(cle); if (g) g.push(c); else groupes.set(cle, [c]);
   }
 
   const maj: { id: string; coupureOrigineId: string }[] = [];
   for (const groupe of groupes.values()) {
     const parSite = new Map<string, typeof candidates>();
-    for (const c of groupe) parSite.set(c.siteId, [...(parSite.get(c.siteId) ?? []), c]);
+    for (const c of groupe) { const l = parSite.get(c.siteId); if (l) l.push(c); else parSite.set(c.siteId, [c]); }
     if (parSite.size < 2) continue;
 
     for (const [siteId, lignes] of parSite) {
@@ -209,6 +232,67 @@ async function detecterHeriteesImport(): Promise<number> {
     );
   }
   return maj.length;
+}
+
+/**
+ * Clôture RÉCURSIVE de l'arbre des coupures héritées (A→B→C…) : la détection
+ * crée des chaînes, or la cascade ne descendait qu'un niveau — les héritées de
+ * second rang restaient ouvertes à vie et faisaient dériver la disponibilité.
+ */
+export async function cloturerHeriteesRecursif(
+  tx: Prisma.TransactionClient,
+  racineIds: string[],
+  fin: Date,
+  actions?: string | null
+): Promise<number> {
+  let niveau = racineIds;
+  let total = 0;
+  for (let profondeur = 0; profondeur < 50 && niveau.length; profondeur++) {
+    const enfants = await tx.coupureReseau.findMany({
+      where: { coupureOrigineId: { in: niveau }, dateFin: null },
+      select: { id: true, dateDebut: true },
+    });
+    if (!enfants.length) break;
+    for (const e of enfants) {
+      await tx.coupureReseau.update({
+        where: { id: e.id },
+        data: {
+          dateFin: fin,
+          downtimeMinutes: minutesEntre(e.dateDebut, fin),
+          ...(actions ? { actions } : {}),
+        },
+      });
+    }
+    total += enfants.length;
+    niveau = enfants.map((e) => e.id);
+  }
+  return total;
+}
+
+/**
+ * Rebouclage coupure → incident : quand la DERNIÈRE coupure ouverte d'un
+ * incident est rétablie, l'incident ne doit plus rester OUVERT (sinon escalade
+ * horaire et SMS de situation à perpétuité, et recyclage par une panne ultérieure).
+ */
+async function resoudreIncidentSiPlusDeCoupure(
+  tx: Prisma.TransactionClient,
+  incidentId: string | null,
+  quand: Date
+): Promise<boolean> {
+  if (!incidentId) return false;
+  const reste = await tx.coupureReseau.count({ where: { incidentId, dateFin: null } });
+  if (reste > 0) return false;
+  const inc = await tx.incident.findUnique({ where: { id: incidentId }, select: { statut: true, dateOuverture: true } });
+  if (!inc || !['OUVERT', 'EN_COURS'].includes(inc.statut)) return false;
+  await tx.incident.update({
+    where: { id: incidentId },
+    data: {
+      statut: 'RESOLU',
+      dateResolution: quand,
+      dureeCoupureMinutes: minutesEntre(inc.dateOuverture, quand),
+    },
+  });
+  return true;
 }
 
 /** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
@@ -317,7 +401,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
 
     // Incident terrain automatique (groupé par site) + dispatch SMS prestataire,
     // uniquement pour une coupure encore EN COURS (pas la saisie d'historique).
-    const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id);
+    const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id, [siteId]);
 
     await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', rows[0].id, { siteId, technologies, sitesImpactes, incidentsCrees }, req);
     res.status(201).json({ success: true, data: { coupures: rows, sitesImpactes, incidentsCrees } });
@@ -363,19 +447,18 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     let hériteesCloturees = 0;
     if (data.dateFin instanceof Date && b.cloturerHeritees !== false) {
       const fin = data.dateFin;
-      const ouvertes = await prisma.coupureReseau.findMany({
-        where: { coupureOrigineId: existing.id, dateFin: null },
-        select: { id: true, dateDebut: true },
-      });
-      if (ouvertes.length) {
-        await prisma.$transaction(ouvertes.map((h) =>
-          prisma.coupureReseau.update({
-            where: { id: h.id },
-            data: { dateFin: fin, downtimeMinutes: minutesEntre(h.dateDebut, fin), actions: (data.actions as string | null) ?? undefined },
-          })
-        ));
-        hériteesCloturees = ouvertes.length;
-      }
+      hériteesCloturees = await prisma.$transaction((tx) =>
+        cloturerHeriteesRecursif(tx, [existing.id], fin, (data.actions as string | null) ?? null)
+      );
+    }
+
+    // Rebouclage : si plus aucune coupure ouverte ne porte l'incident lié,
+    // celui-ci passe RESOLU (sinon escalade horaire et SMS de situation à vie).
+    let incidentResolu = false;
+    if (data.dateFin instanceof Date && existing.incidentId) {
+      incidentResolu = await prisma.$transaction((tx) =>
+        resoudreIncidentSiPlusDeCoupure(tx, existing.incidentId, data.dateFin as Date)
+      );
     }
 
     // Réouverture par le NOC (dateFin retirée) : si l'incident lié a été résolu
@@ -392,6 +475,12 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
           data: { statut: 'EN_COURS', dateResolution: null, dureeCoupureMinutes: null },
         });
         incidentRouvert = true;
+        // Symétrie : les héritées fermées par la cascade sont rouvertes, sinon
+        // l'indisponibilité aval du second épisode n'était jamais comptée.
+        await prisma.coupureReseau.updateMany({
+          where: { coupureOrigineId: existing.id, dateFin: existing.dateFin },
+          data: { dateFin: null, downtimeMinutes: null },
+        });
         await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'reouverture_noc', coupureId: existing.id }, req);
         await notifierIncidentCoupure(
           existing.siteId,
@@ -401,8 +490,8 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       }
     }
 
-    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, { cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert }, req);
-    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert } });
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, { cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu }, req);
+    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu } });
   } catch (err) { next(err); }
 }
 
@@ -600,11 +689,16 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     // Reclassement des impacts d'aval AVANT le rattachement : les lignes de même
     // fenêtre dont un site amont figure dans le groupe deviennent HÉRITÉES →
     // un seul incident sera créé, sur le site origine.
-    const heriteesDetectees = await detecterHeriteesImport();
+    const heriteesDetectees = await detecterHeriteesImport(
+      lots.length ? new Date(Math.min(...lots.map((l) => (l.dateDebut as Date).getTime()))) : undefined
+    );
 
     // Les coupures importées ENCORE EN COURS obtiennent leur incident terrain
     // (groupé par site) — l'historique déjà rétabli n'en crée jamais.
-    const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id);
+    const incidentsCrees = await rattacherIncidentsCoupures(
+      req.user!.id,
+      [...new Set(lots.map((l) => String(l.siteId)))]
+    );
 
     await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, clotureesParImport, heriteesDetectees, incidentsCrees }, req);
     res.json({
