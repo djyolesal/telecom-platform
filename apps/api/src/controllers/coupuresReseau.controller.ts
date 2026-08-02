@@ -14,6 +14,7 @@ import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
 import { construireClasseurCoupures, COLONNES_DETAIL } from '../services/coupuresExport.service';
 import { logger } from '../utils/logger';
+import { Intervalle, minutesUnion, minutesUnionParCle, pousser } from '../utils/intervals';
 import { io } from '../server';
 
 export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
@@ -655,14 +656,24 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       }),
     ]);
 
-    let downtimeTotal = 0, downtimeEnergie = 0, downtimeActif = 0, downtimePassif = 0;
+    // ⚠️ Le rapport NOC produit UNE LIGNE PAR TECHNOLOGIE pour une même panne :
+    // toutes les durées passent donc par une UNION D'INTERVALLES par site avant
+    // d'être sommées (sinon un site entier coupé 6 h comptait 24 h).
+    const ivSite = new Map<string, Intervalle[]>();
+    const ivEnergie = new Map<string, Intervalle[]>();
+    const ivActif = new Map<string, Intervalle[]>();
+    const ivPassif = new Map<string, Intervalle[]>();
+    const ivAlarme = new Map<string, Intervalle[]>(); // clé « alarme|site »
     const parSite = new Map<string, { nom: string; region: string; downtime: number; coupures: number; enCours: number }>();
     const parAlarme = new Map<string, { type: string; coupures: number; downtime: number }>();
     const ENERGIE = new Set(['AE', 'GE', 'EN']);
     let enCours = 0;
 
     // Évaluation par prestataire (vue interne) : agrégats sur les sites de ses lots.
-    interface EvalPresta { nom: string; nbSites: number; coupures: number; enCours: number; downtime: number; downtimeActif: number; downtimePassif: number; nonClasse: number; sitesTouches: Set<string> }
+    interface EvalPresta {
+      nom: string; nbSites: number; coupures: number; enCours: number; sitesTouches: Set<string>;
+      iv: Map<string, Intervalle[]>; ivActif: Map<string, Intervalle[]>; ivPassif: Map<string, Intervalle[]>; ivNonClasse: Map<string, Intervalle[]>;
+    }
     const parPresta = new Map<string, EvalPresta>();
     const prestasDuLot = new Map<string, { prestataireId: string; nom: string }[]>();
     for (const lot of lots) {
@@ -670,7 +681,11 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       for (const a of lot.assignments) uniques.set(a.prestataireId, a.prestataire.nom);
       prestasDuLot.set(lot.id, [...uniques.entries()].map(([prestataireId, nom]) => ({ prestataireId, nom })));
       for (const [prestataireId, nom] of uniques) {
-        const e = parPresta.get(prestataireId) ?? { nom, nbSites: 0, coupures: 0, enCours: 0, downtime: 0, downtimeActif: 0, downtimePassif: 0, nonClasse: 0, sitesTouches: new Set<string>() };
+        const e = parPresta.get(prestataireId) ?? {
+          nom, nbSites: 0, coupures: 0, enCours: 0, sitesTouches: new Set<string>(),
+          iv: new Map<string, Intervalle[]>(), ivActif: new Map<string, Intervalle[]>(),
+          ivPassif: new Map<string, Intervalle[]>(), ivNonClasse: new Map<string, Intervalle[]>(),
+        };
         e.nbSites += lot._count.sites;
         parPresta.set(prestataireId, e);
       }
@@ -681,20 +696,21 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       const debut = c.dateDebut < depuis ? depuis : c.dateDebut;
       const fin = c.dateFin ?? maintenant;
       if (fin <= depuis) continue;
-      const dt = minutesEntre(debut, fin);
+      const iv: Intervalle = { debut, fin };
       if (!c.dateFin) enCours++;
-      downtimeTotal += dt;
-      if (c.typeAlarme && ENERGIE.has(c.typeAlarme)) downtimeEnergie += dt;
-      if (c.causeCategorie === 'ACTIF') downtimeActif += dt;
-      else if (c.causeCategorie === 'PASSIF') downtimePassif += dt;
+      pousser(ivSite, c.siteId, iv);
+      if (c.typeAlarme && ENERGIE.has(c.typeAlarme)) pousser(ivEnergie, c.siteId, iv);
+      if (c.causeCategorie === 'ACTIF') pousser(ivActif, c.siteId, iv);
+      else if (c.causeCategorie === 'PASSIF') pousser(ivPassif, c.siteId, iv);
 
       const ps = parSite.get(c.siteId) ?? { nom: c.site.nom, region: c.site.region, downtime: 0, coupures: 0, enCours: 0 };
-      ps.downtime += dt; ps.coupures += 1; if (!c.dateFin) ps.enCours += 1;
+      ps.coupures += 1; if (!c.dateFin) ps.enCours += 1;
       parSite.set(c.siteId, ps);
 
       const ta = c.typeAlarme ?? '—';
       const pa = parAlarme.get(ta) ?? { type: ta, coupures: 0, downtime: 0 };
-      pa.coupures += 1; pa.downtime += dt; parAlarme.set(ta, pa);
+      pa.coupures += 1; parAlarme.set(ta, pa);
+      pousser(ivAlarme, `${ta}|${c.siteId}`, iv);
 
       // L'imputation par prestataire EXCLUT les coupures héritées : l'aval d'une
       // panne amont n'est pas de la responsabilité du prestataire du site aval
@@ -703,16 +719,29 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
         for (const { prestataireId } of prestasDuLot.get(c.site.lotId) ?? []) {
           const e = parPresta.get(prestataireId);
           if (!e) continue;
-          e.coupures += 1; e.downtime += dt; if (!c.dateFin) e.enCours += 1;
-          if (c.causeCategorie === 'ACTIF') e.downtimeActif += dt;
-          else if (c.causeCategorie === 'PASSIF') e.downtimePassif += dt;
-          else e.nonClasse += dt;
+          e.coupures += 1; if (!c.dateFin) e.enCours += 1;
+          pousser(e.iv, c.siteId, iv);
+          if (c.causeCategorie === 'ACTIF') pousser(e.ivActif, c.siteId, iv);
+          else if (c.causeCategorie === 'PASSIF') pousser(e.ivPassif, c.siteId, iv);
+          else pousser(e.ivNonClasse, c.siteId, iv);
           e.sitesTouches.add(c.siteId);
         }
       }
     }
 
-    const nonClasse = downtimeTotal - downtimeActif - downtimePassif;
+    // Unions par site puis somme : une panne listée sur 4 technologies ne compte
+    // qu'une fois.
+    const downtimeTotal = minutesUnionParCle(ivSite);
+    const downtimeEnergie = minutesUnionParCle(ivEnergie);
+    const downtimeActif = minutesUnionParCle(ivActif);
+    const downtimePassif = minutesUnionParCle(ivPassif);
+    for (const [siteId, ps] of parSite) ps.downtime = minutesUnion(ivSite.get(siteId) ?? []);
+    for (const [ta, pa] of parAlarme) {
+      pa.downtime = [...ivAlarme.entries()]
+        .filter(([k]) => k.startsWith(`${ta}|`))
+        .reduce((s, [, liste]) => s + minutesUnion(liste), 0);
+    }
+    const nonClasse = Math.max(0, downtimeTotal - downtimeActif - downtimePassif);
     res.json({
       success: true,
       data: {
@@ -740,19 +769,22 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
           .sort((a, b) => b.downtime - a.downtime),
         // Vue interne uniquement : évaluation de chaque prestataire sur son périmètre.
         parPrestataire: restreint ? undefined : [...parPresta.values()]
-          .map((e) => ({
-            nom: e.nom,
-            nbSites: e.nbSites,
-            coupures: e.coupures,
-            enCours: e.enCours,
-            sitesTouches: e.sitesTouches.size,
-            downtimeHeures: Math.round(e.downtime / 60),
-            downtimeActifHeures: Math.round(e.downtimeActif / 60),
-            downtimePassifHeures: Math.round(e.downtimePassif / 60),
-            downtimeNonClasseHeures: Math.round(e.nonClasse / 60),
-            // Dispo moyenne du parc du prestataire (minutes site×fenêtre).
-            dispoPct: e.nbSites > 0 ? Math.max(0, Math.round((1 - e.downtime / (fenetreMin * e.nbSites)) * 1000) / 10) : 100,
-          }))
+          .map((e) => {
+            const dt = minutesUnionParCle(e.iv);
+            return {
+              nom: e.nom,
+              nbSites: e.nbSites,
+              coupures: e.coupures,
+              enCours: e.enCours,
+              sitesTouches: e.sitesTouches.size,
+              downtimeHeures: Math.round(dt / 60),
+              downtimeActifHeures: Math.round(minutesUnionParCle(e.ivActif) / 60),
+              downtimePassifHeures: Math.round(minutesUnionParCle(e.ivPassif) / 60),
+              downtimeNonClasseHeures: Math.round(minutesUnionParCle(e.ivNonClasse) / 60),
+              // Dispo moyenne du parc du prestataire (minutes site×fenêtre).
+              dispoPct: e.nbSites > 0 ? Math.max(0, Math.round((1 - dt / (fenetreMin * e.nbSites)) * 1000) / 10) : 100,
+            };
+          })
           .sort((a, b) => b.downtimeHeures - a.downtimeHeures),
       },
     });

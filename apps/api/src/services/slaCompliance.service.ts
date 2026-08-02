@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { getNum } from './settings.service';
+import { Intervalle, minutesUnion, pousser } from '../utils/intervals';
 
 /**
  * Conformité SLA par prestataire : mesure le respect des engagements contractuels
@@ -57,7 +58,7 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
       select: { lotId: true, prestataireId: true, prestataire: { select: { nom: true } } },
       orderBy: { scope: 'asc' }, // PASSIVE avant LES_DEUX
     }),
-    prisma.site.findMany({ select: { id: true, lotId: true } }),
+    prisma.site.findMany({ where: { isActive: true }, select: { id: true, lotId: true } }),
   ]);
   const prestataireParLot = new Map<string, { id: string; nom: string }>();
   for (const a of assignments) {
@@ -68,9 +69,11 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
     if (s.lotId && prestataireParLot.has(s.lotId)) prestataireParSite.set(s.id, prestataireParLot.get(s.lotId)!);
   }
 
-  type Acc = { nom: string; prevPlan: number; prevTemps: number; incResolus: number; incHorsDelai: number; sommeDelaiMin: number; nbSites: number; downtimePassifMin: number };
+  // Le downtime passif passe par une UNION D'INTERVALLES par site : le rapport
+  // NOC liste une ligne par technologie, les sommer facturait 4× la même panne.
+  type Acc = { nom: string; prevPlan: number; prevTemps: number; incResolus: number; incHorsDelai: number; sommeDelaiMin: number; nbSites: number; ivPassif: Map<string, Intervalle[]> };
   const acc = new Map<string, Acc>();
-  const ensure = (id: string, nom: string) => acc.get(id) ?? acc.set(id, { nom, prevPlan: 0, prevTemps: 0, incResolus: 0, incHorsDelai: 0, sommeDelaiMin: 0, nbSites: 0, downtimePassifMin: 0 }).get(id)!;
+  const ensure = (id: string, nom: string) => acc.get(id) ?? acc.set(id, { nom, prevPlan: 0, prevTemps: 0, incResolus: 0, incHorsDelai: 0, sommeDelaiMin: 0, nbSites: 0, ivPassif: new Map() }).get(id)!;
 
   // Tout prestataire passif entre dans l'évaluation, même sans activité sur la
   // période (dispo 100 %, conforme) — l'absence de données n'est pas un angle mort.
@@ -78,7 +81,14 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
 
   // ── Préventif : réalisé à temps si clôturé avant datePlanifiee + tolérance ──
   const prevs = await prisma.maintenance.findMany({
-    where: { type: 'PREVENTIVE', datePlanifiee: { gte: since }, prestataireId: { not: null } },
+    // Borne HAUTE indispensable : sans elle, le planning du mois fraîchement
+    // généré (tickets PLANIFIEE à venir) comptait comme « non réalisé » et
+    // déclenchait des pénalités fictives dès le 2 du mois.
+    where: {
+      type: 'PREVENTIVE',
+      datePlanifiee: { gte: since, lte: new Date(Date.now() - toleranceJours * 86400000) },
+      prestataireId: { not: null },
+    },
     select: { prestataireId: true, prestataire: { select: { nom: true } }, statut: true, datePlanifiee: true, dateFin: true, dureeSuspendueMinutes: true },
   });
   for (const m of prevs) {
@@ -124,14 +134,15 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
     const debut = c.dateDebut < since ? since : c.dateDebut;
     const fin = c.dateFin ?? maintenant;
     if (fin <= since) continue;
-    ensure(p.id, p.nom).downtimePassifMin += Math.max(0, Math.round((fin.getTime() - debut.getTime()) / 60000));
+    pousser(ensure(p.id, p.nom).ivPassif, c.siteId, { debut, fin });
   }
 
   const parPrestataire: SlaPrestataire[] = [...acc.entries()].map(([id, a]) => {
     const tauxPreventif = a.prevPlan ? Math.round((a.prevTemps / a.prevPlan) * 100) : 100;
     const tauxResolution = a.incResolus ? Math.round(((a.incResolus - a.incHorsDelai) / a.incResolus) * 100) : 100;
+    const downtimePassifMin = [...a.ivPassif.values()].reduce((s, l) => s + minutesUnion(l), 0);
     const dispoPassivePct = a.nbSites > 0
-      ? Math.max(0, Math.round((1 - a.downtimePassifMin / (fenetreMin * a.nbSites)) * 1000) / 10)
+      ? Math.max(0, Math.round((1 - downtimePassifMin / (fenetreMin * a.nbSites)) * 1000) / 10)
       : 100;
     // Pénalité de disponibilité : par dixième de point sous l'engagement.
     const dixiemesManquants = Math.max(0, Math.round((dispoMin - dispoPassivePct) * 10));
@@ -151,7 +162,7 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
       incidentsHorsDelai: a.incHorsDelai,
       delaiResolutionMoyenH: a.incResolus ? Math.round((a.sommeDelaiMin / a.incResolus / 60) * 10) / 10 : null,
       nbSites: a.nbSites,
-      downtimePassifHeures: Math.round(a.downtimePassifMin / 60),
+      downtimePassifHeures: Math.round(downtimePassifMin / 60),
       dispoPassivePct,
       scoreSla,
       penaliteFCFA: Math.round(penalite),
