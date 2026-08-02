@@ -33,6 +33,10 @@ export const io = new SocketIOServer(httpServer, {
 setupSocketIO(io);
 
 // ── Middlewares ───────────────────────────────────────────────
+// Derrière nginx : sans cela `req.ip` vaut l'IP du conteneur proxy pour TOUTES
+// les requêtes → le plafond anti-bruteforce devient global (61 tentatives
+// bloquent la plateforme entière) et le journal d'audit perd l'IP réelle.
+app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(compression());

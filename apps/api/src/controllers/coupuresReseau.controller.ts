@@ -10,9 +10,10 @@ import { descendantsTransmission } from '../utils/transmission';
 import { genererReference } from '../services/reference.service';
 import { notifierIncidentCoupure } from '../services/sms.service';
 import { notificationService } from '../services/notifications.service';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
 import { construireClasseurCoupures, COLONNES_DETAIL } from '../services/coupuresExport.service';
+import { logger } from '../utils/logger';
 import { io } from '../server';
 
 export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
@@ -124,7 +125,9 @@ export async function rattacherIncidentsCoupures(userId: string): Promise<number
           })));
         }
       } catch (e) {
-        // Le push ne doit jamais faire échouer la création de l'incident.
+        // Le push ne doit jamais faire échouer la création de l'incident —
+        // mais un échec systématique doit rester visible dans les logs.
+        logger.warn('[coupures] push technicien échoué:', e);
       }
     }
     await prisma.coupureReseau.updateMany({
@@ -775,7 +778,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
     const rows = await prisma.coupureReseau.findMany({
       where,
       orderBy: { dateDebut: 'desc' },
-      take: 20000,
+      take: EXPORT_MAX,
       include: {
         site: { select: { nom: true, region: true } },
         incident: { select: { reference: true } },

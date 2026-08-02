@@ -2,6 +2,14 @@ import { Response } from 'express';
 import { buildXlsx, buildXlsxMulti, setXlsxHeaders, ExcelColumn } from './excel';
 import { buildTablePdf } from './tablePdf';
 
+/**
+ * Plafond de lignes par export : ExcelJS matérialise chaque cellule stylée en
+ * mémoire (~1 Ko), et le conteneur API est limité à 1 Go — sans plafond, un
+ * export du parc entier provoquait un OOM-kill. Les gros volumes passent par un
+ * filtre de période côté appelant.
+ */
+export const EXPORT_MAX = 5000;
+
 export interface TabularSheet {
   name: string;
   columns: ExcelColumn[];

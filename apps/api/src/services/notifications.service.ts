@@ -26,6 +26,9 @@ async function sendFcm(token: string, payload: NotificationPayload): Promise<voi
   try {
     await fetch('https://fcm.googleapis.com/fcm/send', {
       method: 'POST',
+      // Sans signal, undici attend 300 s : un FCM injoignable figeait la boucle
+      // de dispatch des incidents pendant 5 minutes.
+      signal: AbortSignal.timeout(10_000),
       headers: {
         Authorization: `key=${env.FCM_SERVER_KEY}`,
         'Content-Type': 'application/json',

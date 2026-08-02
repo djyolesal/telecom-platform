@@ -218,6 +218,7 @@ model Site {
   @@index([powerConfig])
   @@index([lotId])
   @@index([gardiennagePrestataireId])
+  @@index([parentTransmissionId])
   @@map("sites")
 }
 
@@ -325,6 +326,9 @@ model Maintenance {
   @@index([datePlanifiee])
   @@index([statut])
   @@index([tachePreventiveKey])
+  @@index([incidentId])
+  @@index([type, datePlanifiee])
+  @@index([statut, dateFin])
   @@map("maintenances")
 }
 
@@ -405,6 +409,7 @@ model Depotage {
   @@index([siteId])
   @@index([dateDepotage])
   @@index([ligneLivraisonId])
+  @@index([technicienId])
   @@map("depotages")
 }
 
@@ -453,6 +458,9 @@ model ReleveEnergie {
   @@index([siteId])
   @@index([dateReleve])
   @@index([source])
+  // Toutes les requêtes chaudes (contexte de saisie, vraisemblance, dernier
+  // stock) filtrent (site, source) et trient par date décroissante.
+  @@index([siteId, source, dateReleve(sort: Desc)])
   @@index([maintenanceId])
   @@index([groupeId])
   @@map("releves_energie")
@@ -493,6 +501,9 @@ model Incident {
   @@index([statut])
   @@index([severite])
   @@index([dateOuverture])
+  @@index([statut, dateOuverture])
+  @@index([dateResolution])
+  @@index([technicienId])
   @@map("incidents")
 }
 
@@ -661,6 +672,7 @@ model SmsLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([createdAt])
+  @@index([statut, createdAt])
   @@map("sms_logs")
 }
 
@@ -852,5 +864,15 @@ model CoupureReseau {
   @@index([dateFin])
   @@index([typeAlarme])
   @@index([incidentId])
+  @@index([coupureOrigineId])
+  // ⚠️ INDEX UNIQUE CRITIQUE, non exprimable en Prisma (expression COALESCE) :
+  //   coupures_reseau_unicite (site_id, technologie, COALESCE(frequence,'-'), date_debut)
+  //   créé par la migration 0029. C'est LUI qui rend l'import NOC idempotent.
+  //   NE JAMAIS lancer `prisma db push` sur cet environnement : il le supprimerait
+  //   sans bruit et chaque ré-import dupliquerait tout le rapport.
+  // Aiguillage des orphelines (rattachement d'incident, situation périodique).
+  @@index([origine, dateFin, incidentId])
+  // Imputation SLA passive par prestataire.
+  @@index([causeCategorie, origine])
   @@map("coupures_reseau")
 }

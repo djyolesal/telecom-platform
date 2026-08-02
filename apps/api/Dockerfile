@@ -47,4 +47,6 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3001/health || exit 1
 
-CMD ["node", "dist/server.js"]
+# Heap borné sous la mem_limit de 1 Go du compose : V8 échoue proprement
+# (exception récupérable) au lieu de se faire tuer par Docker (exit 137).
+CMD ["node", "--max-old-space-size=700", "dist/server.js"]

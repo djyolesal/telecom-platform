@@ -8,7 +8,7 @@ import { idempotencyKey } from '../utils/idempotency';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { clearMemo } from '../utils/memo';
 import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../utils/energy';
 import { genererReference } from '../services/reference.service';
@@ -493,6 +493,7 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
 
     const rows = await prisma.depotage.findMany({
       where,
+      take: EXPORT_MAX,
       orderBy: { dateDepotage: 'desc' },
       include: { site: { select: { code: true } } },
     });

@@ -10,7 +10,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf, generateBonMouvementPdf } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
@@ -946,6 +946,7 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
 
     const rows = await prisma.maintenance.findMany({
       where,
+      take: EXPORT_MAX,
       orderBy: { datePlanifiee: 'desc' },
       include: { site: { select: { code: true, nom: true } }, technicien: { select: { nom: true, prenom: true } } },
     });

@@ -1,5 +1,6 @@
 import { PrismaClient, PowerConfig, StatutGE, RoleUser } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
@@ -41,7 +42,11 @@ async function main() {
   console.log('🌱 Seed démarré...');
 
   // ── Utilisateurs ───────────────────────────────────────────
-  const password = await bcrypt.hash('Telecom@2026', SALT_ROUNDS);
+  // JAMAIS de mot de passe en dur : SEED_PASSWORD si fourni, sinon un secret
+  // aléatoire imprimé UNE SEULE FOIS. Un mot de passe versionné dans le dépôt
+  // donnait un accès ADMIN public à toute instance installée par `make install`.
+  const motDePasse = process.env.SEED_PASSWORD || crypto.randomBytes(12).toString('base64url');
+  const password = await bcrypt.hash(motDePasse, SALT_ROUNDS);
   const users: Array<{ nom: string; prenom: string; email: string; role: RoleUser; region?: string }> = [
     { nom: 'Admin', prenom: 'Système', email: 'admin@telecom.tg', role: 'ADMIN' },
     { nom: 'Mensah', prenom: 'Koffi', email: 'manager@telecom.tg', role: 'MANAGER' },
@@ -59,7 +64,9 @@ async function main() {
       create: { ...u, passwordHash: password, telephone: '+228 90 00 00 00' },
     });
   }
-  console.log(`✅ ${users.length} utilisateurs créés (mot de passe : Telecom@2026)`);
+  console.log(`✅ ${users.length} utilisateurs créés.`);
+  console.log(`🔑 Mot de passe initial (à changer à la première connexion) : ${motDePasse}`);
+  console.log('   ⚠️  Notez-le maintenant : il n\'est stocké nulle part en clair.');
 
   // ── Sites (~559) ───────────────────────────────────────────
   const TOTAL = 559;

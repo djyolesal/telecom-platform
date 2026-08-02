@@ -6,7 +6,7 @@ import { AppError } from '../utils/AppError';
 import { idempotencyKey } from '../utils/idempotency';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 
 // Libellé court de la tâche préventive d'origine (pour la « provenance » du relevé).
@@ -149,6 +149,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
 
     const rows = await prisma.releveEnergie.findMany({
       where,
+      take: EXPORT_MAX,
       orderBy: { dateReleve: 'desc' },
       include: { site: { select: { code: true } }, maintenance: { select: { type: true, tachePreventiveKey: true } } },
     });

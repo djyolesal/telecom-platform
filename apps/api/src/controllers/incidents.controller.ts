@@ -7,7 +7,7 @@ import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { notificationService } from '../services/notifications.service';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { io } from '../server';
 import { differenceInMinutes } from 'date-fns';
 import { assertOnSite } from '../utils/geofence';
@@ -380,6 +380,7 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
 
     const rows = await prisma.incident.findMany({
       where,
+      take: EXPORT_MAX,
       orderBy: { dateOuverture: 'desc' },
       include: { site: { select: { code: true, region: true } }, technicien: { select: { nom: true, prenom: true } } },
     });

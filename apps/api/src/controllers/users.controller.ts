@@ -8,7 +8,7 @@ import { env } from '../config/env';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 
 const SALT_ROUNDS = 12;
 const SAFE_SELECT = {
@@ -149,7 +149,7 @@ export async function resetUserPassword(req: Request, res: Response, next: NextF
 
 export async function exportUsers(req: Request, res: Response, next: NextFunction) {
   try {
-    const users = await prisma.user.findMany({ orderBy: { nom: 'asc' }, select: SAFE_SELECT });
+    const users = await prisma.user.findMany({ take: EXPORT_MAX, orderBy: { nom: 'asc' }, select: SAFE_SELECT });
     await auditLog(req.user!.id, 'EXPORT', 'users', undefined, { count: users.length }, req);
 
     const format = req.params.format || 'csv';

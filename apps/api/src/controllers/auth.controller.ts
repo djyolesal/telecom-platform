@@ -73,12 +73,19 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
     // Verrou d'appareil des comptes terrain : le compte se lie au PREMIER mobile
     // qui se connecte ; tout autre appareil est refusé jusqu'à déliaison admin.
-    // Compatibilité : une ancienne app qui n'envoie pas deviceId n'est ni liée
-    // ni bloquée — le verrou s'arme à la première connexion de l'app à jour.
     if (plt === 'MOBILE' && (user.role === 'TECHNICIEN' || user.role === 'TRANSPORTEUR')) {
       const deviceId = String((req.body as { deviceId?: unknown }).deviceId ?? '').slice(0, 100);
       const deviceLabel = String((req.body as { deviceLabel?: unknown }).deviceLabel ?? '').slice(0, 80);
-      if (deviceId) {
+      // Le verrou serait purement déclaratif si un client pouvait l'esquiver en
+      // omettant deviceId : un compte terrain DOIT présenter un identifiant
+      // d'appareil (l'app à jour l'envoie toujours).
+      if (!deviceId) {
+        throw new AppError(
+          "Application mobile obsolète ou identifiant d'appareil indisponible : mettez à jour l'application E&M OpS.",
+          403
+        );
+      }
+      {
         if (!user.appareilId) {
           await prisma.user.update({
             where: { id: user.id },

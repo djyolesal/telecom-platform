@@ -11,7 +11,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams, getNum, typesLiaison } from '../services/settings.service';
 import { forecastSites } from '../services/replenishment.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { generateEtiquettesQrPdf } from '../services/pdf.service';
 import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission, assertSansCycle } from '../utils/transmission';
@@ -665,7 +665,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
 
-    const sites = await prisma.site.findMany({ where, orderBy: { code: 'asc' } });
+    const sites = await prisma.site.findMany({ where, take: EXPORT_MAX, orderBy: { code: 'asc' } });
 
     await auditLog(req.user!.id, 'EXPORT', 'sites', undefined, { count: sites.length }, req);
     await sendTabular(res, req.params.format, 'sites', 'Parc de sites', [{
@@ -842,6 +842,7 @@ export async function exportTopologie(req: Request, res: Response, next: NextFun
   try {
     const sites = await prisma.site.findMany({
       where: { isActive: true },
+      take: EXPORT_MAX,
       select: {
         id: true, nom: true, region: true, typeLiaison: true, parentTransmissionId: true,
         parentTransmission: { select: { nom: true } },
