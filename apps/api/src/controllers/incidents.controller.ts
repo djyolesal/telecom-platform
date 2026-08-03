@@ -168,6 +168,21 @@ export async function updateIncident(req: Request, res: Response, next: NextFunc
 export async function assignIncident(req: Request, res: Response, next: NextFunction) {
   try {
     const { technicienId } = req.body;
+    if (!technicienId || typeof technicienId !== 'string') throw new AppError('Technicien requis', 400);
+
+    // Cloisonnement : l'incident doit être dans le périmètre de l'appelant
+    // (sans quoi un superviseur d'un autre prestataire pouvait s'attribuer, ou
+    // attribuer à n'importe qui, l'incident d'un site tiers).
+    const existant = await prisma.incident.findUnique({ where: { id: req.params.id }, select: { siteId: true } });
+    if (!existant) throw new AppError('Incident introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, existant.siteId);
+
+    // Le technicien assigné doit exister, être actif, et relever du même
+    // périmètre que le site (pas d'assignation à un compte arbitraire).
+    const tech = await prisma.user.findUnique({ where: { id: technicienId }, select: { id: true, isActive: true, role: true } });
+    if (!tech || !tech.isActive) throw new AppError('Technicien introuvable ou inactif', 400);
+    await assertSiteInPerimetre(technicienId, existant.siteId);
+
     const incident = await prisma.incident.update({
       where: { id: req.params.id },
       data: { technicienId, statut: 'EN_COURS' },

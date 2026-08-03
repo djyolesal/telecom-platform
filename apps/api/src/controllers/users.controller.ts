@@ -10,6 +10,7 @@ import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
+import { revoquerToutesSessions } from '../services/session.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 
 const SALT_ROUNDS = 12;
@@ -115,6 +116,12 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
     if (password) data.passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     const user = await prisma.user.update({ where: { id: req.params.id }, data, select: SAFE_SELECT });
+    // Rôle rétrogradé, compte désactivé ou mot de passe changé : les jetons
+    // portent le rôle et survivent jusqu'à expiration (JWT_EXPIRES_IN). On
+    // révoque toutes les sessions pour que le changement prenne effet tout de suite.
+    if (data.role !== undefined || data.isActive === false || data.passwordHash !== undefined) {
+      await revoquerToutesSessions(existing.id);
+    }
     // Jamais le hash en clair dans le journal d'audit (lisible via /admin/audit
     // et présent dans toutes les sauvegardes).
     await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { champs: Object.keys(data) }, req);
@@ -129,6 +136,9 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
     if (!existing) throw new AppError('Utilisateur introuvable', 404);
     // Désactivation (soft delete) pour préserver l'intégrité des historiques
     await prisma.user.update({ where: { id: req.params.id }, data: { isActive: false } });
+    // Accès coupé immédiatement (départ, terminal volé) : sinon les jetons
+    // vivants gardaient un accès complet jusqu'à leur expiration.
+    await revoquerToutesSessions(existing.id);
     await auditLog(req.user!.id, 'DELETE', 'users', existing.id, {}, req);
     res.json({ success: true, message: 'Utilisateur désactivé' });
   } catch (err) { next(err); }
@@ -143,6 +153,9 @@ export async function toggleActive(req: Request, res: Response, next: NextFuncti
       data: { isActive: !existing.isActive },
       select: SAFE_SELECT,
     });
+    // Désactivation → coupe l'accès tout de suite (jetons vivants sinon valables
+    // jusqu'à expiration).
+    if (!user.isActive) await revoquerToutesSessions(existing.id);
     await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { isActive: user.isActive }, req);
     res.json({ success: true, data: user });
   } catch (err) { next(err); }

@@ -447,6 +447,9 @@ export async function exportDepotagePdf(req: Request, res: Response, next: NextF
       },
     });
     if (!d) throw new AppError('Dépotage introuvable', 404);
+    // Cloisonnement : ce bordereau embarque 3 signatures manuscrites + les
+    // photos — jamais lisible hors périmètre (getDepotageById l'imposait déjà).
+    await assertSiteInPerimetre(req.user!.id, d.siteId);
 
     const photoRows = await prisma.photo.findMany({ where: { entityType: 'depotage', entityId: d.id }, orderBy: { createdAt: 'asc' } });
 

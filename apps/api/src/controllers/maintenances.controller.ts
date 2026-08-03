@@ -941,6 +941,9 @@ export async function getMaintenancePdf(req: Request, res: Response, next: NextF
       include: { site: true, technicien: { select: { nom: true, prenom: true } }, pieces: true },
     });
     if (!maintenance) throw new AppError('Maintenance introuvable', 404);
+    // Cloisonnement : ce PDF (rapport d'intervention complet) était accessible
+    // par id sans contrôle de périmètre, contrairement à getMaintenanceById.
+    await assertSiteInPerimetre(req.user!.id, maintenance.siteId);
 
     const pdf = await generateMaintenancePdf(maintenance);
     res.setHeader('Content-Type', 'application/pdf');
@@ -1034,6 +1037,9 @@ export async function getBonMouvementPdf(req: Request, res: Response, next: Next
       },
     });
     if (!m) throw new AppError('Maintenance introuvable', 404);
+    // Cloisonnement : ce bon de mouvement embarque la signature manuscrite du
+    // technicien — jamais lisible hors périmètre.
+    await assertSiteInPerimetre(req.user!.id, m.siteId);
     if (!m.natureTravaux || m.natureTravaux === 'ENTRETIEN' || !m.actifId) {
       throw new AppError('Cette intervention n’est pas un mouvement d’actif.', 400);
     }
