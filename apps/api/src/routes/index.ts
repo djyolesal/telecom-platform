@@ -269,6 +269,7 @@ router.delete('/bons-commande/:id', rbac(['ADMIN']), carburantCtrl.deleteBonComm
 // ── Logistique carburant : bons de livraison + plan ───────────
 router.get('/bons-livraison', carburantCtrl.getBonsLivraison);
 router.get('/bons-livraison/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsLivraison);
+router.post('/bons-livraison/analyser-document', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), heavyLimit, uploadMiddleware.single('file'), verifierSignature, carburantCtrl.analyserBonLivraisonDocument);
 router.post('/bons-livraison', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), carburantCtrl.createBonLivraison);
 router.get('/bons-livraison/:id', carburantCtrl.getBonLivraisonById);
 router.get('/bons-livraison/:id/plan.xlsx', carburantCtrl.exportPlanLivraisonXlsx);

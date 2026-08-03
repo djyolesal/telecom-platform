@@ -1,5 +1,6 @@
 import { publicFileUrl, uploadBuffer } from '../services/storage.service';
 import { analyserBonCommandePdf as analyserBcPdf } from '../services/bcPdf.service';
+import { analyserBonLivraisonDocument as analyserBlDoc } from '../services/blPdf.service';
 import { Request, Response, NextFunction } from 'express';
 import { assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
@@ -357,6 +358,43 @@ async function validatePlan(
     }
   }
   return { warnings };
+}
+
+/**
+ * Analyse un document de bon de livraison — PDF (web, possiblement plusieurs BL,
+ * un par page) ou photo du transporteur (mobile) — et renvoie les champs par BL
+ * reconnu, plus les BC correspondants trouvés en base et la clé du document
+ * archivé. Le formulaire est pré-rempli, l'utilisateur relit et valide.
+ */
+export async function analyserBonLivraisonDocument(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) throw new AppError('Fichier PDF ou photo requis', 400);
+
+    const { documents, ocrUtilise, pagesIgnorees } = await analyserBlDoc(req.file.buffer, req.file.mimetype);
+
+    // Rattachement aux BC : le document porte « BC N°POxxxxxxxxx ».
+    const numerosBc = [...new Set(documents.map((d) => d.bcNumero).filter((x): x is string => !!x))];
+    const bcs = numerosBc.length
+      ? await prisma.bonCommande.findMany({
+          where: { numero: { in: numerosBc } },
+          select: { id: true, numero: true, annee: true, trimestre: true, volumesMensuels: { select: { mois: true }, orderBy: { mois: 'asc' } } },
+        })
+      : [];
+    const bcParNumero = Object.fromEntries(bcs.map((b) => [b.numero, { id: b.id, numero: b.numero, annee: b.annee, trimestre: b.trimestre, mois: b.volumesMensuels.map((v) => v.mois) }]));
+    for (const d of documents) {
+      if (d.bcNumero && !bcParNumero[d.bcNumero]) {
+        d.avertissements.push(`Le bon de commande ${d.bcNumero} n'existe pas encore dans la plateforme — créez-le d'abord.`);
+      }
+    }
+
+    // Archivage du document : réutilisé comme pièce jointe du BL (PDF) ou trace (photo).
+    const stocke = await uploadBuffer(req.file.buffer, req.file.originalname, req.file.mimetype, 'bons-livraison');
+
+    await auditLog(req.user!.id, 'CREATE', 'bons_livraison', undefined, {
+      analyseDocument: true, documents: documents.length, ocr: ocrUtilise, pagesIgnorees,
+    }, req);
+    res.json({ success: true, data: { documents, bcs: bcParNumero, documentPath: stocke.key, ocr: ocrUtilise, pagesIgnorees } });
+  } catch (err) { next(err); }
 }
 
 export async function createBonLivraison(req: Request, res: Response, next: NextFunction) {

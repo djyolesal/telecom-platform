@@ -1,7 +1,44 @@
+import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/network_info.dart';
 import '../../../core/sync/sync_service.dart';
 import 'depotage_model.dart';
+
+/// Champs extraits d'un BL par l'analyse serveur (OCR) — tous optionnels :
+/// l'OCR propose, le transporteur relit et corrige avant d'enregistrer.
+class BlExtrait {
+  final String? numeroBL;
+  final String? bcNumero;
+  final String? dateBL; // JJ/MM/AAAA
+  final String? immatriculation;
+  final int? volumeChargeLitres;
+  final List<String> avertissements;
+
+  const BlExtrait({this.numeroBL, this.bcNumero, this.dateBL, this.immatriculation, this.volumeChargeLitres, this.avertissements = const []});
+
+  factory BlExtrait.fromJson(Map<String, dynamic> j) => BlExtrait(
+        numeroBL: j['numeroBL'] as String?,
+        bcNumero: j['bcNumero'] as String?,
+        dateBL: j['dateBL'] as String?,
+        immatriculation: j['immatriculation'] as String?,
+        volumeChargeLitres: (j['volumeChargeLitres'] as num?)?.toInt(),
+        avertissements: ((j['avertissements'] as List?) ?? const []).map((e) => e.toString()).toList(),
+      );
+
+  DateTime? get date {
+    final d = dateBL;
+    if (d == null || d.length != 10) return null;
+    return DateTime.tryParse('${d.substring(6)}-${d.substring(3, 5)}-${d.substring(0, 2)}');
+  }
+}
+
+class AnalyseBlResult {
+  final List<BlExtrait> documents;
+  /// BC reconnus en base, indexés par numéro (PO…) — pour présélectionner.
+  final Map<String, BonCommandeLite> bcs;
+  const AnalyseBlResult({required this.documents, required this.bcs});
+}
 
 /// Saisie des bons de livraison par le transporteur (offline-first).
 class BonLivraisonRepository {
@@ -17,6 +54,36 @@ class BonLivraisonRepository {
     return _client.request(
       (dio) => dio.get('/bons-commande', queryParameters: {'limit': 50}),
       (data) => (data['data'] as List).map((e) => BonCommandeLite.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  /// Envoie la PHOTO du BL à l'analyse serveur (OCR) pour pré-remplir le
+  /// formulaire. Renvoie `null` hors-ligne (saisie manuelle, photo conservée).
+  Future<AnalyseBlResult?> analyserPhoto(Uint8List bytes) async {
+    if (!await _network.isConnected) return null;
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: 'bl-scan.jpg'),
+    });
+    return _client.request(
+      (dio) => dio.post('/bons-livraison/analyser-document', data: form),
+      (data) {
+        final d = data['data'] as Map<String, dynamic>;
+        final bcs = <String, BonCommandeLite>{};
+        (d['bcs'] as Map<String, dynamic>? ?? const {}).forEach((numero, v) {
+          final m = v as Map<String, dynamic>;
+          bcs[numero] = BonCommandeLite(
+            id: m['id'] as String,
+            numero: m['numero'] as String,
+            annee: (m['annee'] as num).toInt(),
+            trimestre: (m['trimestre'] as num).toInt(),
+            mois: ((m['mois'] as List?) ?? const []).map((e) => (e as num).toInt()).toList(),
+          );
+        });
+        return AnalyseBlResult(
+          documents: ((d['documents'] as List?) ?? const []).map((e) => BlExtrait.fromJson(e as Map<String, dynamic>)).toList(),
+          bcs: bcs,
+        );
+      },
     );
   }
 

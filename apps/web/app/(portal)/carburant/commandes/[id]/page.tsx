@@ -55,6 +55,61 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
   const [warnings, setWarnings] = useState<string[]>([]);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  interface BlExtrait {
+    page: number; numeroBL: string | null; bcNumero: string | null; dateBL: string | null;
+    immatriculation: string | null; volumeChargeLitres: number | null; avertissements: string[];
+  }
+  const [extraits, setExtraits] = useState<BlExtrait[]>([]);
+  const [pageChoisie, setPageChoisie] = useState<number | null>(null);
+  const [avertissements, setAvertissements] = useState<string[]>([]);
+  const [analysing, setAnalysing] = useState(false);
+
+  /** JJ/MM/AAAA → AAAA-MM-JJ pour l'input date. */
+  const isoDe = (d: string | null) => (d ? `${d.slice(6)}-${d.slice(3, 5)}-${d.slice(0, 2)}` : null);
+
+  const appliquerExtrait = (d: BlExtrait) => {
+    setPageChoisie(d.page);
+    setForm((f) => ({
+      ...f,
+      numeroBL: d.numeroBL ?? f.numeroBL,
+      immatriculation: d.immatriculation ?? f.immatriculation,
+      volumeChargeLitres: d.volumeChargeLitres != null ? String(d.volumeChargeLitres) : f.volumeChargeLitres,
+      dateChargement: isoDe(d.dateBL) ?? f.dateChargement,
+      // Mois exécuté proposé d'après la date du BL, s'il figure au BC.
+      mois: d.dateBL && bc.volumesMensuels.some((v) => v.mois === parseInt(d.dateBL!.slice(3, 5), 10))
+        ? String(parseInt(d.dateBL.slice(3, 5), 10)) : f.mois,
+    }));
+    const av = [...d.avertissements];
+    // Le BL référence son BC : alerter si ce n'est pas celui de la page courante.
+    if (d.bcNumero && d.bcNumero !== bc.numero) {
+      av.unshift(`⚠ Ce BL référence le bon de commande ${d.bcNumero}, mais vous êtes sur ${bc.numero} — vérifiez.`);
+    }
+    setAvertissements(av);
+  };
+
+  /** PDF du BL analysé côté serveur (OCR si scan) → champs pré-remplis. */
+  const analyserBl = async (file: File) => {
+    setAnalysing(true);
+    setError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post('/bons-livraison/analyser-document', fd);
+      const d = r.data?.data as { documents: BlExtrait[]; documentPath: string };
+      setBlPdfPath(d.documentPath);
+      setExtraits(d.documents);
+      if (d.documents.length) appliquerExtrait(d.documents[0]);
+    } catch (e) {
+      // Analyse impossible : on archive quand même le PDF, saisie manuelle.
+      try {
+        const key = await uploadPdf(file);
+        setBlPdfPath(key);
+        const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
+        setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) — PDF joint, saisie manuelle.`]);
+      } catch { setError('Échec de l’upload du PDF.'); }
+    } finally { setAnalysing(false); }
+  };
+
   // Liste des transporteurs (visible côté manager pour désigner le transporteur).
   const { data: transporteurs = [] } = useQuery({
     queryKey: ['transporteurs'],
@@ -110,6 +165,29 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
           </div>
         )}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
+          <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
+            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">Pré-remplir depuis le PDF du BL (un lot de plusieurs BL est accepté)</p>
+            <div className="flex items-center gap-3">
+              <input type="file" accept="application/pdf,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserBl(f); }} className="text-xs" />
+              {analysing && <span className="text-xs text-gray-500">Analyse en cours…</span>}
+              {!analysing && extraits.length > 0 && <span className="text-xs font-medium text-emerald-700">{extraits.length} BL reconnu(s) ✓ — vérifiez les valeurs</span>}
+            </div>
+            {extraits.length > 1 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {extraits.map((d) => (
+                  <button key={d.page} type="button" onClick={() => appliquerExtrait(d)}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${pageChoisie === d.page ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                    {d.numeroBL ?? `page ${d.page}`}{d.volumeChargeLitres ? ` · ${d.volumeChargeLitres.toLocaleString('fr-FR')} L` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            {avertissements.length > 0 && (
+              <ul className="mt-2 space-y-0.5 text-xs text-amber-700">
+                {avertissements.map((a, i) => <li key={i}>{a.startsWith('⚠') ? a : `⚠ ${a}`}</li>)}
+              </ul>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="N° bon de livraison" required><Input value={form.numeroBL} onChange={(e) => set('numeroBL', e.target.value)} required placeholder="BL-00123" /></Field>
             <Field label="Immatriculation camion" required><Input value={form.immatriculation} onChange={(e) => set('immatriculation', e.target.value)} required placeholder="TG-1234-AB" /></Field>

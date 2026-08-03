@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/errors/exceptions.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../data/depotage_model.dart';
 import '../data/bon_livraison_repository.dart';
@@ -30,6 +31,8 @@ class _BlFormScreenState extends State<BlFormScreen> {
   String? _blDoc;
   String? _bordereauDoc;
   bool _saving = false;
+  bool _analysing = false;
+  List<String> _avertissements = const [];
 
   @override
   void initState() {
@@ -74,6 +77,66 @@ class _BlFormScreenState extends State<BlFormScreen> {
         _bordereauDoc = path;
       }
     });
+  }
+
+  /// Photographie le BL, l'envoie à l'analyse serveur (OCR) et PRÉ-REMPLIT le
+  /// formulaire — le transporteur relit et corrige avant d'enregistrer. La photo
+  /// sert aussi de pièce jointe « Photo du bon de livraison ».
+  Future<void> _scannerBl() async {
+    final messenger = ScaffoldMessenger.of(context);
+    // Qualité soignée : l'OCR a besoin de netteté (85 %, 2400 px max).
+    final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2400);
+    if (img == null) return;
+    final bytes = await img.readAsBytes();
+    final ts = DateTime.now().microsecondsSinceEpoch;
+    final path = await AttachmentStore.persistBytes(bytes, 'doc-bl-$ts.jpg');
+    if (!mounted) return;
+    setState(() { _blDoc = path; _analysing = true; _avertissements = const []; });
+    try {
+      final repo = context.read<BonLivraisonRepository>();
+      final res = await repo.analyserPhoto(bytes);
+      if (!mounted) return;
+      if (res == null) {
+        messenger.showSnackBar(const SnackBar(content: Text('Hors ligne : analyse indisponible — photo conservée, saisie manuelle.')));
+        return;
+      }
+      final d = res.documents.isNotEmpty ? res.documents.first : null;
+      if (d == null) {
+        messenger.showSnackBar(const SnackBar(content: Text('Aucun BL reconnu sur la photo — saisie manuelle.'), backgroundColor: Colors.orange));
+        return;
+      }
+      final bcsDispo = await _bcsFuture;
+      setState(() {
+        if (d.numeroBL != null) _numeroBL.text = d.numeroBL!;
+        if (d.immatriculation != null) _immat.text = d.immatriculation!;
+        if (d.volumeChargeLitres != null) _volume.text = d.volumeChargeLitres!.toString();
+        final date = d.date;
+        if (date != null && !date.isAfter(DateTime.now())) _dateChargement = date;
+        // Présélection du BC référencé sur le document (« BC N°POxxxxxxxxx »).
+        final bcNumero = d.bcNumero;
+        final avert = List<String>.from(d.avertissements);
+        if (bcNumero != null) {
+          final trouve = bcsDispo.where((b) => b.numero == bcNumero).toList();
+          if (trouve.isNotEmpty) {
+            _bc = trouve.first;
+            final moisDoc = date?.month;
+            _mois = (moisDoc != null && _bc!.mois.contains(moisDoc))
+                ? moisDoc
+                : (_bc!.mois.isNotEmpty ? _bc!.mois.first : null);
+          } else {
+            avert.insert(0, 'Le bon de commande $bcNumero du document est introuvable — sélectionnez-le manuellement.');
+          }
+        }
+        _avertissements = avert;
+      });
+      messenger.showSnackBar(const SnackBar(content: Text('BL lu — vérifiez les valeurs avant d\'enregistrer.')));
+    } on ServerException catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.message), backgroundColor: Colors.orange));
+    } catch (_) {
+      if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Analyse impossible — photo conservée, saisie manuelle.'), backgroundColor: Colors.orange));
+    } finally {
+      if (mounted) setState(() => _analysing = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -130,6 +193,32 @@ class _BlFormScreenState extends State<BlFormScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                OutlinedButton.icon(
+                  onPressed: _analysing ? null : _scannerBl,
+                  icon: _analysing
+                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.document_scanner),
+                  label: Text(_analysing ? 'Analyse du BL en cours…' : 'Scanner le BL (pré-remplir)'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                ),
+                if (_avertissements.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _avertissements.map((a) => Text('⚠ $a', style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900))).toList(),
+                    ),
+                  ),
+                const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   initialValue: _bc?.id,
                   isExpanded: true,
