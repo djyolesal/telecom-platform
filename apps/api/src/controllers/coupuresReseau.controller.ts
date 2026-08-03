@@ -254,11 +254,15 @@ export async function cloturerHeriteesRecursif(
     });
     if (!enfants.length) break;
     for (const e of enfants) {
+      // Une héritée peut avoir été saisie avec un début postérieur à la fin de
+      // la racine : on borne à son propre début (downtime 0) — la contrainte
+      // date_fin >= date_debut refuserait l'écriture sinon.
+      const finEffective = fin < e.dateDebut ? e.dateDebut : fin;
       await tx.coupureReseau.update({
         where: { id: e.id },
         data: {
-          dateFin: fin,
-          downtimeMinutes: minutesEntre(e.dateDebut, fin),
+          dateFin: finEffective,
+          downtimeMinutes: minutesEntre(e.dateDebut, finEffective),
           ...(actions ? { actions } : {}),
         },
       });
@@ -583,7 +587,21 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
         }
         const debut = combiner(cell(row, 5), cell(row, 6));
         if (!debut) { erreurs.push({ feuille: nomFeuille, ligne: n, message: 'date de début illisible' }); return; }
-        const fin = combiner(cell(row, 7), cell(row, 8));
+        let fin = combiner(cell(row, 7), cell(row, 8));
+        if (fin && fin < debut) {
+          // Rapport NOC : fin à cheval sur minuit dont la COLONNE DATE n'a pas
+          // été incrémentée (23h50 → 00h20 « le même jour »). Si l'écart est
+          // inférieur à 24 h, c'est ce cas — on répare. Au-delà, la ligne est
+          // incohérente : on la signale et on l'écarte, car la contrainte
+          // d'intégrité en base (date_fin >= date_debut) refuserait tout le
+          // lot d'insertion — c'est un 500 sur l'import entier sinon.
+          if (debut.getTime() - fin.getTime() < 86_400_000) {
+            fin = new Date(fin.getTime() + 86_400_000);
+          } else {
+            erreurs.push({ feuille: nomFeuille, ligne: n, message: `rétablissement (${fin.toISOString().slice(0, 16)}) antérieur au début (${debut.toISOString().slice(0, 16)}) — ligne écartée` });
+            return;
+          }
+        }
         const technoBrut = String(cell(row, 2) ?? '').trim();
         // « 2G/3G/4G » (toutes technos) → coupure SITE entier.
         const technologie = technoParDefaut ?? (technoBrut.includes('/') ? 'SITE' : (technoBrut || 'SITE'));
@@ -639,11 +657,22 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
 
     // createMany + skipDuplicates : l'index d'unicité absorbe le ré-import.
     for (let i = 0; i < lots.length; i += 500) {
-      const res2 = await prisma.coupureReseau.createMany({
-        data: lots.slice(i, i + 500) as never,
-        skipDuplicates: true,
-      });
-      crees += res2.count;
+      try {
+        const res2 = await prisma.coupureReseau.createMany({
+          data: lots.slice(i, i + 500) as never,
+          skipDuplicates: true,
+        });
+        crees += res2.count;
+      } catch (e) {
+        // Une contrainte d'intégrité (CHECK/FK) rejette TOUT le lot de 500 :
+        // remonter un 422 détaillé plutôt qu'un « erreur interne » muet.
+        const detail = e instanceof Error ? e.message.split('\n').pop() : String(e);
+        logger.error(`[coupures] import rejeté par la base (lignes ${i + 1}–${i + 500}):`, e);
+        throw new AppError(
+          `Import refusé par les contraintes d'intégrité (lignes ${i + 1}–${Math.min(i + 500, lots.length)} du lot préparé) : ${detail}`,
+          422
+        );
+      }
     }
     doublons = lots.length - crees;
 
@@ -689,9 +718,13 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     // Reclassement des impacts d'aval AVANT le rattachement : les lignes de même
     // fenêtre dont un site amont figure dans le groupe deviennent HÉRITÉES →
     // un seul incident sera créé, sur le site origine.
-    const heriteesDetectees = await detecterHeriteesImport(
-      lots.length ? new Date(Math.min(...lots.map((l) => (l.dateDebut as Date).getTime()))) : undefined
-    );
+    // reduce (pas de spread) : Math.min(...tableau) dépasse la pile d'appels
+    // au-delà de ~100 000 lignes.
+    const plusAncien = lots.reduce<number | null>((min, l) => {
+      const t = (l.dateDebut as Date).getTime();
+      return min == null || t < min ? t : min;
+    }, null);
+    const heriteesDetectees = await detecterHeriteesImport(plusAncien != null ? new Date(plusAncien) : undefined);
 
     // Les coupures importées ENCORE EN COURS obtiennent leur incident terrain
     // (groupé par site) — l'historique déjà rétabli n'en crée jamais.
