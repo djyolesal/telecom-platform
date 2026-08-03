@@ -1,4 +1,4 @@
-.PHONY: help install start stop restart logs backup restore reset-sites update status migrate ssl clean
+.PHONY: help install start stop restart logs backup restore reset-sites purge-mise-en-service update status migrate ssl clean
 
 help:
 	@echo ""
@@ -18,6 +18,7 @@ help:
 	@echo "  make backup      Backup BDD maintenant"
 	@echo "  make restore     Restaurer un backup"
 	@echo "  make reset-sites Vider sites + données liées (sauvegarde auto)"
+	@echo "  make purge-mise-en-service   Bascule TEST → EXPLOITATION (purge de l'activité)"
 	@echo "  make update      Mettre à jour l'application"
 	@echo "  make ssl         Renouveler certificats SSL"
 	@echo "  make clean       Nettoyer images/conteneurs inutilisés"
@@ -96,10 +97,20 @@ backup:
 	@echo "=== Sauvegardes disponibles ==="
 	@ls -lh /opt/telecom/backups/db_*.sql.gz /opt/telecom/backups/minio_*.tar.gz 2>/dev/null || echo "(aucune)"
 
+purge-mise-en-service:
+	@# Bascule TEST → EXPLOITATION : efface l'activité de test pour que les
+	@# premiers rapports contractuels et les références MNT/INC/DEP partent
+	@# d'une base propre. Voir infra/scripts/purge-mise-en-service.sh.
+	@bash infra/scripts/purge-mise-en-service.sh
+
 reset-sites:
 	@echo "⚠️  RESET COMPLET DES SITES"
-	@echo "    Supprime DÉFINITIVEMENT : sites + maintenances + pièces + relevés énergie + dépotages + incidents + photos."
-	@echo "    (lots, prestataires, utilisateurs sont conservés)"
+	@echo "    Supprime DÉFINITIVEMENT : sites + maintenances + pièces + relevés énergie + dépotages + incidents + photos"
+	@echo "    + coupures réseau + plans de livraison + groupes électrogènes et actifs."
+	@echo "    (TRUNCATE ... CASCADE emporte forcément tout ce qui référence un site : le parc GE part aussi.)"
+	@echo "    (lots, prestataires, contacts, utilisateurs sont conservés)"
+	@echo "    ⚠️  Pour une bascule test → exploitation, préférez 'make purge-mise-en-service',"
+	@echo "        qui conserve les sites et la topologie."
 	@read -p "Tapez 'RESET' pour confirmer : " CONF; \
 	if [ "$$CONF" != "RESET" ]; then echo "❌ Annulé."; exit 1; fi; \
 	echo "=== Sauvegarde préalable ==="; \
@@ -108,7 +119,7 @@ reset-sites:
 	docker compose exec -T postgres psql \
 		-U $$(grep POSTGRES_USER .env | cut -d= -f2) \
 		-d $$(grep POSTGRES_DB .env | cut -d= -f2) \
-		-c "TRUNCATE TABLE photos, pieces_rechange, releves_energie, depotages, maintenances, incidents, sites RESTART IDENTITY CASCADE;"; \
+		-c "TRUNCATE TABLE photos, pieces_rechange, depotage_heures_ge, releves_energie, depotages, maintenances, incidents, coupures_reseau, lignes_livraison, groupes_electrogenes, equipements_actifs, sites RESTART IDENTITY CASCADE;"; \
 	echo "✅ Sites et données liées vidés. Importez la nouvelle liste : Sites → Importer."
 
 restore:
@@ -129,7 +140,9 @@ restore:
 
 update:
 	@echo "--- Pull du code source ---"
-	@git pull origin main
+	@# La branche de livraison du dépôt est `develop` : `origin/main` n'existe
+	@# pas, `make update` échouait donc au premier pas.
+	@git pull origin develop
 	@echo "--- Rebuild images ---"
 	@docker compose build api web
 	@echo "--- Redémarrage sans interruption ---"

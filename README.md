@@ -89,7 +89,32 @@ make restore       # Restaurer backup
 make update        # Mise à jour (git pull + rebuild)
 make migrate       # Appliquer migrations Prisma
 make ssl           # Renouveler SSL
+make purge-mise-en-service  # Bascule TEST → EXPLOITATION (voir ci-dessous)
 ```
+
+### Bascule test → exploitation
+
+La plateforme est actuellement déployée **en mode test** : au moment de la mise
+en service réelle, l'activité de test (interventions, dépotages, coupures,
+incidents, SMS, photos…) doit être purgée pour que les premiers rapports
+contractuels et les références `MNT/INC/DEP-2026-00001` partent d'une base
+propre.
+
+```bash
+# Cas normal : conserve le parc (sites, topologie, lots, prestataires,
+# utilisateurs, GE), efface uniquement l'activité :
+make purge-mise-en-service
+
+# Remise à zéro complète (le parc sera réimporté) :
+NIVEAU=total ADMIN_EMAIL=admin@exemple.com bash infra/scripts/purge-mise-en-service.sh
+```
+
+Le script exige une confirmation, fait une **sauvegarde complète préalable**
+(purge annulée si elle échoue), arrête l'API le temps de la purge, vide aussi
+les fichiers MinIO et le cache Redis, remet à zéro les compteurs de référence
+et les verrous d'appareil, puis affiche les comptes de vérification. La
+checklist post-purge (reconnexion des techniciens, vidage des applis mobiles de
+test, réactivation de la situation périodique) est imprimée en fin d'exécution.
 
 ---
 
