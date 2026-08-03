@@ -320,7 +320,23 @@
       "Bash(grep -n *)",
       "Bash(git ls-remote *)",
       "Bash(awk '{print $2}')",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=10 server01@41.78.137.83 \"cd /opt/telecom-platform && docker compose logs api --since 30m 2>&1 | grep -iA 20 'error\\\\|import' | tail -80\")",
+      "Bash(pkill -f \"next lint\")",
+      "Bash(pip3 list *)",
+      "Bash(python3 -c \"import pypdf\")",
+      "Bash(sed -n '/^model BonCommande/,/@@map\\(\"bons_commande\"\\)/p' prisma/schema.prisma)",
+      "Read(//private/tmp/claude-501/-Users-yohaness-Downloads-telecom-platform/d9f77179-4b1d-400b-9390-fb9d8efdeb28/apps/web/**)",
+      "Bash(brew install *)",
+      "Bash(pdftoppm -jpeg -r 300 -f 1 -l 1 \"/Users/yohaness/Downloads/PO250100005 Achat de 485 000 litres de carburant pour janvier à mars 2025.pdf\" page)",
+      "Bash(tesseract page-1.jpg stdout -l fra --psm 4)",
+      "Bash(pdftotext -layout \"/Volumes/DEBIAN 13_5/20260803145805671.pdf\" -)",
+      "Bash(pdfinfo \"/Volumes/DEBIAN 13_5/20260803145805671.pdf\")",
+      "Bash(rm -f bl-*.jpg)",
+      "Bash(pdftoppm -jpeg -r 200 \"/Volumes/DEBIAN 13_5/20260803145805671.pdf\" bl)",
+      "Bash(rm -f blhr-*.jpg)",
+      "Bash(pdftoppm -jpeg -r 300 -f 1 -l 1 \"/Volumes/DEBIAN 13_5/20260803145805671.pdf\" blhr)",
+      "Bash(tesseract blhr-1.jpg stdout -l fra --psm 4)"
     ]
   }
 }
