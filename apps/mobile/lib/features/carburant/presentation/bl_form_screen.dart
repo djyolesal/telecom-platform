@@ -27,7 +27,10 @@ class _BlFormScreenState extends State<BlFormScreen> {
   late Future<List<BonCommandeLite>> _bcsFuture;
   BonCommandeLite? _bc;
   int? _mois;
-  DateTime _dateChargement = DateTime.now();
+  // Pas de valeur par défaut : la date de chargement ne figure pas sur le BL
+  // (la date du document est celle du traitement) — saisie manuelle obligatoire.
+  DateTime? _dateChargement;
+  DateTime? _dateTraitement;
   String? _blDoc;
   String? _bordereauDoc;
   bool _saving = false;
@@ -56,7 +59,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
     // Le camion charge avant la saisie : on n'autorise pas de date future.
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dateChargement,
+      initialDate: _dateChargement ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
@@ -110,8 +113,9 @@ class _BlFormScreenState extends State<BlFormScreen> {
         if (d.numeroBL != null) _numeroBL.text = d.numeroBL!;
         if (d.immatriculation != null) _immat.text = d.immatriculation!;
         if (d.volumeChargeLitres != null) _volume.text = d.volumeChargeLitres!.toString();
-        final date = d.date;
-        if (date != null && !date.isAfter(DateTime.now())) _dateChargement = date;
+        // La date lue sur le BL est celle de son TRAITEMENT — pas du chargement,
+        // qui ne figure pas sur le papier et reste à saisir à la main.
+        _dateTraitement = d.date;
         // Présélection du BC référencé sur le document (« BC N°POxxxxxxxxx »).
         final bcNumero = d.bcNumero;
         final avert = List<String>.from(d.avertissements);
@@ -119,17 +123,14 @@ class _BlFormScreenState extends State<BlFormScreen> {
           final trouve = bcsDispo.where((b) => b.numero == bcNumero).toList();
           if (trouve.isNotEmpty) {
             _bc = trouve.first;
-            final moisDoc = date?.month;
-            _mois = (moisDoc != null && _bc!.mois.contains(moisDoc))
-                ? moisDoc
-                : (_bc!.mois.isNotEmpty ? _bc!.mois.first : null);
+            if (_mois == null && _bc!.mois.isNotEmpty) _mois = _bc!.mois.first;
           } else {
             avert.insert(0, 'Le bon de commande $bcNumero du document est introuvable — sélectionnez-le manuellement.');
           }
         }
         _avertissements = avert;
       });
-      messenger.showSnackBar(const SnackBar(content: Text('BL lu — vérifiez les valeurs avant d\'enregistrer.')));
+      messenger.showSnackBar(const SnackBar(content: Text('BL lu — vérifiez les valeurs et saisissez la date de chargement.')));
     } on ServerException catch (e) {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.message), backgroundColor: Colors.orange));
     } catch (_) {
@@ -145,6 +146,10 @@ class _BlFormScreenState extends State<BlFormScreen> {
       messenger.showSnackBar(const SnackBar(content: Text('Renseignez le bon de commande et le mois'), backgroundColor: Colors.red));
       return;
     }
+    if (_dateChargement == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('Saisissez la date de chargement du camion'), backgroundColor: Colors.red));
+      return;
+    }
     final repo = context.read<BonLivraisonRepository>();
     final router = GoRouter.of(context);
     setState(() => _saving = true);
@@ -156,7 +161,8 @@ class _BlFormScreenState extends State<BlFormScreen> {
         annee: _bc!.annee,
         immatriculation: _immat.text.trim(),
         volumeChargeLitres: _num(_volume) ?? 0,
-        dateChargement: _dateChargement,
+        dateChargement: _dateChargement!,
+        dateTraitement: _dateTraitement,
         observations: _obs.text.trim(),
         blDocLocalPath: _blDoc,
         bordereauDocLocalPath: _bordereauDoc,
@@ -245,7 +251,13 @@ class _BlFormScreenState extends State<BlFormScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [Text(_fmtDate(_dateChargement)), const Icon(Icons.calendar_today, size: 18)],
+                        children: [
+                          Text(
+                            _dateChargement != null ? _fmtDate(_dateChargement!) : 'Choisir la date…',
+                            style: _dateChargement == null ? TextStyle(color: Theme.of(context).hintColor) : null,
+                          ),
+                          const Icon(Icons.calendar_today, size: 18),
+                        ],
                       ),
                     ),
                   ),

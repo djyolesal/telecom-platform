@@ -403,6 +403,11 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     if (!bonCommandeId) throw new AppError('Bon de commande requis', 400);
     if (!numeroBL) throw new AppError('Numéro de bon de livraison requis', 400);
     if (!immatriculation) throw new AppError('Immatriculation du camion requise', 400);
+    // La date de chargement ne figure PAS sur le BL : c'est une saisie humaine
+    // obligatoire — un défaut silencieux « aujourd'hui » fabriquait une donnée.
+    if (!dateChargement) throw new AppError('Date de chargement du camion requise', 400);
+    const dateChargementValide = new Date(String(dateChargement));
+    if (Number.isNaN(dateChargementValide.getTime())) throw new AppError('Date de chargement invalide', 400);
 
     const bc = await prisma.bonCommande.findUnique({ where: { id: bonCommandeId } });
     if (!bc) throw new AppError('Bon de commande introuvable', 404);
@@ -437,7 +442,7 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
         immatriculation: String(immatriculation).trim(),
         volumeChargeLitres: volume,
         numeroClient: bc.numeroClient, // constant, hérité du BC
-        dateChargement: dateChargement ? new Date(dateChargement) : new Date(),
+        dateChargement: dateChargementValide,
         dateTraitement: dateTraitement ? new Date(dateTraitement) : null,
         statut: statut ?? undefined,
         blPdfPath: blPdfPath ?? null,

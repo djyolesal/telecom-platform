@@ -46,8 +46,11 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
   const moisOpts = bc.volumesMensuels.map((v) => ({ value: String(v.mois), label: MOIS[v.mois] }));
   const [form, setForm] = useState({
     numeroBL: '', immatriculation: '', mois: String(bc.volumesMensuels[0]?.mois ?? new Date().getMonth() + 1),
-    volumeChargeLitres: '', dateChargement: today(), transporteurId: '', observations: '',
+    // Date de chargement SANS valeur par défaut : elle ne figure pas sur le BL
+    // (la date du document est celle du traitement) — saisie manuelle obligatoire.
+    volumeChargeLitres: '', dateChargement: '', transporteurId: '', observations: '',
   });
+  const [dateTraitement, setDateTraitement] = useState('');
   const [blPdfPath, setBlPdfPath] = useState('');
   const [bordereauPdfPath, setBordereauPdfPath] = useState('');
   const [uploading, setUploading] = useState('');
@@ -74,11 +77,10 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
       numeroBL: d.numeroBL ?? f.numeroBL,
       immatriculation: d.immatriculation ?? f.immatriculation,
       volumeChargeLitres: d.volumeChargeLitres != null ? String(d.volumeChargeLitres) : f.volumeChargeLitres,
-      dateChargement: isoDe(d.dateBL) ?? f.dateChargement,
-      // Mois exécuté proposé d'après la date du BL, s'il figure au BC.
-      mois: d.dateBL && bc.volumesMensuels.some((v) => v.mois === parseInt(d.dateBL!.slice(3, 5), 10))
-        ? String(parseInt(d.dateBL.slice(3, 5), 10)) : f.mois,
+      // La date du document est la date de TRAITEMENT du BL — jamais celle du
+      // chargement, qui ne figure pas sur le papier et reste à saisir à la main.
     }));
+    setDateTraitement(isoDe(d.dateBL) ?? '');
     const av = [...d.avertissements];
     // Le BL référence son BC : alerter si ce n'est pas celui de la page courante.
     if (d.bcNumero && d.bcNumero !== bc.numero) {
@@ -135,6 +137,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
       immatriculation: form.immatriculation,
       volumeChargeLitres: Number(form.volumeChargeLitres) || 0,
       dateChargement: form.dateChargement,
+      dateTraitement: dateTraitement || undefined,
       transporteurId: isManager && form.transporteurId ? form.transporteurId : undefined,
       blPdfPath: blPdfPath || undefined,
       bordereauPdfPath: bordereauPdfPath || undefined,
@@ -170,7 +173,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             <div className="flex items-center gap-3">
               <input type="file" accept="application/pdf,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserBl(f); }} className="text-xs" />
               {analysing && <span className="text-xs text-gray-500">Analyse en cours…</span>}
-              {!analysing && extraits.length > 0 && <span className="text-xs font-medium text-emerald-700">{extraits.length} BL reconnu(s) ✓ — vérifiez les valeurs</span>}
+              {!analysing && extraits.length > 0 && <span className="text-xs font-medium text-emerald-700">{extraits.length} BL reconnu(s) ✓ — vérifiez, et saisissez la date de chargement</span>}
             </div>
             {extraits.length > 1 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -192,7 +195,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             <Field label="N° bon de livraison" required><Input value={form.numeroBL} onChange={(e) => set('numeroBL', e.target.value)} required placeholder="BL-00123" /></Field>
             <Field label="Immatriculation camion" required><Input value={form.immatriculation} onChange={(e) => set('immatriculation', e.target.value)} required placeholder="TG-1234-AB" /></Field>
             <Field label="Mois exécuté" required><Select value={form.mois} onChange={(e) => set('mois', e.target.value)} options={moisOpts} /></Field>
-            <Field label="Date chargement" required><Input type="date" max={today()} value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
+            <Field label="Date chargement (saisie manuelle)" required><Input type="date" max={today()} value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
             <Field label="Volume chargé (L)" required><Input type="number" value={form.volumeChargeLitres} onChange={(e) => set('volumeChargeLitres', e.target.value)} required placeholder="0" /></Field>
             {isManager && (
               <Field label="Transporteur">
