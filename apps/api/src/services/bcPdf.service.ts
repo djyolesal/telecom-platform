@@ -1,12 +1,8 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { mkdtemp, rm, writeFile, readdir } from 'fs/promises';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import { AppError } from '../utils/AppError';
-import { logger } from '../utils/logger';
-
-const run = promisify(execFile);
+import { sousSemaphoreOcr, verifierPdf, rendreImages, ocrImage, texteNatif } from './ocrCommon';
 
 /**
  * Analyse du PDF d'un bon de commande carburant (modèle Moov Africa) pour
@@ -115,47 +111,33 @@ export function extraireChampsBC(texte: string, ocr: boolean): ExtractionBC {
   return { numero, dateEmission, annee, trimestre, volumesMensuels, totalLitres, totalAnnonceLitres, avertissements, ocr };
 }
 
-/** Texte du PDF : couche texte si elle existe, sinon OCR de la première page. */
+/**
+ * Texte du PDF : couche texte si elle existe, sinon OCR de la première page.
+ * Rendu borné + garde `pdfinfo` + sémaphore de concurrence (cf. ocrCommon).
+ */
 export async function texteDuPdf(buffer: Buffer): Promise<{ texte: string; ocr: boolean }> {
   const dossier = await mkdtemp(path.join(tmpdir(), 'bc-'));
   try {
     const pdf = path.join(dossier, 'bc.pdf');
     await writeFile(pdf, buffer);
+    await verifierPdf(pdf);
 
     // Voie 1 : couche texte native.
-    try {
-      const { stdout } = await run('pdftotext', ['-layout', pdf, '-'], { timeout: 20_000 });
-      if (stdout.trim().length > 60) return { texte: stdout, ocr: false };
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new AppError("Analyse indisponible : poppler-utils n'est pas installé sur le serveur.", 501);
-      }
-      logger.warn('[bc-pdf] pdftotext en échec, bascule OCR:', e);
-    }
+    const natif = await texteNatif(pdf);
+    if (natif.trim().length > 60) return { texte: natif, ocr: false };
 
-    // Voie 2 : scan → image 300 dpi → OCR français.
-    await run('pdftoppm', ['-jpeg', '-r', '300', '-f', '1', '-l', '1', pdf, path.join(dossier, 'page')], { timeout: 30_000 });
-    const image = (await readdir(dossier)).find((f) => f.startsWith('page') && f.endsWith('.jpg'));
-    if (!image) throw new AppError('PDF illisible (aucune page convertible).', 422);
-    try {
-      const { stdout } = await run(
-        'tesseract',
-        [path.join(dossier, image), 'stdout', '-l', 'fra', '--psm', '4'],
-        { timeout: 60_000, maxBuffer: 8 * 1024 * 1024 }
-      );
-      return { texte: stdout, ocr: true };
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new AppError("Analyse indisponible : tesseract n'est pas installé sur le serveur.", 501);
-      }
-      throw e;
-    }
+    // Voie 2 : scan → première page bornée → OCR français.
+    const images = await rendreImages(pdf, dossier, 1);
+    if (!images.length) throw new AppError('PDF illisible (aucune page convertible).', 422);
+    return { texte: await ocrImage(path.join(dossier, images[0])), ocr: true };
   } finally {
     await rm(dossier, { recursive: true, force: true });
   }
 }
 
 export async function analyserBonCommandePdf(buffer: Buffer): Promise<ExtractionBC> {
-  const { texte, ocr } = await texteDuPdf(buffer);
-  return extraireChampsBC(texte, ocr);
+  return sousSemaphoreOcr(async () => {
+    const { texte, ocr } = await texteDuPdf(buffer);
+    return extraireChampsBC(texte, ocr);
+  });
 }

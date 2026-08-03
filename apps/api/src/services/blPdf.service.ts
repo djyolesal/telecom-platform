@@ -1,12 +1,8 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { mkdtemp, rm, writeFile, readdir } from 'fs/promises';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import { AppError } from '../utils/AppError';
-import { logger } from '../utils/logger';
-
-const run = promisify(execFile);
+import { MAX_PAGES_OCR, sousSemaphoreOcr, verifierPdf, rendreImages, ocrImage, texteNatif } from './ocrCommon';
 
 /**
  * Analyse d'un bon de livraison TotalEnergies (modèle Moov Africa) pour
@@ -84,72 +80,54 @@ function exploitable(e: ExtractionBL): boolean {
   return !!(e.numeroBL || e.volumeChargeLitres || e.immatriculation || e.bcNumero);
 }
 
-const MAX_PAGES = 8;
-
-async function ocr(image: string): Promise<string> {
-  try {
-    const { stdout } = await run('tesseract', [image, 'stdout', '-l', 'fra', '--psm', '4'],
-      { timeout: 60_000, maxBuffer: 8 * 1024 * 1024 });
-    return stdout;
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new AppError("Analyse indisponible : tesseract n'est pas installé sur le serveur.", 501);
-    }
-    throw e;
-  }
-}
-
 /**
  * PDF (multi-pages, natif ou scan) ou image (photo du transporteur) →
- * une extraction par page exploitable.
+ * une extraction par page exploitable. Rendu borné + garde `pdfinfo` +
+ * sémaphore de concurrence (cf. ocrCommon) contre le DoS mémoire.
  */
 export async function analyserBonLivraisonDocument(
   buffer: Buffer,
   mimetype: string
 ): Promise<{ documents: ExtractionBL[]; ocrUtilise: boolean; pagesIgnorees: number }> {
-  const dossier = await mkdtemp(path.join(tmpdir(), 'bl-'));
-  try {
-    // Photo directe (mobile) : OCR immédiat.
-    if (mimetype.startsWith('image/')) {
-      const img = path.join(dossier, 'photo');
-      await writeFile(img, buffer);
-      const doc = extraireChampsBL(await ocr(img), 1);
-      if (!exploitable(doc)) throw new AppError('Photo illisible : rapprochez-vous du document, évitez reflets et flou, puis reprenez la photo.', 422);
-      return { documents: [doc], ocrUtilise: true, pagesIgnorees: 0 };
-    }
-
-    const pdf = path.join(dossier, 'bl.pdf');
-    await writeFile(pdf, buffer);
-
-    // Voie 1 : couche texte native — pdftotext sépare les pages par \f.
+  return sousSemaphoreOcr(async () => {
+    const dossier = await mkdtemp(path.join(tmpdir(), 'bl-'));
     try {
-      const { stdout } = await run('pdftotext', ['-layout', pdf, '-'], { timeout: 20_000 });
-      if (stdout.trim().length > 60) {
-        const pages = stdout.split('\f');
+      // Photo directe (mobile) : OCR immédiat.
+      if (mimetype.startsWith('image/')) {
+        const img = path.join(dossier, 'photo');
+        await writeFile(img, buffer);
+        const doc = extraireChampsBL(await ocrImage(img), 1);
+        if (!exploitable(doc)) throw new AppError('Photo illisible : rapprochez-vous du document, évitez reflets et flou, puis reprenez la photo.', 422);
+        return { documents: [doc], ocrUtilise: true, pagesIgnorees: 0 };
+      }
+
+      const pdf = path.join(dossier, 'bl.pdf');
+      await writeFile(pdf, buffer);
+      // Garde anti pixel-bomb / trop de pages AVANT tout rendu.
+      await verifierPdf(pdf);
+
+      // Voie 1 : couche texte native — pdftotext sépare les pages par \f.
+      const natif = await texteNatif(pdf);
+      if (natif.trim().length > 60) {
+        const pages = natif.split('\f');
         const docs = pages.map((p, i) => extraireChampsBL(p, i + 1)).filter(exploitable);
         if (docs.length) return { documents: docs, ocrUtilise: false, pagesIgnorees: pages.length - docs.length };
       }
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new AppError("Analyse indisponible : poppler-utils n'est pas installé sur le serveur.", 501);
-      }
-      logger.warn('[bl-pdf] pdftotext en échec, bascule OCR:', e);
-    }
 
-    // Voie 2 : scan → une image par page (bornées : un lot de BL reste court).
-    await run('pdftoppm', ['-jpeg', '-r', '300', '-f', '1', '-l', String(MAX_PAGES), pdf, path.join(dossier, 'page')], { timeout: 60_000 });
-    const images = (await readdir(dossier)).filter((f) => f.startsWith('page') && f.endsWith('.jpg')).sort();
-    if (!images.length) throw new AppError('PDF illisible (aucune page convertible).', 422);
-    const docs: ExtractionBL[] = [];
-    let ignorees = 0;
-    for (const [i, img] of images.entries()) {
-      const doc = extraireChampsBL(await ocr(path.join(dossier, img)), i + 1);
-      if (exploitable(doc)) docs.push(doc);
-      else ignorees++;
+      // Voie 2 : scan → images bornées, une par page.
+      const images = await rendreImages(pdf, dossier, MAX_PAGES_OCR);
+      if (!images.length) throw new AppError('PDF illisible (aucune page convertible).', 422);
+      const docs: ExtractionBL[] = [];
+      let ignorees = 0;
+      for (const [i, img] of images.entries()) {
+        const doc = extraireChampsBL(await ocrImage(path.join(dossier, img)), i + 1);
+        if (exploitable(doc)) docs.push(doc);
+        else ignorees++;
+      }
+      if (!docs.length) throw new AppError('Aucun bon de livraison reconnu dans ce document.', 422);
+      return { documents: docs, ocrUtilise: true, pagesIgnorees: ignorees };
+    } finally {
+      await rm(dossier, { recursive: true, force: true });
     }
-    if (!docs.length) throw new AppError('Aucun bon de livraison reconnu dans ce document.', 422);
-    return { documents: docs, ocrUtilise: true, pagesIgnorees: ignorees };
-  } finally {
-    await rm(dossier, { recursive: true, force: true });
-  }
+  });
 }

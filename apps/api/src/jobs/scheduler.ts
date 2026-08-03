@@ -19,15 +19,29 @@ import { purgeOrphelinsJob } from './purge-orphelins';
  */
 async function avecVerrou(nom: string, fn: () => Promise<void>): Promise<void> {
   const cle = `job:${nom}`;
-  const [{ pris }] = await prisma.$queryRaw<{ pris: boolean }[]>`
-    SELECT pg_try_advisory_lock(hashtext(${cle})::bigint) AS pris`;
-  if (!pris) { logger.warn(`[CRON] ${nom} déjà en cours (verrou) — exécution ignorée`); return; }
+  // Verrou consultatif de TRANSACTION (pg_advisory_xact_lock) tenu par la
+  // connexion épinglée de la transaction interactive, et libéré AUTOMATIQUEMENT
+  // à sa fin. Auparavant le lock (pg_try_advisory_lock, portée session) et son
+  // unlock partaient sur deux connexions différentes du pool Prisma : l'unlock
+  // était un no-op, le verrou fuyait, et les nuits suivantes le job était sauté
+  // « déjà en cours » alors que rien ne tournait. Le corps du job (`fn`, sur le
+  // client global) s'exécute PENDANT que la transaction garde le verrou.
   const t0 = Date.now();
   try {
-    await fn();
-    logger.info(`[CRON] ${nom} terminé en ${Math.round((Date.now() - t0) / 1000)}s`);
-  } finally {
-    await prisma.$queryRaw`SELECT pg_advisory_unlock(hashtext(${cle})::bigint)`;
+    await prisma.$transaction(async (tx) => {
+      const [{ pris }] = await tx.$queryRaw<{ pris: boolean }[]>`
+        SELECT pg_try_advisory_xact_lock(hashtext(${cle})::bigint) AS pris`;
+      if (!pris) { logger.warn(`[CRON] ${nom} déjà en cours (verrou) — exécution ignorée`); return; }
+      await fn();
+      logger.info(`[CRON] ${nom} terminé en ${Math.round((Date.now() - t0) / 1000)}s`);
+    }, {
+      // La transaction reste ouverte le temps du job (verrou tenu) : plafond
+      // large pour ne pas avorter un job long (rapport mensuel).
+      timeout: 30 * 60_000,
+      maxWait: 5_000,
+    });
+  } catch (e) {
+    logger.error(`[CRON] ${nom} : échec (verrou/transaction)`, e);
   }
 }
 
@@ -93,5 +107,5 @@ export function setupCronJobs() {
     try { await avecVerrou('situationPeriodique', situationPeriodiqueJob); } catch (e) { logger.error('[CRON] situationPeriodique error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 8 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
+  logger.info('✅ 9 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
 }
