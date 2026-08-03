@@ -301,7 +301,26 @@
       "Bash(sed -n '/export async function exportDepotagePdf/,/^}/p' depotages.controller.ts)",
       "Bash(sed -n '/export async function getReleveById/,/^}/p' releves.controller.ts)",
       "Bash(sed -n '/export async function createReleve/,/^}/p' releves.controller.ts)",
-      "Bash(grep -rn \"io.of\\('/supervision'\\).emit\\\\|io.of\\('/notif'\\)\\\\|\\\\.to\\(\\\\`role:\" .)"
+      "Bash(grep -rn \"io.of\\('/supervision'\\).emit\\\\|io.of\\('/notif'\\)\\\\|\\\\.to\\(\\\\`role:\" .)",
+      "Bash(npm audit *)",
+      "Bash(node -p \"require\\('./package.json'\\).dependencies.next\")",
+      "Bash(node -p \"JSON.stringify\\(require\\('./package.json'\\).dependencies,null,1\\)\")",
+      "Bash(node -p \"require\\('next-auth/package.json'\\).version\")",
+      "Bash(node -p \"require\\('postcss/package.json'\\).version\")",
+      "Bash(node -p \"require\\('next/node_modules/postcss/package.json'\\).version\")",
+      "Bash(node -p \"require\\('axios/package.json'\\).version\")",
+      "Bash(node -p \"JSON.stringify\\({nodemailer:require\\('nodemailer/package.json'\\).version, tar:require\\('tar/package.json'\\).version, uuid:require\\('uuid/package.json'\\).version}\\)\")",
+      "Bash(npm view *)",
+      "Bash(npm ls *)",
+      "Bash(npm uninstall *)",
+      "Bash(node -p \"JSON.stringify\\(require\\('bcrypt/package.json'\\).dependencies\\)\")",
+      "Bash(docker version *)",
+      "Bash(git checkout *)",
+      "Bash(bash -n infra/scripts/purge-mise-en-service.sh)",
+      "Bash(grep -n *)",
+      "Bash(git ls-remote *)",
+      "Bash(awk '{print $2}')",
+      "Bash(git commit *)"
     ]
   }
 }
