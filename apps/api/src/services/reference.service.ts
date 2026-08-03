@@ -31,9 +31,14 @@ export async function genererReference(db: Db, type: TypeReference, dateMetier: 
   return formatReference(type, annee, await prochainNumero(db, type, annee));
 }
 
-/** Réserve un BLOC de n numéros consécutifs (imports en masse) → premier numéro. */
-export async function reserverReferences(type: TypeReference, annee: number, n: number): Promise<number> {
+/**
+ * Réserve un BLOC de n numéros consécutifs (imports en masse) → premier numéro.
+ * Passer le client de transaction (`db`) pour que la réservation soit ATOMIQUE
+ * avec l'insertion : sinon un échec d'insertion laissait le compteur avancé
+ * (trous de numérotation à chaque rejeu).
+ */
+export async function reserverReferences(type: TypeReference, annee: number, n: number, db: Db = prisma): Promise<number> {
   if (n <= 0) return 0;
-  const dernier = await prochainNumero(prisma, type, annee, n);
+  const dernier = await prochainNumero(db, type, annee, n);
   return dernier - n + 1;
 }

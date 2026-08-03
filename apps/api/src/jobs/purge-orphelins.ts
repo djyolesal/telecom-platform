@@ -76,37 +76,46 @@ async function clesReferencees(): Promise<Set<string>> {
   return refs;
 }
 
-interface ObjetStockage { name: string; lastModified: Date; size: number }
+interface ObjetOrphelin { name: string; size: number }
 
-function inventaireBucket(): Promise<ObjetStockage[]> {
+/**
+ * Parcourt le bucket EN FLUX : ne matérialise que les orphelins (liste courte,
+ * bornée) et compte le total au passage — au lieu de charger tout l'inventaire
+ * en mémoire à côté du recensement des références (conteneur 1 Go, job à 4h30).
+ */
+function scannerOrphelins(refs: Set<string>, seuilMs: number): Promise<{ orphelins: ObjetOrphelin[]; total: number }> {
   return new Promise((resolve, reject) => {
-    const objets: ObjetStockage[] = [];
+    const orphelins: ObjetOrphelin[] = [];
+    let total = 0;
     const flux = minioClient.listObjectsV2(MINIO_BUCKET, '', true);
     flux.on('data', (o) => {
-      if (o.name && o.lastModified) objets.push({ name: o.name, lastModified: o.lastModified, size: o.size ?? 0 });
+      if (!o.name || !o.lastModified) return;
+      total++;
+      if (!refs.has(o.name) && o.lastModified.getTime() < seuilMs) {
+        orphelins.push({ name: o.name, size: o.size ?? 0 });
+      }
     });
     flux.on('error', reject);
-    flux.on('end', () => resolve(objets));
+    flux.on('end', () => resolve({ orphelins, total }));
   });
 }
 
 export async function purgeOrphelinsJob(): Promise<void> {
   const refs = await clesReferencees();
-  const objets = await inventaireBucket();
   const seuil = Date.now() - AGE_MIN_JOURS * 86_400_000;
+  const { orphelins, total } = await scannerOrphelins(refs, seuil);
 
-  const orphelins = objets.filter((o) => !refs.has(o.name) && o.lastModified.getTime() < seuil);
   if (!orphelins.length) {
-    logger.info(`[purge-orphelins] Rien à faire (${objets.length} objets, tous référencés ou récents).`);
+    logger.info(`[purge-orphelins] Rien à faire (${total} objets, tous référencés ou récents).`);
     return;
   }
 
   // Garde-fou : si plus de la moitié du bucket partait d'un coup, c'est
   // vraisemblablement le recensement des références qui a un trou (nouveau
   // champ non listé ici, par exemple) — on n'efface rien et on alerte.
-  if (objets.length >= 100 && orphelins.length / objets.length > 0.5) {
+  if (total >= 100 && orphelins.length / total > 0.5) {
     logger.error(
-      `[purge-orphelins] ANNULÉ : ${orphelins.length}/${objets.length} objets seraient supprimés (>50 %). ` +
+      `[purge-orphelins] ANNULÉ : ${orphelins.length}/${total} objets seraient supprimés (>50 %). ` +
       `Vérifier que clesReferencees() couvre bien tous les champs de chemins.`
     );
     return;
@@ -118,6 +127,6 @@ export async function purgeOrphelinsJob(): Promise<void> {
   }
   logger.info(
     `[purge-orphelins] ${orphelins.length} objet(s) orphelin(s) supprimé(s) (${totalMo.toFixed(1)} Mo) — ` +
-    `${objets.length - orphelins.length} objets conservés.`
+    `${total - orphelins.length} objets conservés.`
   );
 }

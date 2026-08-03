@@ -106,6 +106,10 @@ export function extraireChampsBC(texte: string, ocr: boolean): ExtractionBC {
     avertissements.push(
       `Incohérence : l'en-tête annonce ${totalAnnonceLitres.toLocaleString('fr-FR')} L mais la somme des mois fait ${totalLitres.toLocaleString('fr-FR')} L — vérifiez chaque volume.`
     );
+  } else if (totalAnnonceLitres == null && volumesMensuels.length) {
+    // Sans total d'en-tête lisible, aucun recoupement possible : une valeur
+    // mensuelle mal lue (« 164 000 » → « 64 000 ») passerait inaperçue.
+    avertissements.push('Total « Achat de N litres » non lu : les volumes mensuels ne sont pas recoupables — vérifiez-les un à un.');
   }
 
   return { numero, dateEmission, annee, trimestre, volumesMensuels, totalLitres, totalAnnonceLitres, avertissements, ocr };

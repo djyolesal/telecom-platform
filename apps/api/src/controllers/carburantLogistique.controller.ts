@@ -399,7 +399,7 @@ export async function analyserBonLivraisonDocument(req: Request, res: Response, 
 
 export async function createBonLivraison(req: Request, res: Response, next: NextFunction) {
   try {
-    const { bonCommandeId, numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath } = req.body;
+    const { bonCommandeId, numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath, numeroClient } = req.body;
     if (!bonCommandeId) throw new AppError('Bon de commande requis', 400);
     if (!numeroBL) throw new AppError('Numéro de bon de livraison requis', 400);
     if (!immatriculation) throw new AppError('Immatriculation du camion requise', 400);
@@ -441,7 +441,10 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
         annee: Math.trunc(n(annee)) || bc.annee,
         immatriculation: String(immatriculation).trim(),
         volumeChargeLitres: volume,
-        numeroClient: bc.numeroClient, // constant, hérité du BC
+        // Le BL porte SON PROPRE numéro client (« Votre N° Client » du document,
+        // extrait par l'OCR). On le conserve s'il est fourni ; sinon on retombe
+        // sur celui du BC (souvent nul depuis qu'il est facultatif).
+        numeroClient: numeroClient ? String(numeroClient).slice(0, 50) : bc.numeroClient,
         dateChargement: dateChargementValide,
         dateTraitement: dateTraitement ? new Date(dateTraitement) : null,
         statut: statut ?? undefined,

@@ -60,11 +60,12 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
 
   interface BlExtrait {
     page: number; numeroBL: string | null; bcNumero: string | null; dateBL: string | null;
-    dateTraitement: string | null;
+    dateTraitement: string | null; numeroClient: string | null;
     immatriculation: string | null; volumeChargeLitres: number | null; avertissements: string[];
   }
   const [extraits, setExtraits] = useState<BlExtrait[]>([]);
   const [pageChoisie, setPageChoisie] = useState<number | null>(null);
+  const [numeroClient, setNumeroClient] = useState<string | null>(null);
   const [avertissements, setAvertissements] = useState<string[]>([]);
   const [analysing, setAnalysing] = useState(false);
 
@@ -73,6 +74,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
 
   const appliquerExtrait = (d: BlExtrait) => {
     setPageChoisie(d.page);
+    setNumeroClient(d.numeroClient);
     setForm((f) => ({
       ...f,
       numeroBL: d.numeroBL ?? f.numeroBL,
@@ -134,6 +136,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
     mutationFn: () => api.post('/bons-livraison', {
       bonCommandeId: bc.id,
       numeroBL: form.numeroBL,
+      numeroClient: numeroClient || undefined,
       mois: parseInt(form.mois),
       annee: bc.annee,
       immatriculation: form.immatriculation,

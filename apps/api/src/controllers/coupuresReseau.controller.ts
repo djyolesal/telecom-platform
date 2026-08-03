@@ -69,8 +69,22 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
         where: { id: { in: coupures.map((c) => c.id) }, causeCategorie: null, typeAlarme: { notIn: [...ALARMES_ENERGIE] } },
         data: { causeCategorie: 'ACTIF' },
       });
-      const aNotifier = coupures.filter((c) => !c.notifieeActif);
-      if (aNotifier.length) {
+      // Verrou + marquage AVANT l'envoi, dans une transaction : deux imports
+      // concurrents sur le même site lisaient tous deux notifieeActif=false et
+      // envoyaient chacun le SMS (double notification payante). On réserve
+      // atomiquement les lignes à notifier (updateMany conditionnel) ; seul le
+      // gagnant obtient une liste non vide et envoie.
+      const reserves = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + siteId})::bigint)`;
+        const aNotifier = coupures.filter((c) => !c.notifieeActif).map((c) => c.id);
+        if (!aNotifier.length) return 0;
+        const r = await tx.coupureReseau.updateMany({
+          where: { id: { in: aNotifier }, notifieeActif: false },
+          data: { notifieeActif: true },
+        });
+        return r.count;
+      });
+      if (reserves > 0) {
         await notifierIncidentCoupure(
           siteId,
           `[E&M OpS] NOC : coupure ${technos.join('/')} sur ${coupures[0].site.nom} (site alimenté) — à traiter côté actif (radio/transmission).`,
@@ -78,10 +92,6 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           'ACTIVE',
           'coupures'
         );
-        await prisma.coupureReseau.updateMany({
-          where: { id: { in: aNotifier.map((c) => c.id) } },
-          data: { notifieeActif: true },
-        });
       }
       continue;
     }

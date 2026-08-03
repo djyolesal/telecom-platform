@@ -71,8 +71,11 @@ async function reconcileDepotage(opts: {
   volumeAnnonce: number | null;
   heuresGE: { groupeId: string; indexHeuresGE: number }[];
   groupes: { id: string; puissanceKva: any; statut: string }[];
+  // À l'ÉDITION : exclure le dépotage courant de la recherche du « précédent »
+  // (sinon il se compare à lui-même).
+  excludeId?: string;
 }, db: Prisma.TransactionClient | typeof prisma = prisma) {
-  const { siteId, stockAvant, volumeReel, volumeAnnonce, heuresGE, groupes } = opts;
+  const { siteId, stockAvant, volumeReel, volumeAnnonce, heuresGE, groupes, excludeId } = opts;
   const seuilLivPct = getNum('carburant.seuilEcartLivraisonPct', 5);
   const seuilConsoPct = getNum('maintenance.seuilEcartGasoilPct', 25);
 
@@ -82,7 +85,7 @@ async function reconcileDepotage(opts: {
 
   // Écart de conso : baisse de cuve depuis le dépotage précédent vs gasoil attendu.
   const prev = await db.depotage.findFirst({
-    where: { siteId, stockApresLitres: { not: null } },
+    where: { siteId, stockApresLitres: { not: null }, ...(excludeId ? { id: { not: excludeId } } : {}) },
     orderBy: { dateDepotage: 'desc' },
     include: { heuresGE: true },
   });
@@ -408,11 +411,41 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
       'fournisseur', 'numeroBonLivraison', 'observations', 'latitude', 'longitude',
     ]);
     const { volume, stockApres } = deriveVolume({ ...existing, ...data });
+    const stockAvant = data.stockAvantLitres != null ? Number(data.stockAvantLitres)
+      : existing.stockAvantLitres != null ? Number(existing.stockAvantLitres) : null;
     if (data.dateDepotage) data.dateDepotage = new Date(data.dateDepotage as string);
 
-    const updated = await prisma.depotage.update({
-      where: { id: req.params.id },
-      data: { ...data, volumeLitres: volume, stockApresLitres: stockApres },
+    // Édition SOUS VERROU + RÉCONCILIATION recalculée : sans cela, modifier le
+    // volume ou le stock laissait figés gasoilAttendu/ecartConso/ecartLivraison
+    // et l'analyse — l'affichage et le bordereau PDF devenaient incohérents avec
+    // le volume réel, et l'édition pouvait lire un stock transitoire d'un autre
+    // dépotage en cours sur le même site.
+    const heuresGE = (await prisma.depotageHeureGE.findMany({
+      where: { depotageId: existing.id },
+      select: { groupeId: true, indexHeuresGE: true },
+    })).filter((h): h is { groupeId: string; indexHeuresGE: Prisma.Decimal } => h.groupeId != null)
+      .map((h) => ({ groupeId: h.groupeId, indexHeuresGE: Number(h.indexHeuresGE) }));
+    const groupes = await prisma.groupeElectrogene.findMany({
+      where: { siteId: existing.siteId }, select: { id: true, puissanceKva: true, statut: true },
+    });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await verrouSiteCarburant(tx, existing.siteId);
+      const recon = await reconcileDepotage({
+        siteId: existing.siteId, stockAvant, volumeReel: volume,
+        volumeAnnonce: existing.volumeAnnonceLitres != null ? Number(existing.volumeAnnonceLitres) : null,
+        heuresGE, groupes, excludeId: existing.id,
+      }, tx);
+      return tx.depotage.update({
+        where: { id: req.params.id },
+        data: {
+          ...data, volumeLitres: volume, stockApresLitres: stockApres,
+          gasoilAttenduLitres: recon.gasoilAttenduLitres,
+          ecartConsoLitres: recon.ecartConsoLitres,
+          ecartLivraisonLitres: recon.ecartLivraisonLitres,
+          analyseDepotage: recon.analyseDepotage,
+        },
+      });
     });
     // Re-synchronise la (ou les) ligne(s) de plan impactée(s).
     await syncLigneLivraison(existing.ligneLivraisonId);

@@ -61,6 +61,10 @@ class BonLivraisonRepository {
     );
   }
 
+  /// Date calendaire « AAAA-MM-JJ » (pas d'heure, pas de fuseau).
+  static String _dateSeule(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   /// Envoie la PHOTO du BL à l'analyse serveur (OCR) pour pré-remplir le
   /// formulaire. Renvoie `null` hors-ligne (saisie manuelle, photo conservée).
   Future<AnalyseBlResult?> analyserPhoto(Uint8List bytes) async {
@@ -120,8 +124,12 @@ class BonLivraisonRepository {
         'annee': annee,
         'immatriculation': immatriculation,
         'volumeChargeLitres': volumeChargeLitres,
-        'dateChargement': dateChargement.toUtc().toIso8601String(),
-        if (dateTraitement != null) 'dateTraitement': dateTraitement.toUtc().toIso8601String(),
+        // Dates CALENDAIRES (choisies par un date-picker à minuit local) : on
+        // envoie la date pure « AAAA-MM-JJ », jamais un instant converti en UTC.
+        // En UTC+1, minuit local → 23:00 UTC la veille → jour de chargement
+        // faux d'un cran côté serveur. La date pure préserve le jour partout.
+        'dateChargement': _dateSeule(dateChargement),
+        if (dateTraitement != null) 'dateTraitement': _dateSeule(dateTraitement),
         if (observations != null && observations.isNotEmpty) 'observations': observations,
       },
       attachments: attachments,

@@ -235,21 +235,25 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
       arr.push(d);
       parAnnee.set(annee, arr);
     }
-    for (const [annee, rows] of parAnnee) {
-      rows.sort((a, b) => new Date(a.dateDepotage as string | Date).getTime() - new Date(b.dateDepotage as string | Date).getTime());
-      const premier = await reserverReferences('DEP', annee, rows.length);
-      rows.forEach((r, i) => { r.reference = formatReference('DEP', annee, premier + i); });
-    }
-
-    const ops: Prisma.PrismaPromise<unknown>[] = [];
-    if (purge) {
-      ops.push(prisma.photo.deleteMany({ where: { entityType: 'depotage' } }));
-      ops.push(prisma.depotage.deleteMany({})); // heures GE liées : cascade
-      ops.push(prisma.releveEnergie.deleteMany({}));
-    }
-    for (const c of chunk(depotages, 5000)) ops.push(prisma.depotage.createMany({ data: c }));
-    for (const c of chunk(releves, 5000)) ops.push(prisma.releveEnergie.createMany({ data: c }));
-    await prisma.$transaction(ops);
+    // Tout dans UNE transaction interactive : la réservation des références DEP
+    // est atomique avec l'insertion (plus de trous de numérotation sur échec),
+    // et `skipDuplicates` rend le ré-import idempotent côté relevés (index
+    // d'unicité (site, source, groupe, date)) au lieu de faire échouer tout le
+    // lot. En mode `purge`, les tables sont vidées d'abord (remplacement propre).
+    await prisma.$transaction(async (tx) => {
+      if (purge) {
+        await tx.photo.deleteMany({ where: { entityType: 'depotage' } });
+        await tx.depotage.deleteMany({}); // heures GE liées : cascade
+        await tx.releveEnergie.deleteMany({});
+      }
+      for (const [annee, rows] of parAnnee) {
+        rows.sort((a, b) => new Date(a.dateDepotage as string | Date).getTime() - new Date(b.dateDepotage as string | Date).getTime());
+        const premier = await reserverReferences('DEP', annee, rows.length, tx);
+        rows.forEach((r, i) => { r.reference = formatReference('DEP', annee, premier + i); });
+      }
+      for (const c of chunk(depotages, 5000)) await tx.depotage.createMany({ data: c, skipDuplicates: true });
+      for (const c of chunk(releves, 5000)) await tx.releveEnergie.createMany({ data: c, skipDuplicates: true });
+    }, { timeout: 120_000 });
 
     await auditLog(req.user!.id, 'CREATE', 'releves_energie', 'bulk-import',
       { fichier: req.file.originalname, ...rapport, purge }, req);
