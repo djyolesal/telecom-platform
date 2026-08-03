@@ -204,7 +204,7 @@ export interface PlanLivraisonPdfData {
   annee: number;
   immatriculation: string;
   transporteur?: string | null;
-  numeroClient: string;
+  numeroClient: string | null;
   volumeChargeLitres: number;
   dateChargement?: Date | null;
   lignes: Array<{ siteCode: string; siteNom: string; region: string; volumePrevuLitres: number }>;
@@ -218,7 +218,7 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
     row(doc, 'N° bon de livraison', p.numeroBL);
     row(doc, 'Bon de commande', p.bcNumero ?? '—');
     row(doc, 'Transporteur', p.transporteur ?? '—');
-    row(doc, 'N° client', p.numeroClient);
+    if (p.numeroClient) row(doc, 'N° client', p.numeroClient);
     row(doc, 'Camion', p.immatriculation);
     row(doc, 'Volume chargé', `${Math.round(p.volumeChargeLitres)} L`);
     row(doc, 'Date chargement', fmtDate(p.dateChargement));

@@ -28,8 +28,10 @@ WORKDIR /app
 ENV TZ=Africa/Lome
 ENV NODE_ENV=production
 
-# curl pour le healthcheck ; openssl + libc6-compat pour les engines Prisma (migrate + client)
-RUN apk add --no-cache curl openssl libc6-compat
+# curl pour le healthcheck ; openssl + libc6-compat pour les engines Prisma
+# (migrate + client) ; poppler-utils + tesseract (fra) pour l'analyse des PDF
+# de bons de commande (pré-remplissage du formulaire, y compris scans OCR).
+RUN apk add --no-cache curl openssl libc6-compat poppler-utils tesseract-ocr tesseract-ocr-data-fra
 
 # Créer utilisateur non-root
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

@@ -26,7 +26,7 @@ interface Ligne {
   depotages: { id: string; dateDepotage: string; volumeLitres: number }[];
 }
 interface BL {
-  id: string; numeroBL: string; mois: number; annee: number; immatriculation: string; numeroClient: string;
+  id: string; numeroBL: string; mois: number; annee: number; immatriculation: string; numeroClient: string | null;
   volumeChargeLitres: number; dateChargement: string; dateTraitement?: string; statut: string; observations?: string;
   blPdfPath?: string; bordereauPdfPath?: string;
   /** URLs signées fournies par l'API (le bucket n'est plus lisible par son chemin). */
@@ -232,7 +232,7 @@ export default function BonLivraisonDetailPage() {
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl border border-gray-100 p-5">
           <h3 className="font-semibold text-gray-700 text-sm mb-2">Détails du chargement</h3>
-          <Row label="N° client" value={data.numeroClient} />
+          <Row label="N° client" value={data.numeroClient ?? '—'} />
           <Row label="Transporteur" value={data.transporteur?.nom ?? '—'} />
           <Row label="Camion" value={data.immatriculation} />
           <Row label="Volume chargé" value={`${fmtNumber(Number(data.volumeChargeLitres))} L`} />

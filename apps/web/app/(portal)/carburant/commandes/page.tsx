@@ -22,7 +22,7 @@ const STATUT_COLORS: Record<string, string> = { OUVERT: 'bg-blue-100 text-blue-7
 
 interface VolumeMensuel { id: string; mois: number; volumePrevuLitres: number }
 interface BonCommande {
-  id: string; numero: string; annee: number; trimestre: number; numeroClient: string; statut: string;
+  id: string; numero: string; annee: number; trimestre: number; numeroClient: string | null; statut: string;
   volumesMensuels: VolumeMensuel[]; _count?: { bonsLivraison: number };
 }
 
@@ -34,19 +34,57 @@ function CreateModal({ onClose }: { onClose: () => void }) {
   const [bcPdfPath, setBcPdfPath] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [avertissements, setAvertissements] = useState<string[]>([]);
+  const [analyse, setAnalyse] = useState<'aucune' | 'ocr' | 'texte' | 'sans'>('aucune');
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const mois = moisDuTrimestre(parseInt(form.trimestre));
 
-  const uploadPdf = async (file: File) => {
+  interface AnalyseBC {
+    numero: string | null; annee: number | null; trimestre: number | null;
+    volumesMensuels: { mois: number; volumePrevuLitres: number }[];
+    totalLitres: number; totalAnnonceLitres: number | null;
+    avertissements: string[]; ocr: boolean; bcPdfPath: string;
+  }
+
+  /**
+   * Le PDF du BC est ANALYSÉ côté serveur (texte natif ou OCR d'un scan) et le
+   * formulaire est pré-rempli — l'utilisateur relit et corrige avant de créer :
+   * le but est d'éviter les fautes de recopie, pas de créer sans contrôle.
+   */
+  const analyserPdf = async (file: File) => {
     setUploading(true);
+    setError('');
     try {
       const fd = new FormData();
-      fd.append('folder', 'documents');
       fd.append('file', file);
-      const r = await api.post('/upload/document', fd);
-      if (r.data?.data) setBcPdfPath(r.data.data.key);
-    } catch { setError('Échec de l’upload du PDF.'); }
-    finally { setUploading(false); }
+      const r = await api.post('/bons-commande/analyser-pdf', fd);
+      const d = r.data?.data as AnalyseBC;
+      setBcPdfPath(d.bcPdfPath);
+      setForm((f) => ({
+        ...f,
+        numero: d.numero ?? f.numero,
+        annee: d.annee ? String(d.annee) : f.annee,
+        trimestre: d.trimestre ? String(d.trimestre) : f.trimestre,
+      }));
+      if (d.volumesMensuels.length) {
+        setVolumes(Object.fromEntries(d.volumesMensuels.map((v) => [v.mois, String(v.volumePrevuLitres)])));
+      }
+      setAvertissements(d.avertissements);
+      setAnalyse(d.ocr ? 'ocr' : 'texte');
+    } catch (e) {
+      // Analyse indisponible (outils absents) ou PDF illisible : on retombe sur
+      // un simple archivage du PDF — le formulaire reste à saisir à la main.
+      try {
+        const fd = new FormData();
+        fd.append('folder', 'documents');
+        fd.append('file', file);
+        const r = await api.post('/upload/document', fd);
+        if (r.data?.data) setBcPdfPath(r.data.data.key);
+        const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
+        setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) — PDF joint, saisie manuelle.`]);
+        setAnalyse('sans');
+      } catch { setError('Échec de l’upload du PDF.'); }
+    } finally { setUploading(false); }
   };
 
   const mutation = useMutation({
@@ -54,7 +92,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
       numero: form.numero,
       annee: parseInt(form.annee),
       trimestre: parseInt(form.trimestre),
-      numeroClient: form.numeroClient,
+      numeroClient: form.numeroClient || undefined,
       observations: form.observations || undefined,
       bcPdfPath: bcPdfPath || undefined,
       volumesMensuels: mois
@@ -74,9 +112,24 @@ function CreateModal({ onClose }: { onClose: () => void }) {
         </div>
         {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
+          <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
+            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">Pré-remplir depuis le PDF du bon de commande</p>
+            <div className="flex items-center gap-3">
+              <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserPdf(f); }} className="text-xs" />
+              {uploading && <span className="text-xs text-gray-500">Analyse en cours…</span>}
+              {!uploading && analyse === 'ocr' && <span className="text-xs font-medium text-emerald-700">Scan lu par OCR ✓ — vérifiez les valeurs</span>}
+              {!uploading && analyse === 'texte' && <span className="text-xs font-medium text-emerald-700">PDF lu ✓ — vérifiez les valeurs</span>}
+              {!uploading && analyse === 'sans' && bcPdfPath && <span className="text-xs text-amber-700">PDF joint (sans analyse)</span>}
+            </div>
+            {avertissements.length > 0 && (
+              <ul className="mt-2 space-y-0.5 text-xs text-amber-700">
+                {avertissements.map((a, i) => <li key={i}>⚠ {a}</li>)}
+              </ul>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Numéro BC" required><Input value={form.numero} onChange={(e) => set('numero', e.target.value)} required placeholder="BC-2026-T1" /></Field>
-            <Field label="Numéro client" required><Input value={form.numeroClient} onChange={(e) => set('numeroClient', e.target.value)} required placeholder="CLT-0001" /></Field>
+            <Field label="Numéro BC" required><Input value={form.numero} onChange={(e) => set('numero', e.target.value)} required placeholder="PO250100005" /></Field>
+            <Field label="Numéro client (optionnel)"><Input value={form.numeroClient} onChange={(e) => set('numeroClient', e.target.value)} placeholder="—" /></Field>
             <Field label="Année" required><Input type="number" value={form.annee} onChange={(e) => set('annee', e.target.value)} required /></Field>
             <Field label="Trimestre" required>
               <Select value={form.trimestre} onChange={(e) => set('trimestre', e.target.value)}
@@ -94,13 +147,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           </div>
-          <Field label="PDF de la commande (BC)">
-            <div className="flex items-center gap-3">
-              <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPdf(f); }} className="text-xs" />
-              {uploading && <span className="text-xs text-gray-400">Envoi…</span>}
-              {bcPdfPath && !uploading && <span className="text-xs text-green-600">PDF joint ✓</span>}
-            </div>
-          </Field>
+          {bcPdfPath && <p className="text-xs text-green-600">PDF de la commande joint ✓</p>}
           <Field label="Observations"><Textarea value={form.observations} onChange={(e) => set('observations', e.target.value)} rows={2} /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
@@ -128,7 +175,7 @@ export default function BonsCommandePage() {
   const columns: Column<BonCommande>[] = [
     { key: 'numero', header: 'N° BC', render: (b) => <span className="font-medium text-gray-800">{b.numero}</span> },
     { key: 'periode', header: 'Période', render: (b) => `T${b.trimestre} ${b.annee}` },
-    { key: 'client', header: 'Client', render: (b) => b.numeroClient },
+    { key: 'client', header: 'Client', render: (b) => b.numeroClient ?? '—' },
     { key: 'volume', header: 'Volume prévu (L)', align: 'right', render: (b) => fmtNumber(b.volumesMensuels.reduce((s, v) => s + Number(v.volumePrevuLitres), 0)) },
     { key: 'bl', header: 'Livraisons', align: 'center', render: (b) => b._count?.bonsLivraison ?? 0 },
     { key: 'statut', header: 'Statut', render: (b) => <Badge className={STATUT_COLORS[b.statut] || ''}>{b.statut}</Badge> },

@@ -737,7 +737,7 @@ model BonCommande {
   numero       String            @unique @db.VarChar(50) // identifiant unique du BC
   annee        Int
   trimestre    Int               // 1..4
-  numeroClient String            @map("numero_client") @db.VarChar(50) // constant
+  numeroClient String?           @map("numero_client") @db.VarChar(50) // facultatif : absent du BC Moov réel
   statut       StatutBonCommande @default(OUVERT)
   bcPdfPath    String?           @map("bc_pdf_path") // PDF de la commande joint par le manager
   observations String?
@@ -775,7 +775,7 @@ model BonLivraison {
   annee              Int
   immatriculation    String             @db.VarChar(30) // camion
   volumeChargeLitres Decimal            @map("volume_charge_litres") @db.Decimal(12, 2)
-  numeroClient       String             @map("numero_client") @db.VarChar(50)
+  numeroClient       String?            @map("numero_client") @db.VarChar(50) // hérité du BC (facultatif)
   dateChargement     DateTime           @map("date_chargement")
   dateTraitement     DateTime?          @map("date_traitement")
   statut             StatutBonLivraison @default(PLANIFIE)

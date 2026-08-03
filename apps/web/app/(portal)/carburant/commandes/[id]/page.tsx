@@ -22,7 +22,7 @@ interface Transporteur { id: string; nom: string }
 interface Suivi { mois: number; prevu: number; livre: number; ecart: number; depassement: boolean }
 interface BL { id: string; numeroBL: string; mois: number; immatriculation: string; volumeChargeLitres: number; dateChargement: string; statut: string; isBrouillon?: boolean; _count?: { lignes: number } }
 interface BC {
-  id: string; numero: string; annee: number; trimestre: number; numeroClient: string; statut: string; observations?: string; bcPdfPath?: string;
+  id: string; numero: string; annee: number; trimestre: number; numeroClient: string | null; statut: string; observations?: string; bcPdfPath?: string;
   /** URL signée fournie par l'API (le bucket n'est plus lisible par son chemin). */
   bcPdfUrl?: string | null;
   volumesMensuels: { id: string; mois: number; volumePrevuLitres: number }[];
@@ -174,7 +174,7 @@ export default function BonCommandeDetailPage() {
     <div>
       <PageHeader
         title={`Bon de commande ${data.numero}`}
-        subtitle={`T${data.trimestre} ${data.annee} · Client ${data.numeroClient}`}
+        subtitle={`T${data.trimestre} ${data.annee}${data.numeroClient ? ` · Client ${data.numeroClient}` : ''}`}
         backHref="/carburant/commandes"
         actions={<Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de livraison</Button>}
       />

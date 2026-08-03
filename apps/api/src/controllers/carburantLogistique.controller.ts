@@ -1,4 +1,5 @@
-import { publicFileUrl } from '../services/storage.service';
+import { publicFileUrl, uploadBuffer } from '../services/storage.service';
+import { analyserBonCommandePdf as analyserBcPdf } from '../services/bcPdf.service';
 import { Request, Response, NextFunction } from 'express';
 import { assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
@@ -138,11 +139,34 @@ export async function getBonCommandeById(req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 }
 
+/**
+ * Analyse le PDF d'un bon de commande (natif ou scan → OCR) et renvoie les
+ * champs extraits pour PRÉ-REMPLIR le formulaire, plus la clé MinIO du PDF
+ * déjà archivé — l'utilisateur relit, corrige au besoin, puis crée le BC.
+ */
+export async function analyserBonCommandePdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) throw new AppError('Fichier PDF requis', 400);
+    if (req.file.mimetype !== 'application/pdf') throw new AppError('Seul un PDF est accepté ici', 415);
+
+    const extraction = await analyserBcPdf(req.file.buffer);
+    // Le PDF est archivé immédiatement : le formulaire recevra la clé et la
+    // création du BC pointera sur ce document, sans second upload.
+    const stocke = await uploadBuffer(req.file.buffer, req.file.originalname, 'application/pdf', 'bons-commande');
+
+    await auditLog(req.user!.id, 'CREATE', 'bons_commande', undefined, {
+      analysePdf: true, numero: extraction.numero, ocr: extraction.ocr, avertissements: extraction.avertissements.length,
+    }, req);
+    res.json({ success: true, data: { ...extraction, bcPdfPath: stocke.key } });
+  } catch (err) { next(err); }
+}
+
 export async function createBonCommande(req: Request, res: Response, next: NextFunction) {
   try {
     const { numero, annee, trimestre, numeroClient, observations, statut, bcPdfPath } = req.body;
     if (!numero) throw new AppError('Numéro de bon de commande requis', 400);
-    if (!numeroClient) throw new AppError('Numéro client requis', 400);
+    // numeroClient : rien de tel sur le BC Moov réel (centre de coût, compte
+    // fournisseur, DA…) — champ facultatif, conservé pour les BC qui en ont un.
     const t = Math.trunc(n(trimestre));
     if (t < 1 || t > 4) throw new AppError('Trimestre invalide (1..4)', 400);
     const volumes = parseVolumes(req.body.volumesMensuels);
@@ -152,7 +176,7 @@ export async function createBonCommande(req: Request, res: Response, next: NextF
         numero: String(numero).trim(),
         annee: Math.trunc(n(annee)),
         trimestre: t,
-        numeroClient: String(numeroClient).trim(),
+        numeroClient: numeroClient ? String(numeroClient).trim() : null,
         statut: statut ?? undefined,
         bcPdfPath: bcPdfPath ?? null,
         observations: observations ?? null,
