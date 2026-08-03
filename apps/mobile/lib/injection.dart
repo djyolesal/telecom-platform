@@ -10,6 +10,7 @@ import 'core/config/app_config.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/sites/data/site_repository.dart';
 import 'features/maintenance/data/maintenance_repository.dart';
+import 'features/maintenance/data/maintenance_cache.dart';
 import 'features/carburant/data/depotage_repository.dart';
 import 'features/carburant/data/bon_livraison_repository.dart';
 import 'features/energie/data/releve_repository.dart';
@@ -47,7 +48,24 @@ class Injection {
     dioClient = DioClient(secureStorage, onSessionExpired: () => onSessionExpired?.call());
     uploadService = UploadService(dioClient);
     configService = ConfigService(dioClient);
-    syncService = SyncService(database, dioClient, networkInfo, uploadService, secureStorage)..start();
+    syncService = SyncService(
+      database, dioClient, networkInfo, uploadService, secureStorage,
+      // Révocation du patch optimiste quand une opération finit en échec/abandon :
+      // une maintenance affichée « Terminée » que le serveur a refusée est
+      // marquée comme non synchronisée (l'écran cesse de mentir au technicien).
+      onOptimistiqueEchoue: (ref) async {
+        // Format : « maintenance:<id>:<statutAvant> ». On restaure le statut réel
+        // (celui d'avant le patch optimiste) et on marque l'échec de synchro.
+        final parts = ref.split(':');
+        if (parts.length >= 2 && parts[0] == 'maintenance') {
+          final avant = parts.length >= 3 ? parts[2] : '';
+          await MaintenanceCache.patch(parts[1], {
+            if (avant.isNotEmpty) 'statut': avant,
+            '_syncEchoue': true,
+          });
+        }
+      },
+    )..start();
 
     authRepository = AuthRepository(dioClient, secureStorage);
     siteRepository = SiteRepository(dioClient, database, networkInfo);

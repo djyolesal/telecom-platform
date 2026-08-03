@@ -37,7 +37,14 @@ class SyncService {
   StreamSubscription<bool>? _connSub;
   bool _syncing = false;
 
-  SyncService(this._db, this._client, this._network, this._upload, this._storage);
+  /// Appelé quand une opération à patch optimiste finit en échec définitif ou
+  /// est abandonnée par l'utilisateur : révoque l'état optimiste du cache (ex.
+  /// une maintenance affichée « Terminée » que le serveur n'a jamais acceptée).
+  /// Injecté depuis `injection.dart` (évite de coupler la sync aux features).
+  final Future<void> Function(String entityRef)? onOptimistiqueEchoue;
+
+  SyncService(this._db, this._client, this._network, this._upload, this._storage,
+      {this.onOptimistiqueEchoue});
 
   /// Démarre l'écoute de la connectivité pour synchroniser automatiquement.
   void start() {
@@ -59,6 +66,30 @@ class SyncService {
   Future<void> retryFailed(int localId) async {
     await _db.retryOutbox(localId);
     await sync();
+  }
+
+  /// Opérations en attente d'une confirmation utilisateur (« valeurs
+  /// inhabituelles » reçues au rejeu hors-ligne). Sans ce canal, elles
+  /// restaient bloquées à vie, ni rejouées ni visibles.
+  Stream<int> get confirmationCount => _db.watchConfirmationCount();
+  Future<List<OutboxEntry>> confirmationsEnAttente() async =>
+      _db.outboxAConfirmer(userId: await _storage.readUserId());
+
+  /// L'utilisateur confirme la saisie malgré les avertissements : le payload
+  /// repart avec le drapeau `confirmerVraisemblance` et est rejoué.
+  Future<void> confirmer(OutboxEntry entry) async {
+    final body = jsonDecode(entry.payload) as Map<String, dynamic>;
+    body['confirmerVraisemblance'] = true;
+    await _db.confirmerOutbox(entry.localId, jsonEncode(body));
+    await sync();
+  }
+
+  /// L'utilisateur abandonne la saisie : l'entrée est retirée de la file et
+  /// l'éventuel patch optimiste du cache est révoqué (l'écran ne montre plus
+  /// une opération « validée » qui ne l'a jamais été).
+  Future<void> annulerConfirmation(OutboxEntry entry) async {
+    if (entry.entityRef != null) await onOptimistiqueEchoue?.call(entry.entityRef!);
+    await _db.removeOutbox(entry.localId);
   }
 
   /// Soumet une écriture : envoie immédiatement si en ligne, sinon met en file.
@@ -134,7 +165,15 @@ class SyncService {
           await _db.removeOutbox(entry.localId);
           _logger.i('[sync] ${entry.entityType} envoyé (${entry.endpoint})');
         } on NetworkException {
-          break; // réseau coupé → on réessaiera tout plus tard (rien n'est perdu)
+          // Distinguer un VRAI hors-ligne d'un timeout propre à CETTE entrée :
+          // `receiveTimeout` (serveur lent, grosse photo sur lien 2G) est aussi
+          // mappé en NetworkException. Si l'appareil est réellement hors-ligne,
+          // on s'arrête sans brûler d'essai (rien n'est perdu). S'il est en
+          // ligne, l'entrée en tête a juste expiré : la laisser bloquerait TOUTE
+          // la file derrière — on compte un essai et on passe à la suivante.
+          if (!await _network.isConnected) break;
+          await _compterEchec(entry, 'Délai réseau dépassé sur cette opération');
+          continue;
         } on UnauthorizedException {
           // Session invalidée : on ARRÊTE le drainage sans compter d'essai (sinon
           // un 401 pendant une oscillation réseau brûlerait les 5 essais de TOUTE
@@ -149,26 +188,28 @@ class SyncService {
             _logger.w('[sync] ${entry.entityType} en attente de confirmation');
             continue;
           }
-          final retries = entry.retries + 1;
-          await _db.markOutboxError(entry.localId, retries, e.toString());
-          if (retries >= AppDatabase.kMaxRetries) {
-            _logger.w('[sync] ${entry.entityType} en échec (${entry.endpoint}) — conservé pour revue manuelle');
-          }
+          await _compterEchec(entry, e.toString());
         } catch (e) {
           // Erreur SERVEUR (validation, refus…) propre à CETTE entrée : on compte
           // un essai et on CONTINUE avec les suivantes (pas de blocage en tête).
-          // Après kMaxRetries, l'entrée n'est plus rejouée mais reste en base
-          // (visible via failedOutbox → écran « échecs », réessai manuel possible).
-          // JAMAIS de removeOutbox ici : une clôture/dépotage terrain ne se perd pas.
-          final retries = entry.retries + 1;
-          await _db.markOutboxError(entry.localId, retries, e.toString());
-          if (retries >= AppDatabase.kMaxRetries) {
-            _logger.w('[sync] ${entry.entityType} en échec (${entry.endpoint}) — conservé pour revue manuelle');
-          }
+          await _compterEchec(entry, e.toString());
         }
       }
     } finally {
       _syncing = false;
+    }
+  }
+
+  /// Compte un essai raté sur une entrée et, au passage en échec DÉFINITIF,
+  /// révoque son patch optimiste (sinon l'écran continue d'afficher une
+  /// opération « validée » que le serveur n'a jamais acceptée). L'entrée reste
+  /// en base (jamais supprimée) : visible dans les échecs, rejouable à la main.
+  Future<void> _compterEchec(OutboxEntry entry, String erreur) async {
+    final retries = entry.retries + 1;
+    await _db.markOutboxError(entry.localId, retries, erreur);
+    if (retries >= AppDatabase.kMaxRetries) {
+      _logger.w('[sync] ${entry.entityType} en échec (${entry.endpoint}) — conservé pour revue manuelle');
+      if (entry.entityRef != null) await onOptimistiqueEchoue?.call(entry.entityRef!);
     }
   }
 

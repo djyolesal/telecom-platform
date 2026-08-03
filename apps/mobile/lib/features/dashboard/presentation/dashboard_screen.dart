@@ -49,6 +49,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   int _n(dynamic v) => v is num ? v.toInt() : 0;
 
+  /// Feuille listant les saisies en attente de confirmation : pour chacune, les
+  /// avertissements de vraisemblance, puis « Confirmer » (rejoue avec accord) ou
+  /// « Abandonner » (retire la saisie et révoque l'état optimiste).
+  Future<void> _ouvrirConfirmations(BuildContext context, SyncService sync) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final entries = await sync.confirmationsEnAttente();
+    if (!context.mounted || entries.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (ctx, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text('Saisies à confirmer', style: Theme.of(ctx).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text('Le serveur a signalé des valeurs inhabituelles. Vérifiez : confirmez si elles sont exactes, sinon abandonnez la saisie.',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
+            const SizedBox(height: 12),
+            for (final e in entries)
+              Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_libelleEntite(e.entityType), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      for (final a in (e.avertissements ?? '').split('\n').where((s) => s.trim().isNotEmpty))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('⚠ $a', style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900)),
+                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () async {
+                              Navigator.of(ctx).pop();
+                              await sync.annulerConfirmation(e);
+                              messenger.showSnackBar(const SnackBar(content: Text('Saisie abandonnée.')));
+                            },
+                            child: const Text('Abandonner'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: () async {
+                              Navigator.of(ctx).pop();
+                              await sync.confirmer(e);
+                              messenger.showSnackBar(const SnackBar(content: Text('Saisie confirmée — envoi en cours.')));
+                            },
+                            child: const Text('Confirmer'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _libelleEntite(String type) {
+    switch (type) {
+      case 'depotage': return 'Dépotage carburant';
+      case 'maintenance': return 'Clôture de maintenance';
+      case 'releve': return 'Relevé énergie';
+      default: return type;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.select((AuthCubit c) => c.state.user);
@@ -148,6 +228,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               style: TextStyle(color: Colors.red.shade800, fontSize: 13, fontWeight: FontWeight.w500)),
                         ),
                         Icon(Icons.refresh, color: Colors.red.shade700, size: 18),
+                      ]),
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Bandeau : opérations mises en attente d'une confirmation (« valeurs
+            // inhabituelles » détectées au rejeu hors-ligne). Sans ce canal, la
+            // saisie restait bloquée sans recours. Touchez pour confirmer/abandonner.
+            StreamBuilder<int>(
+              stream: sync.confirmationCount,
+              builder: (context, snap) {
+                final n = snap.data ?? 0;
+                if (n == 0) return const SizedBox.shrink();
+                return Material(
+                  color: Colors.orange.shade50,
+                  child: InkWell(
+                    onTap: () => _ouvrirConfirmations(context, sync),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Row(children: [
+                        Icon(Icons.help_outline, color: Colors.orange.shade800, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('$n saisie(s) à confirmer — valeurs inhabituelles signalées. Touchez pour vérifier.',
+                              style: TextStyle(color: Colors.orange.shade900, fontSize: 13, fontWeight: FontWeight.w500)),
+                        ),
+                        Icon(Icons.chevron_right, color: Colors.orange.shade800, size: 18),
                       ]),
                     ),
                   ),

@@ -124,9 +124,14 @@ class AppDatabase extends _$AppDatabase {
             avertissements: Value(avertissements),
           ));
 
-  /// Entrées en attente d'une confirmation utilisateur.
-  Future<List<OutboxEntry>> outboxAConfirmer() =>
-      (select(outboxEntries)..where((t) => t.besoinConfirmation.equals(true))).get();
+  /// Entrées en attente d'une confirmation utilisateur (cloisonnées par auteur
+  /// sur un téléphone de service partagé).
+  Future<List<OutboxEntry>> outboxAConfirmer({String? userId}) =>
+      (select(outboxEntries)
+            ..where((t) => t.besoinConfirmation.equals(true) &
+                (userId == null ? const Constant(true) : (t.userId.equals(userId) | t.userId.isNull())))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+          .get();
 
   /// L'utilisateur confirme : le payload repart avec le drapeau de confirmation.
   Future<void> confirmerOutbox(int localId, String payload) =>
@@ -144,12 +149,24 @@ class AppDatabase extends _$AppDatabase {
       (update(outboxEntries)..where((t) => t.localId.equals(localId)))
           .write(const OutboxEntriesCompanion(retries: Value(0), lastError: Value(null)));
 
-  /// Nombre d'opérations encore à envoyer (hors échecs permanents).
+  /// Nombre d'opérations encore à envoyer (hors échecs permanents ET hors
+  /// entrées en attente de confirmation : celles-ci ont leur propre compteur,
+  /// sinon le badge « en attente » restait à 1 pour toujours).
   Stream<int> watchOutboxCount() {
     final count = outboxEntries.localId.count();
     final q = selectOnly(outboxEntries)
       ..addColumns([count])
-      ..where(outboxEntries.retries.isSmallerThanValue(kMaxRetries));
+      ..where(outboxEntries.retries.isSmallerThanValue(kMaxRetries) &
+          outboxEntries.besoinConfirmation.equals(false));
+    return q.map((row) => row.read(count) ?? 0).watchSingle();
+  }
+
+  /// Nombre d'opérations en attente d'une confirmation de l'utilisateur.
+  Stream<int> watchConfirmationCount() {
+    final count = outboxEntries.localId.count();
+    final q = selectOnly(outboxEntries)
+      ..addColumns([count])
+      ..where(outboxEntries.besoinConfirmation.equals(true));
     return q.map((row) => row.read(count) ?? 0).watchSingle();
   }
 

@@ -11,12 +11,16 @@ DELETE FROM "releves_energie" a USING "releves_energie" b
 CREATE UNIQUE INDEX IF NOT EXISTS "releves_energie_unicite"
   ON "releves_energie" ("site_id", "source", (COALESCE("groupe_id", '-')), "date_releve");
 
--- 2) Dépotages : un seul dépotage par (site, date, volume).
-DELETE FROM "depotages" a USING "depotages" b
-  WHERE a.ctid < b.ctid
-    AND a.site_id = b.site_id AND a.date_depotage = b.date_depotage AND a.volume_litres = b.volume_litres;
-CREATE UNIQUE INDEX IF NOT EXISTS "depotages_unicite"
-  ON "depotages" ("site_id", "date_depotage", "volume_litres");
+-- 2) Dépotages : PAS d'index d'unicité sur (site, date, volume).
+--    Ce tuple n'est PAS une clé métier : deux camions peuvent livrer le même
+--    volume au même site le même jour (et l'import historique horodate à minuit,
+--    ce qui aligne encore plus les collisions). Un DELETE de dédoublonnage
+--    aurait détruit des livraisons réelles sans trace. L'idempotence de la
+--    saisie repose sur l'Idempotency-Key (createDepotage) et sur la référence
+--    unique DEP-AAAA-NNNNN (colonne `reference`, déjà @unique). L'idempotence
+--    de l'import de masse est assurée côté applicatif (relevesImport :
+--    skipDuplicates + garde de ré-import), pas par une contrainte destructrice.
+--    (Aucune action SQL ici — volontairement.)
 
 -- 3) Planning préventif : un seul ticket OUVERT par (site, tâche contractuelle).
 --    Empêche les doublons de génération (deux réplicas, ou relance manuelle).

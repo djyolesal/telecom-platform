@@ -132,10 +132,11 @@ class MaintenanceRepository {
   }
 
   Future<SubmitResult> start(String id, {double? latitude, double? longitude}) async {
+    final avant = (await MaintenanceCache.byId(id))?['statut'] as String?;
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/start',
       entityType: 'maintenance_start',
-      entityRef: 'maintenance:$id',
+      entityRef: 'maintenance:$id:${avant ?? ''}',
       payload: {
         // Heure RÉELLE du démarrage terrain : sans elle, une maintenance
         // démarrée hors couverture était datée de l'instant du rejeu et sa
@@ -159,7 +160,7 @@ class MaintenanceRepository {
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/suspend',
       entityType: 'maintenance_suspend',
-      entityRef: 'maintenance:$id',
+      entityRef: 'maintenance:$id:${(await MaintenanceCache.byId(id))?['statut'] ?? ''}',
       payload: {'motif': motif},
     );
     if (res.isQueued) {
@@ -173,7 +174,7 @@ class MaintenanceRepository {
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/resume',
       entityType: 'maintenance_resume',
-      entityRef: 'maintenance:$id',
+      entityRef: 'maintenance:$id:${(await MaintenanceCache.byId(id))?['statut'] ?? ''}',
       payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
     );
     if (res.isQueued) {
@@ -205,7 +206,7 @@ class MaintenanceRepository {
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/close',
       entityType: 'maintenance_close',
-      entityRef: 'maintenance:$id',
+      entityRef: 'maintenance:$id:${(await MaintenanceCache.byId(id))?['statut'] ?? ''}',
       payload: {
         'agentPresent': agentPresent,
         // Heure RÉELLE de fin : la durée minimale se mesure sur le terrain,
