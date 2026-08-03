@@ -2,6 +2,7 @@ import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 import path from 'path';
 import { minioClient, MINIO_BUCKET } from '../config/minio';
 import { env } from '../config/env';
+import { AppError } from '../utils/AppError';
 
 export interface StoredFile {
   url: string;
@@ -22,8 +23,12 @@ export interface StoredFile {
  */
 const FICHIER_TTL_S = 24 * 3600;
 
+// Clé de signature des URLs de fichiers, séparée du JWT (à défaut : repli sur
+// JWT_SECRET pour ne pas casser l'existant).
+const FILE_SECRET = env.FILE_URL_SECRET || env.JWT_SECRET;
+
 function hmac(cle: string, exp: number): string {
-  return createHmac('sha256', env.JWT_SECRET).update(`${cle}|${exp}`).digest('base64url');
+  return createHmac('sha256', FILE_SECRET).update(`${cle}|${exp}`).digest('base64url');
 }
 
 /** Jeton `exp.signature` pour une clé d'objet. */
@@ -90,6 +95,24 @@ function mimeExt(mime: string): string {
     'application/pdf': '.pdf',
   };
   return map[mime] ?? '';
+}
+
+/**
+ * Valide une clé d'objet fournie par le client (BL/BC PDF, signatures…) avant
+ * de la stocker ou de la re-signer : dossier connu + pas de traversée. Sans ça,
+ * un client (dont un TRANSPORTEUR) pouvait pointer n'importe quel objet du
+ * bucket dans un champ de chemin. Renvoie la clé si valide, `null` si vide,
+ * lève sinon.
+ */
+const DOSSIERS_AUTORISES = ['photos', 'signatures', 'documents', 'logos', 'bons-commande', 'bons-livraison', 'rapports'];
+export function cleMinioValide(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  const k = String(v);
+  const dossier = k.split('/')[0];
+  if (k.includes('..') || k.startsWith('/') || !DOSSIERS_AUTORISES.includes(dossier) || !/^[A-Za-z0-9._/-]+$/.test(k)) {
+    throw new AppError('Chemin de fichier invalide.', 400);
+  }
+  return k;
 }
 
 /** Métadonnées + flux d'un objet, pour la passerelle de téléchargement. */

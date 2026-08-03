@@ -12,6 +12,10 @@ import { enregistrerSession, effacerSession, sessionValide, revoquerToutesSessio
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 12;
+// Hash bcrypt LEURRE (mot de passe aléatoire jamais divulgué) : comparé quand le
+// compte n'existe pas / est inactif, pour égaliser le temps de réponse du login
+// et fermer l'oracle d'énumération temporel.
+const HASH_LEURRE = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), SALT_ROUNDS);
 // Durée de vie du jeton d'accès. 15 min était trop court pour le terrain
 // (le jeton expirait pendant une intervention et faisait échouer l'upload
 // multipart des photos lors de la clôture). Configurable via JWT_EXPIRES_IN.
@@ -59,11 +63,14 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user || !user.isActive) throw new AppError('Identifiants invalides', 401);
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: false }, req);
+    // Anti-énumération par le TEMPS : pour un email inexistant/inactif, on
+    // comparait sans bcrypt (réponse immédiate) alors qu'un compte valide
+    // subissait ~250 ms de hachage — l'écart trahissait l'existence du compte.
+    // On hache TOUJOURS (contre le hash réel ou un leurre) avant de conclure.
+    const hashCible = user?.isActive ? user.passwordHash : HASH_LEURRE;
+    const valid = await bcrypt.compare(password, hashCible);
+    if (!user || !user.isActive || !valid) {
+      if (user) await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: false }, req);
       throw new AppError('Identifiants invalides', 401);
     }
 

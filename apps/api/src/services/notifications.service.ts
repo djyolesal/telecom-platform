@@ -44,7 +44,7 @@ async function sendFcm(token: string, payload: NotificationPayload): Promise<voi
   }
 }
 
-async function persistAndDispatch(userId: string, payload: NotificationPayload) {
+async function persistAndDispatch(userId: string, payload: NotificationPayload, fcmTokenConnu?: string | null) {
   const notif = await prisma.notification.create({
     data: {
       userId,
@@ -57,11 +57,11 @@ async function persistAndDispatch(userId: string, payload: NotificationPayload) 
 
   emitToUser(userId, { ...payload, id: notif.id });
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { fcmToken: true },
-  });
-  if (user?.fcmToken) await sendFcm(user.fcmToken, payload);
+  // fcmToken déjà chargé par l'appelant (sendToRole) → pas de requête par
+  // destinataire (N+1). Sinon on le récupère (envoi à un utilisateur isolé).
+  const token = fcmTokenConnu !== undefined ? fcmTokenConnu
+    : (await prisma.user.findUnique({ where: { id: userId }, select: { fcmToken: true } }))?.fcmToken ?? null;
+  if (token) await sendFcm(token, payload);
 
   return notif;
 }
@@ -76,9 +76,9 @@ export const notificationService = {
   async sendToRole(role: string, payload: NotificationPayload) {
     const users = await prisma.user.findMany({
       where: { role: role as never, isActive: true },
-      select: { id: true },
+      select: { id: true, fcmToken: true },
     });
-    await Promise.all(users.map((u) => persistAndDispatch(u.id, payload)));
+    await Promise.all(users.map((u) => persistAndDispatch(u.id, payload, u.fcmToken)));
     return users.length;
   },
 
@@ -86,9 +86,9 @@ export const notificationService = {
   async sendToRoleInRegion(role: string, region: string, payload: NotificationPayload) {
     const users = await prisma.user.findMany({
       where: { role: role as never, region, isActive: true },
-      select: { id: true },
+      select: { id: true, fcmToken: true },
     });
-    await Promise.all(users.map((u) => persistAndDispatch(u.id, payload)));
+    await Promise.all(users.map((u) => persistAndDispatch(u.id, payload, u.fcmToken)));
     return users.length;
   },
 };

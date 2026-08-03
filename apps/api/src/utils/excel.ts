@@ -47,6 +47,13 @@ function styliserFeuille(ws: ExcelJS.Worksheet, nbCols: number): void {
       cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
       if (r % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA } };
       cell.border = { bottom: { style: 'hair', color: { argb: BORDURE } } };
+      // Injection de formule : une cellule texte issue d'une saisie terrain
+      // commençant par = + - @ est interprétée comme une FORMULE par Excel
+      // (exécution DDE, exfiltration via HYPERLINK). On la préfixe d'une
+      // apostrophe → forcée en texte, comme pour l'export CSV.
+      if (typeof cell.value === 'string' && /^[=+\-@\t\r]/.test(cell.value)) {
+        cell.value = `'${cell.value}`;
+      }
     }
   }
 }

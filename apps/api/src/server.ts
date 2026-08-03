@@ -42,6 +42,10 @@ app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// `combined` journalise l'URL complète : on masque le jeton de fichier signé
+// (?t=<exp>.<hmac>) — une capacité de lecture valable 24 h ne doit pas traîner
+// en clair dans les logs applicatifs (ni l'access_log nginx, à masquer côté infra).
+morgan.token('url', (req) => (req as { originalUrl?: string; url?: string }).originalUrl?.replace(/([?&]t=)[^&\s"]+/g, '$1***') ?? '');
 app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
 app.use(metricsMiddleware);
 

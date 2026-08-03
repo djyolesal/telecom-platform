@@ -35,6 +35,14 @@ if [ "$CONFIRM" != "oui" ]; then
   exit 0
 fi
 
+# L'API est ARRÊTÉE pendant la restauration : sinon une écriture mobile ou un
+# job cron peut s'intercaler pendant/juste après le psql, et la base restaurée
+# se retrouve désalignée avec le stockage MinIO restauré séparément. Redémarrée
+# à la toute fin (trap : même en cas d'erreur).
+echo "--- Arrêt de l'API pendant la restauration ---"
+$COMPOSE stop api || true
+trap '$COMPOSE start api || true' EXIT
+
 # ON_ERROR_STOP=1 : le dump --clean/--if-exists se rejoue proprement ; toute
 # vraie erreur ARRÊTE la restauration au lieu de produire une base incohérente.
 echo "--- Restauration base ---"

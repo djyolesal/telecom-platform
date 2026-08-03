@@ -111,6 +111,8 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: telecom-files
       JWT_SECRET: ${JWT_SECRET}
+      # Séparation de clés : signe les URLs de fichiers (repli sur JWT_SECRET si absent).
+      FILE_URL_SECRET: ${FILE_URL_SECRET:-}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}

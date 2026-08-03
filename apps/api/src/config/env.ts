@@ -48,6 +48,11 @@ const envSchema = z.object({
   // Firebase Cloud Messaging
   FCM_SERVER_KEY: z.string().optional(),
 
+  // Secret DÉDIÉ à la signature des URLs de fichiers (séparation de clés). À
+  // défaut, retombe sur JWT_SECRET (compatibilité) — mais une variable propre
+  // permet de faire tourner l'une sans invalider l'autre.
+  FILE_URL_SECRET: z.string().min(16).optional(),
+
   // Divers
   APP_URL: z.string().default('http://localhost:3000'),
   // Origines autorisées (CORS + Socket.IO). Défaut = origine locale du portail

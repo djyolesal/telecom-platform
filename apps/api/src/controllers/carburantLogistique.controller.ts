@@ -1,4 +1,4 @@
-import { publicFileUrl, uploadBuffer } from '../services/storage.service';
+import { publicFileUrl, uploadBuffer, cleMinioValide } from '../services/storage.service';
 import { analyserBonCommandePdf as analyserBcPdf } from '../services/bcPdf.service';
 import { analyserBonLivraisonDocument as analyserBlDoc } from '../services/blPdf.service';
 import { Request, Response, NextFunction } from 'express';
@@ -179,7 +179,7 @@ export async function createBonCommande(req: Request, res: Response, next: NextF
         trimestre: t,
         numeroClient: numeroClient ? String(numeroClient).trim() : null,
         statut: statut ?? undefined,
-        bcPdfPath: bcPdfPath ?? null,
+        bcPdfPath: cleMinioValide(bcPdfPath),
         observations: observations ?? null,
         volumesMensuels: { create: volumes },
       },
@@ -448,8 +448,8 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
         dateChargement: dateChargementValide,
         dateTraitement: dateTraitement ? new Date(dateTraitement) : null,
         statut: statut ?? undefined,
-        blPdfPath: blPdfPath ?? null,
-        bordereauPdfPath: bordereauPdfPath ?? null,
+        blPdfPath: cleMinioValide(blPdfPath),
+        bordereauPdfPath: cleMinioValide(bordereauPdfPath),
         observations: observations ?? null,
         ...(lignes.length ? { lignes: { create: lignes } } : {}),
       },
@@ -501,8 +501,8 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     if (dateTraitement !== undefined) data.dateTraitement = dateTraitement ? new Date(dateTraitement) : null;
     if (observations !== undefined) data.observations = observations;
     if (statut != null) data.statut = statut;
-    if (blPdfPath !== undefined) data.blPdfPath = blPdfPath;
-    if (bordereauPdfPath !== undefined) data.bordereauPdfPath = bordereauPdfPath;
+    if (blPdfPath !== undefined) data.blPdfPath = cleMinioValide(blPdfPath);
+    if (bordereauPdfPath !== undefined) data.bordereauPdfPath = cleMinioValide(bordereauPdfPath);
     if (transporteurId !== undefined && !isTransporteur) {
       data.transporteur = transporteurId ? { connect: { id: transporteurId } } : { disconnect: true };
     }
