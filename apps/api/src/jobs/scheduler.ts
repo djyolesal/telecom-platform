@@ -9,6 +9,7 @@ import { preventivePlanJob } from './preventive-plan';
 import { manquantAlertJob } from './manquant-alert';
 import { vidangeAlertJob } from './vidange-alert';
 import { situationPeriodiqueJob } from './situation-periodique';
+import { purgeOrphelinsJob } from './purge-orphelins';
 
 /**
  * Verrou Postgres par job : `node-cron` n'attend pas la fin d'un callback async
@@ -31,6 +32,13 @@ async function avecVerrou(nom: string, fn: () => Promise<void>): Promise<void> {
 }
 
 export function setupCronJobs() {
+  // ── Ménage du stockage — tous les jours à 4h30 (après le backup de 3h,
+  // qui garde ainsi une dernière copie des objets sur le point d'être purgés) ──
+  cron.schedule('30 4 * * *', async () => {
+    logger.info('[CRON] Démarrage job purge des fichiers orphelins');
+    try { await avecVerrou('purgeOrphelins', purgeOrphelinsJob); } catch (e) { logger.error('[CRON] purgeOrphelins error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
   // ── Vérif stock carburant — tous les jours à 8h ─────────────
   cron.schedule('0 8 * * *', async () => {
     logger.info('[CRON] Démarrage job vérification stock carburant');
