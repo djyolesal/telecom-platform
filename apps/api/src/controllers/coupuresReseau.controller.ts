@@ -384,8 +384,14 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
 
     // Propagation à l'AVAL de transmission : les descendants perdent leur lien
     // → une coupure SITE entier « héritée » par site aval, liée à la racine.
+    // UNIQUEMENT si le site entier est tombé : une coupure partielle (une techno
+    // down, site alimenté) laisse la transmission en service — propager créerait
+    // des héritées fictives sur tout l'aval (règle vérifiée ici, pas seulement
+    // dans le formulaire web).
+    const siteEntier = technologies.includes('SITE')
+      || ['2G', '3G', '4G', '5G'].every((t) => technologies.includes(t));
     let sitesImpactes = 0;
-    if (b.propagerAval === true) {
+    if (b.propagerAval === true && siteEntier) {
       const aval = await descendantsTransmission(siteId);
       if (aval.length) {
         const racineId = rows[0].id;

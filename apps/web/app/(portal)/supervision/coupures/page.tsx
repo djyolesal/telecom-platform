@@ -219,12 +219,17 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     enabled: !!siteId,
   });
   const nbAval = transmission?.aval.length ?? 0;
+  // La propagation à l'aval n'a de sens que si le SITE ENTIER est tombé
+  // (perte d'énergie → perte du lien de transmission). Une coupure partielle
+  // (une techno down, site alimenté) laisse la transmission en service :
+  // l'aval n'est pas menacé, on ne doit pas pouvoir lui créer des héritées.
+  const siteEntier = technos.has('SITE') || ['2G', '3G', '4G', '5G'].every((t) => technos.has(t));
 
   const mutation = useMutation({
     mutationFn: () => api.post('/coupures-reseau', {
       siteId,
       technologies: [...technos],
-      propagerAval: nbAval > 0 && propagerAval,
+      propagerAval: siteEntier && nbAval > 0 && propagerAval,
       dateDebut,
       typeAlarme: typeAlarme || undefined,
       cause: cause || undefined,
@@ -275,7 +280,7 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
       <Field label="Cause constatée"><Input value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" /></Field>
       <Field label="Technicien contacté"><Input value={technicien} onChange={(e) => setTechnicien(e.target.value)} /></Field>
       <Field label="Observations"><Textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} /></Field>
-      {nbAval > 0 && (
+      {siteEntier && nbAval > 0 && (
         <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
           <input type="checkbox" checked={propagerAval} onChange={(e) => setPropagerAval(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-amber-300" />
           <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) — <b>propager la coupure</b> à tout l'aval (coupures « héritées », clôturées en cascade avec celle-ci).</span>

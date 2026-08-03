@@ -49,7 +49,7 @@ export default function TopologiePage() {
   const { data: coupures } = useQuery({
     queryKey: ['coupures-en-cours-topo'],
     queryFn: () => api.get('/coupures-reseau', { params: { statut: 'EN_COURS', limit: 200 } })
-      .then((r) => r.data.data as { siteId?: string; site?: { nom: string } }[]),
+      .then((r) => r.data.data as { siteId?: string; technologie?: string; site?: { nom: string } }[]),
     refetchInterval: 60_000,
     // staleTime aligné : sans lui, chaque tick refait un aller-retour réseau
     // même si la donnée vient d'arriver (endpoints agrégés coûteux).
@@ -86,15 +86,30 @@ export default function TopologiePage() {
       .map((s) => ({ racine: s, taille: 1 + taille(s.id) }))
       .sort((a, b) => b.taille - a.taille);
 
-    // Sites en coupure (rouge) et leur aval (ambre).
+    // Sites en coupure (rouge) et leur aval (ambre). L'aval n'est menacé que si
+    // le site amont est ENTIÈREMENT tombé (ligne SITE ou les 4 technos down) :
+    // une coupure partielle laisse le site alimenté et sa transmission en
+    // service — colorer l'aval reviendrait à peindre toute une chaîne en ambre
+    // pour une simple panne 3G.
     const sitesDown = new Set((coupures ?? []).map((c) => c.siteId).filter((x): x is string => !!x));
+    const technosParSite = new Map<string, Set<string>>();
+    for (const c of coupures ?? []) {
+      if (!c.siteId) continue;
+      const set = technosParSite.get(c.siteId) ?? new Set<string>();
+      set.add(c.technologie ?? 'SITE');
+      technosParSite.set(c.siteId, set);
+    }
+    const entierementDown = (id: string) => {
+      const t = technosParSite.get(id);
+      return !!t && (t.has('SITE') || ['2G', '3G', '4G', '5G'].every((x) => t.has(x)));
+    };
     const sitesImpactes = new Set<string>();
     const marquerAval = (id: string) => {
       for (const e of enfants.get(id) ?? []) {
         if (!sitesImpactes.has(e.id)) { sitesImpactes.add(e.id); marquerAval(e.id); }
       }
     };
-    sitesDown.forEach(marquerAval);
+    for (const id of sitesDown) if (entierementDown(id)) marquerAval(id);
 
     // Liaisons critiques (SPOF) : poids = le site + tout ce qui est suspendu à
     // sa liaison amont — les plus lourdes, surtout en FH, sont candidates à
