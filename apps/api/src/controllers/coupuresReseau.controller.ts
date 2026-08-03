@@ -91,7 +91,9 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
     // incidents CRITIQUE pour la même panne, et le second updateMany laissait le
     // premier incident OUVERT sans aucune coupure — jamais clôturable.
     const { incident, cree } = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + siteId})::bigint)`;
+      // $executeRaw (pas $queryRaw) : pg_advisory_xact_lock renvoie `void`, que
+      // Prisma refuse de désérialiser — l'import entier tombait en 500.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + siteId})::bigint)`;
       // `some: { dateFin: null }` : un incident dont toutes les coupures sont
       // rétablies ne doit PAS être recyclé (sa dateOuverture ferait exploser le
       // MTTR et les pénalités de délai).

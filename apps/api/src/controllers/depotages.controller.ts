@@ -60,7 +60,8 @@ function parseHeuresGE(raw: unknown, siteGroupeIds: Set<string>) {
  *  dépotages et clôtures concurrents d'un MÊME site → plus de double comptage de
  *  la consommation. N'affecte pas les autres sites (clé dérivée du siteId). */
 async function verrouSiteCarburant(tx: Prisma.TransactionClient, siteId: string): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'carb:' + siteId})::bigint)`;
+  // $executeRaw : le retour `void` du verrou n'est pas désérialisable par $queryRaw.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'carb:' + siteId})::bigint)`;
 }
 
 async function reconcileDepotage(opts: {

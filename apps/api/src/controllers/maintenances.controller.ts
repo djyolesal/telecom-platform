@@ -761,7 +761,8 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         // Verrou consultatif par site : sérialise clôtures et dépotages concurrents
         // du même site AVANT le calcul de consommation gasoil (évite que deux
         // clôtures lisent le même relevé précédent → conso comptée deux fois).
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'carb:' + existing.siteId})::bigint)`;
+        // $executeRaw : le retour `void` du verrou n'est pas désérialisable par $queryRaw.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'carb:' + existing.siteId})::bigint)`;
         // VERROU anti-double-clôture concurrente : le passage EN_COURS→TERMINEE
         // est fait EN PREMIER et conditionné. Postgres verrouille la ligne ; une
         // 2e transaction concurrente attend le commit puis voit statut TERMINEE →
