@@ -1,3 +1,4 @@
+import { publicFileUrl } from '../services/storage.service';
 import { Request, Response, NextFunction } from 'express';
 import { assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
@@ -132,7 +133,8 @@ export async function getBonCommandeById(req: Request, res: Response, next: Next
       return { mois: vm.mois, prevu, livre, ecart: livre - prevu, depassement: livre > prevu + TOLERANCE_L };
     });
 
-    res.json({ success: true, data: { ...bc, suivi } });
+    // URL signée : le bucket n'est plus lisible publiquement par son chemin.
+    res.json({ success: true, data: { ...bc, suivi, bcPdfUrl: bc.bcPdfPath ? publicFileUrl(bc.bcPdfPath) : null } });
   } catch (err) { next(err); }
 }
 
@@ -282,6 +284,8 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
         ...bl,
         lignes,
         sommeLignes,
+        blPdfUrl: bl.blPdfPath ? publicFileUrl(bl.blPdfPath) : null,
+        bordereauPdfUrl: bl.bordereauPdfPath ? publicFileUrl(bl.bordereauPdfPath) : null,
         coherenceCharge: Math.abs(sommeLignes - n(bl.volumeChargeLitres)) <= TOLERANCE_L,
       },
     });

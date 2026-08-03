@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -12,7 +13,7 @@ import 'injection.dart';
 /// Serveur en HTTPS auto-signé (IP sans domaine) : faire confiance au certificat
 /// pour TOUT le HttpClient par défaut — indispensable au chargement d'images
 /// (cached_network_image / Image.network n'utilisent pas Dio).
-const bool _allowSelfSigned = bool.fromEnvironment('ALLOW_SELF_SIGNED');
+const bool _allowSelfSigned = kDebugMode && bool.fromEnvironment('ALLOW_SELF_SIGNED');
 
 class _SelfSignedHttpOverrides extends HttpOverrides {
   @override

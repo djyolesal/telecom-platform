@@ -73,7 +73,10 @@ export default function NouvelleMaintenancePage() {
   const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
   const mutation = useMutation({
-    mutationFn: () => {
+    // Type de retour explicite : les trois branches postent des corps différents,
+    // et axios ≥1.19 fait porter le type du corps à AxiosResponse — sans cette
+    // annotation, TypeScript tente d'unifier les trois et échoue.
+    mutationFn: (): Promise<{ data: { data: { id: string } } }> => {
       if (new Date(form.datePlanifiee).getTime() < Date.now() - 60000) {
         throw new Error('La date planifiée doit être postérieure ou égale à maintenant.');
       }

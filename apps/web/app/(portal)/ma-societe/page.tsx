@@ -13,6 +13,8 @@ interface MaSociete {
   id: string; nom: string;
   email: string | null; adresse: string | null; rccm: string | null; nif: string | null;
   contactCommercial: string | null; contactTechnique: string | null; logoPath: string | null;
+  /** URL signée fournie par l'API (le bucket n'est plus lisible par son chemin). */
+  logoUrl?: string | null;
   ficheComplete: boolean; champsManquants: string[];
 }
 
@@ -98,7 +100,7 @@ function SocieteForm({ societe, onSaved }: { societe: MaSociete; onSaved: () => 
           <div className="flex items-center gap-3">
             {(logoPreview || f.logoPath) && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoPreview ?? `/storage/telecom-files/${f.logoPath}`} alt="logo" className="h-12 w-auto rounded border border-gray-100 object-contain" />
+              <img src={logoPreview ?? societe.logoUrl ?? undefined} alt="logo" className="h-12 w-auto rounded border border-gray-100 object-contain" />
             )}
             <input type="file" accept="image/png,image/jpeg" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadLogo(file); }} className="text-xs" />
             {uploading && <span className="text-xs text-gray-400">Envoi…</span>}

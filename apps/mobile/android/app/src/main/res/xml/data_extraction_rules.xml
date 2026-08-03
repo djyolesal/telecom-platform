@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ : exclut l'application des sauvegardes cloud et des transferts
+  d'appareil à appareil. La base Drift hors ligne contient l'intégralité des
+  saisies terrain non encore synchronisées et le keystore garde les jetons :
+  un `adb backup` ou une restauration sur un autre téléphone contournait le
+  verrou d'appareil des comptes terrain.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

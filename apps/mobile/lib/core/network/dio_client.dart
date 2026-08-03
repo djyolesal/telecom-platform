@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:logger/logger.dart';
@@ -10,7 +11,13 @@ import 'auth_interceptor.dart';
 /// Active l'acceptation des certificats TLS auto-signés.
 /// À passer au build pour un serveur en HTTPS auto-signé (IP sans domaine) :
 ///   flutter build apk --dart-define=ALLOW_SELF_SIGNED=true --dart-define=API_URL=https://<IP>/api/v1
-const bool _allowSelfSigned = bool.fromEnvironment('ALLOW_SELF_SIGNED');
+/// Acceptation des certificats TLS auto-signés — **jamais en build de release**.
+/// Le `--dart-define` seul suffisait à désactiver la validation TLS dans un APK
+/// distribué : un APK de recette signé par erreur, ou un simple oubli du flag
+/// dans le script de build, exposait tout le trafic terrain à l'interception.
+/// Le domaine de production (emops.uk) a un certificat Let's Encrypt valide ;
+/// le contournement n'a de sens qu'en debug, face à une IP nue.
+const bool _allowSelfSigned = kDebugMode && bool.fromEnvironment('ALLOW_SELF_SIGNED');
 
 /// Client HTTP central (Dio) avec intercepteurs auth/retry et journalisation.
 class DioClient {

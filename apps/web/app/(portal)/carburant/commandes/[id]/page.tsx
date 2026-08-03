@@ -23,6 +23,8 @@ interface Suivi { mois: number; prevu: number; livre: number; ecart: number; dep
 interface BL { id: string; numeroBL: string; mois: number; immatriculation: string; volumeChargeLitres: number; dateChargement: string; statut: string; isBrouillon?: boolean; _count?: { lignes: number } }
 interface BC {
   id: string; numero: string; annee: number; trimestre: number; numeroClient: string; statut: string; observations?: string; bcPdfPath?: string;
+  /** URL signée fournie par l'API (le bucket n'est plus lisible par son chemin). */
+  bcPdfUrl?: string | null;
   volumesMensuels: { id: string; mois: number; volumePrevuLitres: number }[];
   bonsLivraison: BL[]; suivi: Suivi[];
 }
@@ -178,7 +180,7 @@ export default function BonCommandeDetailPage() {
       />
 
       {data.bcPdfPath && (
-        <a href={`/storage/telecom-files/${data.bcPdfPath}`} target="_blank" rel="noopener noreferrer"
+        <a href={data.bcPdfUrl ?? undefined} target="_blank" rel="noopener noreferrer"
           className="mb-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
           <FileText size={15} className="text-red-500" /> PDF de la commande
         </a>

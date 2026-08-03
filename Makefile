@@ -45,7 +45,7 @@ install:
 	@echo ""
 	@echo "✅ Installation terminée !"
 	@echo "   Portail web  : https://$$(grep DOMAIN .env | cut -d= -f2)"
-	@echo "   API Swagger  : https://$$(grep DOMAIN .env | cut -d= -f2)/api/docs"
+	@echo "   (Swagger désactivé en production — disponible sur /docs en dev)"
 	@echo "   Grafana      : https://$$(grep DOMAIN .env | cut -d= -f2)/grafana"
 
 start:

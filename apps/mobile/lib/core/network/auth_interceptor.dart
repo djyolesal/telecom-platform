@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import '../constants/app_constants.dart';
 import '../errors/exceptions.dart';
 import '../storage/secure_storage.dart';
 
-const bool _allowSelfSigned = bool.fromEnvironment('ALLOW_SELF_SIGNED');
+const bool _allowSelfSigned = kDebugMode && bool.fromEnvironment('ALLOW_SELF_SIGNED');
 
 /// Attache le jeton d'accès à chaque requête et rafraîchit automatiquement
 /// le jeton sur 401 (une seule tentative, puis rejoue la requête initiale).

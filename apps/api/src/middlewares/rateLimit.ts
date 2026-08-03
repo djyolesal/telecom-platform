@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { redisClient } from '../config/redis';
+import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 
 /**
@@ -10,7 +11,9 @@ import { logger } from '../utils/logger';
  * Fail-open : si Redis est indisponible, la limite n'est PAS appliquée plutôt
  * que de verrouiller l'authentification de toute la plateforme.
  */
-export function rateLimit(opts: { windowSec: number; max: number; keyPrefix: string; ipMax?: number }) {
+export function rateLimit(opts: { windowSec: number; max: number; keyPrefix: string;
+  /** Refuser (429) plutôt que laisser passer si Redis est indisponible. */
+  failClosed?: boolean; ipMax?: number }) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -39,7 +42,13 @@ export function rateLimit(opts: { windowSec: number; max: number; keyPrefix: str
       if (count > opts.max) return tooMany(await redisClient.ttl(key));
       return next();
     } catch (e) {
-      logger.warn('[rateLimit] Redis indisponible — limite non appliquée', e);
+      // Fail-OPEN par défaut (une panne Redis ne doit pas couper le terrain),
+      // mais fail-CLOSED sur l'authentification : sans compteur, le bruteforce
+      // redevient illimité — mieux vaut refuser temporairement la connexion.
+      logger.warn('[rateLimit] Redis indisponible', e);
+      if (opts.failClosed) {
+        return next(new AppError('Service d\'authentification momentanément indisponible, réessayez.', 429));
+      }
       return next();
     }
   };

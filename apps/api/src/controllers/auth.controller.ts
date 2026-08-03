@@ -268,6 +268,11 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     const userId = await redisClient.get(`reset:${token}`);
     if (!userId) throw new AppError('Token invalide ou expiré', 400);
 
+    // Le compte a pu être DÉSACTIVÉ entre l'émission du lien (valable 1 h) et
+    // son usage : un départ d'entreprise ne doit pas laisser une porte ouverte.
+    const cible = await prisma.user.findUnique({ where: { id: userId }, select: { isActive: true } });
+    if (!cible?.isActive) throw new AppError('Token invalide ou expiré', 400);
+
     const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
 

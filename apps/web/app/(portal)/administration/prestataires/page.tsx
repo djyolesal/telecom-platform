@@ -24,6 +24,8 @@ interface Prestataire {
   contactCommercial?: string;
   contactTechnique?: string;
   logoPath?: string;
+  /** URL signée fournie par l'API (le bucket n'est plus lisible par son chemin). */
+  logoUrl?: string | null;
   isTransporteur?: boolean;
   isGardiennage?: boolean;
   isActive: boolean;
@@ -88,7 +90,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
             <div className="flex items-center gap-3">
               {(logoPreview || form.logoPath) && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoPreview ?? `/storage/telecom-files/${form.logoPath}`} alt="logo" className="h-12 w-auto rounded border border-gray-100 object-contain" />
+                <img src={logoPreview ?? prestataire?.logoUrl ?? undefined} alt="logo" className="h-12 w-auto rounded border border-gray-100 object-contain" />
               )}
               <input type="file" accept="image/png,image/jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }} className="text-xs" />
               {uploading && <span className="text-xs text-gray-400">Envoi…</span>}

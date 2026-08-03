@@ -16,7 +16,7 @@ export const minioClient = new MinioClient({
 
 export const MINIO_BUCKET = env.MINIO_BUCKET;
 
-/** Crée le bucket s'il n'existe pas et applique une policy de lecture publique. */
+/** Crée le bucket s'il n'existe pas et s'assure qu'il reste PRIVÉ. */
 export async function ensureBucket(): Promise<void> {
   const exists = await minioClient.bucketExists(MINIO_BUCKET).catch(() => false);
   if (!exists) {
@@ -24,19 +24,11 @@ export async function ensureBucket(): Promise<void> {
     logger.info(`✅ Bucket MinIO créé : ${MINIO_BUCKET}`);
   }
 
-  // Lecture publique des objets (les URLs sont servies derrière Nginx)
-  const policy = {
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Principal: { AWS: ['*'] },
-        Action: ['s3:GetObject'],
-        Resource: [`arn:aws:s3:::${MINIO_BUCKET}/*`],
-      },
-    ],
-  };
-  await minioClient.setBucketPolicy(MINIO_BUCKET, JSON.stringify(policy)).catch((e) => {
-    logger.warn('Impossible d\'appliquer la policy MinIO:', e.message);
+  // Bucket PRIVÉ : plus aucune policy anonyme. Les objets sont servis
+  // exclusivement par la passerelle signée /api/v1/files (storage.service).
+  // Une lecture publique rendait toute photo d'intervention accessible à qui
+  // connaissait sa clé — y compris après le départ d'un prestataire.
+  await minioClient.setBucketPolicy(MINIO_BUCKET, '').catch(() => {
+    /* Aucune policy à retirer : c'est déjà l'état voulu. */
   });
 }

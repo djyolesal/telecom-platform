@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Politique réseau de l'application.
+
+  `cleartextTrafficPermitted="false"` interdit tout HTTP en clair : sans cela,
+  une redirection ou un API_URL mal saisi (http://...) expédiait jetons et
+  données terrain en clair sur des réseaux mobiles partagés.
+  Aucune ancre de confiance « user » n'est déclarée : un certificat installé
+  a posteriori sur le téléphone (proxy d'interception) n'est pas accepté.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

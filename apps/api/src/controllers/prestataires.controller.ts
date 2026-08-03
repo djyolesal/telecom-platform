@@ -1,3 +1,4 @@
+import { publicFileUrl } from '../services/storage.service';
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
@@ -18,6 +19,22 @@ async function rapprocherSitesGardiennage(prestataireId: string, nom: string): P
   if (ids.length) await prisma.site.updateMany({ where: { id: { in: ids } }, data: { gardiennagePrestataireId: prestataireId } });
 }
 
+/**
+ * `logoPath` est une clé d'objet MinIO fournie par le client et relue telle
+ * quelle à la génération des fiches : sans contrainte, on pouvait pointer
+ * n'importe quel objet du bucket (photos d'intervention, pièces jointes) et
+ * l'exfiltrer dans un classeur Excel.
+ */
+function logoValide(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  const k = String(v);
+  if (!/^logos\/[A-Za-z0-9._-]+\.(png|jpe?g|gif)$/i.test(k)) {
+    throw new AppError('Chemin de logo invalide (attendu : logos/<fichier>.png|jpg|gif)', 400);
+  }
+  return k;
+}
+
 export async function getPrestataires(req: Request, res: Response, next: NextFunction) {
   try {
     const { search, is_active, is_transporteur, is_gardiennage, page = '1', limit = '20' } = req.query as Record<string, string>;
@@ -35,7 +52,11 @@ export async function getPrestataires(req: Request, res: Response, next: NextFun
       { where, orderBy: { nom: 'asc' }, include: { _count: { select: { assignments: true, sitesGardes: true } } } },
       { page: parseInt(page), limit: parseInt(limit) }
     );
-    res.json({ success: true, data, meta });
+    // Logo : URL signée (le bucket n'est plus lisible par simple chemin).
+    const avecLogo = (data as Array<{ logoPath: string | null }>).map((p) => ({
+      ...p, logoUrl: p.logoPath ? publicFileUrl(p.logoPath) : null,
+    }));
+    res.json({ success: true, data: avecLogo, meta });
   } catch (err) { next(err); }
 }
 
@@ -59,7 +80,7 @@ export async function createPrestataire(req: Request, res: Response, next: NextF
   try {
     const { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur, isGardiennage } = req.body;
     if (!nom) throw new AppError('Le nom est requis', 400);
-    const prestataire = await prisma.prestataire.create({ data: { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur: !!isTransporteur, isGardiennage: !!isGardiennage } });
+    const prestataire = await prisma.prestataire.create({ data: { nom, email, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath: logoValide(logoPath) ?? null, isTransporteur: !!isTransporteur, isGardiennage: !!isGardiennage } });
     if (prestataire.isGardiennage) await rapprocherSitesGardiennage(prestataire.id, prestataire.nom);
     await auditLog(req.user!.id, 'CREATE', 'prestataires', prestataire.id, { nom }, req);
     res.status(201).json({ success: true, data: prestataire });
@@ -73,7 +94,7 @@ export async function updatePrestataire(req: Request, res: Response, next: NextF
     const { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, isTransporteur, isGardiennage } = req.body;
     const updated = await prisma.prestataire.update({
       where: { id: req.params.id },
-      data: { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath, ...(isTransporteur !== undefined ? { isTransporteur: !!isTransporteur } : {}), ...(isGardiennage !== undefined ? { isGardiennage: !!isGardiennage } : {}) },
+      data: { nom, email, isActive, adresse, rccm, nif, contactCommercial, contactTechnique, logoPath: logoValide(logoPath), ...(isTransporteur !== undefined ? { isTransporteur: !!isTransporteur } : {}), ...(isGardiennage !== undefined ? { isGardiennage: !!isGardiennage } : {}) },
     });
     if (updated.isGardiennage) await rapprocherSitesGardiennage(updated.id, updated.nom);
     await auditLog(req.user!.id, 'UPDATE', 'prestataires', existing.id, req.body, req);
@@ -128,7 +149,7 @@ export async function getMaSociete(req: Request, res: Response, next: NextFuncti
     const prestataire = await prisma.prestataire.findUnique({ where: { id: me.prestataireId } });
     if (!prestataire) return res.json({ success: true, data: null });
     const manquants = champsManquants(prestataire as unknown as Record<string, unknown>);
-    res.json({ success: true, data: { ...prestataire, ficheComplete: manquants.length === 0, champsManquants: manquants } });
+    res.json({ success: true, data: { ...prestataire, logoUrl: prestataire.logoPath ? publicFileUrl(prestataire.logoPath) : null, ficheComplete: manquants.length === 0, champsManquants: manquants } });
   } catch (err) { next(err); }
 }
 

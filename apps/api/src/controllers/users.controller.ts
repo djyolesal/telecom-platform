@@ -176,10 +176,18 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
 
     const format = req.params.format || 'csv';
     if (format === 'csv') {
-      const header = 'Nom;Prénom;Email;Téléphone;Rôle;Région;Actif;Dernière connexion';
+      const header = ['Nom','Prénom','Email','Téléphone','Rôle','Région','Actif','Dernière connexion'].map((h) => `"${h}"`).join(';');
+      // Échappement CSV : un nom commençant par = + - @ est interprété comme une
+      // FORMULE par Excel (exécution DDE, exfiltration via HYPERLINK), et un
+      // point-virgule non protégé décale toutes les colonnes.
+      const csvCell = (v: unknown): string => {
+        const t = String(v ?? '');
+        const neutralise = /^[=+\-@\t\r]/.test(t) ? `'${t}` : t;
+        return `"${neutralise.replace(/"/g, '""')}"`;
+      };
       const lines = users.map((u) =>
         [u.nom, u.prenom, u.email, u.telephone ?? '', u.role, u.region ?? '',
-          u.isActive ? 'Oui' : 'Non', u.lastLoginAt?.toISOString() ?? ''].join(';')
+          u.isActive ? 'Oui' : 'Non', u.lastLoginAt?.toISOString() ?? ''].map(csvCell).join(';')
       );
       const csv = '﻿' + [header, ...lines].join('\n');
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');

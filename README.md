@@ -141,19 +141,28 @@ telecom-platform/
 
 ## 👥 Rôles utilisateurs
 
-| Rôle | Accès Mobile | Accès Web |
-|------|-------------|-----------|
-| TECHNICIEN | ✅ Saisie complète | ❌ |
-| SUPERVISEUR | ✅ + Assignation | ✅ Supervision + Rapports |
-| MANAGER | ✅ Lecture | ✅ Tout sauf Admin |
-| ADMIN | ❌ | ✅ Tout + Système |
-| DIRECTION | ❌ | ✅ Lecture seule |
+| Rôle | Accès Mobile | Accès Web | Périmètre |
+|------|-------------|-----------|-----------|
+| TECHNICIEN | ✅ Saisie complète (verrou d'appareil) | ❌ | Sites de ses lots |
+| TRANSPORTEUR | ✅ BL + dépotages uniquement | ✅ Ses seuls chargements | Ses propres BL |
+| SUPERVISEUR | ✅ + Assignation | ✅ Supervision + Rapports | Sites de son prestataire (si rattaché) |
+| NOC | ❌ | ✅ Coupures, topologie, incidents | Tout le réseau, lecture des seuls modules supervision |
+| MANAGER | ✅ Lecture | ✅ Tout sauf Admin | Tout le parc |
+| ADMIN | ❌ | ✅ Tout + Système | Tout le parc |
+| DIRECTION | ❌ | ✅ Lecture seule | Tout le parc |
+
+Le cloisonnement est appliqué côté API (`utils/perimetre.ts` + `rbac()`), pas
+seulement dans l'interface : un compte rattaché à un prestataire ne voit que
+les sites de ses lots et que ses collègues dans l'annuaire.
 
 ---
 
 ## 🔐 Sécurité
 
-- JWT access (15 min) + refresh token rotatif (30 j)
+- JWT access (durée `JWT_EXPIRES_IN`) + refresh token rotatif (30 j), session unique par plateforme
+- Verrou d'appareil des comptes terrain (le compte se lie au premier mobile)
+- Fichiers servis par URL signée à durée limitée (bucket MinIO privé)
+- CSP + HSTS + `frame-ancestors 'none'` sur le portail
 - HTTPS forcé via Nginx (TLS 1.2/1.3)
 - Rate limiting par IP (Nginx + Redis)
 - RBAC sur chaque endpoint API

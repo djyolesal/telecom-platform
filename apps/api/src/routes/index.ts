@@ -3,6 +3,10 @@ import { authMiddleware } from '../middlewares/auth';
 import { AppError } from '../utils/AppError';
 import { rbac } from '../middlewares/rbac';
 import { rateLimit } from '../middlewares/rateLimit';
+import { validate } from '../middlewares/validate';
+import {
+  loginSchema, forgotPasswordSchema, resetPasswordSchema, refreshTokenSchema, updatePasswordSchema,
+} from '../schemas/auth.schema';
 import { prisma as _prisma } from '../config/database';
 
 // Controllers
@@ -26,20 +30,28 @@ import * as tachesCtrl from '../controllers/taches.controller';
 import * as configCtrl from '../controllers/config.controller';
 import * as carburantCtrl from '../controllers/carburantLogistique.controller';
 import * as coupuresCtrl from '../controllers/coupuresReseau.controller';
-import { uploadMiddleware, uploadSpreadsheet } from '../middlewares/upload';
+import { uploadMiddleware, uploadSpreadsheet, verifierSignature } from '../middlewares/upload';
+import * as filesCtrl from '../controllers/files.controller';
 
 export const router = Router();
 
 // ── Auth (public) ─────────────────────────────────────────────
 // Anti-bruteforce : limite le débit des routes sensibles (par IP + email).
-const loginLimit = rateLimit({ windowSec: 900, max: 10, ipMax: 60, keyPrefix: 'login' }); // 10/compte + 60/IP par 15 min (anti-spraying)
-const resetLimit = rateLimit({ windowSec: 3600, max: 5, keyPrefix: 'pwreset' });      // 5 / h
+const loginLimit = rateLimit({ windowSec: 900, max: 10, ipMax: 60, keyPrefix: 'login', failClosed: true }); // 10/compte + 60/IP par 15 min (anti-spraying)
+const resetLimit = rateLimit({ windowSec: 3600, max: 5, keyPrefix: 'pwreset', failClosed: true });      // 5 / h
 // Génération lourde (PDF, exports xlsx/pdf, rapport mensuel) : plafond par IP anti-DoS applicatif.
 const heavyLimit = rateLimit({ windowSec: 60, max: 20, keyPrefix: 'heavy' });
-router.post('/auth/login', loginLimit, authCtrl.login);
-router.post('/auth/refresh-token', authCtrl.refreshToken);
-router.post('/auth/forgot-password', resetLimit, authCtrl.forgotPassword);
-router.post('/auth/reset-password', resetLimit, authCtrl.resetPassword);
+router.post('/auth/login', loginLimit, validate({ body: loginSchema }), authCtrl.login);
+// Limiteur AUSSI sur le refresh : c'était la seule route d'auth sans plafond.
+router.post('/auth/refresh-token', loginLimit, validate({ body: refreshTokenSchema }), authCtrl.refreshToken);
+router.post('/auth/forgot-password', resetLimit, validate({ body: forgotPasswordSchema }), authCtrl.forgotPassword);
+router.post('/auth/reset-password', resetLimit, validate({ body: resetPasswordSchema }), authCtrl.resetPassword);
+
+// ── Passerelle fichiers (signature HMAC, pas de session) ──────
+// Hors authMiddleware à dessein : une balise <img> ne peut pas poser d'en-tête
+// Authorization. L'URL est signée et expire (cf. storage.service).
+const fileLimit = rateLimit({ windowSec: 60, max: 300, keyPrefix: 'files' });
+router.get('/files/*', fileLimit, filesCtrl.servirFichier);
 
 // ── Auth (protégé) ────────────────────────────────────────────
 router.use(authMiddleware); // Tout ce qui suit requiert un JWT valide
@@ -131,7 +143,7 @@ router.use((req, res, next) => {
 
 router.post('/auth/logout', authCtrl.logout);
 router.get('/auth/me', authCtrl.getMe);
-router.put('/auth/me/password', authCtrl.updatePassword);
+router.put('/auth/me/password', validate({ body: updatePasswordSchema }), authCtrl.updatePassword);
 router.post('/auth/fcm-token', authCtrl.updateFcmToken);
 
 // ── Sites ─────────────────────────────────────────────────────
@@ -347,5 +359,5 @@ router.put('/notifications/:id/read', notifCtrl.markRead);
 router.put('/notifications/read-all', notifCtrl.markAllRead);
 
 // ── Upload ────────────────────────────────────────────────────
-router.post('/upload/image', uploadMiddleware.single('file'), uploadCtrl.uploadImage);
-router.post('/upload/document', uploadMiddleware.single('file'), uploadCtrl.uploadDocument);
+router.post('/upload/image', uploadMiddleware.single('file'), verifierSignature, uploadCtrl.uploadImage);
+router.post('/upload/document', uploadMiddleware.single('file'), verifierSignature, uploadCtrl.uploadDocument);

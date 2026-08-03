@@ -29,6 +29,8 @@ interface BL {
   id: string; numeroBL: string; mois: number; annee: number; immatriculation: string; numeroClient: string;
   volumeChargeLitres: number; dateChargement: string; dateTraitement?: string; statut: string; observations?: string;
   blPdfPath?: string; bordereauPdfPath?: string;
+  /** URLs signées fournies par l'API (le bucket n'est plus lisible par son chemin). */
+  blPdfUrl?: string | null; bordereauPdfUrl?: string | null;
   bonCommande?: { numero: string; annee: number; trimestre: number };
   transporteur?: { id: string; nom: string };
   lignes: Ligne[]; sommeLignes: number; coherenceCharge: boolean;
@@ -238,8 +240,8 @@ export default function BonLivraisonDetailPage() {
           {data.dateTraitement && <Row label="Date traitement" value={fmtDate(data.dateTraitement)} />}
           {(data.blPdfPath || data.bordereauPdfPath) && (
             <div className="flex gap-2 pt-3">
-              {data.blPdfPath && <a href={`/storage/telecom-files/${data.blPdfPath}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"><FileText size={13} className="text-red-500" /> PDF du BL</a>}
-              {data.bordereauPdfPath && <a href={`/storage/telecom-files/${data.bordereauPdfPath}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"><FileText size={13} className="text-red-500" /> Bordereau</a>}
+              {data.blPdfPath && <a href={data.blPdfUrl ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"><FileText size={13} className="text-red-500" /> PDF du BL</a>}
+              {data.bordereauPdfPath && <a href={data.bordereauPdfUrl ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"><FileText size={13} className="text-red-500" /> Bordereau</a>}
             </div>
           )}
         </div>
