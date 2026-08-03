@@ -26,6 +26,9 @@ export function NotificationBell() {
     queryKey: ['notifications'],
     queryFn: () => api.get('/notifications', { params: { limit: 10 } }).then((r) => r.data),
     refetchInterval: 60_000,
+    // staleTime aligné : sans lui, chaque tick refait un aller-retour réseau
+    // même si la donnée vient d'arriver (endpoints agrégés coûteux).
+    staleTime: 60_000,
   });
 
   const notifs: Notif[] = data?.data ?? [];

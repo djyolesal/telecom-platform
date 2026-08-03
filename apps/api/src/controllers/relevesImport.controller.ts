@@ -55,7 +55,12 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
     const purge = String(req.query.purge ?? '') === 'true';
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer, {
+      // Les nœuds de présentation (styles, images, mises en forme) représentent
+      // l'essentiel de la mémoire d'un .xlsx : 10 Mo de fichier donnaient
+      // 300-600 Mo de heap pour un conteneur limité à 1 Go.
+      ignoreNodes: ['dataValidations', 'drawing', 'hyperlinks', 'picture', 'styles', 'conditionalFormatting'],
+    });
     const ws = wb.worksheets[0];
     if (!ws || ws.rowCount < 2) throw new AppError('Fichier vide ou sans données.', 400);
 

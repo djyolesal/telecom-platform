@@ -738,7 +738,13 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
           OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
           ...(restreint ? { site: perimetre } : {}),
         },
-        include: { site: { select: { id: true, nom: true, region: true, lotId: true } } },
+        // `select` explicite : l'`include` seul ramenait TOUTES les colonnes,
+        // dont `observations` (text illimité) — 1 Ko par ligne au lieu de 200 o.
+        select: {
+          siteId: true, dateDebut: true, dateFin: true, typeAlarme: true,
+          causeCategorie: true, origine: true,
+          site: { select: { id: true, nom: true, region: true, lotId: true } },
+        },
       }),
       prisma.site.count({ where: whereSite }),
       restreint ? Promise.resolve([]) : prisma.lot.findMany({

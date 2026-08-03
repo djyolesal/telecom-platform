@@ -338,7 +338,12 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
     if (!req.file) throw new AppError('Aucun fichier reçu (champ "file").', 400);
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer, {
+      // Les nœuds de présentation (styles, images, mises en forme) représentent
+      // l'essentiel de la mémoire d'un .xlsx : 10 Mo de fichier donnaient
+      // 300-600 Mo de heap pour un conteneur limité à 1 Go.
+      ignoreNodes: ['dataValidations', 'drawing', 'hyperlinks', 'picture', 'styles', 'conditionalFormatting'],
+    });
     const ws = wb.worksheets[0];
     if (!ws || ws.rowCount < 2) throw new AppError('Fichier vide ou sans données.', 400);
 
@@ -351,6 +356,12 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
     if (colByField.code == null) {
       throw new AppError('Colonne "code" introuvable. Utilisez le modèle d\'import.', 422);
     }
+
+    // Tous les sites existants en UNE requête (clé : code) — l'import faisait
+    // 5 à 6 allers-retours SQL par ligne, soit ~90 s et un état à moitié
+    // importé en cas d'échec à 5 000 sites.
+    const tousSites = await prisma.site.findMany({ select: { id: true, code: true } });
+    const codesExistants = new Map(tousSites.map((x) => [x.code, x]));
 
     const POWER = Object.values(PowerConfig) as string[];
     const STATUT = Object.values(StatutGE) as string[];
@@ -450,7 +461,9 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           isActive: true,
         };
 
-        const existing = await prisma.site.findUnique({ where: { code } });
+        // Préchargé en une requête (voir `codesExistants`) : un findUnique par
+      // ligne, c'était 800 allers-retours pour un import de parc.
+      const existing = codesExistants.get(code) ?? null;
         let siteId: string;
         if (existing) {
           const upd = await prisma.site.update({ where: { code }, data });
@@ -459,6 +472,9 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
         } else {
           const cre = await prisma.site.create({ data: { ...data, code } });
           siteId = cre.id;
+          // Ajouté à l'index : un même code répété plus bas dans le fichier doit
+          // être traité comme une mise à jour, pas comme une seconde création.
+          codesExistants.set(code, { id: cre.id, code });
           results.created++;
         }
         // Synchronise le GE n°1 depuis statut/puissance (table dédiée).
@@ -733,7 +749,12 @@ export async function importTopologie(req: Request, res: Response, next: NextFun
     if (!req.file) throw new AppError('Aucun fichier reçu (champ "file").', 400);
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer, {
+      // Les nœuds de présentation (styles, images, mises en forme) représentent
+      // l'essentiel de la mémoire d'un .xlsx : 10 Mo de fichier donnaient
+      // 300-600 Mo de heap pour un conteneur limité à 1 Go.
+      ignoreNodes: ['dataValidations', 'drawing', 'hyperlinks', 'picture', 'styles', 'conditionalFormatting'],
+    });
     const ws = wb.worksheets[0];
     if (!ws || ws.rowCount < 2) throw new AppError('Fichier vide ou sans données.', 400);
 

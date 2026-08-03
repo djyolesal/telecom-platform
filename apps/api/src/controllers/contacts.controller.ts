@@ -118,7 +118,12 @@ export async function importContacts(req: Request, res: Response, next: NextFunc
   try {
     if (!req.file) throw new AppError('Fichier .xlsx requis (champ « file »)', 400);
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer);
+    await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer, {
+      // Les nœuds de présentation (styles, images, mises en forme) représentent
+      // l'essentiel de la mémoire d'un .xlsx : 10 Mo de fichier donnaient
+      // 300-600 Mo de heap pour un conteneur limité à 1 Go.
+      ignoreNodes: ['dataValidations', 'drawing', 'hyperlinks', 'picture', 'styles', 'conditionalFormatting'],
+    });
     const ws = wb.worksheets[0];
     if (!ws) throw new AppError('Classeur vide', 400);
 

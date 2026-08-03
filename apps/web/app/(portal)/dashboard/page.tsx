@@ -105,7 +105,10 @@ export default function DashboardPage() {
   const { data: dashData, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => api.get('/rapports/dashboard').then(r => r.data.data),
-    refetchInterval: 60_000, // Refresh toutes les minutes
+    refetchInterval: 60_000,
+    // staleTime aligné : sans lui, chaque tick refait un aller-retour réseau
+    // même si la donnée vient d'arriver (endpoints agrégés coûteux).
+    staleTime: 60_000, // Refresh toutes les minutes
   });
 
   // Écoute WebSocket pour mises à jour en temps réel + vignette dépotage.

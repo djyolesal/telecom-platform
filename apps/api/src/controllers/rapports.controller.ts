@@ -17,16 +17,16 @@ import { sitePerimetre, isRestreint } from '../utils/perimetre';
 
 /** Dernier relevé GE (volume gasoil) par site. */
 async function dernierStockParSite(): Promise<Map<string, number>> {
+  // `distinct` : une ligne par site au lieu de TOUT l'historique GE (28 000
+  // lignes chargées pour n'en garder que 800). Cette fonction alimente le
+  // tableau de bord ET le stock carburant, tous deux pollés toutes les 60 s.
   const releves = await prisma.releveEnergie.findMany({
     where: { source: 'GE', volumeGasoilLitres: { not: null } },
-    orderBy: { dateReleve: 'desc' },
-    select: { siteId: true, volumeGasoilLitres: true, dateReleve: true },
+    orderBy: [{ siteId: 'asc' }, { dateReleve: 'desc' }],
+    distinct: ['siteId'],
+    select: { siteId: true, volumeGasoilLitres: true },
   });
-  const map = new Map<string, number>();
-  for (const r of releves) {
-    if (!map.has(r.siteId)) map.set(r.siteId, Number(r.volumeGasoilLitres));
-  }
-  return map;
+  return new Map(releves.map((r) => [r.siteId, Number(r.volumeGasoilLitres)]));
 }
 
 // ── Dashboard principal ──────────────────────────────────────

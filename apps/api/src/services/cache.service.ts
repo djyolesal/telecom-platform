@@ -28,8 +28,15 @@ export const cacheService = {
   async invalidate(keyOrPattern: string): Promise<void> {
     try {
       if (keyOrPattern.includes('*')) {
-        const keys = await redisClient.keys(keyOrPattern);
-        if (keys.length) await redisClient.del(keys);
+        // SCAN (curseur, non bloquant) plutôt que KEYS : cette invalidation part
+        // à chaque écriture de site, et KEYS est O(N) BLOQUANT — sur un keyspace
+        // important il gelait Redis, donc le cache ET le rate-limit de toute l'API.
+        let cursor = 0;
+        do {
+          const lot = await redisClient.scan(cursor, { MATCH: keyOrPattern, COUNT: 200 });
+          cursor = Number(lot.cursor);
+          if (lot.keys.length) await redisClient.del(lot.keys);
+        } while (cursor !== 0);
       } else {
         await redisClient.del(keyOrPattern);
       }

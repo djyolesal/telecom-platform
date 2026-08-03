@@ -18,11 +18,17 @@ export default function AlertesPage() {
     queryKey: ['stock'],
     queryFn: () => api.get('/rapports/stock-carburant').then((r) => r.data.data),
     refetchInterval: 60_000,
+    // staleTime aligné : sans lui, chaque tick refait un aller-retour réseau
+    // même si la donnée vient d'arriver (endpoints agrégés coûteux).
+    staleTime: 60_000,
   });
   const { data: incData, isLoading: l2 } = useQuery({
     queryKey: ['incidents', { alertes: true }],
     queryFn: () => api.get('/incidents', { params: { severite: 'CRITIQUE', statut: 'OUVERT', limit: 50 } }).then((r) => r.data),
     refetchInterval: 30_000,
+    // staleTime aligné : sans lui, chaque tick refait un aller-retour réseau
+    // même si la donnée vient d'arriver (endpoints agrégés coûteux).
+    staleTime: 30_000,
   });
 
   const sitesAlerte = (stockData?.sites ?? []).filter((s: { niveauAlerte: string }) => ['VIDE', 'CRITIQUE'].includes(s.niveauAlerte));

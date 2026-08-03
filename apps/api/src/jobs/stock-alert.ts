@@ -15,17 +15,22 @@ export async function stockAlertJob(): Promise<void> {
   // Dernier niveau de cuve relevé par site (+ date, pour rejouer les dépotages postérieurs)
   const releves = await prisma.releveEnergie.findMany({
     where: { source: 'GE', volumeGasoilLitres: { not: null } },
-    orderBy: { dateReleve: 'desc' },
+    orderBy: [{ siteId: 'asc' }, { dateReleve: 'desc' }],
+    distinct: ['siteId'],
     select: { siteId: true, volumeGasoilLitres: true, dateReleve: true },
   });
   const stockMap = new Map<string, number>();
   const dateMap = new Map<string, Date>();
-  for (const r of releves) {
-    if (!stockMap.has(r.siteId)) { stockMap.set(r.siteId, Number(r.volumeGasoilLitres)); dateMap.set(r.siteId, r.dateReleve); }
-  }
+  for (const r of releves) { stockMap.set(r.siteId, Number(r.volumeGasoilLitres)); dateMap.set(r.siteId, r.dateReleve); }
 
   // Dépotages postérieurs au dernier relevé → cuve réapprovisionnée (cohérent avec le forecast).
-  const depots = await prisma.depotage.findMany({ select: { siteId: true, dateDepotage: true, volumeLitres: true } });
+  // Bornés au plus ancien relevé de référence : charger TOUTE la table des
+  // dépotages depuis la création du parc était une croissance sans fin.
+  const plusAncienReleve = [...dateMap.values()].reduce<Date | null>((min, d) => (!min || d < min ? d : min), null);
+  const depots = await prisma.depotage.findMany({
+    where: plusAncienReleve ? { dateDepotage: { gte: plusAncienReleve } } : {},
+    select: { siteId: true, dateDepotage: true, volumeLitres: true },
+  });
   const depotMap = new Map<string, number>();
   for (const d of depots) {
     const ref = dateMap.get(d.siteId);

@@ -12,6 +12,7 @@ import { Button } from '@/components/shared/Button';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { couleurLiaison, useTypesLiaison } from '@/lib/liaisons';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface SiteNode {
   id: string;
@@ -30,6 +31,7 @@ interface Arbre { racine: SiteNode; taille: number }
  */
 export default function TopologiePage() {
   const [recherche, setRecherche] = useState('');
+  const termeDebounce = useDebounce(recherche);
   const [vue, setVue] = useState<'graphe' | 'liste'>('graphe');
   const [showImport, setShowImport] = useState(false);
   const { data: session } = useSession();
@@ -49,9 +51,12 @@ export default function TopologiePage() {
     queryFn: () => api.get('/coupures-reseau', { params: { statut: 'EN_COURS', limit: 200 } })
       .then((r) => r.data.data as { siteId?: string; site?: { nom: string } }[]),
     refetchInterval: 60_000,
+    // staleTime aligné : sans lui, chaque tick refait un aller-retour réseau
+    // même si la donnée vient d'arriver (endpoints agrégés coûteux).
+    staleTime: 60_000,
   });
 
-  const { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes, liaisonsCritiques } = useMemo(() => {
+  const { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes, liaisonsCritiques, parId, arbresTouches } = useMemo(() => {
     const tous = sites ?? [];
     const enfants = new Map<string, SiteNode[]>();
     const parId = new Map(tous.map((s) => [s.id, s]));
@@ -66,8 +71,16 @@ export default function TopologiePage() {
     enfants.forEach((l) => l.sort((a, b) => a.nom.localeCompare(b.nom)));
 
     // Racines des arbres : sites SANS parent qui ont de l'aval.
-    const taille = (id: string): number =>
-      (enfants.get(id) ?? []).reduce((n, e) => n + 1 + taille(e.id), 0);
+    // Mémoïsée : sans cache, `taille` était recalculée intégralement pour chaque
+    // arbre PUIS pour chaque liaison critique (~786 traversées complètes).
+    const cacheTaille = new Map<string, number>();
+    const taille = (id: string): number => {
+      const connu = cacheTaille.get(id);
+      if (connu !== undefined) return connu;
+      const n = (enfants.get(id) ?? []).reduce((acc, e) => acc + 1 + taille(e.id), 0);
+      cacheTaille.set(id, n);
+      return n;
+    };
     const arbres: Arbre[] = tous
       .filter((s) => (!s.parentTransmissionId || !parId.has(s.parentTransmissionId)) && enfants.has(s.id))
       .map((s) => ({ racine: s, taille: 1 + taille(s.id) }))
@@ -92,7 +105,22 @@ export default function TopologiePage() {
       .sort((a, b) => b.poids - a.poids)
       .slice(0, 8);
 
-    return { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes, liaisonsCritiques };
+    // Arbres « touchés » précalculés : la carte testait, POUR CHAQUE arbre,
+    // chaque site impacté contre tout le sous-arbre (produit cartésien, relancé
+    // à chaque rafraîchissement des coupures).
+    const arbreDe = new Map<string, string>(); // site → racine de son arbre
+    const marquerArbre = (racineId: string, id: string) => {
+      arbreDe.set(id, racineId);
+      for (const e of enfants.get(id) ?? []) marquerArbre(racineId, e.id);
+    };
+    for (const a of arbres) marquerArbre(a.racine.id, a.racine.id);
+    const arbresTouches = new Set<string>();
+    for (const id of [...sitesDown, ...sitesImpactes]) {
+      const r = arbreDe.get(id);
+      if (r) arbresTouches.add(r);
+    }
+
+    return { enfants, arbres, nbLiaisons, sitesDown, sitesImpactes, liaisonsCritiques, parId, arbresTouches };
   }, [sites, coupures]);
 
   // Comptage des liaisons déclarées par type (seuls les sites AVEC parent comptent).
@@ -107,13 +135,19 @@ export default function TopologiePage() {
   if (isLoading) return <Loading />;
   if (isError || !sites) return <ErrorState message="Topologie indisponible" />;
 
-  const terme = recherche.trim().toLowerCase();
-  const arbreContient = (id: string): boolean => {
-    const s = (sites ?? []).find((x) => x.id === id);
-    if (s && s.nom.toLowerCase().includes(terme)) return true;
-    return (enfants.get(id) ?? []).some((e) => arbreContient(e.id));
-  };
-  const arbresVisibles = terme ? arbres.filter((a) => arbreContient(a.racine.id)) : arbres;
+  // Recherche débouncée + Map d'index : le `.find()` linéaire dans une récursion
+  // coûtait ~630 000 comparaisons PAR FRAPPE sur 786 nœuds (saisie saccadée),
+  // et le calcul se refaisait à chaque rendu (donc à chaque tick de 60 s).
+  const terme = termeDebounce.trim().toLowerCase();
+  const arbresVisibles = useMemo(() => {
+    if (!terme) return arbres;
+    const contient = (id: string): boolean => {
+      const n = parId.get(id);
+      if (n && n.nom.toLowerCase().includes(terme)) return true;
+      return (enfants.get(id) ?? []).some((e) => contient(e.id));
+    };
+    return arbres.filter((a) => contient(a.racine.id));
+  }, [terme, arbres, enfants, parId]);
   const nbDirectsSansAval = sites.length - nbLiaisons - arbres.length;
 
   return (
@@ -239,7 +273,17 @@ export default function TopologiePage() {
       ) : (
         <div className="space-y-4">
           {arbresVisibles.map((a) => (
-            <ArbreCard key={a.racine.id} arbre={a} enfants={enfants} sitesDown={sitesDown} sitesImpactes={sitesImpactes} terme={terme} vue={vue} />
+            <ArbreCard
+              key={a.racine.id}
+              arbre={a}
+              enfants={enfants}
+              sitesDown={sitesDown}
+              sitesImpactes={sitesImpactes}
+              terme={terme}
+              vue={vue}
+              estTouche={arbresTouches.has(a.racine.id)}
+              defaultOuvert={arbresVisibles.length <= 20}
+            />
           ))}
           {arbresVisibles.length === 0 && (
             <div className="rounded-xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-400">
@@ -338,16 +382,19 @@ function ImportTopologieModal({ onClose, onDone }: { onClose: () => void; onDone
   );
 }
 
-function ArbreCard({ arbre, enfants, sitesDown, sitesImpactes, terme, vue }: {
+function ArbreCard({ arbre, enfants, sitesDown, sitesImpactes, terme, vue, estTouche, defaultOuvert }: {
   arbre: Arbre;
   enfants: Map<string, SiteNode[]>;
   sitesDown: Set<string>;
   sitesImpactes: Set<string>;
   terme: string;
   vue: 'graphe' | 'liste';
+  estTouche: boolean;
+  /** Au-delà de 20 chaînes, tout ouvrir rendait des milliers de nœuds SVG. */
+  defaultOuvert: boolean;
 }) {
-  const [ouvert, setOuvert] = useState(true);
-  const touche = sitesDown.has(arbre.racine.id) || [...sitesImpactes].some((id) => sousArbreContientId(arbre.racine.id, id, enfants));
+  const [ouvert, setOuvert] = useState(defaultOuvert);
+  const touche = estTouche;
   return (
     <div className={`rounded-xl border bg-white ${touche ? 'border-red-200' : 'border-gray-100'}`}>
       <button
@@ -587,11 +634,6 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
       </div>
     </div>
   );
-}
-
-function sousArbreContientId(racineId: string, chercheId: string, enfants: Map<string, SiteNode[]>): boolean {
-  if (racineId === chercheId) return true;
-  return (enfants.get(racineId) ?? []).some((e) => sousArbreContientId(e.id, chercheId, enfants));
 }
 
 function Noeud({ site, enfants, sitesDown, sitesImpactes, terme, profondeur }: {

@@ -30,6 +30,9 @@ export default function SupervisionIncidentsPage() {
     queryKey: ['incidents', { live: true }],
     queryFn: () => api.get('/incidents', { params: { limit: 100 } }).then((r) => r.data),
     refetchInterval: 30_000,
+    // staleTime aligné : sans lui, chaque tick refait un aller-retour réseau
+    // même si la donnée vient d'arriver (endpoints agrégés coûteux).
+    staleTime: 30_000,
   });
 
   const actifs: Incident[] = (data?.data ?? []).filter((i: Incident) => i.statut === 'OUVERT' || i.statut === 'EN_COURS');
