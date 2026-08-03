@@ -60,6 +60,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
 
   interface BlExtrait {
     page: number; numeroBL: string | null; bcNumero: string | null; dateBL: string | null;
+    dateTraitement: string | null;
     immatriculation: string | null; volumeChargeLitres: number | null; avertissements: string[];
   }
   const [extraits, setExtraits] = useState<BlExtrait[]>([]);
@@ -77,10 +78,11 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
       numeroBL: d.numeroBL ?? f.numeroBL,
       immatriculation: d.immatriculation ?? f.immatriculation,
       volumeChargeLitres: d.volumeChargeLitres != null ? String(d.volumeChargeLitres) : f.volumeChargeLitres,
-      // La date du document est la date de TRAITEMENT du BL — jamais celle du
-      // chargement, qui ne figure pas sur le papier et reste à saisir à la main.
+      // La date de traitement est celle qui SUIT le n° de bon de commande sur le
+      // document (« BC N°PO… / 04.08.2025 ») — jamais la date de chargement, qui
+      // ne figure pas sur le papier et reste à saisir à la main.
     }));
-    setDateTraitement(isoDe(d.dateBL) ?? '');
+    setDateTraitement(isoDe(d.dateTraitement) ?? '');
     const av = [...d.avertissements];
     // Le BL référence son BC : alerter si ce n'est pas celui de la page courante.
     if (d.bcNumero && d.bcNumero !== bc.numero) {

@@ -15,9 +15,11 @@ const run = promisify(execFile);
  * chaque page exploitable produit une extraction.
  *
  * Champs du document réel :
- *   Référence / Date : 3030729534 / 07.08.2025   → n° BL + date de traitement
+ *   Référence / Date : 3030729534 / 07.08.2025   → n° BL + date du BL
  *   Votre N° Client : 116129                     → n° client
- *   Réf. cde. Client : BC N°PO250300014          → n° du bon de commande
+ *   Réf. cde. Client : BC N°PO250300014 / 04.08.2025
+ *       → n° du bon de commande, suivi de la DATE DE TRAITEMENT (qui passe
+ *         souvent à la ligne sur le scan)
  *   TG 0688 AH (colonne Description)             → immatriculation camion
  *   Quantité 15.000,000 L                        → volume chargé
  */
@@ -27,7 +29,8 @@ export interface ExtractionBL {
   numeroBL: string | null;
   numeroClient: string | null;
   bcNumero: string | null;
-  dateBL: string | null; // JJ/MM/AAAA
+  dateBL: string | null; // date de la ligne « Référence » (JJ/MM/AAAA)
+  dateTraitement: string | null; // date après le n° de BC (JJ/MM/AAAA)
   immatriculation: string | null;
   volumeChargeLitres: number | null;
   avertissements: string[];
@@ -51,9 +54,11 @@ export function extraireChampsBL(texte: string, page: number): ExtractionBL {
   const mClient = t.match(/N[°ºo]\s*Client\s*:?\s*(\d{4,10})/i);
   const numeroClient = mClient ? mClient[1] : null;
 
-  // « Réf. cde. Client / Date : BC N°PO250300014 » — rattache le BL à son BC.
-  const mBc = t.match(/BC\s*N[°ºo]?\s*(P[O0]\s?\d{6,12})/i);
+  // « Réf. cde. Client / Date : BC N°PO250300014 / 04.08.2025 » — n° du BC,
+  // suivi de la DATE DE TRAITEMENT (souvent rejetée à la ligne par le scan).
+  const mBc = t.match(/BC\s*N[°ºo]?\s*(P[O0]\s?\d{6,12})\s*\/?\s*(\d{2}[./]\d{2}[./]\d{4})?/i);
   const bcNumero = mBc ? `PO${mBc[1].replace(/^P[O0]\s?/i, '')}` : null;
+  const dateTraitement = mBc?.[2] ? mBc[2].replace(/\./g, '/') : null;
   if (!bcNumero) avertissements.push('N° du bon de commande (BC N°POxxxxxxxxx) non trouvé — sélectionnez-le manuellement.');
 
   // Plaque togolaise : TG + 4 chiffres + 2 lettres (dans la colonne Description).
@@ -71,7 +76,7 @@ export function extraireChampsBL(texte: string, page: number): ExtractionBL {
   }
   if (volumeChargeLitres == null) avertissements.push('Volume chargé (colonne Quantité) illisible — à saisir manuellement.');
 
-  return { page, numeroBL, numeroClient, bcNumero, dateBL, immatriculation, volumeChargeLitres, avertissements };
+  return { page, numeroBL, numeroClient, bcNumero, dateBL, dateTraitement, immatriculation, volumeChargeLitres, avertissements };
 }
 
 /** Une page est exploitable si au moins un champ clef en est sorti. */

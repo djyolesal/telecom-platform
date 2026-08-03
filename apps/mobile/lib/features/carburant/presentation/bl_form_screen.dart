@@ -113,9 +113,9 @@ class _BlFormScreenState extends State<BlFormScreen> {
         if (d.numeroBL != null) _numeroBL.text = d.numeroBL!;
         if (d.immatriculation != null) _immat.text = d.immatriculation!;
         if (d.volumeChargeLitres != null) _volume.text = d.volumeChargeLitres!.toString();
-        // La date lue sur le BL est celle de son TRAITEMENT — pas du chargement,
-        // qui ne figure pas sur le papier et reste à saisir à la main.
-        _dateTraitement = d.date;
+        // Date de traitement = celle qui SUIT le n° de bon de commande sur le
+        // document — la date de chargement, elle, reste à saisir à la main.
+        _dateTraitement = d.traitement;
         // Présélection du BC référencé sur le document (« BC N°POxxxxxxxxx »).
         final bcNumero = d.bcNumero;
         final avert = List<String>.from(d.avertissements);

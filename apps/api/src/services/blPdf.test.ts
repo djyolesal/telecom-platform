@@ -24,6 +24,9 @@ describe('extraireChampsBL', () => {
     expect(r.numeroClient).toBe('116129');
     expect(r.bcNumero).toBe('PO250300014');
     expect(r.dateBL).toBe('07/08/2025');
+    // La date de traitement est celle qui suit le n° de BC (passée à la ligne
+    // sur le scan réel : « BC N°PO250300014 /\n04.08.2025 »).
+    expect(r.dateTraitement).toBe('04/08/2025');
     expect(r.immatriculation).toBe('TG 0688 AH');
     expect(r.volumeChargeLitres).toBe(15000);
     expect(r.avertissements).toEqual([]);

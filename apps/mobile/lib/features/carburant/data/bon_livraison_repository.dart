@@ -10,27 +10,31 @@ import 'depotage_model.dart';
 class BlExtrait {
   final String? numeroBL;
   final String? bcNumero;
-  final String? dateBL; // JJ/MM/AAAA
+  final String? dateBL; // date de la ligne « Référence » (JJ/MM/AAAA)
+  final String? dateTraitement; // date après le n° de BC (JJ/MM/AAAA)
   final String? immatriculation;
   final int? volumeChargeLitres;
   final List<String> avertissements;
 
-  const BlExtrait({this.numeroBL, this.bcNumero, this.dateBL, this.immatriculation, this.volumeChargeLitres, this.avertissements = const []});
+  const BlExtrait({this.numeroBL, this.bcNumero, this.dateBL, this.dateTraitement, this.immatriculation, this.volumeChargeLitres, this.avertissements = const []});
 
   factory BlExtrait.fromJson(Map<String, dynamic> j) => BlExtrait(
         numeroBL: j['numeroBL'] as String?,
         bcNumero: j['bcNumero'] as String?,
         dateBL: j['dateBL'] as String?,
+        dateTraitement: j['dateTraitement'] as String?,
         immatriculation: j['immatriculation'] as String?,
         volumeChargeLitres: (j['volumeChargeLitres'] as num?)?.toInt(),
         avertissements: ((j['avertissements'] as List?) ?? const []).map((e) => e.toString()).toList(),
       );
 
-  DateTime? get date {
-    final d = dateBL;
+  static DateTime? _parse(String? d) {
     if (d == null || d.length != 10) return null;
     return DateTime.tryParse('${d.substring(6)}-${d.substring(3, 5)}-${d.substring(0, 2)}');
   }
+
+  /// Date de TRAITEMENT du BL (celle qui suit le n° de bon de commande).
+  DateTime? get traitement => _parse(dateTraitement);
 }
 
 class AnalyseBlResult {
