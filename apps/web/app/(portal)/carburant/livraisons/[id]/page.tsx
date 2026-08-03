@@ -139,7 +139,10 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
     numeroBL: bl.numeroBL.startsWith('BR-') ? '' : bl.numeroBL,
     immatriculation: bl.immatriculation === 'À AFFECTER' ? '' : bl.immatriculation,
     volumeChargeLitres: String(Math.round(Number(bl.volumeChargeLitres))),
-    dateChargement: bl.dateChargement ? bl.dateChargement.slice(0, 10) : todayStr(),
+    // Brouillon (réappro prédictif) : la date de chargement stockée est fabriquée
+    // (date de planification). On la laisse VIDE pour forcer la saisie de la
+    // date réelle du camion à la finalisation ; sinon on garde la date existante.
+    dateChargement: bl.numeroBL.startsWith('BR-') ? '' : (bl.dateChargement ? bl.dateChargement.slice(0, 10) : ''),
     transporteurId: bl.transporteur?.id ?? '',
     statut: bl.statut,
   });

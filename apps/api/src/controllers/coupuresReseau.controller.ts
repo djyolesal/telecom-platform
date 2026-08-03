@@ -215,6 +215,18 @@ async function detecterHeriteesImport(depuis?: Date): Promise<number> {
       }
       if (!racineSiteId) continue;
       const lignesRacine = parSite.get(racineSiteId)!;
+      // La propagation à l'aval n'a de sens que si l'ancêtre est ENTIÈREMENT
+      // tombé (perte d'énergie → perte du lien). Une coupure PARTIELLE de
+      // l'amont (une techno down, site alimenté) laisse la transmission en
+      // service : les lignes aval sont des pannes LOCALES, pas des héritées.
+      // Sans ce contrôle, une simple coïncidence de fenêtre (l'opérateur
+      // horodate un lot à la même minute) masquait une panne locale réelle
+      // (ni incident, ni imputation SLA). Règle alignée sur createCoupure et
+      // rattacherIncidentsCoupures.
+      const technosRacine = new Set(lignesRacine.map((l) => l.technologie));
+      const racineSiteEntier = technosRacine.has('SITE')
+        || ['2G', '3G', '4G', '5G'].every((t) => technosRacine.has(t));
+      if (!racineSiteEntier) continue;
       const racine = lignesRacine.find((l) => l.technologie === 'SITE') ?? lignesRacine[0];
       for (const l of lignes) {
         if (l.incidentId) continue; // incident déjà dispatché → on ne réécrit pas l'histoire

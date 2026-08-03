@@ -471,7 +471,20 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     if (numeroBL != null) {
       data.numeroBL = String(numeroBL).trim();
       // La finalisation d'un brouillon (vrai numéro) est réservée au manager/admin.
-      if (!String(numeroBL).trim().startsWith('BR-') && !isTransporteur) data.isBrouillon = false;
+      if (!String(numeroBL).trim().startsWith('BR-') && !isTransporteur) {
+        data.isBrouillon = false;
+        // Un brouillon (réappro prédictif) porte une date de chargement FABRIQUÉE
+        // (new Date() à la génération). À la finalisation, exiger la VRAIE date
+        // du chargement : sans cela la date de planification devenait officielle
+        // et faussait l'ancienneté et les alertes « en retard ».
+        if (existing.isBrouillon && dateChargement == null) {
+          throw new AppError('Saisissez la date réelle de chargement du camion pour finaliser ce brouillon.', 400);
+        }
+      }
+    }
+    if (dateChargement != null) {
+      const dc = new Date(String(dateChargement));
+      if (Number.isNaN(dc.getTime())) throw new AppError('Date de chargement invalide', 400);
     }
     if (mois != null) {
       const m = Math.trunc(n(mois));
