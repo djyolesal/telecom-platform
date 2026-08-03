@@ -132,12 +132,13 @@ export default function TopologiePage() {
     return [...compte.entries()].sort((a, b) => b[1] - a[1]);
   }, [sites]);
 
-  if (isLoading) return <Loading />;
-  if (isError || !sites) return <ErrorState message="Topologie indisponible" />;
-
   // Recherche débouncée + Map d'index : le `.find()` linéaire dans une récursion
   // coûtait ~630 000 comparaisons PAR FRAPPE sur 786 nœuds (saisie saccadée),
   // et le calcul se refaisait à chaque rendu (donc à chaque tick de 60 s).
+  // IMPÉRATIVEMENT AVANT les `return` anticipés : un hook après un retour
+  // conditionnel change le nombre de hooks entre deux rendus — React lève
+  // « Rendered more hooks than during the previous render » dès que le
+  // chargement se termine (page entière en erreur côté client).
   const terme = termeDebounce.trim().toLowerCase();
   const arbresVisibles = useMemo(() => {
     if (!terme) return arbres;
@@ -148,6 +149,10 @@ export default function TopologiePage() {
     };
     return arbres.filter((a) => contient(a.racine.id));
   }, [terme, arbres, enfants, parId]);
+
+  if (isLoading) return <Loading />;
+  if (isError || !sites) return <ErrorState message="Topologie indisponible" />;
+
   const nbDirectsSansAval = sites.length - nbLiaisons - arbres.length;
 
   return (
