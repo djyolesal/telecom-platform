@@ -123,16 +123,49 @@ export async function getBonCommandeById(req: Request, res: Response, next: Next
       bc.bonsLivraison = bc.bonsLivraison.filter((bl) => bl.transporteurId === moi);
     }
 
-    // Suivi commandé vs livré, par mois.
+    // Suivi par mois. On distingue CHARGÉ (monté dans le camion) et LIVRÉ
+    // (réellement dépoté sur les sites) : la colonne était intitulée « livré »
+    // alors qu'elle portait le chargé — le manager pilotait son trimestre sur un
+    // chiffre qui ignorait tout ce qui n'était pas descendu du camion.
     const charge = new Map<number, number>();
+    const blIds: string[] = [];
+    const moisParBl = new Map<string, number>();
     for (const bl of bc.bonsLivraison) {
       if (bl.statut === 'ANNULE' || bl.isBrouillon) continue; // brouillon = pas un chargement réel
       charge.set(bl.mois, (charge.get(bl.mois) ?? 0) + n(bl.volumeChargeLitres));
+      blIds.push(bl.id);
+      moisParBl.set(bl.id, bl.mois);
     }
+
+    // Volumes réellement dépotés, rattachés au mois du chargement d'origine.
+    const livreParMois = new Map<number, number>();
+    if (blIds.length) {
+      const deps = await prisma.depotage.findMany({
+        where: { ligneLivraison: { bonLivraisonId: { in: blIds } } },
+        select: { volumeLitres: true, ligneLivraison: { select: { bonLivraisonId: true } } },
+      });
+      for (const d of deps) {
+        const mois = moisParBl.get(d.ligneLivraison?.bonLivraisonId ?? '');
+        if (mois != null) livreParMois.set(mois, (livreParMois.get(mois) ?? 0) + n(d.volumeLitres));
+      }
+    }
+
     const suivi = bc.volumesMensuels.map((vm) => {
-      const livre = charge.get(vm.mois) ?? 0;
+      const chargeMois = charge.get(vm.mois) ?? 0;
+      const livreMois = livreParMois.get(vm.mois) ?? 0;
       const prevu = n(vm.volumePrevuLitres);
-      return { mois: vm.mois, prevu, livre, ecart: livre - prevu, depassement: livre > prevu + TOLERANCE_L };
+      return {
+        mois: vm.mois,
+        prevu,
+        charge: chargeMois,
+        livre: livreMois,
+        // `ecart` reste calculé sur le CHARGÉ : c'est lui qui engage le BC
+        // vis-à-vis du fournisseur (le dépassement se juge à la commande).
+        ecart: chargeMois - prevu,
+        depassement: chargeMois > prevu + TOLERANCE_L,
+        // Ce qui est monté dans le camion mais pas encore descendu.
+        enCours: Math.max(0, chargeMois - livreMois),
+      };
     });
 
     // URL signée : le bucket n'est plus lisible publiquement par son chemin.
@@ -530,7 +563,27 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     if (dateChargement != null) data.dateChargement = new Date(dateChargement);
     if (dateTraitement !== undefined) data.dateTraitement = dateTraitement ? new Date(dateTraitement) : null;
     if (observations !== undefined) data.observations = observations;
-    if (statut != null) data.statut = statut;
+    if (statut != null) {
+      // ANNULER un BL le retire de TOUS les rapports (manquants 4 niveaux, suivi
+      // du BC, alerte quotidienne) alors que ses dépotages restent comptés dans
+      // le stock. Sans garde, un TRANSPORTEUR pouvait donc effacer son propre
+      // manquant d'un clic — la suppression était protégée, pas l'annulation.
+      if (statut === 'ANNULE' && existing.statut !== 'ANNULE') {
+        if (isTransporteur) throw new AppError("L'annulation d'un bon de livraison est réservée au pilotage.", 403);
+        const depotagesLies = await prisma.depotage.count({ where: { ligneLivraison: { bonLivraisonId: existing.id } } });
+        if (depotagesLies > 0) {
+          throw new AppError(
+            `Annulation refusée : ${depotagesLies} dépotage(s) sont rattachés à ce bon de livraison. ` +
+            `Le carburant a été livré — corrigez les dépotages avant d'annuler.`,
+            409
+          );
+        }
+        const motif = String((req.body as Record<string, unknown>).motifAnnulation ?? '').trim();
+        if (motif.length < 5) throw new AppError("Motif d'annulation requis (5 caractères minimum).", 400);
+        data.observations = `${existing.observations ? existing.observations + '\n' : ''}[ANNULÉ] ${motif}`;
+      }
+      data.statut = statut;
+    }
     if (blPdfPath !== undefined) data.blPdfPath = cleMinioValide(blPdfPath);
     if (bordereauPdfPath !== undefined) data.bordereauPdfPath = cleMinioValide(bordereauPdfPath);
     if (transporteurId !== undefined && !isTransporteur) {

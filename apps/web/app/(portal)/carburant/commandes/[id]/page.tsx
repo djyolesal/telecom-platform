@@ -19,7 +19,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const BL_COLORS: Record<string, string> = { PLANIFIE: 'bg-amber-100 text-amber-700', CHARGE: 'bg-blue-100 text-blue-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 
 interface Transporteur { id: string; nom: string }
-interface Suivi { mois: number; prevu: number; livre: number; ecart: number; depassement: boolean }
+interface Suivi { mois: number; prevu: number; charge: number; livre: number; ecart: number; depassement: boolean; enCours: number }
 interface BL { id: string; numeroBL: string; mois: number; immatriculation: string; volumeChargeLitres: number; dateChargement: string; statut: string; isBrouillon?: boolean; _count?: { lignes: number } }
 interface BC {
   id: string; numero: string; annee: number; trimestre: number; numeroClient: string | null; statut: string; observations?: string; bcPdfPath?: string;
@@ -261,6 +261,7 @@ export default function BonCommandeDetailPage() {
   if (isError || !data) return <div className="p-6"><ErrorState /></div>;
 
   const totalPrevu = data.suivi.reduce((s, v) => s + v.prevu, 0);
+  const totalCharge = data.suivi.reduce((s, v) => s + v.charge, 0);
   const totalLivre = data.suivi.reduce((s, v) => s + v.livre, 0);
 
   return (
@@ -286,9 +287,11 @@ export default function BonCommandeDetailPage() {
           <thead>
             <tr className="text-gray-500 text-xs border-b">
               <th className="text-left py-2">Mois</th>
-              <th className="text-right">Prévu (L)</th>
-              <th className="text-right">Livré (L)</th>
-              <th className="text-right">Écart</th>
+              <th className="text-right">Commandé (L)</th>
+              <th className="text-right">Chargé (L)</th>
+              <th className="text-right">Livré sur sites (L)</th>
+              <th className="text-right">En cours</th>
+              <th className="text-right">Écart / commande</th>
             </tr>
           </thead>
           <tbody>
@@ -296,7 +299,11 @@ export default function BonCommandeDetailPage() {
               <tr key={v.mois} className="border-b last:border-0">
                 <td className="py-2">{MOIS[v.mois]}</td>
                 <td className="text-right">{fmtNumber(v.prevu)}</td>
+                <td className="text-right">{fmtNumber(v.charge)}</td>
                 <td className="text-right">{fmtNumber(v.livre)}</td>
+                <td className={`text-right ${v.enCours > TOL ? 'text-amber-600' : 'text-gray-400'}`}>
+                  {v.enCours > TOL ? fmtNumber(v.enCours) : '—'}
+                </td>
                 <td className={`text-right font-medium ${v.depassement ? 'text-red-600' : v.ecart < -TOL ? 'text-amber-600' : 'text-green-600'}`}>
                   {v.ecart > 0 ? '+' : ''}{fmtNumber(v.ecart)}
                 </td>
@@ -305,8 +312,12 @@ export default function BonCommandeDetailPage() {
             <tr className="font-semibold">
               <td className="py-2">Total</td>
               <td className="text-right">{fmtNumber(totalPrevu)}</td>
+              <td className="text-right">{fmtNumber(totalCharge)}</td>
               <td className="text-right">{fmtNumber(totalLivre)}</td>
-              <td className={`text-right ${totalLivre > totalPrevu + TOL ? 'text-red-600' : 'text-gray-700'}`}>{totalLivre - totalPrevu > 0 ? '+' : ''}{fmtNumber(totalLivre - totalPrevu)}</td>
+              <td className={`text-right ${totalCharge - totalLivre > TOL ? 'text-amber-600' : 'text-gray-400'}`}>
+                {totalCharge - totalLivre > TOL ? fmtNumber(totalCharge - totalLivre) : '—'}
+              </td>
+              <td className={`text-right ${totalCharge > totalPrevu + TOL ? 'text-red-600' : 'text-gray-700'}`}>{totalCharge - totalPrevu > 0 ? '+' : ''}{fmtNumber(totalCharge - totalPrevu)}</td>
             </tr>
           </tbody>
         </table>

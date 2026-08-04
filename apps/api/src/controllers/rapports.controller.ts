@@ -14,20 +14,15 @@ import { carboneFactors } from '../services/settings.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 import { sitePerimetre, isRestreint } from '../utils/perimetre';
+import { stockCourantParSite } from '../services/stockCourant.service';
 
-/** Dernier relevé GE (volume gasoil) par site. */
-async function dernierStockParSite(): Promise<Map<string, number>> {
-  // `distinct` : une ligne par site au lieu de TOUT l'historique GE (28 000
-  // lignes chargées pour n'en garder que 800). Cette fonction alimente le
-  // tableau de bord ET le stock carburant, tous deux pollés toutes les 60 s.
-  const releves = await prisma.releveEnergie.findMany({
-    where: { source: 'GE', volumeGasoilLitres: { not: null } },
-    orderBy: [{ siteId: 'asc' }, { dateReleve: 'desc' }],
-    distinct: ['siteId'],
-    select: { siteId: true, volumeGasoilLitres: true },
-  });
-  return new Map(releves.map((r) => [r.siteId, Number(r.volumeGasoilLitres)]));
-}
+/**
+ * Stock par site — délégué à la SOURCE UNIQUE (relevé + dépotages postérieurs).
+ * Cette fonction ne lisait que les relevés : un site livré après son dernier
+ * relevé restait affiché « critique » ici alors que le job d'alerte et le
+ * réappro le considéraient servi.
+ */
+const dernierStockParSite = stockCourantParSite;
 
 // ── Dashboard principal ──────────────────────────────────────
 export async function getDashboard(req: Request, res: Response, next: NextFunction) {

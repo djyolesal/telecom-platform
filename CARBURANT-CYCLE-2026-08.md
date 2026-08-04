@@ -124,7 +124,10 @@ la période ressort « normal ».
 
 ## 5. Plan proposé
 
-### Lot 1 — Étanchéité (effort faible, gain immédiat)
+### Lot 1 — Étanchéité ✅ FAIT le 04/08/2026
+Les six points sont livrés (voir le commit « carburant lot 1 »).
+
+#### Détail
 1. **Verrouiller l'annulation d'un BL** : interdite si des dépotages sont rattachés, réservée
    MANAGER/ADMIN, motif obligatoire. *(F1 — à faire en premier, c'est une faille de contrôle.)*
 2. **Rattacher/corriger un dépotage** : étendre l'édition à `ligneLivraisonId` et

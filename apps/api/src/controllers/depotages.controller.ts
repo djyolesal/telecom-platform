@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { dateBornee } from '../utils/dates';
+import { assertOnSite } from '../utils/geofence';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
@@ -247,6 +248,17 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       if (ligne.siteId !== siteId) throw new AppError('La ligne de plan ne correspond pas au site du dépotage', 400);
     }
 
+    // Preuve de présence : le dépotage engage plus de valeur qu'un incident, et
+    // c'était pourtant la seule opération terrain SANS contrôle de position — un
+    // dépotage entièrement fabriqué à distance était indiscernable. Même règle
+    // que les incidents et les maintenances (sites non géolocalisés : ignoré).
+    const siteDepotage = await prisma.site.findUnique({
+      where: { id: siteId },
+      select: { latitude: true, longitude: true, code: true },
+    });
+    if (!siteDepotage) throw new AppError('Site introuvable', 404);
+    assertOnSite(siteDepotage, b.latitude, b.longitude, 'le dépotage');
+
     const { volume, stockAvant, stockApres } = deriveVolume(b);
 
     // GE actifs du site → validation des heures saisies + réconciliation conso.
@@ -256,6 +268,12 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     });
     const heuresGE = parseHeuresGE(b.heuresGE, new Set(groupes.map((g) => g.id)));
     const volumeAnnonce = b.volumeAnnonceLitres != null ? Number(b.volumeAnnonceLitres) : null;
+
+    // Prix du litre : celui saisi sur le terrain, sinon le paramètre global.
+    const prixSaisi = b.prixLitre != null ? Number(b.prixLitre) : null;
+    const prixLitreEffectif = prixSaisi != null && Number.isFinite(prixSaisi) && prixSaisi > 0
+      ? prixSaisi
+      : (getNum('ge.prixLitreFCFA', 0) || null);
 
     const photosIn = (b.photos as { url?: string; key?: string }[] | undefined) ?? [];
 
@@ -329,7 +347,11 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           stockAvantLitres: stockAvant,
           fournisseur: b.fournisseur ? String(b.fournisseur) : null,
           numeroBonLivraison: b.numeroBonLivraison ? String(b.numeroBonLivraison) : null,
-          prixLitre: b.prixLitre != null ? Number(b.prixLitre) : null,
+          prixLitre: prixLitreEffectif,
+          // coutTotal n'était JAMAIS écrit, alors qu'il est sommé dans le rapport
+          // mensuel et imprimé dans le PDF envoyé à la direction : celui-ci
+          // affichait « Coût total : 0 FCFA » sur du carburant.
+          coutTotal: prixLitreEffectif != null ? Math.round(volume * prixLitreEffectif) : null,
           observations: obsDepotage,
           latitude: b.latitude != null ? Number(b.latitude) : null,
           longitude: b.longitude != null ? Number(b.longitude) : null,
@@ -409,7 +431,29 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
     const data = pick<Record<string, unknown>>(req.body, [
       'dateDepotage', 'stockAvantLitres', 'stockApresLitres', 'volumeLitres',
       'fournisseur', 'numeroBonLivraison', 'observations', 'latitude', 'longitude',
+      // RATTACHEMENT a posteriori : le mobile propose « Hors plan » (réseau
+      // coupé, plan pas encore posé). Sans ces deux champs, un tel dépotage
+      // était IRRATTRAPABLE — la ligne du plan restait « prévu », le site
+      // sortait en manquant critique chaque nuit, et le seul remède était la
+      // suppression (ADMIN), qui détruit photos et signatures.
+      'ligneLivraisonId', 'volumeAnnonceLitres',
     ]);
+
+    // La ligne visée doit exister et porter sur LE MÊME site : sinon on
+    // déplacerait la livraison d'un site à l'autre par la bande.
+    if (data.ligneLivraisonId != null && data.ligneLivraisonId !== '') {
+      const ligne = await prisma.ligneLivraison.findUnique({
+        where: { id: String(data.ligneLivraisonId) },
+        select: { siteId: true },
+      });
+      if (!ligne) throw new AppError('Ligne de plan introuvable', 404);
+      if (ligne.siteId !== existing.siteId) {
+        throw new AppError("Cette ligne de plan concerne un autre site que ce dépotage.", 400);
+      }
+    } else if (data.ligneLivraisonId === '') {
+      data.ligneLivraisonId = null; // détachement explicite
+    }
+
     const { volume, stockApres } = deriveVolume({ ...existing, ...data });
     const stockAvant = data.stockAvantLitres != null ? Number(data.stockAvantLitres)
       : existing.stockAvantLitres != null ? Number(existing.stockAvantLitres) : null;
@@ -429,17 +473,25 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
       where: { siteId: existing.siteId }, select: { id: true, puissanceKva: true, statut: true },
     });
 
+    const prixEdition = existing.prixLitre != null && Number(existing.prixLitre) > 0
+      ? Number(existing.prixLitre)
+      : (getNum('ge.prixLitreFCFA', 0) || null);
+
     const updated = await prisma.$transaction(async (tx) => {
       await verrouSiteCarburant(tx, existing.siteId);
       const recon = await reconcileDepotage({
         siteId: existing.siteId, stockAvant, volumeReel: volume,
-        volumeAnnonce: existing.volumeAnnonceLitres != null ? Number(existing.volumeAnnonceLitres) : null,
+        volumeAnnonce: data.volumeAnnonceLitres != null ? Number(data.volumeAnnonceLitres)
+          : existing.volumeAnnonceLitres != null ? Number(existing.volumeAnnonceLitres) : null,
         heuresGE, groupes, excludeId: existing.id,
       }, tx);
       return tx.depotage.update({
         where: { id: req.params.id },
         data: {
           ...data, volumeLitres: volume, stockApresLitres: stockApres,
+          // Le volume a pu changer : le coût suit, sinon le rapport mensuel
+          // reste sur l'ancien montant.
+          ...(prixEdition != null ? { coutTotal: Math.round(volume * prixEdition) } : {}),
           gasoilAttenduLitres: recon.gasoilAttenduLitres,
           ecartConsoLitres: recon.ecartConsoLitres,
           ecartLivraisonLitres: recon.ecartLivraisonLitres,
