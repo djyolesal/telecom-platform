@@ -14,6 +14,7 @@ import { sendTabular } from '../utils/exporter';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { rapprochementBc } from '../services/rapprochement.service';
+import { resoudreVehicule, resoudreChauffeur, depassementCiterne } from '../services/referentielTransport.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
 import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
 import { getNum } from '../services/settings.service';
@@ -328,6 +329,7 @@ export async function getBonsLivraison(req: Request, res: Response, next: NextFu
         include: {
           bonCommande: { select: { numero: true } },
           transporteur: { select: { nom: true } },
+          chauffeur: { select: { nom: true } },
           _count: { select: { lignes: true } },
         },
       },
@@ -344,6 +346,8 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
       include: {
         bonCommande: { select: { numero: true, annee: true, trimestre: true } },
         transporteur: { select: { id: true, nom: true } },
+        chauffeur: { select: { id: true, nom: true, telephone: true } },
+        vehicule: { select: { id: true, libelle: true, capaciteCiterneLitres: true } },
         lignes: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -525,6 +529,32 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     const lignes = estTransporteur ? [] : parseLignes(req.body.lignes);
     const { warnings } = await validatePlan(bonCommandeId, m, volume, lignes);
 
+    // CHAUFFEUR DÉCLARÉ AU DÉPART. La signature du chauffeur était bloquante au
+    // dépotage, son nom ne l'était pas : on exigeait une signature manuscrite
+    // sans exiger de savoir qui signe — sans valeur en litige. Déclaré ici, il
+    // devient confrontable au signataire réel sur le terrain.
+    const nomChauffeur = req.body.nomChauffeur ?? req.body.chauffeurNom;
+    const chauffeur = req.body.chauffeurId
+      ? await prisma.chauffeur.findUnique({ where: { id: String(req.body.chauffeurId) }, select: { id: true, nom: true } })
+      : await resoudreChauffeur(nomChauffeur, transporteurId);
+    if (!chauffeur) {
+      throw new AppError('Nom du chauffeur requis : il sera confronté au chauffeur qui signera sur site.', 400);
+    }
+
+    // VÉHICULE : le référentiel se construit à l'usage (une plaque nomme un
+    // camion). Quand sa capacité est connue, un chargement qui la dépasse est
+    // physiquement impossible et trahit une saisie fausse.
+    const vehicule = await resoudreVehicule(immatriculation, transporteurId);
+    const dep = depassementCiterne(volume, vehicule?.capaciteCiterneLitres);
+    if (dep.depasse) {
+      throw new AppError(
+        `Volume chargé (${volume.toLocaleString('fr-FR')} L) supérieur à la capacité de la citerne ` +
+        `du camion ${String(immatriculation).trim()} (${dep.capacite.toLocaleString('fr-FR')} L). ` +
+        `Corrigez le volume, ou la capacité dans la fiche du véhicule.`,
+        400
+      );
+    }
+
     const bl = await prisma.bonLivraison.create({
       data: {
         bonCommandeId,
@@ -533,6 +563,8 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
         mois: m,
         annee: Math.trunc(n(annee)) || bc.annee,
         immatriculation: String(immatriculation).trim(),
+        vehiculeId: vehicule?.id ?? null,
+        chauffeurId: chauffeur.id,
         volumeChargeLitres: volume,
         // Le BL porte SON PROPRE numéro client (« Votre N° Client » du document,
         // extrait par l'OCR). On le conserve s'il est fourni ; sinon on retombe
@@ -590,6 +622,12 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
         if (existing.isBrouillon && !bordereauPdfPath && !existing.bordereauPdfPath) {
           throw new AppError('Joignez le bordereau de chargement pour finaliser ce brouillon.', 400);
         }
+        // Un brouillon n'a pas de chauffeur (il n'existait pas de camion) : le
+        // déclarer fait partie de la finalisation, au même titre que les pièces.
+        if (existing.isBrouillon && !existing.chauffeurId && !req.body.chauffeurId
+            && !(req.body.nomChauffeur ?? req.body.chauffeurNom)) {
+          throw new AppError('Déclarez le chauffeur du chargement pour finaliser ce brouillon.', 400);
+        }
       }
     }
     if (dateChargement != null) {
@@ -604,6 +642,38 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     if (annee != null) data.annee = Math.trunc(n(annee));
     if (immatriculation != null) data.immatriculation = String(immatriculation).trim();
     if (volumeChargeLitres != null) data.volumeChargeLitres = n(volumeChargeLitres);
+
+    // ── Référentiels transport ────────────────────────────────────────────
+    // Le véhicule suit la plaque (le référentiel se construit à l'usage), et le
+    // chauffeur déclaré suit le nom saisi. La capacité citerne, quand elle est
+    // connue, rend un chargement impossible détectable dès la saisie.
+    let vehiculeCourant: { id: string; capaciteCiterneLitres: unknown } | null = null;
+    if (immatriculation != null) {
+      vehiculeCourant = await resoudreVehicule(immatriculation, existing.transporteurId);
+      data.vehicule = vehiculeCourant ? { connect: { id: vehiculeCourant.id } } : { disconnect: true };
+    } else if (existing.vehiculeId) {
+      vehiculeCourant = await prisma.vehicule.findUnique({
+        where: { id: existing.vehiculeId },
+        select: { id: true, capaciteCiterneLitres: true },
+      });
+    }
+    const nomChauffeurMaj = req.body.nomChauffeur ?? req.body.chauffeurNom;
+    if (req.body.chauffeurId) {
+      data.chauffeur = { connect: { id: String(req.body.chauffeurId) } };
+    } else if (nomChauffeurMaj != null) {
+      const c = await resoudreChauffeur(nomChauffeurMaj, existing.transporteurId);
+      if (!c) throw new AppError('Nom du chauffeur invalide.', 400);
+      data.chauffeur = { connect: { id: c.id } };
+    }
+    const volumeEffectif = volumeChargeLitres != null ? n(volumeChargeLitres) : n(existing.volumeChargeLitres);
+    const depMaj = depassementCiterne(volumeEffectif, vehiculeCourant?.capaciteCiterneLitres as never);
+    if (depMaj.depasse) {
+      throw new AppError(
+        `Volume chargé (${volumeEffectif.toLocaleString('fr-FR')} L) supérieur à la capacité de la citerne ` +
+        `(${depMaj.capacite.toLocaleString('fr-FR')} L). Corrigez le volume, ou la capacité dans la fiche du véhicule.`,
+        400
+      );
+    }
     if (dateChargement != null) data.dateChargement = new Date(dateChargement);
     if (dateTraitement !== undefined) data.dateTraitement = dateTraitement ? new Date(dateTraitement) : null;
     if (observations !== undefined) data.observations = observations;
@@ -1147,6 +1217,32 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
         rows: m.parMois as unknown as Record<string, unknown>[],
       },
       {
+        name: 'Par chauffeur',
+        columns: [
+          { header: 'Chauffeur', key: 'libelle', width: 26 },
+          { header: 'Chargé (L)', key: 'charge', width: 12 },
+          { header: 'Distribué (L)', key: 'distribue', width: 14 },
+          { header: 'Manquant (L)', key: 'manquant', width: 14 },
+          { header: 'Taux manquant (%)', key: 'tauxManquantPct', width: 18 },
+          { header: 'Chargements', key: 'nbBl', width: 12 },
+          { header: 'dont en écart', key: 'nbBlEcart', width: 14 },
+        ],
+        rows: m.parChauffeur as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Par vehicule',
+        columns: [
+          { header: 'Camion', key: 'libelle', width: 16 },
+          { header: 'Chargé (L)', key: 'charge', width: 12 },
+          { header: 'Distribué (L)', key: 'distribue', width: 14 },
+          { header: 'Manquant (L)', key: 'manquant', width: 14 },
+          { header: 'Taux manquant (%)', key: 'tauxManquantPct', width: 18 },
+          { header: 'Chargements', key: 'nbBl', width: 12 },
+          { header: 'dont en écart', key: 'nbBlEcart', width: 14 },
+        ],
+        rows: m.parVehicule as unknown as Record<string, unknown>[],
+      },
+      {
         name: 'Par bon de commande',
         columns: [
           { header: 'BC', key: 'numero', width: 16 },
@@ -1350,6 +1446,8 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
       orderBy: { dateChargement: 'desc' },
       include: {
         bonCommande: { select: { numero: true } },
+        chauffeur: { select: { nom: true } },
+        transporteur: { select: { nom: true } },
         lignes: { include: { site: { select: { code: true, nom: true, region: true } } } },
       },
     });
@@ -1357,7 +1455,7 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
     const rows: Record<string, unknown>[] = [];
     for (const bl of bls) {
       if (bl.lignes.length === 0) {
-        rows.push({ bl: bl.numeroBL, bc: bl.bonCommande?.numero ?? '', mois: MOIS[bl.mois], annee: bl.annee, camion: bl.immatriculation, charge: n(bl.volumeChargeLitres), site: '', region: '', prevu: '', livre: '', statut: bl.statut });
+        rows.push({ bl: bl.numeroBL, bc: bl.bonCommande?.numero ?? '', mois: MOIS[bl.mois], annee: bl.annee, camion: bl.immatriculation, chauffeur: bl.chauffeur?.nom ?? '', transporteur: bl.transporteur?.nom ?? '', charge: n(bl.volumeChargeLitres), site: '', region: '', prevu: '', livre: '', statut: bl.statut });
         continue;
       }
       for (const l of bl.lignes) {
@@ -1367,6 +1465,8 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
           mois: MOIS[bl.mois],
           annee: bl.annee,
           camion: bl.immatriculation,
+          chauffeur: bl.chauffeur?.nom ?? '',
+          transporteur: bl.transporteur?.nom ?? '',
           charge: n(bl.volumeChargeLitres),
           site: l.site.code,
           region: l.site.region,
@@ -1386,6 +1486,8 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
         { header: 'Mois', key: 'mois', width: 12 },
         { header: 'Année', key: 'annee', width: 8 },
         { header: 'Camion', key: 'camion', width: 14 },
+        { header: 'Chauffeur', key: 'chauffeur', width: 22 },
+        { header: 'Transporteur', key: 'transporteur', width: 22 },
         { header: 'Volume chargé (L)', key: 'charge', width: 16 },
         { header: 'Site', key: 'site', width: 14 },
         { header: 'Région', key: 'region', width: 16 },

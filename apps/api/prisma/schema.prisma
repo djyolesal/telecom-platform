@@ -383,6 +383,9 @@ model Depotage {
   bonLivraisonPath   String?  @map("bon_livraison_path")
   // Validation tripartite du dépotage (signatures sur site)
   nomChauffeur                String? @map("nom_chauffeur") @db.VarChar(100)
+  // Rattachement au référentiel quand le nom saisi correspond à un chauffeur
+  // connu : c'est ce qui rend possible « ce chauffeur livre-t-il moins ? ».
+  chauffeurId                 String? @map("chauffeur_id")
   signatureChauffeurPath      String? @map("signature_chauffeur_path")
   nomAgentSecurite            String? @map("nom_agent_securite") @db.VarChar(100)
   agentPresent                Boolean? @map("agent_present") // agent de gardiennage présent au dépotage ?
@@ -405,12 +408,14 @@ model Depotage {
   site           Site               @relation(fields: [siteId], references: [id])
   technicien     User?              @relation("TechnicienDepotages", fields: [technicienId], references: [id])
   ligneLivraison LigneLivraison?    @relation(fields: [ligneLivraisonId], references: [id])
+  chauffeur      Chauffeur?         @relation(fields: [chauffeurId], references: [id], onDelete: SetNull)
   heuresGE       DepotageHeureGE[]
 
   @@index([siteId])
   @@index([dateDepotage])
   @@index([ligneLivraisonId])
   @@index([technicienId])
+  @@index([chauffeurId])
   @@map("depotages")
 }
 
@@ -623,6 +628,8 @@ model Prestataire {
   bonsLivraison  BonLivraison[]
   contacts       Contact[]
   sitesGardes    Site[]          @relation("GardiennageSites")
+  vehicules      Vehicule[]
+  chauffeurs     Chauffeur[]
 
   @@map("prestataires")
 }
@@ -732,6 +739,56 @@ enum StatutLigneLivraison {
   ANNULE
 }
 
+// Référentiel VÉHICULE : sans lui, aucune question sur un camion n'avait de
+// réponse. L'immatriculation vivait en texte libre sur chaque BL, non indexée,
+// avec deux graphies natives (l'OCR produit « TG 1234 AB », l'interface suggère
+// « TG-1234-AB ») et la sentinelle « À AFFECTER » des brouillons — donc
+// impossible d'agréger « ce camion a-t-il des manquants récurrents ? ».
+// `immatriculation` est la forme NORMALISÉE (clé d'agrégation), `libelle` garde
+// la graphie d'origine pour l'affichage.
+model Vehicule {
+  id                    String   @id @default(uuid())
+  immatriculation       String   @unique @db.VarChar(30) // normalisée : TG1234AB
+  libelle               String   @db.VarChar(30)         // graphie d'origine
+  prestataireId         String?  @map("prestataire_id")  // transporteur propriétaire
+  capaciteCiterneLitres Decimal? @map("capacite_citerne_litres") @db.Decimal(10, 2)
+  marque                String?  @db.VarChar(60)
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  prestataire   Prestataire?   @relation(fields: [prestataireId], references: [id], onDelete: SetNull)
+  bonsLivraison BonLivraison[]
+
+  @@index([prestataireId])
+  @@map("vehicules")
+}
+
+// Référentiel CHAUFFEUR. La signature du chauffeur était BLOQUANTE au dépotage,
+// son nom ne l'était pas : on exigeait une signature manuscrite sans exiger de
+// savoir qui signe — en litige, elle ne valait rien. `nomNormalise` sert de clé
+// de rapprochement (casse, accents et espaces neutralisés).
+model Chauffeur {
+  id            String   @id @default(uuid())
+  nom           String   @db.VarChar(100)
+  nomNormalise  String   @map("nom_normalise") @db.VarChar(100)
+  prestataireId String?  @map("prestataire_id")
+  telephone     String?  @db.VarChar(30)
+  numeroPermis  String?  @map("numero_permis") @db.VarChar(40)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  prestataire   Prestataire?   @relation(fields: [prestataireId], references: [id], onDelete: SetNull)
+  bonsLivraison BonLivraison[]
+  depotages     Depotage[]
+
+  // Un même nom peut exister chez deux transporteurs différents.
+  @@unique([prestataireId, nomNormalise])
+  @@index([nomNormalise])
+  @@map("chauffeurs")
+}
+
 // Bon de commande trimestriel : référence principale, volumes répartis par mois.
 model BonCommande {
   id           String            @id @default(uuid())
@@ -774,7 +831,11 @@ model BonLivraison {
   numeroBL           String             @unique @map("numero_bl") @db.VarChar(50) // unique par chargement
   mois               Int                // mois exécuté (1..12)
   annee              Int
-  immatriculation    String             @db.VarChar(30) // camion
+  immatriculation    String             @db.VarChar(30) // camion (graphie saisie)
+  vehiculeId         String?            @map("vehicule_id")  // référentiel (clé d'agrégation)
+  // Chauffeur DÉCLARÉ avant le départ du dépôt. Confronté au chauffeur qui
+  // signe réellement au dépotage : déclaré ≠ signataire devient une anomalie.
+  chauffeurId        String?            @map("chauffeur_id")
   volumeChargeLitres Decimal            @map("volume_charge_litres") @db.Decimal(12, 2)
   numeroClient       String?            @map("numero_client") @db.VarChar(50) // hérité du BC (facultatif)
   dateChargement     DateTime           @map("date_chargement")
@@ -805,6 +866,8 @@ model BonLivraison {
   transporteur Prestataire?    @relation(fields: [transporteurId], references: [id])
   lignes      LigneLivraison[]
   cloturePar    User?          @relation("ClotureBonsLivraison", fields: [clotureParId], references: [id])
+  vehicule      Vehicule?      @relation(fields: [vehiculeId], references: [id], onDelete: SetNull)
+  chauffeur     Chauffeur?     @relation(fields: [chauffeurId], references: [id], onDelete: SetNull)
   reportSurBl   BonLivraison?  @relation("ReportReste", fields: [reportSurBlId], references: [id])
   reportsRecus  BonLivraison[] @relation("ReportReste")
 
@@ -812,6 +875,8 @@ model BonLivraison {
   @@index([transporteurId])
   @@index([annee, mois])
   @@index([dateCloture])
+  @@index([vehiculeId])
+  @@index([chauffeurId])
   @@map("bons_livraison")
 }
 

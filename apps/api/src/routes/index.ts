@@ -29,6 +29,7 @@ import * as lotsCtrl from '../controllers/lots.controller';
 import * as tachesCtrl from '../controllers/taches.controller';
 import * as configCtrl from '../controllers/config.controller';
 import * as carburantCtrl from '../controllers/carburantLogistique.controller';
+import * as refTransportCtrl from '../controllers/referentielTransport.controller';
 import * as coupuresCtrl from '../controllers/coupuresReseau.controller';
 import { uploadMiddleware, uploadSpreadsheet, verifierSignature } from '../middlewares/upload';
 import * as filesCtrl from '../controllers/files.controller';
@@ -65,6 +66,8 @@ const TRANSPORTEUR_ALLOW: RegExp[] = [
   /^\/auth\//,                      // profil, mot de passe, logout, FCM
   /^\/bons-commande(\/|$)/,         // lecture pour rattacher un BL
   /^\/bons-livraison(\/|$)/,        // ses chargements (filtrés côté contrôleur)
+  /^\/vehicules(\/|$)/,            // son parc (filtré côté contrôleur)
+  /^\/chauffeurs(\/|$)/,           // son effectif (filtré côté contrôleur)
   /^\/upload\/(image|document)$/,   // photos du BL et du bordereau
   /^\/notifications(\/|$)/,
 ];
@@ -278,6 +281,16 @@ router.get('/bons-livraison/:id/plan.pdf', carburantCtrl.exportPlanLivraisonPdf)
 router.put('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), carburantCtrl.updateBonLivraison);
 router.put('/bons-livraison/:id/plan', rbac(['MANAGER', 'ADMIN']), carburantCtrl.setPlanLivraison);
 router.delete('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.deleteBonLivraison); // MANAGER : brouillons uniquement (vérifié dans le contrôleur)
+// ── Référentiels transport (véhicules & chauffeurs) ──
+// Ils se peuplent à l'usage ; ces routes servent à les enrichir (capacité de
+// citerne, téléphone, permis). Un transporteur est enfermé dans son parc.
+router.get('/vehicules', rbac(['MANAGER', 'ADMIN', 'DIRECTION', 'TRANSPORTEUR']), refTransportCtrl.getVehicules);
+router.post('/vehicules', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), refTransportCtrl.createVehicule);
+router.put('/vehicules/:id', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), refTransportCtrl.updateVehicule);
+router.get('/chauffeurs', rbac(['MANAGER', 'ADMIN', 'DIRECTION', 'TRANSPORTEUR']), refTransportCtrl.getChauffeurs);
+router.post('/chauffeurs', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), refTransportCtrl.createChauffeur);
+router.put('/chauffeurs/:id', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), refTransportCtrl.updateChauffeur);
+
 // Clôture comptable : ventilation du reste en citerne (le geste qui solde un camion).
 router.post('/bons-livraison/:id/cloturer', rbac(['MANAGER', 'ADMIN']), carburantCtrl.cloturerBonLivraison);
 router.post('/bons-livraison/:id/rouvrir', rbac(['ADMIN']), carburantCtrl.rouvrirBonLivraison);

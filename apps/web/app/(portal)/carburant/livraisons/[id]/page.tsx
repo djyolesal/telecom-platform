@@ -33,6 +33,8 @@ interface BL {
   blPdfUrl?: string | null; bordereauPdfUrl?: string | null;
   bonCommande?: { numero: string; annee: number; trimestre: number };
   transporteur?: { id: string; nom: string };
+  chauffeur?: { id: string; nom: string } | null;
+  vehicule?: { id: string; libelle: string; capaciteCiterneLitres?: number | null } | null;
   lignes: Ligne[]; sommeLignes: number; coherenceCharge: boolean;
   // Clôture comptable : ventilation du reste en citerne.
   dateCloture?: string | null; estClos?: boolean;
@@ -159,6 +161,7 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
     // date réelle du camion à la finalisation ; sinon on garde la date existante.
     dateChargement: bl.numeroBL.startsWith('BR-') ? '' : (bl.dateChargement ? bl.dateChargement.slice(0, 10) : ''),
     transporteurId: bl.transporteur?.id ?? '',
+    nomChauffeur: bl.chauffeur?.nom ?? '',
     statut: bl.statut,
   });
   const [error, setError] = useState('');
@@ -168,6 +171,10 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
     queryKey: ['transporteurs'],
     queryFn: () => api.get('/prestataires', { params: { is_transporteur: true, is_active: true, limit: 100 } }).then((r) => r.data.data as Transporteur[]),
   });
+  const { data: chauffeurs = [] } = useQuery({
+    queryKey: ['chauffeurs-options'],
+    queryFn: () => api.get('/chauffeurs', { params: { actifs: true, limit: 200 } }).then((r) => r.data.data as { id: string; nom: string }[]),
+  });
 
   const mutation = useMutation({
     mutationFn: () => api.put(`/bons-livraison/${bl.id}`, {
@@ -175,6 +182,7 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
       volumeChargeLitres: Number(form.volumeChargeLitres) || 0,
       dateChargement: form.dateChargement,
       transporteurId: form.transporteurId || null,
+      nomChauffeur: form.nomChauffeur || undefined,
       statut: form.statut,
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['bon-livraison', bl.id] }); onClose(); },
@@ -195,6 +203,10 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
           <Field label="Volume chargé (L)" required><Input type="number" value={form.volumeChargeLitres} onChange={(e) => set('volumeChargeLitres', e.target.value)} required /></Field>
           <Field label="Date chargement" required><Input type="date" max={todayStr()} value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
           <Field label="Transporteur"><Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="—" options={transporteurs.map((tr) => ({ value: tr.id, label: tr.nom }))} /></Field>
+          <Field label="Chauffeur (déclaré au départ)">
+            <Input list="chauffeurs-connus-bl" value={form.nomChauffeur} onChange={(e) => set('nomChauffeur', e.target.value)} placeholder="Nom et prénom" />
+            <datalist id="chauffeurs-connus-bl">{chauffeurs.map((c) => <option key={c.id} value={c.nom} />)}</datalist>
+          </Field>
           <Field label="Statut"><Select value={form.statut} onChange={(e) => set('statut', e.target.value)} options={['PLANIFIE', 'CHARGE', 'LIVRE', 'ANNULE'].map((s) => ({ value: s, label: s }))} /></Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
@@ -471,6 +483,12 @@ export default function BonLivraisonDetailPage() {
           <Row label="N° client" value={data.numeroClient ?? '—'} />
           <Row label="Transporteur" value={data.transporteur?.nom ?? '—'} />
           <Row label="Camion" value={data.immatriculation} />
+          {/* Le chauffeur déclaré est la référence du contrôle terrain : sans lui,
+              la signature manuscrite exigée au dépotage ne valait rien en litige. */}
+          <Row label="Chauffeur déclaré" value={data.chauffeur?.nom ?? <span className="text-amber-600">non déclaré</span>} />
+          {data.vehicule?.capaciteCiterneLitres != null && (
+            <Row label="Capacité citerne" value={`${fmtNumber(Number(data.vehicule.capaciteCiterneLitres))} L`} />
+          )}
           <Row label="Volume chargé" value={`${fmtNumber(Number(data.volumeChargeLitres))} L`} />
           <Row label="Date chargement" value={fmtDate(data.dateChargement)} />
           {data.dateTraitement && <Row label="Date traitement" value={fmtDate(data.dateTraitement)} />}

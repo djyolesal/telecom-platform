@@ -20,6 +20,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _numeroBL = TextEditingController();
   final _immat = TextEditingController();
+  final _chauffeur = TextEditingController();
   final _volume = TextEditingController();
   final _obs = TextEditingController();
   final _picker = ImagePicker();
@@ -45,7 +46,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
 
   @override
   void dispose() {
-    for (final c in [_numeroBL, _immat, _volume, _obs]) {
+    for (final c in [_numeroBL, _immat, _chauffeur, _volume, _obs]) {
       c.dispose();
     }
     super.dispose();
@@ -174,6 +175,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
         mois: _mois!,
         annee: _bc!.annee,
         immatriculation: _immat.text.trim(),
+        nomChauffeur: _chauffeur.text.trim(),
         volumeChargeLitres: _num(_volume) ?? 0,
         dateChargement: _dateChargement!,
         dateTraitement: _dateTraitement,
@@ -291,6 +293,20 @@ class _BlFormScreenState extends State<BlFormScreen> {
                   controller: _immat,
                   decoration: const InputDecoration(labelText: 'Immatriculation camion *', prefixIcon: Icon(Icons.local_shipping)),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _chauffeur,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Chauffeur (déclaré au départ) *',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                    // Déclaré ici, il sera confronté au nom signé sur site : un
+                    // camion confié à quelqu'un d'autre en route devient visible.
+                    helperText: 'Nom du chauffeur qui prend le camion au dépôt.',
+                    helperMaxLines: 2,
+                  ),
+                  validator: (v) => (v == null || v.trim().length < 2) ? 'Requis' : null,
                 ),
                 const SizedBox(height: 14),
                 TextFormField(

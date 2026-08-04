@@ -184,15 +184,36 @@ Les six points sont livrés (voir le commit « carburant lot 1 »).
     est rattaché à un plan. L'écart jauge − annoncé redevient un vrai signal de détournement au
     lieu d'un artefact du pré-remplissage.
 
-### Lot 4 — Chauffeurs et camions (effort moyen)
-14. **Référentiel véhicule** + normalisation de plaque (prérequis de toute agrégation) et
-    contrôle « volume chargé > capacité citerne ».
-15. **Chauffeur déclaré sur le BL** (avant le départ dépôt) — plus fort levier anti-fraude pour
-    l'effort le plus faible : chauffeur déclaré ≠ chauffeur signataire devient une anomalie.
-16. **Référentiel chauffeur** rattaché au transporteur, sélection au lieu de la saisie libre, et
-    nom rendu obligatoire au même titre que la signature.
-17. Projeter la détection d'anomalies et les manquants sur les axes **chauffeur** et **véhicule**.
-18. Colonnes chauffeur/camion dans les exports et écrans de dépotage.
+### Lot 4 — Chauffeurs et camions ✅ FAIT le 04/08/2026
+
+Migration `0040` : modèles `Vehicule` et `Chauffeur`, `bons_livraison.vehicule_id` /
+`chauffeur_id`, `depotages.chauffeur_id`, **avec backfill** du parc existant à partir des BL et
+des dépotages déjà enregistrés.
+
+14. **Référentiel véhicule et normalisation de plaque.** `normaliserPlaque` ramène les trois
+    graphies natives (« TG 1234 AB » de l'OCR, « TG-1234-AB » de l'interface, « tg1234ab » de la
+    saisie libre) à une clé unique, et exclut la sentinelle « À AFFECTER » des brouillons — sans
+    quoi tous les brouillons du parc se seraient agrégés sur un véhicule fantôme. Quand la
+    **capacité de citerne** est renseignée, un bon de livraison dont le volume chargé la dépasse
+    est refusé : c'est physiquement impossible, donc c'est une saisie fausse.
+15. **Chauffeur déclaré sur le BL**, obligatoire à la création comme à la finalisation d'un
+    brouillon. Au dépotage, le nom signé sur site est comparé au nom déclaré (`memeChauffeur`
+    tolère l'inversion nom/prénom et un prénom d'usage) : une divergence s'inscrit en tête de
+    l'analyse du dépotage. Le nom déclaré n'est **volontairement pas** affiché sur le formulaire
+    mobile de dépotage — le montrer inviterait à le recopier, et le contrôle validerait sa propre
+    hypothèse.
+16. **Référentiel chauffeur** rattaché au transporteur, avec autocomplétion sur les noms connus
+    côté web. Les deux référentiels se **peuplent à l'usage** plutôt que par une saisie
+    d'administration préalable : exiger la fiche du camion avant le BL aurait bloqué une saisie à
+    22 h au dépôt, et le terrain aurait contourné en réutilisant une plaque existante. Page
+    **Flotte transport** pour les enrichir (capacité, marque, téléphone, permis, mise hors parc) ;
+    un transporteur n'y voit que son propre parc.
+17. **Projections chauffeur et véhicule** dans le rapport des manquants (onglets dédiés, avec
+    **taux de manquant** — sans lui le classement ne mesure que le volume transporté) et dans les
+    exports. L'écart de livraison est structurellement imputable au transport : il n'était mesuré
+    que par site, donc imputé au technicien.
+18. **Colonnes chauffeur et camion** dans les exports de dépotages et de bons de livraison, et sur
+    la fiche du chargement.
 
 ### Lot 5 — Cas d'exploitation manquants (effort moyen)
 19. Transfert de gasoil entre sites (mouvement à deux jambes, neutre au bilan).

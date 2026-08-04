@@ -35,6 +35,9 @@ const NAV_ITEMS = [
   // hors-menu /carburant lui refusait la fiche d'un BL.
   { href: '/carburant/livraisons',      label: 'Mes chargements',   icon: Truck,            roles: ['TRANSPORTEUR','SUPERVISEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR'] },
   { href: '/carburant/pertes',         label: 'Pertes carburant',  icon: ShieldAlert,      roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  // Référentiels camions/chauffeurs : le transporteur y gère SON parc (l'API le
+  // filtre), le pilotage y renseigne les capacités de citerne.
+  { href: '/carburant/flotte',         label: 'Flotte transport',  icon: Truck,            roles: ['TRANSPORTEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR','MANAGER','ADMIN'] },
   { href: '/energie',                  label: 'Énergie',           icon: Zap,              roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/incidents',                label: 'Incidents',         icon: AlertTriangle,    roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { href: '/rapports',                 label: 'Rapports',          icon: BarChart3,        roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },

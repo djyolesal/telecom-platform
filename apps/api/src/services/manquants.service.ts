@@ -67,6 +67,8 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     include: {
       bonCommande: { select: { id: true, numero: true, annee: true, trimestre: true } },
       transporteur: { select: { nom: true } },
+      chauffeur: { select: { id: true, nom: true } },
+      vehicule: { select: { id: true, libelle: true, immatriculation: true } },
       lignes: {
         include: {
           site: { select: { id: true, code: true, nom: true, region: true } },
@@ -92,6 +94,15 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
   const parCamion: Array<Record<string, unknown>> = [];
   const lignesEnRetard: LigneEnRetard[] = [];
   const camionsCritiques: CamionCritique[] = [];
+
+  // Projections CHAUFFEUR et VÉHICULE : l'écart de livraison est structurellement
+  // imputable au TRANSPORT, mais il n'était mesuré que par site — donc imputé au
+  // technicien. Sans ces deux axes, « ce chauffeur livre-t-il systématiquement
+  // moins ? » et « ce camion a-t-il des manquants récurrents ? » restaient sans
+  // réponse.
+  type AxeAgg = { id: string; libelle: string; charge: number; distribue: number; manquant: number; nbBl: number; nbBlEcart: number };
+  const parChauffeurMap = new Map<string, AxeAgg>();
+  const parVehiculeMap = new Map<string, AxeAgg>();
 
   type MoisAgg = { bcId: string; bcNumero: string; annee: number; mois: number; prevu: number; charge: number; livre: number };
   const parMoisMap = new Map<string, MoisAgg>();
@@ -164,6 +175,19 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       critique: ecartCamion >= critCamion && !clos,
     });
 
+    // Axes transport : un chargement clôturé garde son écart ici (il est
+    // expliqué, pas effacé) mais on distingue les BL réellement en écart.
+    const ecartBl = Math.max(0, charge - blDistribue);
+    const pousserAxe = (map: Map<string, AxeAgg>, id: string | null | undefined, libelle: string) => {
+      if (!id) return;
+      const a = map.get(id) ?? { id, libelle, charge: 0, distribue: 0, manquant: 0, nbBl: 0, nbBlEcart: 0 };
+      a.charge += charge; a.distribue += blDistribue; a.manquant += ecartBl; a.nbBl++;
+      if (ecartBl > EPS && !clos) a.nbBlEcart++;
+      map.set(id, a);
+    };
+    pousserAxe(parChauffeurMap, bl.chauffeurId, bl.chauffeur?.nom ?? '—');
+    pousserAxe(parVehiculeMap, bl.vehiculeId, bl.vehicule?.libelle ?? bl.immatriculation);
+
     // Agrégat mensuel (par bon de commande + mois).
     const mKey = `${bl.bonCommandeId}|${bl.mois}`;
     const ma = parMoisMap.get(mKey) ?? { bcId: bl.bonCommandeId, bcNumero: bl.bonCommande.numero, annee: bl.annee, mois: bl.mois, prevu: volMensuel.get(mKey) ?? 0, charge: 0, livre: 0 };
@@ -196,6 +220,19 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     .map((b) => ({ ...b, prevu: round(b.prevu), charge: round(b.charge), livre: round(b.livre), manquant: round(Math.max(0, b.prevu - b.livre)), surCharge: round(Math.max(0, b.charge - b.prevu)) }))
     .sort((a, b) => b.manquant - a.manquant);
 
+  // Taux de manquant : c'est lui qui distingue un chauffeur qui roule beaucoup
+  // d'un chauffeur qui perd beaucoup. Trié par volume manquant décroissant.
+  const finaliserAxe = (map: Map<string, AxeAgg>) =>
+    [...map.values()]
+      .map((a) => ({
+        ...a,
+        charge: round(a.charge), distribue: round(a.distribue), manquant: round(a.manquant),
+        tauxManquantPct: a.charge > 0 ? Math.round((a.manquant / a.charge) * 1000) / 10 : 0,
+      }))
+      .sort((x, y) => y.manquant - x.manquant);
+  const parChauffeur = finaliserAxe(parChauffeurMap);
+  const parVehicule = finaliserAxe(parVehiculeMap);
+
   const totaux = {
     manquantSitesLitres: round(parSite.reduce((s, x) => s + x.manquant, 0)),
     nbSitesManquants: parSite.length,
@@ -211,7 +248,7 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     resteVentileLitres: round(parCamion.reduce((s, x) => s + n(x['ventile']), 0)),
   };
 
-  return { seuilJours, parSite, parCamion: camions, parMois, parBc, totaux, lignesEnRetard, camionsCritiques };
+  return { seuilJours, parSite, parCamion: camions, parMois, parBc, parChauffeur, parVehicule, totaux, lignesEnRetard, camionsCritiques };
 }
 
 export interface BlEnAttente {

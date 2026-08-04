@@ -140,6 +140,9 @@ class BonLivraisonRepository {
     required int mois,
     required int annee,
     required String immatriculation,
+    /// Chauffeur DÉCLARÉ au départ du dépôt : confronté au chauffeur qui signera
+    /// réellement sur site. L'API le refuse vide.
+    required String nomChauffeur,
     required double volumeChargeLitres,
     required DateTime dateChargement,
     DateTime? dateTraitement,
@@ -160,6 +163,7 @@ class BonLivraisonRepository {
         'mois': mois,
         'annee': annee,
         'immatriculation': immatriculation,
+        'nomChauffeur': nomChauffeur,
         'volumeChargeLitres': volumeChargeLitres,
         // Dates CALENDAIRES (choisies par un date-picker à minuit local) : on
         // envoie la date pure « AAAA-MM-JJ », jamais un instant converti en UTC.

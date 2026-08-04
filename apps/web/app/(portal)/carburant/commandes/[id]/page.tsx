@@ -49,6 +49,9 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
     // Date de chargement SANS valeur par défaut : elle ne figure pas sur le BL
     // (la date du document est celle du traitement) — saisie manuelle obligatoire.
     volumeChargeLitres: '', dateChargement: '', transporteurId: '', observations: '',
+    // Chauffeur DÉCLARÉ avant le départ du dépôt : c'est lui qui sera confronté
+    // au chauffeur qui signe réellement sur site.
+    nomChauffeur: '',
   });
   const [dateTraitement, setDateTraitement] = useState('');
   const [blPdfPath, setBlPdfPath] = useState('');
@@ -116,6 +119,13 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
     } finally { setAnalysing(false); }
   };
 
+  // Chauffeurs déjà connus : proposés en autocomplétion pour éviter d'inventer
+  // une troisième graphie du même nom (le référentiel se peuple à l'usage).
+  const { data: chauffeurs = [] } = useQuery({
+    queryKey: ['chauffeurs-options'],
+    queryFn: () => api.get('/chauffeurs', { params: { actifs: true, limit: 200 } }).then((r) => r.data.data as { id: string; nom: string }[]),
+  });
+
   // Liste des transporteurs (visible côté manager pour désigner le transporteur).
   const { data: transporteurs = [] } = useQuery({
     queryKey: ['transporteurs'],
@@ -145,6 +155,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
       dateChargement: form.dateChargement,
       dateTraitement: dateTraitement || undefined,
       transporteurId: isManager && form.transporteurId ? form.transporteurId : undefined,
+      nomChauffeur: form.nomChauffeur,
       blPdfPath: blPdfPath || undefined,
       bordereauPdfPath: bordereauPdfPath || undefined,
       observations: form.observations || undefined,
@@ -210,6 +221,14 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             <Field label="Mois exécuté" required><Select value={form.mois} onChange={(e) => set('mois', e.target.value)} options={moisOpts} /></Field>
             <Field label="Date chargement (saisie manuelle)" required><Input type="date" max={today()} value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
             <Field label="Volume chargé (L)" required><Input type="number" value={form.volumeChargeLitres} onChange={(e) => set('volumeChargeLitres', e.target.value)} required placeholder="0" /></Field>
+            {/* Le chauffeur déclaré ici est confronté au signataire du dépotage :
+                un camion confié à quelqu'un d'autre en route devient visible. */}
+            <Field label="Chauffeur (déclaré au départ)" required>
+              <Input list="chauffeurs-connus" value={form.nomChauffeur} onChange={(e) => set('nomChauffeur', e.target.value)} required placeholder="Nom et prénom" />
+              <datalist id="chauffeurs-connus">
+                {chauffeurs.map((c) => <option key={c.id} value={c.nom} />)}
+              </datalist>
+            </Field>
             {isManager && (
               <Field label="Transporteur">
                 <Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="—"

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Download, AlertTriangle, MapPin, Truck, Calendar, Camera, X, ClipboardList } from 'lucide-react';
+import { Download, AlertTriangle, MapPin, Truck, Calendar, Camera, X, ClipboardList, User } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -23,11 +23,14 @@ interface ParSite { siteId: string; siteCode: string; siteNom: string; region: s
 interface SiteLigne { ligneId: string; blId: string; numeroBL: string; bcNumero: string; transporteur?: string; immatriculation: string; mois: number; annee: number; dateChargement: string; jours: number; prevu: number; livre: number; manquant: number; statut: string; enRetard: boolean }
 interface ParCamion { blId: string; numeroBL: string; bcNumero: string; mois: number; immatriculation: string; transporteur?: string; charge: number; distribue: number; manquant: number; surLivre: number; clos: boolean; ventile: number; nbSitesManquants: number; jours: number; enRetard: boolean; critique: boolean }
 interface ParMois { bcNumero: string; annee: number; mois: number; prevu: number; charge: number; livre: number; manquantCharge: number; manquantLivre: number; surCharge: number }
+// Axes TRANSPORT : l'écart de livraison est imputable au transport, pas au site.
+interface AxeTransport { id: string; libelle: string; charge: number; distribue: number; manquant: number; tauxManquantPct: number; nbBl: number; nbBlEcart: number }
 interface BlEnAttente { id: string; numeroBL: string; bcNumero: string | null; immatriculation: string; transporteur: string | null; volumeChargeLitres: number; dateChargement: string | null; jours: number }
 interface ParBc { bcId: string; numero: string; annee: number; trimestre: number; prevu: number; charge: number; livre: number; manquant: number }
 interface ManquantsData {
   seuilJours: number;
   parSite: ParSite[]; parCamion: ParCamion[]; parMois: ParMois[]; parBc: ParBc[];
+  parChauffeur: AxeTransport[]; parVehicule: AxeTransport[];
   totaux: { manquantSitesLitres: number; nbSitesManquants: number; nbSitesEnRetard: number; nbCamionsEcart: number; manquantMensuelLitres: number; nbLignesEnRetard: number; nbLignesCritiques: number; nbCamionsCritiques: number; surLivreSitesLitres: number; nbSitesSurLivres: number };
   pilotage: { seuilJours: number; sansPlan: BlEnAttente[]; brouillonsOublies: BlEnAttente[] };
 }
@@ -38,6 +41,8 @@ const TABS = [
   { key: 'camion', label: 'Par camion', icon: Truck },
   { key: 'mois', label: 'Par mois', icon: Calendar },
   { key: 'bc', label: 'Par bon de commande', icon: Calendar },
+  { key: 'chauffeur', label: 'Par chauffeur', icon: User },
+  { key: 'vehicule', label: 'Par véhicule', icon: Truck },
   { key: 'attente', label: 'À traiter', icon: ClipboardList },
 ] as const;
 
@@ -108,7 +113,7 @@ function SiteDrillModal({ site, bcId, mois, onClose }: { site: ParSite; bcId: st
 
 export default function ManquantsPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<'site' | 'camion' | 'mois' | 'bc' | 'attente'>('site');
+  const [tab, setTab] = useState<'site' | 'camion' | 'mois' | 'bc' | 'chauffeur' | 'vehicule' | 'attente'>('site');
   const [bcId, setBcId] = useState('');
   const [mois, setMois] = useState('');
   const [region, setRegion] = useState('');
@@ -169,6 +174,21 @@ export default function ManquantsPage() {
     { key: 'manquantLivre', header: 'Manq. livré', align: 'right', render: (m) => mq(m.manquantLivre) },
     { key: 'surCharge', header: 'Sur-chargé', align: 'right', render: (m) => sl(m.surCharge) },
   ];
+  // Le TAUX distingue un chauffeur qui roule beaucoup d'un chauffeur qui perd
+  // beaucoup : sans lui, le classement ne mesure que le volume transporté.
+  const colsAxe = (nomColonne: string): Column<AxeTransport>[] => [
+    { key: 'libelle', header: nomColonne, render: (a) => <span className="font-medium text-gray-800">{a.libelle}</span> },
+    { key: 'charge', header: 'Chargé (L)', align: 'right', render: (a) => fmtNumber(a.charge) },
+    { key: 'distribue', header: 'Distribué (L)', align: 'right', render: (a) => fmtNumber(a.distribue) },
+    { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (a) => mq(a.manquant) },
+    { key: 'taux', header: 'Taux', align: 'right', render: (a) => (
+      <span className={a.tauxManquantPct >= 2 ? 'font-semibold text-red-600' : a.tauxManquantPct > 0 ? 'text-amber-700' : 'text-gray-400'}>
+        {a.tauxManquantPct > 0 ? `${a.tauxManquantPct.toLocaleString('fr-FR')} %` : '—'}
+      </span>
+    ) },
+    { key: 'nbBl', header: 'Chargements', align: 'right', render: (a) => `${a.nbBlEcart} / ${a.nbBl}` },
+  ];
+
   const colsBc: Column<ParBc>[] = [
     { key: 'numero', header: 'BC', render: (b) => <span className="font-medium text-gray-800">{b.numero}</span> },
     { key: 'periode', header: 'Période', render: (b) => `T${b.trimestre} ${b.annee}` },
@@ -226,6 +246,13 @@ export default function ManquantsPage() {
       {tab === 'camion' && (camions.length ? <DataTable columns={colsCamion} data={camions} rowKey={(c) => c.blId} rowClassName={(c) => c.critique ? 'bg-red-50' : undefined} onRowClick={(c) => router.push(`/carburant/livraisons/${c.blId}`)} /> : <EmptyState title="Aucun écart par camion" />)}
       {tab === 'mois' && (data?.parMois.length ? <DataTable columns={colsMois} data={data.parMois} /> : <EmptyState title="Aucune donnée mensuelle" />)}
       {tab === 'bc' && (data?.parBc.length ? <DataTable columns={colsBc} data={data.parBc} onRowClick={(b) => router.push(`/carburant/commandes/${b.bcId}`)} /> : <EmptyState title="Aucune donnée par bon de commande" />)}
+
+      {tab === 'chauffeur' && (data?.parChauffeur.length
+        ? <DataTable columns={colsAxe('Chauffeur')} data={data.parChauffeur} rowKey={(a) => a.id} />
+        : <EmptyState title="Aucun chauffeur déclaré sur la période" hint="Le chauffeur est déclaré à la création du bon de livraison." />)}
+      {tab === 'vehicule' && (data?.parVehicule.length
+        ? <DataTable columns={colsAxe('Camion')} data={data.parVehicule} rowKey={(a) => a.id} />
+        : <EmptyState title="Aucun véhicule identifié sur la période" />)}
 
       {tab === 'attente' && (
         nbAttente === 0 ? (

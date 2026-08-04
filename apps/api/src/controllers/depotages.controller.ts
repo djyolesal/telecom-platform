@@ -6,6 +6,8 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { dateBornee } from '../utils/dates';
 import { assertOnSite } from '../utils/geofence';
+import { memeChauffeur } from '../utils/referentielTransport';
+import { resoudreChauffeur } from '../services/referentielTransport.service';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
@@ -347,6 +349,29 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
         avertissements,
       });
     }
+    // CHAUFFEUR SIGNATAIRE vs CHAUFFEUR DÉCLARÉ au départ du dépôt. C'est le
+    // levier anti-fraude le plus fort pour l'effort le plus faible : un camion
+    // confié à quelqu'un d'autre en route ne se voyait nulle part. Le nom saisi
+    // sur site n'est jamais pré-rempli avec le déclaré — sinon le contrôle
+    // validerait sa propre hypothèse.
+    let chauffeurId: string | null = null;
+    let anomalieChauffeur: string | null = null;
+    if (ligneLivraisonId) {
+      const contexte = await prisma.ligneLivraison.findUnique({
+        where: { id: ligneLivraisonId },
+        select: { bonLivraison: { select: { transporteurId: true, chauffeur: { select: { id: true, nom: true } } } } },
+      });
+      const declare = contexte?.bonLivraison.chauffeur ?? null;
+      const c = await resoudreChauffeur(b.nomChauffeur, contexte?.bonLivraison.transporteurId ?? null);
+      chauffeurId = c?.id ?? null;
+      if (declare && b.nomChauffeur && !memeChauffeur(b.nomChauffeur, declare.nom)) {
+        anomalieChauffeur = `⚠ Chauffeur différent de celui déclaré au départ (déclaré : ${declare.nom}, signataire : ${String(b.nomChauffeur).trim()}).`;
+      }
+    } else {
+      const c = await resoudreChauffeur(b.nomChauffeur, null);
+      chauffeurId = c?.id ?? null;
+    }
+
     const obsDepotage = [
       b.observations ? String(b.observations) : '',
       avertissements.length && confirmeVraisemblance ? traceConfirmation(avertissements) : '',
@@ -390,6 +415,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           latitude: b.latitude != null ? Number(b.latitude) : null,
           longitude: b.longitude != null ? Number(b.longitude) : null,
           nomChauffeur: b.nomChauffeur ? String(b.nomChauffeur) : null,
+          chauffeurId,
           signatureChauffeurPath: b.signatureChauffeurPath ? String(b.signatureChauffeurPath) : null,
           nomAgentSecurite: b.nomAgentSecurite ? String(b.nomAgentSecurite) : null,
           agentPresent,
@@ -401,7 +427,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           gasoilAttenduLitres: recon.gasoilAttenduLitres,
           ecartConsoLitres: recon.ecartConsoLitres,
           ecartLivraisonLitres: recon.ecartLivraisonLitres,
-          analyseDepotage: recon.analyseDepotage,
+          analyseDepotage: [anomalieChauffeur, recon.analyseDepotage].filter(Boolean).join('\n') || null,
           heuresGE: { create: heuresGE.map((h) => ({ groupeId: h.groupeId, indexHeuresGE: h.indexHeuresGE })) },
         },
         include: { site: { select: { code: true, nom: true } } },
@@ -627,7 +653,13 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
       where,
       take: EXPORT_MAX,
       orderBy: { dateDepotage: 'desc' },
-      include: { site: { select: { code: true } } },
+      include: {
+        site: { select: { code: true } },
+        // Chauffeur et camion : l'écart de livraison est structurellement
+        // imputable au transport, il doit pouvoir se lire par chauffeur.
+        chauffeur: { select: { nom: true } },
+        ligneLivraison: { select: { bonLivraison: { select: { numeroBL: true, immatriculation: true } } } },
+      },
     });
 
     await auditLog(req.user!.id, 'EXPORT', 'depotages', undefined, { count: rows.length }, req);
@@ -636,6 +668,8 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
       columns: [
         { header: 'Site', key: 'site', width: 16 },
         { header: 'Date', key: 'date', width: 18 },
+        { header: 'Chauffeur', key: 'chauffeur', width: 22 },
+        { header: 'Camion', key: 'camion', width: 14 },
         { header: 'Volume livré (L)', key: 'volume', width: 14 },
         { header: 'Volume annoncé (L)', key: 'annonce', width: 16 },
         { header: 'Écart livraison (L)', key: 'ecartLiv', width: 16 },
@@ -646,12 +680,14 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
       rows: rows.map((d) => ({
         site: d.site?.code ?? '',
         date: d.dateDepotage.toLocaleString('fr-FR'),
+        chauffeur: d.chauffeur?.nom ?? d.nomChauffeur ?? '',
+        camion: d.ligneLivraison?.bonLivraison?.immatriculation ?? '',
         volume: Number(d.volumeLitres),
         annonce: d.volumeAnnonceLitres != null ? Number(d.volumeAnnonceLitres) : '',
         ecartLiv: d.ecartLivraisonLitres != null ? Number(d.ecartLivraisonLitres) : '',
         stockApres: d.stockApresLitres != null ? Number(d.stockApresLitres) : '',
         fournisseur: d.fournisseur ?? '',
-        bl: d.numeroBonLivraison ?? '',
+        bl: d.numeroBonLivraison ?? d.ligneLivraison?.bonLivraison?.numeroBL ?? '',
       })),
     }]);
   } catch (err) { next(err); }
