@@ -25,25 +25,23 @@ export async function resoudreVehicule(
   const cle = normaliserPlaque(immatriculation);
   const libelle = String(immatriculation).trim().slice(0, 30);
 
-  const existant = await db.vehicule.findUnique({
+  // `upsert` et non findUnique+create : deux bons de livraison créés en même
+  // temps avec la même plaque neuve produisaient une violation d'unicité,
+  // remontée à l'utilisateur sous le message trompeur « Un bon de livraison
+  // avec ce numéro existe déjà ».
+  const v = await db.vehicule.upsert({
     where: { immatriculation: cle },
+    create: { immatriculation: cle, libelle, prestataireId: prestataireId ?? null },
+    // Aucune mise à jour à la volée : réaffecter un camion à un transporteur est
+    // une décision d'administration, pas un effet de bord d'une saisie de BL.
+    update: {},
     select: { id: true, capaciteCiterneLitres: true, prestataireId: true },
   });
-  if (existant) {
-    // Un camion changé de transporteur : on rattache s'il n'était pas rattaché,
-    // sans jamais écraser une affectation existante (ce serait une décision
-    // d'administration, pas un effet de bord d'une saisie de BL).
-    if (!existant.prestataireId && prestataireId) {
-      await db.vehicule.update({ where: { id: existant.id }, data: { prestataireId } });
-    }
-    return { id: existant.id, capaciteCiterneLitres: existant.capaciteCiterneLitres };
+  // Seul cas rattrapé : un camion encore rattaché à personne.
+  if (!v.prestataireId && prestataireId) {
+    await db.vehicule.update({ where: { id: v.id }, data: { prestataireId } });
   }
-
-  const cree = await db.vehicule.create({
-    data: { immatriculation: cle, libelle, prestataireId: prestataireId ?? null },
-    select: { id: true, capaciteCiterneLitres: true },
-  });
-  return cree;
+  return { id: v.id, capaciteCiterneLitres: v.capaciteCiterneLitres };
 }
 
 /** Chauffeur correspondant à un nom, créé au besoin. `null` si inexploitable. */
@@ -66,6 +64,19 @@ export async function resoudreChauffeur(
     select: { id: true, nom: true },
   });
   if (existant) return existant;
+
+  // Pas de transporteur connu (BL saisi sans transporteur désigné) : plutôt que
+  // de créer une seconde fiche pour la même personne, on rattache au chauffeur
+  // homonyme existant s'il n'y en a qu'UN. Deux homonymes chez deux
+  // transporteurs différents restent ambigus → nouvelle fiche, sans deviner.
+  if (!pid) {
+    const homonymes = await db.chauffeur.findMany({
+      where: { nomNormalise: cle },
+      select: { id: true, nom: true },
+      take: 2,
+    });
+    if (homonymes.length === 1) return homonymes[0];
+  }
 
   return db.chauffeur.create({
     data: { nom: affiche, nomNormalise: cle, prestataireId: pid },

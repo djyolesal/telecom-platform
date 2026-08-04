@@ -85,10 +85,19 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     { prefixe: '/rapports', roles: ['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION', 'NOC'] },
     { prefixe: '/administration', roles: ['ADMIN'] },
   ];
+  // Règles PROFONDES : une page enfouie sous une section dont elle ne partage
+  // pas les rôles. Elles priment sur le menu et sur les sections hors-menu, qui
+  // ne raisonnent que par préfixe — le rapprochement héritait sinon des rôles de
+  // « Appro. carburant » (dont TRANSPORTEUR) et affichait une page en erreur au
+  // lieu d'un « accès refusé » propre. L'API refuse déjà (rbac + INTERNE_ONLY).
+  const REGLES_PROFONDES: Array<{ test: RegExp; roles: string[] }> = [
+    { test: /^\/carburant\/commandes\/[^/]+\/rapprochement/, roles: ['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION'] },
+  ];
   const correspond = (href: string) => pathname === href || pathname.startsWith(href + '/');
   const section = [...NAV_ITEMS].sort((a, b) => b.href.length - a.href.length).find((item) => correspond(item.href));
   const horsMenu = SECTIONS_HORS_MENU.find((s) => correspond(s.prefixe));
-  const rolesAutorises = section?.roles ?? horsMenu?.roles;
+  const profonde = REGLES_PROFONDES.find((r) => r.test.test(pathname));
+  const rolesAutorises = profonde?.roles ?? section?.roles ?? horsMenu?.roles;
   const accesRefuse = userRole && rolesAutorises && !rolesAutorises.includes(userRole) && pathname !== '/ma-societe';
 
   return (

@@ -53,6 +53,16 @@ export async function stockCourantParSite(): Promise<Map<string, number>> {
   // Transferts et purges postérieurs au relevé : sans eux, un site vidé au
   // profit d'un autre resterait affiché plein, et un site secouru resterait
   // affiché critique alors qu'il vient d'être servi.
+  // Les sites connus par leurs SEULS dépotages (jamais relevés) doivent y
+  // figurer aussi : sinon leur purge n'était jamais déduite et leur stock
+  // restait surévalué. Leur borne est le PLUS ANCIEN de leurs dépotages —
+  // `depotages` n'est pas trié, d'où la comparaison à chaque passage.
+  const sitesReleves = new Set(dateRef.keys());
+  for (const d of depotages) {
+    if (sitesReleves.has(d.siteId)) continue;
+    const actuel = dateRef.get(d.siteId);
+    if (!actuel || d.dateDepotage < actuel) dateRef.set(d.siteId, d.dateDepotage);
+  }
   const solde = await soldeMouvementsParSite(dateRef);
   for (const [siteId, delta] of solde) {
     stock.set(siteId, (stock.get(siteId) ?? 0) + delta);

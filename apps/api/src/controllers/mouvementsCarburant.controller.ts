@@ -8,7 +8,7 @@ import { clearMemo } from '../utils/memo';
 import { dateBornee } from '../utils/dates';
 import { genererReference } from '../services/reference.service';
 import { cleMinioValide, publicFileUrl } from '../services/storage.service';
-import { assertSiteInPerimetre } from '../utils/perimetre';
+import { assertSiteInPerimetre, sitePerimetre, isRestreint } from '../utils/perimetre';
 import { verrouSiteCarburant } from '../services/verrou.service';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
@@ -32,11 +32,22 @@ const MOTIF_MIN = 10;
 export async function getMouvements(req: Request, res: Response, next: NextFunction) {
   try {
     const where: Prisma.MouvementCarburantWhereInput = {};
+    // PÉRIMÈTRE PAR DÉFAUT. Le filtre n'était appliqué que si `site_id` était
+    // fourni : un superviseur rattaché à un prestataire listait donc TOUS les
+    // mouvements du parc — sites, volumes et motifs compris — en omettant
+    // simplement le paramètre.
+    const perimetre = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetre)) {
+      where.OR = [
+        { site: perimetre as Prisma.SiteWhereInput },
+        { contrepartie: perimetre as Prisma.SiteWhereInput },
+      ];
+    }
     if (req.query.site_id) {
       const siteId = String(req.query.site_id);
       await assertSiteInPerimetre(req.user!.id, siteId);
       // Les deux jambes concernent le site : celle qui part comme celle qui arrive.
-      where.OR = [{ siteId }, { contrepartieId: siteId }];
+      where.AND = [{ OR: [{ siteId }, { contrepartieId: siteId }] }];
     }
     if (req.query.type) where.type = String(req.query.type) as Prisma.EnumTypeMouvementCarburantFilter['equals'];
     if (req.query.bon_commande_id) where.bonCommandeId = String(req.query.bon_commande_id);

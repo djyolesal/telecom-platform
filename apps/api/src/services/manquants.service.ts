@@ -68,6 +68,11 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       bonCommande: { select: { id: true, numero: true, annee: true, trimestre: true } },
       transporteur: { select: { nom: true } },
       chauffeur: { select: { id: true, nom: true } },
+      // Reports REÇUS d'autres chargements : ces litres sont physiquement dans
+      // cette citerne. Sans eux, ils étaient expliqués côté source puis perdus,
+      // et ce camion ressortait en sur-livraison pour avoir livré ce qui était
+      // prévu.
+      reportsRecus: { select: { resteReportLitres: true } },
       vehicule: { select: { id: true, libelle: true, immatriculation: true } },
       lignes: {
         include: {
@@ -151,7 +156,8 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       }
     }
 
-    const charge = n(bl.volumeChargeLitres);
+    const reportRecu = bl.reportsRecus.reduce((t, r) => t + n(r.resteReportLitres), 0);
+    const charge = n(bl.volumeChargeLitres) + reportRecu;
     // Niveau camion : écart chargé − distribué supérieur au seuil critique (signal perte/vol).
     const ecartCamion = Math.max(0, charge - blDistribue);
     const ventile = n(bl.resteRetourDepotLitres) + n(bl.restePerteLitres) + n(bl.resteReportLitres);

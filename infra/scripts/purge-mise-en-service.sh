@@ -123,6 +123,13 @@ TRUNCATE TABLE
   bons_livraison,
   volumes_mensuels,
   bons_commande,
+  -- Écritures et référentiels du transport carburant. Sans eux, des transferts,
+  -- purges et avoirs de TEST survivaient à la mise en service, avec des camions
+  -- et des chauffeurs fictifs qui polluaient immédiatement les projections par
+  -- chauffeur et par véhicule.
+  mouvements_carburant,
+  vehicules,
+  chauffeurs,
   notifications,
   sms_logs,
   audit_logs,

@@ -42,6 +42,10 @@ interface BL {
   reportSurBlId?: string | null; motifCloture?: string | null;
   bonRetourPath?: string | null; bonRetourUrl?: string | null;
   reste?: number; resteVentile?: number; resteAExpliquer?: number;
+  // Reports REÇUS d'autres chargements : ces litres sont dans cette citerne.
+  reportsRecus?: { id: string; numeroBL: string; resteReportLitres: number }[];
+  reportSurBl?: { id: string; numeroBL: string } | null;
+  reportRecu?: number; volumeDisponible?: number;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -429,7 +433,12 @@ export default function BonLivraisonDetailPage() {
   const totalLivreReel = data.lignes.reduce((s, l) => s + l.volumeLivreReel, 0);
   // Ce qui n'est pas encore descendu du camion (jamais négatif : une
   // sur-livraison ne se lit pas comme un reste).
-  const resteCiterne = Math.max(0, Number(data.volumeChargeLitres) - totalLivreReel);
+  // Volume réellement embarqué = chargé au dépôt + reports reçus. Sans les
+  // compter, ce camion livrait plus qu'il n'avait « chargé » et ressortait en
+  // sur-livraison pour avoir fait ce qui était prévu.
+  const reportRecu = data.reportRecu ?? 0;
+  const volumeDisponible = Number(data.volumeChargeLitres) + reportRecu;
+  const resteCiterne = Math.max(0, volumeDisponible - totalLivreReel);
   const hasPlan = data.lignes.length > 0;
   const clos = !!data.dateCloture;
   // Clôturable : un chargement réel, non annulé, pas déjà soldé.
@@ -506,6 +515,17 @@ export default function BonLivraisonDetailPage() {
           </h3>
           <Row label="Total du plan (prévu)" value={`${fmtNumber(data.sommeLignes)} L`} />
           <Row label="Volume chargé camion" value={`${fmtNumber(Number(data.volumeChargeLitres))} L`} />
+          {reportRecu > 0 && (
+            <Row
+              label="Reste reçu d'un autre chargement"
+              value={
+                <span className="text-blue-700">
+                  +{fmtNumber(reportRecu)} L
+                  {data.reportsRecus?.length ? ` (${data.reportsRecus.map((r) => r.numeroBL).join(', ')})` : ''}
+                </span>
+              }
+            />
+          )}
           <Row label="Total livré (réel)" value={`${fmtNumber(totalLivreReel)} L`} />
           {/* Ce qui reste dans la citerne : c'est l'écart camion sur lequel le
               pilotage interpelle le transporteur — il doit le voir en premier. */}
@@ -519,7 +539,10 @@ export default function BonLivraisonDetailPage() {
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Reste ventilé à la clôture</p>
               {Number(data.resteRetourDepotLitres) > 0 && <Row label="Retour au dépôt" value={`${fmtNumber(Number(data.resteRetourDepotLitres))} L`} />}
               {Number(data.restePerteLitres) > 0 && <Row label="Perte constatée" value={`${fmtNumber(Number(data.restePerteLitres))} L`} />}
-              {Number(data.resteReportLitres) > 0 && <Row label="Reporté sur un autre chargement" value={`${fmtNumber(Number(data.resteReportLitres))} L`} />}
+              {Number(data.resteReportLitres) > 0 && (
+                <Row label="Reporté sur un autre chargement"
+                  value={`${fmtNumber(Number(data.resteReportLitres))} L${data.reportSurBl ? ` → ${data.reportSurBl.numeroBL}` : ''}`} />
+              )}
               {data.bonRetourUrl && (
                 <a href={data.bonRetourUrl} target="_blank" rel="noopener noreferrer"
                   className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50">

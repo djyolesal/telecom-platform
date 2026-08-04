@@ -83,6 +83,8 @@ async function rapprochementBcImpl(bonCommandeId: string) {
   const bls = await prisma.bonLivraison.findMany({
     where: { bonCommandeId, isBrouillon: false, statut: { not: 'ANNULE' } },
     include: {
+      // Report reçu d'un autre chargement : ces litres sont dans cette citerne.
+      reportsRecus: { select: { resteReportLitres: true } },
       lignes: {
         include: {
           site: { select: { id: true, code: true, nom: true, region: true } },
@@ -125,7 +127,7 @@ async function rapprochementBcImpl(bonCommandeId: string) {
 
   for (const bl of bls) {
     const a = parMois.get(bl.mois) ?? vide();
-    a.charge += n(bl.volumeChargeLitres);
+    a.charge += n(bl.volumeChargeLitres) + bl.reportsRecus.reduce((t, r) => t + n(r.resteReportLitres), 0);
     a.nbBl++;
     if (!bl.dateCloture) a.nbBlNonClos++;
     a.retourDepot += n(bl.resteRetourDepotLitres);
@@ -166,18 +168,18 @@ async function rapprochementBcImpl(bonCommandeId: string) {
       };
     });
 
-  // L'avoir est imputé au premier mois de la période : il porte sur la commande,
-  // pas sur un chargement daté.
-  if (avoirs > 0 && lignesMois.length) {
-    const l = lignesMois[0];
-    l.charge = r0(l.charge - avoirs);
-    l.ecartNonExplique = r0(l.ecartNonExplique - avoirs);
-  }
+  // L'avoir porte sur la COMMANDE, pas sur un chargement daté : l'imputer au
+  // premier mois pouvait afficher un « chargé » négatif quand ce mois ne portait
+  // aucun chargement. Il est donc exposé à part et déduit des seuls TOTAUX.
 
   const conservation = await conservationParSite([...sitesVus.entries()], livreParSite, debut, fin);
 
   const somme = <K extends keyof LigneMoisRapprochement>(k: K) =>
     lignesMois.reduce((s, l) => s + (l[k] as number), 0);
+  // Le volume repris n'est jamais entré dans une cuve : il sort du chargé et,
+  // mécaniquement, de l'écart non expliqué du trimestre.
+  const chargeNet = somme('charge') - avoirs;
+  const ecartNet = somme('ecartNonExplique') - avoirs;
 
   return {
     bc: { id: bc.id, numero: bc.numero, annee: bc.annee, trimestre: bc.trimestre, statut: bc.statut },
@@ -186,10 +188,10 @@ async function rapprochementBcImpl(bonCommandeId: string) {
     conservation,
     avoirsLitres: r0(avoirs),
     totaux: {
-      commande: somme('commande'), charge: somme('charge'), planifie: somme('planifie'),
+      commande: somme('commande'), charge: r0(chargeNet), chargeBrut: somme('charge'), planifie: somme('planifie'),
       livrePlan: somme('livrePlan'), livreHorsPlan: somme('livreHorsPlan'), livreTotal: somme('livreTotal'),
       retourDepot: somme('retourDepot'), perte: somme('perte'), report: somme('report'),
-      ecartNonExplique: somme('ecartNonExplique'),
+      ecartNonExplique: r0(ecartNet),
       nbBl: somme('nbBl'), nbBlNonClos: somme('nbBlNonClos'),
       nbSites: conservation.length,
       nbSitesMesures: conservation.filter((c) => c.mesure).length,

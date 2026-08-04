@@ -117,6 +117,9 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/synthese-appro$/,
   /^\/rapports\/manquants-livraison(\/|$)/,
   /^\/rapports\/rapprochement(\/|$)/,
+  // Vue consolidée des transferts/purges/avoirs du parc : jamais pour un
+  // compte prestataire, même superviseur (le contrôleur périmètre en plus).
+  /^\/mouvements-carburant(\/|$)/,
   /^\/rapports\/correlation-carburant$/,
   /^\/rapports\/empreinte-carbone$/,
   /^\/rapports\/mensuel(\/|$)/,

@@ -15,6 +15,8 @@ import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { rapprochementBc } from '../services/rapprochement.service';
 import { resoudreVehicule, resoudreChauffeur, depassementCiterne } from '../services/referentielTransport.service';
+import { nomUtilisable } from '../utils/referentielTransport';
+import { verrouSiteCarburant } from '../services/verrou.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
 import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
 import { getNum } from '../services/settings.service';
@@ -348,6 +350,9 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
         transporteur: { select: { id: true, nom: true } },
         chauffeur: { select: { id: true, nom: true, telephone: true } },
         vehicule: { select: { id: true, libelle: true, capaciteCiterneLitres: true } },
+        // Reports REÇUS d'autres chargements : physiquement dans cette citerne.
+        reportsRecus: { select: { id: true, numeroBL: true, resteReportLitres: true } },
+        reportSurBl: { select: { id: true, numeroBL: true } },
         lignes: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -375,7 +380,11 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
     // est expliqué (retour dépôt / perte / report), pas quand il est simplement
     // faible. `resteAExpliquer` est ce qui reste à décider.
     const totalLivre = lignes.reduce((t, l) => t + l.volumeLivreReel, 0);
-    const reste = n(bl.volumeChargeLitres) - totalLivre;
+    // Volume RÉELLEMENT embarqué = chargé au dépôt + reports reçus d'autres
+    // chargements. Sans les compter, ce camion livrait plus qu'il n'avait
+    // « chargé » et ressortait en sur-livraison.
+    const reportRecu = bl.reportsRecus.reduce((t, r) => t + n(r.resteReportLitres), 0);
+    const reste = n(bl.volumeChargeLitres) + reportRecu - totalLivre;
     const ventile = n(bl.resteRetourDepotLitres) + n(bl.restePerteLitres) + n(bl.resteReportLitres);
 
     res.json({
@@ -387,8 +396,10 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
         blPdfUrl: bl.blPdfPath ? publicFileUrl(bl.blPdfPath) : null,
         bordereauPdfUrl: bl.bordereauPdfPath ? publicFileUrl(bl.bordereauPdfPath) : null,
         bonRetourUrl: bl.bonRetourPath ? publicFileUrl(bl.bonRetourPath) : null,
-        coherenceCharge: Math.abs(sommeLignes - n(bl.volumeChargeLitres)) <= TOLERANCE_L,
+        coherenceCharge: Math.abs(sommeLignes - (n(bl.volumeChargeLitres) + reportRecu)) <= TOLERANCE_L,
         totalLivre: Math.round(totalLivre),
+        reportRecu: Math.round(reportRecu),
+        volumeDisponible: Math.round(n(bl.volumeChargeLitres) + reportRecu),
         reste: Math.round(reste),
         resteVentile: Math.round(ventile),
         resteAExpliquer: Math.round(reste - ventile),
@@ -534,51 +545,58 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     // sans exiger de savoir qui signe — sans valeur en litige. Déclaré ici, il
     // devient confrontable au signataire réel sur le terrain.
     const nomChauffeur = req.body.nomChauffeur ?? req.body.chauffeurNom;
-    const chauffeur = req.body.chauffeurId
-      ? await prisma.chauffeur.findUnique({ where: { id: String(req.body.chauffeurId) }, select: { id: true, nom: true } })
-      : await resoudreChauffeur(nomChauffeur, transporteurId);
-    if (!chauffeur) {
+    if (!req.body.chauffeurId && !nomUtilisable(nomChauffeur)) {
       throw new AppError('Nom du chauffeur requis : il sera confronté au chauffeur qui signera sur site.', 400);
     }
 
-    // VÉHICULE : le référentiel se construit à l'usage (une plaque nomme un
-    // camion). Quand sa capacité est connue, un chargement qui la dépasse est
-    // physiquement impossible et trahit une saisie fausse.
-    const vehicule = await resoudreVehicule(immatriculation, transporteurId);
-    const dep = depassementCiterne(volume, vehicule?.capaciteCiterneLitres);
-    if (dep.depasse) {
-      throw new AppError(
-        `Volume chargé (${volume.toLocaleString('fr-FR')} L) supérieur à la capacité de la citerne ` +
-        `du camion ${String(immatriculation).trim()} (${dep.capacite.toLocaleString('fr-FR')} L). ` +
-        `Corrigez le volume, ou la capacité dans la fiche du véhicule.`,
-        400
-      );
-    }
+    // Référentiels résolus DANS la transaction de création : un bon de livraison
+    // refusé (numéro dupliqué, volume au-delà de la citerne) laissait sinon
+    // derrière lui un camion et un chauffeur créés pour rien.
+    const bl = await prisma.$transaction(async (tx) => {
+      const chauffeur = req.body.chauffeurId
+        ? await tx.chauffeur.findUnique({ where: { id: String(req.body.chauffeurId) }, select: { id: true, nom: true } })
+        : await resoudreChauffeur(nomChauffeur, transporteurId, tx);
+      if (!chauffeur) throw new AppError('Chauffeur introuvable.', 404);
 
-    const bl = await prisma.bonLivraison.create({
-      data: {
-        bonCommandeId,
-        transporteurId,
-        numeroBL: String(numeroBL).trim(),
-        mois: m,
-        annee: Math.trunc(n(annee)) || bc.annee,
-        immatriculation: String(immatriculation).trim(),
-        vehiculeId: vehicule?.id ?? null,
-        chauffeurId: chauffeur.id,
-        volumeChargeLitres: volume,
-        // Le BL porte SON PROPRE numéro client (« Votre N° Client » du document,
-        // extrait par l'OCR). On le conserve s'il est fourni ; sinon on retombe
-        // sur celui du BC (souvent nul depuis qu'il est facultatif).
-        numeroClient: numeroClient ? String(numeroClient).slice(0, 50) : bc.numeroClient,
-        dateChargement: dateChargementValide,
-        dateTraitement: dateTraitement ? new Date(dateTraitement) : null,
-        statut: statut ?? undefined,
-        blPdfPath: cleMinioValide(blPdfPath),
-        bordereauPdfPath: cleMinioValide(bordereauPdfPath),
-        observations: observations ?? null,
-        ...(lignes.length ? { lignes: { create: lignes } } : {}),
-      },
-      include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+      // VÉHICULE : le référentiel se construit à l'usage (une plaque nomme un
+      // camion). Quand sa capacité est connue, un chargement qui la dépasse est
+      // physiquement impossible et trahit une saisie fausse.
+      const vehicule = await resoudreVehicule(immatriculation, transporteurId, tx);
+      const dep = depassementCiterne(volume, vehicule?.capaciteCiterneLitres);
+      if (dep.depasse) {
+        throw new AppError(
+          `Volume chargé (${volume.toLocaleString('fr-FR')} L) supérieur à la capacité de la citerne ` +
+          `du camion ${String(immatriculation).trim()} (${dep.capacite.toLocaleString('fr-FR')} L). ` +
+          `Corrigez le volume, ou la capacité dans la fiche du véhicule.`,
+          400
+        );
+      }
+
+      return tx.bonLivraison.create({
+        data: {
+          bonCommandeId,
+          transporteurId,
+          numeroBL: String(numeroBL).trim(),
+          mois: m,
+          annee: Math.trunc(n(annee)) || bc.annee,
+          immatriculation: String(immatriculation).trim(),
+          vehiculeId: vehicule?.id ?? null,
+          chauffeurId: chauffeur.id,
+          volumeChargeLitres: volume,
+          // Le BL porte SON PROPRE numéro client (« Votre N° Client » du document,
+          // extrait par l'OCR). On le conserve s'il est fourni ; sinon on retombe
+          // sur celui du BC (souvent nul depuis qu'il est facultatif).
+          numeroClient: numeroClient ? String(numeroClient).slice(0, 50) : bc.numeroClient,
+          dateChargement: dateChargementValide,
+          dateTraitement: dateTraitement ? new Date(dateTraitement) : null,
+          statut: statut ?? undefined,
+          blPdfPath: cleMinioValide(blPdfPath),
+          bordereauPdfPath: cleMinioValide(bordereauPdfPath),
+          observations: observations ?? null,
+          ...(lignes.length ? { lignes: { create: lignes } } : {}),
+        },
+        include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+      });
     });
     await auditLog(req.user!.id, 'CREATE', 'bons_livraison', bl.id, req.body, req);
     clearMemo();
@@ -725,7 +743,10 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
 
     let warnings: string[] = [];
     const effMois = data.mois != null ? (data.mois as number) : existing.mois;
-    const effVolume = data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : n(existing.volumeChargeLitres);
+    const effVolume = await volumeDisponibleBl(
+      existing.id,
+      data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : existing.volumeChargeLitres
+    );
 
     let nouvellesLignes: { siteId: string; volumePrevuLitres: number }[] | null = null;
     if (req.body.lignes !== undefined && !isTransporteur) {
@@ -801,7 +822,10 @@ export async function cloturerBonLivraison(req: Request, res: Response, next: Ne
   try {
     const bl = await prisma.bonLivraison.findUnique({
       where: { id: req.params.id },
-      include: { lignes: { include: { depotages: { select: { volumeLitres: true } } } } },
+      include: {
+        lignes: { select: { siteId: true, depotages: { select: { volumeLitres: true } } } },
+        reportsRecus: { select: { resteReportLitres: true } },
+      },
     });
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
     if (bl.isBrouillon) throw new AppError("Un brouillon n'a pas de chargement réel à solder. Finalisez-le ou supprimez-le.", 400);
@@ -809,7 +833,8 @@ export async function cloturerBonLivraison(req: Request, res: Response, next: Ne
     if (bl.dateCloture) throw new AppError('Ce chargement est déjà clôturé.', 409);
 
     const livre = bl.lignes.reduce((t, l) => t + l.depotages.reduce((s, d) => s + n(d.volumeLitres), 0), 0);
-    const charge = n(bl.volumeChargeLitres);
+    // Chargé au dépôt + reports reçus : c'est ce que la citerne contenait.
+    const charge = n(bl.volumeChargeLitres) + bl.reportsRecus.reduce((t, r) => t + n(r.resteReportLitres), 0);
     const reste = charge - livre;
     // Sur-livraison : le camion a déposé PLUS qu'il n'a chargé. Il n'y a rien à
     // ventiler et le défaut est ailleurs (jauge, double saisie, plan) — clôturer
@@ -860,18 +885,49 @@ export async function cloturerBonLivraison(req: Request, res: Response, next: Ne
       }
     }
 
-    const maj = await prisma.bonLivraison.update({
-      where: { id: bl.id },
-      data: {
-        dateCloture: new Date(),
-        cloturePar: { connect: { id: req.user!.id } },
-        resteRetourDepotLitres: retour,
-        restePerteLitres: perte,
-        resteReportLitres: report,
-        reportSurBl: report > TOLERANCE_L && reportSurBlId ? { connect: { id: reportSurBlId } } : undefined,
-        motifCloture: motif || null,
-        bonRetourPath: bonRetourPath ?? undefined,
-      },
+    // Lecture du livré ET écriture dans la MÊME transaction, sous le verrou de
+    // chaque site servi : un dépotage synchronisé entre les deux figerait sinon
+    // une ventilation qui n'égale plus le reste réel — et un chargement clos
+    // sort des alertes, donc l'incohérence deviendrait invisible.
+    const maj = await prisma.$transaction(async (tx) => {
+      for (const siteId of [...new Set(bl.lignes.map((l) => l.siteId))]) {
+        await verrouSiteCarburant(tx, siteId);
+      }
+      const frais = await tx.bonLivraison.findUnique({
+        where: { id: bl.id },
+        select: {
+          dateCloture: true, volumeChargeLitres: true,
+          lignes: { select: { depotages: { select: { volumeLitres: true } } } },
+          reportsRecus: { select: { resteReportLitres: true } },
+        },
+      });
+      if (!frais) throw new AppError('Bon de livraison introuvable', 404);
+      if (frais.dateCloture) throw new AppError('Ce chargement vient d\'être clôturé.', 409);
+
+      const livreFrais = frais.lignes.reduce((t, l) => t + l.depotages.reduce((x, d) => x + n(d.volumeLitres), 0), 0);
+      const chargeFrais = n(frais.volumeChargeLitres) + frais.reportsRecus.reduce((t, r) => t + n(r.resteReportLitres), 0);
+      const resteFrais = Math.max(0, chargeFrais - livreFrais);
+      if (Math.abs(somme - resteFrais) > TOLERANCE_L) {
+        throw new AppError(
+          `Une livraison a été enregistrée pendant la saisie : le reste est maintenant de ` +
+          `${Math.round(resteFrais).toLocaleString('fr-FR')} L. Reprenez la ventilation.`,
+          409
+        );
+      }
+
+      return tx.bonLivraison.update({
+        where: { id: bl.id },
+        data: {
+          dateCloture: new Date(),
+          cloturePar: { connect: { id: req.user!.id } },
+          resteRetourDepotLitres: retour,
+          restePerteLitres: perte,
+          resteReportLitres: report,
+          reportSurBl: report > TOLERANCE_L && reportSurBlId ? { connect: { id: reportSurBlId } } : undefined,
+          motifCloture: motif || null,
+          bonRetourPath: bonRetourPath ?? undefined,
+        },
+      });
     });
     await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { cloture: { reste: Math.round(reste), retour, perte, report } }, req);
     clearMemo();
@@ -943,13 +999,27 @@ async function replaceLignesPreservees(
  * Génère / édite le plan de livraison d'un bon de livraison (réservé MANAGER/ADMIN).
  * Remplace les lignes en PRÉSERVANT les livraisons déjà rattachées ; Σ = volume chargé.
  */
+/**
+ * Volume RÉELLEMENT embarqué par un chargement : chargé au dépôt + reports reçus
+ * d'autres chargements. Le plan et la cohérence se mesurent là-dessus, sinon un
+ * camion qui reprend le reste d'un autre est jugé sur un volume qu'il n'a pas.
+ */
+async function volumeDisponibleBl(blId: string, volumeCharge: unknown): Promise<number> {
+  const r = await prisma.bonLivraison.aggregate({
+    where: { reportSurBlId: blId },
+    _sum: { resteReportLitres: true },
+  });
+  return n(volumeCharge) + n(r._sum.resteReportLitres);
+}
+
 export async function setPlanLivraison(req: Request, res: Response, next: NextFunction) {
   try {
     const bl = await prisma.bonLivraison.findUnique({ where: { id: req.params.id } });
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
 
     const lignes = parseLignes(req.body.lignes);
-    const { warnings: planWarn } = await validatePlan(bl.bonCommandeId, bl.mois, n(bl.volumeChargeLitres), lignes, bl.id);
+    const dispo = await volumeDisponibleBl(bl.id, bl.volumeChargeLitres);
+    const { warnings: planWarn } = await validatePlan(bl.bonCommandeId, bl.mois, dispo, lignes, bl.id);
 
     const updated = await prisma.$transaction(async (tx) => {
       const preserveWarn = await replaceLignesPreservees(tx, bl.id, lignes);
