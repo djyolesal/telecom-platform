@@ -487,7 +487,13 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     const { numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath, transporteurId } = req.body;
 
     const data: Prisma.BonLivraisonUpdateInput = {};
-    if (numeroBL != null) {
+    // Un numéro VIDE n'est pas une saisie : le formulaire d'entête pré-remplit
+    // le champ à '' pour un brouillon (dont le n° BR- est provisoire). Sans ce
+    // garde-fou, enregistrer l'entête sans toucher au numéro effaçait le n° du
+    // BL (colonne UNIQUE) et déclenchait la finalisation — rendant impossible le
+    // simple changement de statut, par exemple pour annuler un brouillon.
+    const numeroFourni = numeroBL != null && String(numeroBL).trim() !== '';
+    if (numeroFourni) {
       data.numeroBL = String(numeroBL).trim();
       // La finalisation d'un brouillon (vrai numéro) est réservée au manager/admin.
       if (!String(numeroBL).trim().startsWith('BR-') && !isTransporteur) {
@@ -570,6 +576,12 @@ export async function deleteBonLivraison(req: Request, res: Response, next: Next
   try {
     const existing = await prisma.bonLivraison.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError('Bon de livraison introuvable', 404);
+    // Un BROUILLON est un artefact de planification (généré par le réappro
+    // prédictif) : le manager qui pilote l'appro doit pouvoir l'écarter lui-même.
+    // Un BL RÉEL, lui, est une pièce d'exploitation → suppression ADMIN seule.
+    if (!existing.isBrouillon && req.user!.role !== 'ADMIN') {
+      throw new AppError("Seul un administrateur peut supprimer un bon de livraison réel. Passez-le au statut ANNULE.", 403);
+    }
     // Refus si des dépotages réels sont rattachés à ce BL : la cascade détacherait
     // les livraisons (ligneLivraisonId → NULL) et fausserait manquants/stocks.
     const depotagesLies = await prisma.depotage.count({ where: { ligneLivraison: { bonLivraisonId: existing.id } } });

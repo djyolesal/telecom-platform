@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, AlertTriangle, Plus, X, Trash2, Download, FileText, Pencil, Navigation } from 'lucide-react';
@@ -27,7 +27,7 @@ interface Ligne {
 }
 interface BL {
   id: string; numeroBL: string; mois: number; annee: number; immatriculation: string; numeroClient: string | null;
-  volumeChargeLitres: number; dateChargement: string; dateTraitement?: string; statut: string; observations?: string;
+  volumeChargeLitres: number; dateChargement: string; dateTraitement?: string; statut: string; observations?: string; isBrouillon?: boolean;
   blPdfPath?: string; bordereauPdfPath?: string;
   /** URLs signées fournies par l'API (le bucket n'est plus lisible par son chemin). */
   blPdfUrl?: string | null; bordereauPdfUrl?: string | null;
@@ -259,6 +259,8 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
 
 export default function BonLivraisonDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role ?? '';
   const isManager = role === 'MANAGER' || role === 'ADMIN';
@@ -268,6 +270,19 @@ export default function BonLivraisonDetailPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bon-livraison', id],
     queryFn: () => api.get(`/bons-livraison/${id}`).then((r) => r.data.data as BL),
+  });
+
+  // Annulation d'un BROUILLON : il n'existait aucune action pour écarter une
+  // proposition du réappro prédictif. Réservée aux brouillons — l'API refuse la
+  // suppression d'un BL réel (hors admin) et de tout BL portant des dépotages.
+  const supprimerBrouillon = useMutation({
+    mutationFn: () => api.delete(`/bons-livraison/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bons-livraison'] });
+      router.push('/carburant/livraisons');
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) =>
+      window.alert(e.response?.data?.error ?? 'Suppression impossible'),
   });
 
   if (isLoading) return <Loading />;
@@ -291,6 +306,16 @@ export default function BonLivraisonDetailPage() {
             {hasPlan && <Button variant="secondary" icon={FileText} onClick={() => downloadFile(`/bons-livraison/${data.id}/plan.pdf`, `plan-${data.numeroBL}.pdf`)}>PDF</Button>}
             {isManager && <Button variant="secondary" icon={Pencil} onClick={() => setShowHeader(true)}>Entête</Button>}
             {isManager && <Button icon={hasPlan ? Pencil : Plus} onClick={() => setShowPlan(true)}>{hasPlan ? 'Éditer le plan' : 'Générer le plan'}</Button>}
+            {isManager && data.isBrouillon && (
+              <Button variant="secondary" icon={Trash2} loading={supprimerBrouillon.isPending}
+                onClick={() => {
+                  if (window.confirm(`Annuler le brouillon ${data.numeroBL} ? Il sera supprimé du plan d'approvisionnement.`)) {
+                    supprimerBrouillon.mutate();
+                  }
+                }}>
+                Annuler le brouillon
+              </Button>
+            )}
           </div>
         }
       />

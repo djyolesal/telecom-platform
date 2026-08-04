@@ -276,7 +276,7 @@ router.get('/bons-livraison/:id/plan.xlsx', carburantCtrl.exportPlanLivraisonXls
 router.get('/bons-livraison/:id/plan.pdf', carburantCtrl.exportPlanLivraisonPdf);
 router.put('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), carburantCtrl.updateBonLivraison);
 router.put('/bons-livraison/:id/plan', rbac(['MANAGER', 'ADMIN']), carburantCtrl.setPlanLivraison);
-router.delete('/bons-livraison/:id', rbac(['ADMIN']), carburantCtrl.deleteBonLivraison);
+router.delete('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.deleteBonLivraison); // MANAGER : brouillons uniquement (vérifié dans le contrôleur)
 
 // ── Rapport corrélation appro ↔ consommation énergie ──────────
 router.get('/rapports/correlation-carburant', carburantCtrl.getCorrelationCarburant);
