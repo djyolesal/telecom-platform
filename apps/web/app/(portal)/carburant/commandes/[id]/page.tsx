@@ -123,11 +123,12 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
     enabled: isManager,
   });
 
-  const doUpload = async (file: File, slot: 'bl' | 'bordereau') => {
+  // Le PDF du BL est joint par la zone de pré-remplissage ; ne reste que le bordereau.
+  const doUpload = async (file: File, slot: 'bordereau') => {
     setUploading(slot);
     try {
       const key = await uploadPdf(file);
-      if (slot === 'bl') setBlPdfPath(key); else setBordereauPdfPath(key);
+      setBordereauPdfPath(key);
     } catch { setError('Échec de l’upload du PDF.'); }
     finally { setUploading(''); }
   };
@@ -175,6 +176,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
           <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
             <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">Pré-remplir depuis le PDF du BL (un lot de plusieurs BL est accepté)</p>
+            <p className="mb-1.5 text-[11px] text-gray-500">Le PDF déposé ici est aussi joint au bon de livraison — pas besoin de le rattacher ailleurs.</p>
             <div className="flex items-center gap-3">
               <input type="file" accept="application/pdf,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserBl(f); }} className="text-xs" />
               {analysing && <span className="text-xs text-gray-500">Analyse en cours…</span>}
@@ -210,22 +212,17 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="PDF du bon de livraison">
-              <div className="flex items-center gap-2 text-xs">
-                <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, 'bl'); }} />
-                {uploading === 'bl' && <span className="text-gray-400">Envoi…</span>}
-                {blPdfPath && uploading !== 'bl' && <span className="text-green-600">✓</span>}
-              </div>
-            </Field>
-            <Field label="PDF du bordereau de chargement">
-              <div className="flex items-center gap-2 text-xs">
-                <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, 'bordereau'); }} />
-                {uploading === 'bordereau' && <span className="text-gray-400">Envoi…</span>}
-                {bordereauPdfPath && uploading !== 'bordereau' && <span className="text-green-600">✓</span>}
-              </div>
-            </Field>
-          </div>
+          {/* Le PDF du BL est déjà joint par la zone de pré-remplissage ci-dessus
+              (analysé ou simplement archivé) : plus de champ « PDF du bon de
+              livraison » séparé, qui écrivait le même blPdfPath. Reste le
+              bordereau de chargement, qui est un AUTRE document. */}
+          <Field label="PDF du bordereau de chargement">
+            <div className="flex items-center gap-2 text-xs">
+              <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, 'bordereau'); }} />
+              {uploading === 'bordereau' && <span className="text-gray-400">Envoi…</span>}
+              {bordereauPdfPath && uploading !== 'bordereau' && <span className="text-green-600">✓</span>}
+            </div>
+          </Field>
 
           <Field label="Observations"><Textarea value={form.observations} onChange={(e) => set('observations', e.target.value)} rows={2} /></Field>
           {warnings.length === 0 && (

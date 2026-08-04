@@ -66,6 +66,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
     if (picked != null && mounted) setState(() => _dateChargement = picked);
   }
 
+  /// Capture du bordereau de chargement (la photo du BL vient du bouton scan).
   Future<void> _capture(String slot) async {
     final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 2000);
     if (img == null) return;
@@ -73,13 +74,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
     final ts = DateTime.now().microsecondsSinceEpoch;
     final path = await AttachmentStore.persistBytes(bytes, 'doc-$slot-$ts.jpg');
     if (!mounted) return;
-    setState(() {
-      if (slot == 'bl') {
-        _blDoc = path;
-      } else {
-        _bordereauDoc = path;
-      }
-    });
+    setState(() => _bordereauDoc = path);
   }
 
   /// Photographie le BL, l'envoie à l'analyse serveur (OCR) et PRÉ-REMPLIT le
@@ -286,7 +281,22 @@ class _BlFormScreenState extends State<BlFormScreen> {
                 const SizedBox(height: 20),
                 const Divider(),
                 const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Documents (photos)', style: TextStyle(fontWeight: FontWeight.w600))),
-                _DocTile(label: 'Photo du bon de livraison', captured: _blDoc != null, onTap: () => _capture('bl')),
+                // La photo du BL provient du bouton « Scanner le BL » en haut (qui
+                // sert à la fois au pré-remplissage et à la pièce jointe) : plus de
+                // tuile séparée qui reprenait la même photo.
+                Row(
+                  children: [
+                    Icon(_blDoc != null ? Icons.check_circle : Icons.photo_camera_outlined,
+                        size: 18, color: _blDoc != null ? Colors.green : Colors.grey),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(
+                      _blDoc != null
+                          ? 'Photo du bon de livraison jointe (via le scan)'
+                          : 'Photo du bon de livraison : utilisez « Scanner le BL » en haut',
+                      style: TextStyle(fontSize: 12.5, color: _blDoc != null ? Colors.green.shade800 : Colors.grey.shade600),
+                    )),
+                  ],
+                ),
                 const SizedBox(height: 10),
                 _DocTile(label: 'Photo du bordereau de chargement', captured: _bordereauDoc != null, onTap: () => _capture('bordereau')),
                 const SizedBox(height: 24),
