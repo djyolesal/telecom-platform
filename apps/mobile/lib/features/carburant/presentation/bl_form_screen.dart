@@ -66,13 +66,14 @@ class _BlFormScreenState extends State<BlFormScreen> {
     if (picked != null && mounted) setState(() => _dateChargement = picked);
   }
 
-  /// Capture du bordereau de chargement (la photo du BL vient du bouton scan).
-  Future<void> _capture(String slot) async {
-    final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 2000);
+  /// Scan du bordereau de chargement (la photo du BL vient du bouton scan du BL).
+  /// Qualité « document » comme le scan du BL : un justificatif doit rester lisible.
+  Future<void> _scannerBordereau() async {
+    final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2400);
     if (img == null) return;
     final bytes = await img.readAsBytes();
     final ts = DateTime.now().microsecondsSinceEpoch;
-    final path = await AttachmentStore.persistBytes(bytes, 'doc-$slot-$ts.jpg');
+    final path = await AttachmentStore.persistBytes(bytes, 'doc-bordereau-$ts.jpg');
     if (!mounted) return;
     setState(() => _bordereauDoc = path);
   }
@@ -297,8 +298,23 @@ class _BlFormScreenState extends State<BlFormScreen> {
                     )),
                   ],
                 ),
-                const SizedBox(height: 10),
-                _DocTile(label: 'Photo du bordereau de chargement', captured: _bordereauDoc != null, onTap: () => _capture('bordereau')),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _scannerBordereau,
+                  icon: Icon(_bordereauDoc != null ? Icons.check_circle : Icons.document_scanner,
+                      color: _bordereauDoc != null ? Colors.green : null),
+                  label: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(_bordereauDoc != null
+                        ? 'Bordereau de chargement scanné — appuyez pour reprendre'
+                        : 'Scanner le bordereau de chargement'),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                    side: BorderSide(color: _bordereauDoc != null ? Colors.green : Colors.grey.shade400),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: _saving ? null : _submit,
@@ -309,27 +325,6 @@ class _BlFormScreenState extends State<BlFormScreen> {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-class _DocTile extends StatelessWidget {
-  final String label;
-  final bool captured;
-  final VoidCallback onTap;
-  const _DocTile({required this.label, required this.captured, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(captured ? Icons.check_circle : Icons.photo_camera, color: captured ? Colors.green : null),
-      label: Align(alignment: Alignment.centerLeft, child: Text(captured ? '$label — joint' : label)),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        side: BorderSide(color: captured ? Colors.green : Colors.grey.shade400),
-        minimumSize: const Size.fromHeight(48),
       ),
     );
   }
