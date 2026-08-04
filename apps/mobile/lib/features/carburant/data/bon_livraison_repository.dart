@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/network_info.dart';
 import '../../../core/sync/sync_service.dart';
@@ -59,6 +61,41 @@ class BonLivraisonRepository {
       (dio) => dio.get('/bons-commande', queryParameters: {'limit': 50}),
       (data) => (data['data'] as List).map((e) => BonCommandeLite.fromJson(e as Map<String, dynamic>)).toList(),
     );
+  }
+
+  /// Mes chargements (l'API filtre déjà sur le prestataire du compte).
+  Future<List<BonLivraisonLite>> getMesBonsLivraison() async {
+    return _client.request(
+      (dio) => dio.get('/bons-livraison', queryParameters: {'limit': 50}),
+      (data) => (data['data'] as List)
+          .map((e) => BonLivraisonLite.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  /// Détail d'un chargement + son plan de livraison (sites et volumes).
+  Future<BonLivraisonDetail> getBonLivraison(String id) async {
+    return _client.request(
+      (dio) => dio.get('/bons-livraison/$id'),
+      (data) => BonLivraisonDetail.fromJson(data['data'] as Map<String, dynamic>),
+    );
+  }
+
+  /// Télécharge le plan de livraison en PDF (requête AUTHENTIFIÉE : l'endpoint
+  /// vérifie que le BL appartient bien au transporteur) et renvoie le chemin du
+  /// fichier écrit sur l'appareil, prêt à être ouvert ou partagé.
+  Future<String> telechargerPlanPdf(String id, String numeroBL) async {
+    final octets = await _client.request<List<int>>(
+      (dio) => dio.get<List<int>>(
+        '/bons-livraison/$id/plan.pdf',
+        options: Options(responseType: ResponseType.bytes),
+      ),
+      (data) => (data as List).cast<int>(),
+    );
+    final dossier = await getTemporaryDirectory();
+    final fichier = File('${dossier.path}/plan-livraison-${numeroBL.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.pdf');
+    await fichier.writeAsBytes(octets, flush: true);
+    return fichier.path;
   }
 
   /// Date calendaire « AAAA-MM-JJ » (pas d'heure, pas de fuseau).

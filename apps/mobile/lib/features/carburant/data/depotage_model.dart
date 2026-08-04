@@ -215,3 +215,121 @@ class PlanLigne {
     );
   }
 }
+
+/// Bon de livraison du transporteur — vue liste (« mes chargements »).
+class BonLivraisonLite {
+  final String id;
+  final String numeroBL;
+  final int mois;
+  final int annee;
+  final String immatriculation;
+  final double volumeChargeLitres;
+  final DateTime? dateChargement;
+  final String statut;
+  final int nbSites; // lignes du plan de livraison
+
+  const BonLivraisonLite({
+    required this.id,
+    required this.numeroBL,
+    required this.mois,
+    required this.annee,
+    required this.immatriculation,
+    required this.volumeChargeLitres,
+    this.dateChargement,
+    required this.statut,
+    this.nbSites = 0,
+  });
+
+  factory BonLivraisonLite.fromJson(Map<String, dynamic> j) => BonLivraisonLite(
+        id: j['id'] as String,
+        numeroBL: j['numeroBL'] as String? ?? '',
+        mois: (j['mois'] as num?)?.toInt() ?? 0,
+        annee: (j['annee'] as num?)?.toInt() ?? 0,
+        immatriculation: j['immatriculation'] as String? ?? '',
+        volumeChargeLitres: Depotage._d(j['volumeChargeLitres']),
+        dateChargement: DateTime.tryParse(j['dateChargement']?.toString() ?? ''),
+        statut: j['statut'] as String? ?? 'PLANIFIE',
+        nbSites: ((j['lignes'] as List?)?.length) ?? (j['_count']?['lignes'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// Une ligne du plan : le site à servir et le volume prévu/livré.
+class LignePlanBL {
+  final String siteCode;
+  final String siteNom;
+  final String region;
+  final double volumePrevuLitres;
+  final double volumeLivreReel;
+  final String statut;
+
+  const LignePlanBL({
+    required this.siteCode,
+    required this.siteNom,
+    required this.region,
+    required this.volumePrevuLitres,
+    required this.volumeLivreReel,
+    required this.statut,
+  });
+
+  double get restant => (volumePrevuLitres - volumeLivreReel).clamp(0, double.infinity);
+
+  factory LignePlanBL.fromJson(Map<String, dynamic> j) {
+    final s = j['site'] as Map<String, dynamic>?;
+    return LignePlanBL(
+      siteCode: s?['code'] as String? ?? '',
+      siteNom: s?['nom'] as String? ?? '',
+      region: s?['region'] as String? ?? '',
+      volumePrevuLitres: Depotage._d(j['volumePrevuLitres']),
+      volumeLivreReel: Depotage._d(j['volumeLivreReel']),
+      statut: j['statut'] as String? ?? 'PREVU',
+    );
+  }
+}
+
+/// Détail d'un bon de livraison : l'entête + son plan de livraison.
+class BonLivraisonDetail {
+  final String id;
+  final String numeroBL;
+  final int mois;
+  final int annee;
+  final String immatriculation;
+  final double volumeChargeLitres;
+  final DateTime? dateChargement;
+  final String statut;
+  final String? bcNumero;
+  final List<LignePlanBL> lignes;
+  final double sommeLignes;
+
+  const BonLivraisonDetail({
+    required this.id,
+    required this.numeroBL,
+    required this.mois,
+    required this.annee,
+    required this.immatriculation,
+    required this.volumeChargeLitres,
+    this.dateChargement,
+    required this.statut,
+    this.bcNumero,
+    this.lignes = const [],
+    this.sommeLignes = 0,
+  });
+
+  /// Volume réellement déposé sur l'ensemble des sites du plan.
+  double get totalLivre => lignes.fold(0, (s, l) => s + l.volumeLivreReel);
+
+  factory BonLivraisonDetail.fromJson(Map<String, dynamic> j) => BonLivraisonDetail(
+        id: j['id'] as String,
+        numeroBL: j['numeroBL'] as String? ?? '',
+        mois: (j['mois'] as num?)?.toInt() ?? 0,
+        annee: (j['annee'] as num?)?.toInt() ?? 0,
+        immatriculation: j['immatriculation'] as String? ?? '',
+        volumeChargeLitres: Depotage._d(j['volumeChargeLitres']),
+        dateChargement: DateTime.tryParse(j['dateChargement']?.toString() ?? ''),
+        statut: j['statut'] as String? ?? 'PLANIFIE',
+        bcNumero: (j['bonCommande'] as Map<String, dynamic>?)?['numero'] as String?,
+        lignes: ((j['lignes'] as List?) ?? const [])
+            .map((e) => LignePlanBL.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        sommeLignes: Depotage._d(j['sommeLignes']),
+      );
+}

@@ -282,6 +282,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         subtitle: 'déclarer un chargement',
                         onTap: () => context.push('/carburant/bon-livraison/nouveau'),
                       ),
+                      const SizedBox(height: 10),
+                      // Ses chargements et, pour chacun, le plan de livraison
+                      // (sites + volumes) exportable en PDF.
+                      _ActionCard(
+                        color: Colors.white,
+                        foreground: AppColors.brand,
+                        icon: Icons.checklist_rtl,
+                        title: 'Mes livraisons planifiées',
+                        subtitle: 'plan par site · export PDF',
+                        onTap: () => context.push('/carburant/bons-livraison'),
+                      ),
                     ] else ...[
                     // ── Pouls du parc ──
                     FutureBuilder<Map<String, dynamic>?>(
