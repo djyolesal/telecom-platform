@@ -1,4 +1,4 @@
-import { computeManquants } from '../services/manquants.service';
+import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { notificationService } from '../services/notifications.service';
 import { logger } from '../utils/logger';
 
@@ -12,11 +12,16 @@ const L = (v: number) => `${v.toLocaleString('fr-FR')} L`;
  * Les criticals (site ou camion) sont en plus escaladés aux administrateurs.
  */
 export async function manquantAlertJob(): Promise<void> {
-  const m = await computeManquants({}); // national, année courante
+  // `ouvertsSeulement` : un BC clôturé ou annulé ne doit plus réveiller personne.
+  const [m, pilotage] = await Promise.all([
+    computeManquants({ ouvertsSeulement: true }), // national, année courante
+    computePilotageBL(),
+  ]);
   const lignes = m.lignesEnRetard;
   const camions = m.camionsCritiques;
+  const nbAttente = pilotage.sansPlan.length + pilotage.brouillonsOublies.length;
 
-  if (!lignes.length && !camions.length) {
+  if (!lignes.length && !camions.length && !nbAttente) {
     logger.info('[manquant-alert] Aucun manquant à signaler');
     return;
   }
@@ -36,11 +41,29 @@ export async function manquantAlertJob(): Promise<void> {
   if (retardLignes.length) {
     sections.push('🟠 En retard :\n' + retardLignes.slice(0, 5).map((l) => `${l.siteCode} — ${L(l.manquant)} (${l.jours} j)`).join('\n'));
   }
+  // Chargements en attente d'un geste du manager : sans ces deux lignes, un BL
+  // parti du dépôt sans plan n'apparaissait dans aucune alerte.
+  if (pilotage.sansPlan.length) {
+    sections.push(`📋 Chargés sans plan (> ${pilotage.seuilJours} j) :\n` +
+      pilotage.sansPlan.slice(0, 5).map((b) => `${b.numeroBL} ${b.immatriculation} — ${L(b.volumeChargeLitres)} (${b.jours} j)`).join('\n'));
+  }
+  if (pilotage.brouillonsOublies.length) {
+    sections.push(`📝 Brouillons oubliés : ${pilotage.brouillonsOublies.length} — ` +
+      pilotage.brouillonsOublies.slice(0, 3).map((b) => `${b.immatriculation} (${b.jours} j)`).join(', '));
+  }
   const body = sections.join('\n\n').slice(0, 1500);
 
   const nbCrit = critsLignes.length + camionsTri.length;
-  const title = `🚚 ${lignes.length} manquant(s)${nbCrit ? ` · ${nbCrit} critique(s)` : ''} — ${L(totalLitres)}`;
-  const payload = { type: 'MANQUANT_LIVRAISON', title, body, data: { kind: 'manquant_livraison', total: lignes.length, critiques: nbCrit, totalLitres } };
+  const title = lignes.length
+    ? `🚚 ${lignes.length} manquant(s)${nbCrit ? ` · ${nbCrit} critique(s)` : ''} — ${L(totalLitres)}`
+    : `📋 ${nbAttente} chargement(s) en attente de plan`;
+  const payload = {
+    type: 'MANQUANT_LIVRAISON', title, body,
+    data: {
+      kind: 'manquant_livraison', total: lignes.length, critiques: nbCrit, totalLitres,
+      sansPlan: pilotage.sansPlan.length, brouillons: pilotage.brouillonsOublies.length,
+    },
+  };
 
   await notificationService.sendToRole('MANAGER', payload);
 
@@ -52,5 +75,5 @@ export async function manquantAlertJob(): Promise<void> {
     });
   }
 
-  logger.info(`[manquant-alert] ${lignes.length} manquants (${nbCrit} critiques, ${camionsTri.length} camions) signalés`);
+  logger.info(`[manquant-alert] ${lignes.length} manquants (${nbCrit} critiques, ${camionsTri.length} camions), ${pilotage.sansPlan.length} sans plan, ${pilotage.brouillonsOublies.length} brouillons`);
 }

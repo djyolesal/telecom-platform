@@ -247,14 +247,26 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
   );
 }
 
+const BC_COLORS: Record<string, string> = { OUVERT: 'bg-green-100 text-green-700', CLOTURE: 'bg-gray-200 text-gray-700', ANNULE: 'bg-red-100 text-red-700' };
+
 export default function BonCommandeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const isManager = ['MANAGER', 'ADMIN'].includes((session?.user as { role?: string })?.role ?? '');
   const [showModal, setShowModal] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bon-commande', id],
     queryFn: () => api.get(`/bons-commande/${id}`).then((r) => r.data.data as BC),
+  });
+
+  // Le statut du BC est désormais opposable (plus de BL ni de modification de
+  // volume sur un trimestre clôturé) : il lui fallait donc un vrai geste.
+  const statutMut = useMutation({
+    mutationFn: (statut: string) => api.put(`/bons-commande/${id}`, { statut }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bon-commande', id] }),
   });
 
   if (isLoading) return <Loading />;
@@ -270,8 +282,25 @@ export default function BonCommandeDetailPage() {
         title={`Bon de commande ${data.numero}`}
         subtitle={`T${data.trimestre} ${data.annee}${data.numeroClient ? ` · Client ${data.numeroClient}` : ''}`}
         backHref="/carburant/commandes"
-        actions={<Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de livraison</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge className={BC_COLORS[data.statut] || ''}>{data.statut}</Badge>
+            {isManager && data.statut !== 'ANNULE' && (
+              <Button variant="secondary" loading={statutMut.isPending}
+                onClick={() => statutMut.mutate(data.statut === 'OUVERT' ? 'CLOTURE' : 'OUVERT')}>
+                {data.statut === 'OUVERT' ? 'Clôturer' : 'Rouvrir'}
+              </Button>
+            )}
+            {data.statut === 'OUVERT' && <Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de livraison</Button>}
+          </div>
+        }
       />
+
+      {data.statut !== 'OUVERT' && (
+        <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          Commande {data.statut.toLowerCase()} : plus aucun chargement ne peut y être ajouté, et les volumes de ses bons de livraison sont figés.
+        </div>
+      )}
 
       {data.bcPdfPath && (
         <a href={data.bcPdfUrl ?? undefined} target="_blank" rel="noopener noreferrer"

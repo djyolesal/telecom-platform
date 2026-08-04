@@ -15,6 +15,9 @@ export interface ManquantsFilter {
   // attribuable à une région). Les niveaux camion / mois / BC restent nationaux,
   // car un camion ou une commande traversent plusieurs régions.
   region?: string;
+  // L'alerte quotidienne n'a plus à réveiller un trimestre déjà arrêté : elle
+  // passe `ouvertsSeulement`, les écrans de consultation gardent l'historique.
+  ouvertsSeulement?: boolean;
 }
 
 export interface LigneEnRetard {
@@ -38,7 +41,7 @@ export interface CamionCritique {
  */
 // Mémoïsé 60 s : déduplique les scans répétés et les requêtes concurrentes.
 export function computeManquants(filter: ManquantsFilter) {
-  const key = `manquants:${filter.bonCommandeId ?? '*'}:${filter.mois ?? '*'}:${filter.annee ?? '*'}:${filter.region ?? '*'}`;
+  const key = `manquants:${filter.bonCommandeId ?? '*'}:${filter.mois ?? '*'}:${filter.annee ?? '*'}:${filter.region ?? '*'}:${filter.ouvertsSeulement ? 'O' : '*'}`;
   return memo(key, 60_000, () => computeManquantsImpl(filter));
 }
 
@@ -51,6 +54,9 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
 
   // Les brouillons (non finalisés) ne représentent pas un chargement réel → exclus.
   const where: Prisma.BonLivraisonWhereInput = { statut: { not: 'ANNULE' }, isBrouillon: false };
+  // Un BC annulé n'engage plus rien : ses BL ne doivent plus produire de manquant
+  // (auparavant l'annulation du BC ne retirait rien des rapports ni de l'alerte).
+  where.bonCommande = { statut: filter.ouvertsSeulement ? 'OUVERT' : { not: 'ANNULE' } };
   if (filter.bonCommandeId) where.bonCommandeId = filter.bonCommandeId;
   if (filter.mois) where.mois = filter.mois;
   if (filter.annee) where.annee = filter.annee;
@@ -81,7 +87,7 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     volBc.set(v.bonCommandeId, (volBc.get(v.bonCommandeId) ?? 0) + n(v.volumePrevuLitres));
   }
 
-  type SiteAgg = { siteId: string; siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; nbLignes: number; nbEnRetard: number; nbCritiques: number };
+  type SiteAgg = { siteId: string; siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; surLivre: number; nbLignes: number; nbEnRetard: number; nbCritiques: number };
   const parSiteMap = new Map<string, SiteAgg>();
   const parCamion: Array<Record<string, unknown>> = [];
   const lignesEnRetard: LigneEnRetard[] = [];
@@ -111,8 +117,12 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       // Le niveau site honore le filtre régional (camion/mois/BC restent nationaux).
       const dansRegion = !filter.region || l.site.region === filter.region;
       if (dansRegion) {
-        const ps = parSiteMap.get(l.site.id) ?? { siteId: l.site.id, siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, prevu: 0, livre: 0, manquant: 0, nbLignes: 0, nbEnRetard: 0, nbCritiques: 0 };
-        ps.prevu += prevu; ps.livre += livre; ps.manquant += manquant; ps.nbLignes++; if (enRetard) ps.nbEnRetard++; if (critique) ps.nbCritiques++;
+        const ps = parSiteMap.get(l.site.id) ?? { siteId: l.site.id, siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, prevu: 0, livre: 0, manquant: 0, surLivre: 0, nbLignes: 0, nbEnRetard: 0, nbCritiques: 0 };
+        // Le sur-livré était noyé par `Math.max(0, …)` : un site servi 1 500 L
+        // au-delà du plan ressortait « conforme », alors que ce volume manque
+        // forcément ailleurs (autre site du camion, ou plan mal saisi).
+        ps.prevu += prevu; ps.livre += livre; ps.manquant += manquant; ps.surLivre += Math.max(0, livre - prevu);
+        ps.nbLignes++; if (enRetard) ps.nbEnRetard++; if (critique) ps.nbCritiques++;
         parSiteMap.set(l.site.id, ps);
       }
 
@@ -141,6 +151,7 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       transporteur: bl.transporteur?.nom ?? null,
       dateChargement: bl.dateChargement, jours,
       charge, distribue: blDistribue, manquant: Math.max(0, charge - blDistribue),
+      surLivre: Math.max(0, blDistribue - charge),
       nbSites: bl.lignes.length, nbSitesManquants: blSitesManquants,
       enRetard: enRetardDelai && charge - blDistribue > EPS,
       critique: ecartCamion >= critCamion,
@@ -161,8 +172,8 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
   const round = (x: number) => Math.round(x);
 
   const parSite = [...parSiteMap.values()]
-    .filter((s) => s.manquant > EPS)
-    .map((s) => ({ ...s, prevu: round(s.prevu), livre: round(s.livre), manquant: round(s.manquant) }))
+    .filter((s) => s.manquant > EPS || s.surLivre > EPS)
+    .map((s) => ({ ...s, prevu: round(s.prevu), livre: round(s.livre), manquant: round(s.manquant), surLivre: round(s.surLivre) }))
     .sort((a, b) => b.manquant - a.manquant);
 
   const camions = parCamion
@@ -171,11 +182,11 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     .sort((a, b) => (b.manquant as number) - (a.manquant as number));
 
   const parMois = [...parMoisMap.values()]
-    .map((m) => ({ ...m, prevu: round(m.prevu), charge: round(m.charge), livre: round(m.livre), manquantCharge: round(Math.max(0, m.prevu - m.charge)), manquantLivre: round(Math.max(0, m.prevu - m.livre)) }))
+    .map((m) => ({ ...m, prevu: round(m.prevu), charge: round(m.charge), livre: round(m.livre), manquantCharge: round(Math.max(0, m.prevu - m.charge)), manquantLivre: round(Math.max(0, m.prevu - m.livre)), surCharge: round(Math.max(0, m.charge - m.prevu)) }))
     .sort((a, b) => a.annee - b.annee || a.mois - b.mois);
 
   const parBc = [...parBcMap.values()]
-    .map((b) => ({ ...b, prevu: round(b.prevu), charge: round(b.charge), livre: round(b.livre), manquant: round(Math.max(0, b.prevu - b.livre)) }))
+    .map((b) => ({ ...b, prevu: round(b.prevu), charge: round(b.charge), livre: round(b.livre), manquant: round(Math.max(0, b.prevu - b.livre)), surCharge: round(Math.max(0, b.charge - b.prevu)) }))
     .sort((a, b) => b.manquant - a.manquant);
 
   const totaux = {
@@ -187,7 +198,73 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     nbLignesEnRetard: lignesEnRetard.length,
     nbLignesCritiques: lignesEnRetard.filter((l) => l.critique).length,
     nbCamionsCritiques: camionsCritiques.length,
+    surLivreSitesLitres: round(parSite.reduce((s, x) => s + x.surLivre, 0)),
+    nbSitesSurLivres: parSite.filter((s) => s.surLivre > EPS).length,
   };
 
   return { seuilJours, parSite, parCamion: camions, parMois, parBc, totaux, lignesEnRetard, camionsCritiques };
+}
+
+export interface BlEnAttente {
+  id: string; numeroBL: string; bcNumero: string | null;
+  immatriculation: string; transporteur: string | null;
+  volumeChargeLitres: number; dateChargement: Date | null; jours: number;
+}
+
+/**
+ * Deux angles morts d'exploitation, invisibles jusqu'ici :
+ *  - un BL finalisé dont le plan n'a jamais été saisi : le carburant est parti du
+ *    dépôt, aucune ligne ne l'attend, donc il ne sort dans AUCUN manquant ;
+ *  - un brouillon abandonné : ni chargement réel, ni relance, il reste
+ *    indéfiniment dans la base et fausse la lecture du trimestre.
+ * Les deux se mesurent en jours depuis le chargement (à défaut, la création).
+ */
+export async function computePilotageBL(seuilJours = 2) {
+  const limite = new Date(Date.now() - seuilJours * 86_400_000);
+  const select = Prisma.validator<Prisma.BonLivraisonSelect>()({
+    id: true, numeroBL: true, immatriculation: true, volumeChargeLitres: true,
+    dateChargement: true, createdAt: true,
+    bonCommande: { select: { numero: true } },
+    transporteur: { select: { nom: true } },
+  });
+  type BlBrut = Prisma.BonLivraisonGetPayload<{ select: typeof select }>;
+
+  const [sansPlan, brouillons] = await Promise.all([
+    prisma.bonLivraison.findMany({
+      where: {
+        isBrouillon: false,
+        statut: { not: 'ANNULE' },
+        bonCommande: { statut: { not: 'ANNULE' } },
+        lignes: { none: {} },
+        dateChargement: { lte: limite },
+      },
+      select,
+      orderBy: { dateChargement: 'asc' },
+      take: 100,
+    }),
+    prisma.bonLivraison.findMany({
+      where: { isBrouillon: true, createdAt: { lte: limite } },
+      select,
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+    }),
+  ]);
+
+  const mapper = (b: BlBrut): BlEnAttente => ({
+    id: b.id,
+    numeroBL: b.numeroBL,
+    bcNumero: b.bonCommande?.numero ?? null,
+    immatriculation: b.immatriculation,
+    transporteur: b.transporteur?.nom ?? null,
+    volumeChargeLitres: n(b.volumeChargeLitres),
+    // Un brouillon n'a pas de chargement effectif : on compte depuis sa création.
+    dateChargement: b.dateChargement,
+    jours: Math.floor((Date.now() - (b.dateChargement ?? b.createdAt).getTime()) / 86_400_000),
+  });
+
+  return {
+    seuilJours,
+    sansPlan: sansPlan.map(mapper),
+    brouillonsOublies: brouillons.map(mapper),
+  };
 }

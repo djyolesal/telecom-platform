@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Download, AlertTriangle, MapPin, Truck, Calendar, Camera, X } from 'lucide-react';
+import { Download, AlertTriangle, MapPin, Truck, Calendar, Camera, X, ClipboardList } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -19,15 +19,17 @@ import { fmtNumber, fmtDate } from '@/lib/utils';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
-interface ParSite { siteId: string; siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; nbEnRetard: number; nbCritiques: number }
+interface ParSite { siteId: string; siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; surLivre: number; nbEnRetard: number; nbCritiques: number }
 interface SiteLigne { ligneId: string; blId: string; numeroBL: string; bcNumero: string; transporteur?: string; immatriculation: string; mois: number; annee: number; dateChargement: string; jours: number; prevu: number; livre: number; manquant: number; statut: string; enRetard: boolean }
-interface ParCamion { blId: string; numeroBL: string; bcNumero: string; mois: number; immatriculation: string; transporteur?: string; charge: number; distribue: number; manquant: number; nbSitesManquants: number; jours: number; enRetard: boolean; critique: boolean }
-interface ParMois { bcNumero: string; annee: number; mois: number; prevu: number; charge: number; livre: number; manquantCharge: number; manquantLivre: number }
+interface ParCamion { blId: string; numeroBL: string; bcNumero: string; mois: number; immatriculation: string; transporteur?: string; charge: number; distribue: number; manquant: number; surLivre: number; nbSitesManquants: number; jours: number; enRetard: boolean; critique: boolean }
+interface ParMois { bcNumero: string; annee: number; mois: number; prevu: number; charge: number; livre: number; manquantCharge: number; manquantLivre: number; surCharge: number }
+interface BlEnAttente { id: string; numeroBL: string; bcNumero: string | null; immatriculation: string; transporteur: string | null; volumeChargeLitres: number; dateChargement: string | null; jours: number }
 interface ParBc { bcId: string; numero: string; annee: number; trimestre: number; prevu: number; charge: number; livre: number; manquant: number }
 interface ManquantsData {
   seuilJours: number;
   parSite: ParSite[]; parCamion: ParCamion[]; parMois: ParMois[]; parBc: ParBc[];
-  totaux: { manquantSitesLitres: number; nbSitesManquants: number; nbSitesEnRetard: number; nbCamionsEcart: number; manquantMensuelLitres: number; nbLignesEnRetard: number; nbLignesCritiques: number; nbCamionsCritiques: number };
+  totaux: { manquantSitesLitres: number; nbSitesManquants: number; nbSitesEnRetard: number; nbCamionsEcart: number; manquantMensuelLitres: number; nbLignesEnRetard: number; nbLignesCritiques: number; nbCamionsCritiques: number; surLivreSitesLitres: number; nbSitesSurLivres: number };
+  pilotage: { seuilJours: number; sansPlan: BlEnAttente[]; brouillonsOublies: BlEnAttente[] };
 }
 interface BCOption { id: string; numero: string }
 
@@ -36,9 +38,13 @@ const TABS = [
   { key: 'camion', label: 'Par camion', icon: Truck },
   { key: 'mois', label: 'Par mois', icon: Calendar },
   { key: 'bc', label: 'Par bon de commande', icon: Calendar },
+  { key: 'attente', label: 'À traiter', icon: ClipboardList },
 ] as const;
 
 const mq = (v: number) => <span className={v > 0 ? 'font-semibold text-red-600' : 'text-gray-400'}>{v > 0 ? fmtNumber(v) : '—'}</span>;
+// Sur-livré : anomalie de sens inverse (bleu, jamais rouge) — le volume n'est pas
+// perdu, il manque forcément ailleurs.
+const sl = (v: number) => <span className={v > 0 ? 'font-semibold text-blue-600' : 'text-gray-300'}>{v > 0 ? `+${fmtNumber(v)}` : '—'}</span>;
 const LIGNE_COLORS: Record<string, string> = { PREVU: 'bg-gray-100 text-gray-600', PARTIEL: 'bg-amber-100 text-amber-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 
 // Drill-down : quels BL ont laissé ce site à découvert.
@@ -102,7 +108,7 @@ function SiteDrillModal({ site, bcId, mois, onClose }: { site: ParSite; bcId: st
 
 export default function ManquantsPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<'site' | 'camion' | 'mois' | 'bc'>('site');
+  const [tab, setTab] = useState<'site' | 'camion' | 'mois' | 'bc' | 'attente'>('site');
   const [bcId, setBcId] = useState('');
   const [mois, setMois] = useState('');
   const [region, setRegion] = useState('');
@@ -128,6 +134,8 @@ export default function ManquantsPage() {
   const camions = (data?.parCamion ?? []).filter((c) => !enRetardOnly || c.enRetard);
   // La région ne s'applique qu'au niveau site (un camion/commande traverse plusieurs régions).
   const regionNationaleNote = region && tab !== 'site';
+  const pil = data?.pilotage;
+  const nbAttente = (pil?.sansPlan.length ?? 0) + (pil?.brouillonsOublies.length ?? 0);
 
   const colsSite: Column<ParSite>[] = [
     { key: 'siteCode', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.siteNom}</span> },
@@ -136,6 +144,7 @@ export default function ManquantsPage() {
     { key: 'prevu', header: 'Prévu (L)', align: 'right', render: (s) => fmtNumber(s.prevu) },
     { key: 'livre', header: 'Livré (L)', align: 'right', render: (s) => fmtNumber(s.livre) },
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (s) => mq(s.manquant) },
+    { key: 'surLivre', header: 'Sur-livré (L)', align: 'right', render: (s) => sl(s.surLivre) },
     { key: 'etat', header: 'État', align: 'center', render: (s) => s.nbCritiques > 0 ? <Badge className="bg-red-600 text-white">Critique</Badge> : s.nbEnRetard > 0 ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">—</span> },
   ];
   const colsCamion: Column<ParCamion>[] = [
@@ -146,6 +155,7 @@ export default function ManquantsPage() {
     { key: 'charge', header: 'Chargé (L)', align: 'right', render: (c) => fmtNumber(c.charge) },
     { key: 'distribue', header: 'Distribué (L)', align: 'right', render: (c) => fmtNumber(c.distribue) },
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (c) => mq(c.manquant) },
+    { key: 'surLivre', header: 'Sur-livré (L)', align: 'right', render: (c) => sl(c.surLivre) },
     { key: 'etat', header: 'État', align: 'center', render: (c) => c.critique ? <Badge className="bg-red-600 text-white">Critique</Badge> : c.enRetard ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">{c.jours} j</span> },
   ];
   const colsMois: Column<ParMois>[] = [
@@ -156,6 +166,7 @@ export default function ManquantsPage() {
     { key: 'livre', header: 'Livré (L)', align: 'right', render: (m) => fmtNumber(m.livre) },
     { key: 'manquantCharge', header: 'Manq. chargé', align: 'right', render: (m) => mq(m.manquantCharge) },
     { key: 'manquantLivre', header: 'Manq. livré', align: 'right', render: (m) => mq(m.manquantLivre) },
+    { key: 'surCharge', header: 'Sur-chargé', align: 'right', render: (m) => sl(m.surCharge) },
   ];
   const colsBc: Column<ParBc>[] = [
     { key: 'numero', header: 'BC', render: (b) => <span className="font-medium text-gray-800">{b.numero}</span> },
@@ -175,11 +186,12 @@ export default function ManquantsPage() {
         actions={<ExportButtons base="/rapports/manquants-livraison/export" name="manquants-livraison" query={params || undefined} />}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
         <StatCard title="Manquant total (sites)" value={`${fmtNumber(t?.manquantSitesLitres ?? 0)} L`} icon={AlertTriangle} color="bg-[#C0392B]" />
         <StatCard title="Sites manquants" value={String(t?.nbSitesManquants ?? 0)} icon={MapPin} color="bg-[#1B3F6B]" />
         <StatCard title="Camions avec écart" value={String(t?.nbCamionsEcart ?? 0)} icon={Truck} color="bg-[#2471A3]" />
         <StatCard title="Critiques (≥ seuil)" value={`${(t?.nbLignesCritiques ?? 0)} sites · ${(t?.nbCamionsCritiques ?? 0)} camions`} icon={AlertTriangle} color="bg-[#C0392B]" />
+        <StatCard title="À traiter" value={`${nbAttente}`} icon={ClipboardList} color="bg-[#B7950B]" />
       </div>
 
       {/* Filtres */}
@@ -214,7 +226,66 @@ export default function ManquantsPage() {
       {tab === 'mois' && (data?.parMois.length ? <DataTable columns={colsMois} data={data.parMois} /> : <EmptyState title="Aucune donnée mensuelle" />)}
       {tab === 'bc' && (data?.parBc.length ? <DataTable columns={colsBc} data={data.parBc} onRowClick={(b) => router.push(`/carburant/commandes/${b.bcId}`)} /> : <EmptyState title="Aucune donnée par bon de commande" />)}
 
+      {tab === 'attente' && (
+        nbAttente === 0 ? (
+          <EmptyState title="Rien en attente" hint={`Aucun chargement sans plan ni brouillon oublié depuis plus de ${pil?.seuilJours ?? 2} jours.`} />
+        ) : (
+          <div className="space-y-6">
+            {/* Un BL parti du dépôt sans plan n'apparaît dans AUCUN manquant :
+                c'est le seul écran où il est visible. */}
+            <ListeAttente
+              titre="Chargés sans plan de livraison"
+              aide="Le camion est parti mais aucun site ne lui est affecté — ces volumes n'apparaissent dans aucun manquant."
+              lignes={pil?.sansPlan ?? []}
+              onOuvrir={(id) => router.push(`/carburant/livraisons/${id}`)}
+            />
+            <ListeAttente
+              titre="Brouillons oubliés"
+              aide="Bons de livraison jamais finalisés. À compléter ou à supprimer."
+              lignes={pil?.brouillonsOublies ?? []}
+              onOuvrir={(id) => router.push(`/carburant/livraisons/${id}`)}
+            />
+          </div>
+        )
+      )}
+
       {drillSite && <SiteDrillModal site={drillSite} bcId={bcId} mois={mois} onClose={() => setDrillSite(null)} />}
     </div>
+  );
+}
+
+function ListeAttente({ titre, aide, lignes, onOuvrir }: { titre: string; aide: string; lignes: BlEnAttente[]; onOuvrir: (id: string) => void }) {
+  if (!lignes.length) return null;
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-800">{titre} <span className="text-gray-400">({lignes.length})</span></h3>
+      <p className="mb-2 text-xs text-gray-500">{aide}</p>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-gray-50 text-xs text-gray-500">
+              <th className="px-3 py-2 text-left">N° BL</th>
+              <th className="text-left">BC</th>
+              <th className="text-left">Camion</th>
+              <th className="text-left">Transporteur</th>
+              <th className="text-right">Chargé (L)</th>
+              <th className="px-3 text-right">Ancienneté</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.map((b) => (
+              <tr key={b.id} className="cursor-pointer border-b last:border-0 hover:bg-gray-50" onClick={() => onOuvrir(b.id)}>
+                <td className="px-3 py-2 font-medium text-gray-800">{b.numeroBL}</td>
+                <td className="text-gray-600">{b.bcNumero ?? '—'}</td>
+                <td className="text-gray-600">{b.immatriculation}</td>
+                <td className="text-gray-600">{b.transporteur ?? '—'}</td>
+                <td className="text-right">{fmtNumber(b.volumeChargeLitres)}</td>
+                <td className="px-3 text-right font-semibold text-amber-700">{b.jours} j</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

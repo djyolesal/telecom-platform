@@ -152,6 +152,40 @@ async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
     where: { id: ligne.id },
     data: { volumeLivreLitres: livre, statut },
   });
+  await syncStatutBonLivraison(ligne.bonLivraisonId);
+}
+
+/**
+ * Fait avancer le statut du BON DE LIVRAISON à partir de l'état de ses lignes.
+ *
+ * Ce statut n'était piloté par RIEN : seule une saisie manuelle dans la fenêtre
+ * « Entête » pouvait le changer. Un camion entièrement livré restait donc
+ * affiché « PLANIFIÉ » — le transporteur croyait avoir du travail, et le
+ * pilotage ne pouvait pas distinguer un chargement soldé d'un chargement en
+ * cours. Règle : pas de plan → PLANIFIE ; plan posé, livraison entamée ou non →
+ * CHARGE ; toutes les lignes soldées (LIVRE/ANNULE) → LIVRE.
+ *
+ * ANNULE n'est jamais posé ni levé ici : c'est une décision humaine, protégée
+ * par ailleurs (motif obligatoire, refus si des dépotages existent).
+ */
+export async function syncStatutBonLivraison(bonLivraisonId: string) {
+  const bl = await prisma.bonLivraison.findUnique({
+    where: { id: bonLivraisonId },
+    select: { id: true, statut: true, isBrouillon: true, lignes: { select: { statut: true } } },
+  });
+  // Un brouillon n'est pas un chargement réel : on ne lui invente pas d'avancement.
+  if (!bl || bl.statut === 'ANNULE' || bl.isBrouillon) return;
+
+  const lignes = bl.lignes;
+  let statut: 'PLANIFIE' | 'CHARGE' | 'LIVRE';
+  if (!lignes.length) statut = 'PLANIFIE';
+  else if (lignes.every((l) => l.statut === 'LIVRE' || l.statut === 'ANNULE')) statut = 'LIVRE';
+  else statut = 'CHARGE';
+
+  if (statut !== bl.statut) {
+    await prisma.bonLivraison.update({ where: { id: bl.id }, data: { statut } });
+  }
+  return statut;
 }
 
 export async function getDepotages(req: Request, res: Response, next: NextFunction) {

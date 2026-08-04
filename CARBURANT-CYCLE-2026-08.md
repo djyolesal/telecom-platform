@@ -137,12 +137,24 @@ Les six points sont livrés (voir le commit « carburant lot 1 »).
 5. **Source de stock unique** consommée par tous les écrans. *(F7)*
 6. **Renommer « Livré » en « Chargé »** sur l'écran BC et ajouter la vraie colonne livrée. *(F5)*
 
-### Lot 2 — Pilotage des états (effort faible/moyen)
-7. Statut BL dérivé automatiquement (PLANIFIÉ → CHARGÉ → LIVRÉ). *(F8)*
-8. BC clôturé/annulé réellement opposable (refus de BL, propagation aux manquants, garde sur la
-   baisse d'un volume mensuel sous le déjà-chargé). *(F8)*
-9. KPI « BL sans plan depuis N jours » et « brouillons oubliés », intégrés à l'alerte de 9 h.
-10. Statut et colonne « sur-livré ». *(F10)*
+### Lot 2 — Pilotage des états ✅ FAIT le 04/08/2026
+
+7. **Statut BL dérivé automatiquement** : `syncStatutBonLivraison` recalcule PLANIFIÉ → CHARGÉ →
+   LIVRÉ à chaque dépotage, à chaque enregistrement de plan et à chaque édition du BL. *(F8)*
+8. **BC clôturé/annulé opposable** : création de BL refusée (409), volumes et plan des BL figés
+   sur un BC non ouvert (l'administratif et l'annulation restent possibles), BL d'un BC annulé
+   retirés des manquants, alerte de 9 h restreinte aux BC ouverts, et **impossible de ramener un
+   volume mensuel sous le volume déjà chargé**. Le geste manquait côté écran : bouton
+   **Clôturer / Rouvrir** sur la fiche BC, badge de statut, bandeau explicatif. *(F8)*
+9. **Deux angles morts rendus visibles** : `computePilotageBL` liste les BL finalisés **sans plan**
+   depuis plus de 2 jours (ils n'apparaissaient dans AUCUN manquant) et les **brouillons oubliés**.
+   Nouvel onglet « À traiter » sur la page des manquants + deux sections dans l'alerte de 9 h,
+   qui se déclenche désormais même sans manquant si des chargements attendent un plan.
+10. **Sur-livraison exposée** plutôt que masquée par `Math.max(0, …)` : colonne « Sur-livré » aux
+    niveaux site et camion, « Sur-chargé » aux niveaux mois et BC, dans les écrans **et** les
+    exports XLSX/PDF, avec le total dans les KPI. Pas de valeur d'énumération `SUR_LIVRE` ajoutée :
+    un `ALTER TYPE ADD VALUE` en production pour une information déjà portée par les chiffres ne
+    valait pas le risque. *(F10)*
 
 ### Lot 3 — Bouclage comptable (effort moyen — le cœur de la demande)
 11. **Clôture d'un BL avec ventilation du reste** : retour dépôt / perte constatée / report sur

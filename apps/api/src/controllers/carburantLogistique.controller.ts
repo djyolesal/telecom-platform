@@ -1,6 +1,7 @@
 import { publicFileUrl, uploadBuffer, cleMinioValide } from '../services/storage.service';
 import { analyserBonCommandePdf as analyserBcPdf } from '../services/bcPdf.service';
 import { analyserBonLivraisonDocument as analyserBlDoc } from '../services/blPdf.service';
+import { syncStatutBonLivraison } from './depotages.controller';
 import { Request, Response, NextFunction } from 'express';
 import { assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
@@ -11,7 +12,7 @@ import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
-import { computeManquants } from '../services/manquants.service';
+import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
 import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
 import { getNum } from '../services/settings.service';
@@ -248,9 +249,29 @@ export async function updateBonCommande(req: Request, res: Response, next: NextF
     if (observations !== undefined) data.observations = observations;
     if (statut != null) data.statut = statut;
 
-    // Remplacement complet des volumes mensuels si fournis.
+    // Remplacement complet des volumes mensuels si fournis. GARDE-FOU : on ne
+    // peut pas ramener le prévu d'un mois SOUS ce qui a déjà été chargé — sinon
+    // on efface rétroactivement un dépassement réel (mars ramené à 0 L alors que
+    // 40 000 L sont partis), et le suivi du BC ment sur le trimestre.
     if (req.body.volumesMensuels !== undefined) {
       const volumes = parseVolumes(req.body.volumesMensuels);
+      const chargesParMois = await prisma.bonLivraison.groupBy({
+        by: ['mois'],
+        where: { bonCommandeId: existing.id, isBrouillon: false, statut: { not: 'ANNULE' } },
+        _sum: { volumeChargeLitres: true },
+      });
+      const prevuParMois = new Map(volumes.map((v) => [v.mois, v.volumePrevuLitres]));
+      for (const c of chargesParMois) {
+        const dejaCharge = n(c._sum.volumeChargeLitres);
+        const nouveauPrevu = prevuParMois.get(c.mois) ?? 0;
+        if (dejaCharge > nouveauPrevu + TOLERANCE_L) {
+          throw new AppError(
+            `Mois ${MOIS[c.mois] ?? c.mois} : ${dejaCharge.toLocaleString('fr-FR')} L ont déjà été chargés, ` +
+            `le volume prévu ne peut pas être ramené à ${nouveauPrevu.toLocaleString('fr-FR')} L.`,
+            409
+          );
+        }
+      }
       await prisma.volumeMensuel.deleteMany({ where: { bonCommandeId: existing.id } });
       data.volumesMensuels = { create: volumes };
     }
@@ -460,6 +481,15 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
 
     const bc = await prisma.bonCommande.findUnique({ where: { id: bonCommandeId } });
     if (!bc) throw new AppError('Bon de commande introuvable', 404);
+    // Un BC clôturé ou annulé n'accepte plus de chargement : sans ce contrôle,
+    // un BL retardataire saisi en mai repeuplait un T1 déjà arrêté et facturé,
+    // et modifiait rétroactivement le manquant du trimestre.
+    if (bc.statut !== 'OUVERT') {
+      throw new AppError(
+        `Le bon de commande ${bc.numero} est ${bc.statut.toLowerCase()} : il n'accepte plus de chargement.`,
+        409
+      );
+    }
 
     // Transporteur : rattaché à son propre prestataire. Manager : peut désigner le transporteur.
     let transporteurId: string | null;
@@ -590,6 +620,25 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
       data.transporteur = transporteurId ? { connect: { id: transporteurId } } : { disconnect: true };
     }
 
+    // BC clôturé ou annulé : le trimestre est arrêté. On laisse encore corriger
+    // l'administratif (documents, observations) et annuler, mais plus rien de ce
+    // qui déplacerait des litres dans un trimestre déjà soldé.
+    const bcParent = await prisma.bonCommande.findUnique({
+      where: { id: existing.bonCommandeId },
+      select: { numero: true, statut: true },
+    });
+    if (bcParent && bcParent.statut !== 'OUVERT') {
+      const bloquants = ['volumeChargeLitres', 'mois', 'annee', 'lignes'].filter((k) => req.body[k] !== undefined);
+      if (data.isBrouillon === false) bloquants.push('finalisation');
+      if (bloquants.length) {
+        throw new AppError(
+          `Le bon de commande ${bcParent.numero} est ${bcParent.statut.toLowerCase()} : ` +
+          `les volumes et le plan de ce chargement ne peuvent plus être modifiés.`,
+          409
+        );
+      }
+    }
+
     let warnings: string[] = [];
     const effMois = data.mois != null ? (data.mois as number) : existing.mois;
     const effVolume = data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : n(existing.volumeChargeLitres);
@@ -619,6 +668,10 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
         include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
       });
     });
+    // Le plan a pu changer (lignes remplacées, BL finalisé) : le statut suit.
+    // Recopié dans la réponse, sinon l'écran réaffiche l'ancien statut.
+    const statutSync = await syncStatutBonLivraison(bl.id);
+    if (statutSync) bl.statut = statutSync;
     await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { updated: Object.keys(data) }, req);
     clearMemo();
     res.json({ success: true, data: bl, warnings });
@@ -705,6 +758,10 @@ export async function setPlanLivraison(req: Request, res: Response, next: NextFu
       });
       return { full, preserveWarn };
     });
+    // Poser (ou vider) le plan fait avancer le statut du BL : PLANIFIE tant
+    // qu'aucune ligne n'existe, CHARGE dès qu'il y en a, LIVRE quand tout est
+    // soldé. Sans cet appel, le statut restait figé jusqu'au premier dépotage.
+    await syncStatutBonLivraison(bl.id);
     await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { plan: lignes.length }, req);
     clearMemo();
     res.json({ success: true, data: updated.full, warnings: [...planWarn, ...updated.preserveWarn] });
@@ -833,10 +890,13 @@ export async function getManquantsSite(req: Request, res: Response, next: NextFu
 
 export async function getManquantsLivraison(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await computeManquants(manquantsFilter(req));
+    const [data, pilotage] = await Promise.all([
+      computeManquants(manquantsFilter(req)),
+      computePilotageBL(),
+    ]);
     // lignesEnRetard sert au job d'alerte ; on ne l'expose pas dans l'API.
     const { lignesEnRetard: _omit, ...rest } = data;
-    res.json({ success: true, data: rest });
+    res.json({ success: true, data: { ...rest, pilotage } });
   } catch (err) { next(err); }
 }
 
@@ -853,6 +913,7 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
           { header: 'Prévu (L)', key: 'prevu', width: 12 },
           { header: 'Livré (L)', key: 'livre', width: 12 },
           { header: 'Manquant (L)', key: 'manquant', width: 14 },
+          { header: 'Sur-livré (L)', key: 'surLivre', width: 14 },
           { header: 'Lignes en retard', key: 'nbEnRetard', width: 16 },
         ],
         rows: m.parSite as unknown as Record<string, unknown>[],
@@ -866,6 +927,7 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
           { header: 'Chargé (L)', key: 'charge', width: 12 },
           { header: 'Distribué (L)', key: 'distribue', width: 14 },
           { header: 'Manquant (L)', key: 'manquant', width: 14 },
+          { header: 'Sur-livré (L)', key: 'surLivre', width: 14 },
           { header: 'Sites manquants', key: 'nbSitesManquants', width: 16 },
         ],
         rows: m.parCamion as unknown as Record<string, unknown>[],
@@ -881,6 +943,7 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
           { header: 'Livré (L)', key: 'livre', width: 12 },
           { header: 'Manquant chargé (L)', key: 'manquantCharge', width: 18 },
           { header: 'Manquant livré (L)', key: 'manquantLivre', width: 18 },
+          { header: 'Sur-chargé (L)', key: 'surCharge', width: 16 },
         ],
         rows: m.parMois as unknown as Record<string, unknown>[],
       },
@@ -894,6 +957,7 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
           { header: 'Chargé (L)', key: 'charge', width: 12 },
           { header: 'Livré (L)', key: 'livre', width: 12 },
           { header: 'Manquant (L)', key: 'manquant', width: 14 },
+          { header: 'Sur-chargé (L)', key: 'surCharge', width: 16 },
         ],
         rows: m.parBc as unknown as Record<string, unknown>[],
       },
@@ -973,6 +1037,15 @@ export async function createBrouillonLivraison(req: Request, res: Response, next
     if (!bonCommandeId) throw new AppError('Bon de commande requis', 400);
     const bc = await prisma.bonCommande.findUnique({ where: { id: bonCommandeId } });
     if (!bc) throw new AppError('Bon de commande introuvable', 404);
+    // Un BC clôturé ou annulé n'accepte plus de chargement : sans ce contrôle,
+    // un BL retardataire saisi en mai repeuplait un T1 déjà arrêté et facturé,
+    // et modifiait rétroactivement le manquant du trimestre.
+    if (bc.statut !== 'OUVERT') {
+      throw new AppError(
+        `Le bon de commande ${bc.numero} est ${bc.statut.toLowerCase()} : il n'accepte plus de chargement.`,
+        409
+      );
+    }
 
     const plan = parseLignes(lignes);
     if (!plan.length) throw new AppError('Aucun site dans la tournée', 400);
