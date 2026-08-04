@@ -406,10 +406,12 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     if (!bonCommandeId) throw new AppError('Bon de commande requis', 400);
     if (!numeroBL) throw new AppError('Numéro de bon de livraison requis', 400);
     if (!immatriculation) throw new AppError('Immatriculation du camion requise', 400);
-    // Le bordereau de chargement est la PREUVE de ce qui est sorti du dépôt :
-    // sans lui, un chargement déclaré n'est adossé à aucun document et l'écart
-    // camion devient incontestable dans les deux sens. Obligatoire à la création
+    // Un chargement déclaré doit être adossé à SES DEUX pièces : le bon de
+    // livraison (ce que le fournisseur a émis) et le bordereau de chargement (ce
+    // qui est réellement sorti du dépôt). Sans elles, l'écart camion n'est
+    // contestable ni dans un sens ni dans l'autre. Obligatoires à la création
     // (les brouillons du réappro prédictif ne passent pas par ici).
+    if (!blPdfPath) throw new AppError('Document du bon de livraison requis (photo ou PDF)', 400);
     if (!bordereauPdfPath) throw new AppError('Bordereau de chargement requis (photo ou PDF)', 400);
     // La date de chargement ne figure PAS sur le BL : c'est une saisie humaine
     // obligatoire — un défaut silencieux « aujourd'hui » fabriquait une donnée.
@@ -491,8 +493,11 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
         if (existing.isBrouillon && dateChargement == null) {
           throw new AppError('Saisissez la date réelle de chargement du camion pour finaliser ce brouillon.', 400);
         }
-        // Un brouillon qui devient un chargement réel doit être adossé à son
-        // bordereau, comme une création directe.
+        // Un brouillon qui devient un chargement réel doit être adossé à ses
+        // deux pièces, comme une création directe.
+        if (existing.isBrouillon && !blPdfPath && !existing.blPdfPath) {
+          throw new AppError('Joignez le document du bon de livraison pour finaliser ce brouillon.', 400);
+        }
         if (existing.isBrouillon && !bordereauPdfPath && !existing.bordereauPdfPath) {
           throw new AppError('Joignez le bordereau de chargement pour finaliser ce brouillon.', 400);
         }

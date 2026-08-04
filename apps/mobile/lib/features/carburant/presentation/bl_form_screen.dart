@@ -146,9 +146,17 @@ class _BlFormScreenState extends State<BlFormScreen> {
       messenger.showSnackBar(const SnackBar(content: Text('Saisissez la date de chargement du camion'), backgroundColor: Colors.red));
       return;
     }
-    // Bordereau OBLIGATOIRE : on bloque ICI, avant la mise en file. Sans ce
-    // contrôle, une saisie hors-ligne partait en attente pour n'être refusée
-    // qu'au rejeu, loin du dépôt — le bordereau n'étant plus photographiable.
+    // Les DEUX pièces sont OBLIGATOIRES, et on bloque ICI, avant la mise en
+    // file. Sans ce contrôle, une saisie hors-ligne partait en attente pour
+    // n'être refusée qu'au rejeu, loin du dépôt — les documents n'étant alors
+    // plus photographiables.
+    if (_blDoc == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Scannez le bon de livraison avant d\'enregistrer'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
     if (_bordereauDoc == null) {
       messenger.showSnackBar(const SnackBar(
         content: Text('Scannez le bordereau de chargement avant d\'enregistrer'),
@@ -210,7 +218,11 @@ class _BlFormScreenState extends State<BlFormScreen> {
                   icon: _analysing
                       ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.document_scanner),
-                  label: Text(_analysing ? 'Analyse du BL en cours…' : 'Scanner le BL (pré-remplir)'),
+                  label: Text(_analysing
+                      ? 'Analyse du BL en cours…'
+                      : _blDoc != null
+                          ? 'BL scanné — appuyez pour reprendre'
+                          : 'Scanner le BL (obligatoire, pré-remplit)'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     minimumSize: const Size.fromHeight(48),
@@ -303,7 +315,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
                     Expanded(child: Text(
                       _blDoc != null
                           ? 'Photo du bon de livraison jointe (via le scan)'
-                          : 'Photo du bon de livraison : utilisez « Scanner le BL » en haut',
+                          : 'Photo du bon de livraison * — utilisez « Scanner le BL » en haut',
                       style: TextStyle(fontSize: 12.5, color: _blDoc != null ? Colors.green.shade800 : Colors.grey.shade600),
                     )),
                   ],

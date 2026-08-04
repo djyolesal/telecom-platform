@@ -175,12 +175,18 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
         )}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
           <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
-            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">Pré-remplir depuis le PDF du BL (un lot de plusieurs BL est accepté)</p>
-            <p className="mb-1.5 text-[11px] text-gray-500">Le PDF déposé ici est aussi joint au bon de livraison — pas besoin de le rattacher ailleurs.</p>
+            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">
+              PDF du bon de livraison <span className="text-red-500">*</span>
+              <span className="font-normal text-gray-500"> — pré-remplit le formulaire (un lot de plusieurs BL est accepté)</span>
+            </p>
+            <p className="mb-1.5 text-[11px] text-gray-500">
+              Ce PDF est la pièce du chargement : il est obligatoire et reste joint au bon de livraison.
+            </p>
             <div className="flex items-center gap-3">
               <input type="file" accept="application/pdf,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserBl(f); }} className="text-xs" />
               {analysing && <span className="text-xs text-gray-500">Analyse en cours…</span>}
               {!analysing && extraits.length > 0 && <span className="text-xs font-medium text-emerald-700">{extraits.length} BL reconnu(s) ✓ — vérifiez, et saisissez la date de chargement</span>}
+              {!analysing && !blPdfPath && <span className="text-xs text-amber-600">requis</span>}
             </div>
             {extraits.length > 1 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -231,7 +237,8 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
           {warnings.length === 0 && (
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
-              <Button type="submit" loading={mutation.isPending} disabled={!!uploading || !bordereauPdfPath}>Créer</Button>
+              <Button type="submit" loading={mutation.isPending}
+                disabled={!!uploading || analysing || !blPdfPath || !bordereauPdfPath}>Créer</Button>
             </div>
           )}
         </form>
