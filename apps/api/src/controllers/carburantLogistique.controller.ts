@@ -166,6 +166,12 @@ export async function createBonCommande(req: Request, res: Response, next: NextF
   try {
     const { numero, annee, trimestre, numeroClient, observations, statut, bcPdfPath } = req.body;
     if (!numero) throw new AppError('Numéro de bon de commande requis', 400);
+    // Le PDF du bon de commande est la pièce signée qui ENGAGE les volumes du
+    // trimestre : tout le suivi (commandé vs livré, dépassements, pénalités) s'y
+    // adosse. Un BC saisi sans son document n'est pas opposable — obligatoire à
+    // la création. (La modification d'un BC existant n'est pas bloquée : les BC
+    // déjà en base sans PDF restent éditables.)
+    if (!bcPdfPath) throw new AppError('Document du bon de commande requis (PDF)', 400);
     // numeroClient : rien de tel sur le BC Moov réel (centre de coût, compte
     // fournisseur, DA…) — champ facultatif, conservé pour les BC qui en ont un.
     const t = Math.trunc(n(trimestre));

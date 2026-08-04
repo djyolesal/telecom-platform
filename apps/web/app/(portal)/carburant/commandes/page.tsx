@@ -114,13 +114,20 @@ function CreateModal({ onClose }: { onClose: () => void }) {
         {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
           <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
-            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">Pré-remplir depuis le PDF du bon de commande</p>
+            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">
+              PDF du bon de commande <span className="text-red-500">*</span>
+              <span className="font-normal text-gray-500"> — pré-remplit le formulaire</span>
+            </p>
+            <p className="mb-1.5 text-[11px] text-gray-500">
+              C'est la pièce signée qui engage les volumes du trimestre : elle est obligatoire et reste jointe au bon de commande.
+            </p>
             <div className="flex items-center gap-3">
               <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserPdf(f); }} className="text-xs" />
               {uploading && <span className="text-xs text-gray-500">Analyse en cours…</span>}
               {!uploading && analyse === 'ocr' && <span className="text-xs font-medium text-emerald-700">Scan lu par OCR ✓ — vérifiez les valeurs</span>}
               {!uploading && analyse === 'texte' && <span className="text-xs font-medium text-emerald-700">PDF lu ✓ — vérifiez les valeurs</span>}
               {!uploading && analyse === 'sans' && bcPdfPath && <span className="text-xs text-amber-700">PDF joint (sans analyse)</span>}
+              {!uploading && !bcPdfPath && <span className="text-xs text-amber-600">requis</span>}
             </div>
             {avertissements.length > 0 && (
               <ul className="mt-2 space-y-0.5 text-xs text-amber-700">
@@ -152,7 +159,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
           <Field label="Observations"><Textarea value={form.observations} onChange={(e) => set('observations', e.target.value)} rows={2} /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
-            <Button type="submit" loading={mutation.isPending}>Créer</Button>
+            <Button type="submit" loading={mutation.isPending} disabled={uploading || !bcPdfPath}>Créer</Button>
           </div>
         </form>
       </div>
