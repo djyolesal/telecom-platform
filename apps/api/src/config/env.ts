@@ -51,7 +51,11 @@ const envSchema = z.object({
   // Secret DÉDIÉ à la signature des URLs de fichiers (séparation de clés). À
   // défaut, retombe sur JWT_SECRET (compatibilité) — mais une variable propre
   // permet de faire tourner l'une sans invalider l'autre.
-  FILE_URL_SECRET: z.string().min(16).optional(),
+  // `z.preprocess` : docker-compose passe `${FILE_URL_SECRET:-}`, soit une CHAÎNE
+  // VIDE quand la variable n'est pas dans le .env — et `.optional()` n'accepte
+  // que `undefined`, pas `''`. Sans ce traitement, la validation échouait et
+  // l'API s'arrêtait au démarrage (process.exit) : plus aucune connexion possible.
+  FILE_URL_SECRET: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(16).optional()),
 
   // Divers
   APP_URL: z.string().default('http://localhost:3000'),
