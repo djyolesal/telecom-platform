@@ -4,9 +4,13 @@ Revue complète du volet carburant : cycle de bout en bout + suivi chauffeurs/ca
 Chaque constat retenu a été **vérifié dans le code** (fichier:ligne).
 
 **En une phrase** : la chaîne **physique** (BC → BL → plan → dépotage → réconciliation →
-alertes) est complète et sérieusement instrumentée ; c'est la chaîne **comptable** qui
-manque — des portes de sortie non modélisées, des statuts qui ne pilotent rien, et aucun
+alertes) était complète et sérieusement instrumentée ; c'est la chaîne **comptable** qui
+manquait — des portes de sortie non modélisées, des statuts qui ne pilotaient rien, et aucun
 rapprochement où commandé / chargé / livré / consommé / perdu s'additionnent enfin.
+
+> **État au 04/08/2026 : les 5 lots sont livrés.** Les 22 points du plan sont traités
+> (migrations `0038` à `0041`). Le rapprochement trimestriel par bon de commande répond
+> désormais à la question posée — « où est passé le carburant du trimestre ? » — en une page.
 
 ---
 
@@ -215,8 +219,33 @@ des dépotages déjà enregistrés.
 18. **Colonnes chauffeur et camion** dans les exports de dépotages et de bons de livraison, et sur
     la fiche du chargement.
 
-### Lot 5 — Cas d'exploitation manquants (effort moyen)
-19. Transfert de gasoil entre sites (mouvement à deux jambes, neutre au bilan).
-20. Avoir / reprise fournisseur (volume négatif tracé).
-21. Événement « purge / vidange de cuve » exclu du calcul de surconsommation.
-22. Autoriser deux passages du même camion sur un même site.
+### Lot 5 — Cas d'exploitation manquants ✅ FAIT le 04/08/2026
+
+Migration `0041` : modèle unique `MouvementCarburant` (types `TRANSFERT_SORTIE`,
+`TRANSFERT_ENTREE`, `PURGE`, `AVOIR_FOURNISSEUR`), page **Mouvements gasoil**, références
+`MVT-<année>-<n>`. Le **sens vient du type**, jamais du signe : le volume est contraint positif en
+base, sinon un signe inversé à la saisie fausserait tous les cumuls sans rien déclencher. Toutes
+ces écritures exigent un **motif** — elles font disparaître ou apparaître du carburant sans pièce
+de livraison, ce sont les plus exposées à l'usage abusif.
+
+19. **Transfert entre sites**, écrit en **deux jambes** partageant un `groupeId`, dans une seule
+    transaction et sous le verrou carburant des deux sites. Neutre au bilan du parc, motivé et
+    visible des deux côtés. Il fallait auparavant inventer un faux dépotage, qui déclenchait une
+    fausse alerte de vol chez le donneur. La suppression retire obligatoirement les deux jambes.
+20. **Avoir / reprise fournisseur** rattaché à un bon de commande. Il ne touche aucune cuve : il
+    vient en **déduction du chargé** dans le rapprochement trimestriel, sinon le trimestre
+    affichait un écart non expliqué exactement égal au volume repris.
+21. **Purge / vidange de cuve** retirée du calcul de consommation, à deux endroits : la
+    réconciliation d'un dépotage (la baisse de cuve entre deux dépotages n'est de la consommation
+    que si rien d'autre n'en est sorti) et l'équation de conservation du rapprochement, qui gagne
+    une colonne « transferts / purges ». Le stock courant intègre lui aussi ces mouvements — un
+    site vidé au profit d'un voisin s'affichait plein, et le site secouru restait « critique ».
+22. **Second passage du même camion sur un site** : une ligne de plan déjà soldée reste proposée
+    au dépotage, étiquetée « 2e passage », tant que le chargement n'est pas clôturé. Elle
+    disparaissait de la liste, ne laissant que le dépotage « hors plan » — qui laissait le BL non
+    soldé et le site en manquant chaque nuit.
+
+**Non couvert volontairement** : la saisie d'un transfert ou d'une purge reste **web uniquement**
+(manager/admin). Ce sont des décisions d'exploitation, rares, et les passer sur mobile exigerait
+de les faire transiter par la file hors-ligne — pour un gain douteux face au risque d'écritures de
+stock rejouées.

@@ -8,6 +8,8 @@ import { dateBornee } from '../utils/dates';
 import { assertOnSite } from '../utils/geofence';
 import { memeChauffeur } from '../utils/referentielTransport';
 import { resoudreChauffeur } from '../services/referentielTransport.service';
+import { soldeMouvementsSite } from '../services/mouvementsCarburant.service';
+import { verrouSiteCarburant } from '../services/verrou.service';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
@@ -59,14 +61,6 @@ function parseHeuresGE(raw: unknown, siteGroupeIds: Set<string>) {
  * Réconciliation carburant au dépotage : compare le volume jauge à l'annoncé (BL)
  * et la baisse de cuve depuis le dépotage précédent au gasoil attendu (heures × kVA).
  */
-/** Verrou consultatif par site (auto-libéré en fin de transaction) : sérialise
- *  dépotages et clôtures concurrents d'un MÊME site → plus de double comptage de
- *  la consommation. N'affecte pas les autres sites (clé dérivée du siteId). */
-async function verrouSiteCarburant(tx: Prisma.TransactionClient, siteId: string): Promise<void> {
-  // $executeRaw : le retour `void` du verrou n'est pas désérialisable par $queryRaw.
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'carb:' + siteId})::bigint)`;
-}
-
 async function reconcileDepotage(opts: {
   siteId: string;
   stockAvant: number | null;
@@ -108,7 +102,16 @@ async function reconcileDepotage(opts: {
     }
   }
 
-  const consomme = prev && stockAvant != null ? Number(prev.stockApresLitres) - stockAvant : null;
+  // La baisse de cuve entre deux dépotages n'est de la CONSOMMATION que si rien
+  // d'autre n'en est sorti. Une purge ou un transfert intercalé faisait basculer
+  // l'écart en surconsommation — donc en signal de vol — sur un site dont le
+  // carburant avait simplement été déplacé. On retire ce solde de la baisse.
+  const soldeMvts = prev && stockAvant != null
+    ? await soldeMouvementsSite(siteId, prev.dateDepotage, new Date(), db)
+    : 0;
+  const consomme = prev && stockAvant != null
+    ? Number(prev.stockApresLitres) - stockAvant + soldeMvts
+    : null;
   const ecartConsoLitres = consomme != null && hasHeures ? Math.round((consomme - attendu) * 100) / 100 : null;
   const analyseConso = analyseGasoilCoherence({ consomme, attendu, hasHeures, seuilPct: seuilConsoPct });
 

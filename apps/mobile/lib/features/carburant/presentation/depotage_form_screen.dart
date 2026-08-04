@@ -434,10 +434,18 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                 ),
                 items: [
                   const DropdownMenuItem<String>(value: null, child: Text('Hors plan (aucune)')),
+                  // Une ligne DÉJÀ SOLDÉE reste proposée : un même camion peut
+                  // repasser sur le site dans la même tournée. Elle est
+                  // étiquetée « 2e passage » pour qu'on la choisisse en
+                  // connaissance de cause, au lieu de retomber sur « hors
+                  // plan » — qui laissait le BL non soldé et le site en
+                  // manquant chaque nuit.
                   ..._lignes.map((l) => DropdownMenuItem<String>(
                         value: l.id,
                         child: Text(
-                          '${l.numeroBL ?? 'BL'} · ${l.volumePrevuLitres.toStringAsFixed(0)} L prévus',
+                          l.statut == 'LIVRE'
+                              ? '${l.numeroBL ?? 'BL'} · soldée — 2e passage'
+                              : '${l.numeroBL ?? 'BL'} · ${l.restant.toStringAsFixed(0)} L restants',
                           overflow: TextOverflow.ellipsis,
                         ),
                       )),

@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { soldeMouvementsParSite } from './mouvementsCarburant.service';
 
 /**
  * SOURCE UNIQUE du stock de gasoil par site.
@@ -11,7 +12,8 @@ import { prisma } from '../config/database';
  * lisait deux chiffres contradictoires et perdait confiance dans l'outil.
  *
  * Règle retenue (celle du job, la plus proche du réel) :
- *   stock = dernier relevé GE + Σ dépotages postérieurs à ce relevé.
+ *   stock = dernier relevé GE + Σ dépotages postérieurs
+ *           + Σ mouvements postérieurs (transferts entrants − sortants − purges).
  *
  * Un site jamais relevé mais déjà livré est compté sur ses seuls dépotages ; un
  * site sans aucune mesure n'apparaît pas (on ne suppose pas un stock nul).
@@ -46,6 +48,14 @@ export async function stockCourantParSite(): Promise<Map<string, number>> {
     if (!ref || d.dateDepotage > ref) {
       stock.set(d.siteId, (stock.get(d.siteId) ?? 0) + Number(d.volumeLitres));
     }
+  }
+
+  // Transferts et purges postérieurs au relevé : sans eux, un site vidé au
+  // profit d'un autre resterait affiché plein, et un site secouru resterait
+  // affiché critique alors qu'il vient d'être servi.
+  const solde = await soldeMouvementsParSite(dateRef);
+  for (const [siteId, delta] of solde) {
+    stock.set(siteId, (stock.get(siteId) ?? 0) + delta);
   }
   return stock;
 }

@@ -20,7 +20,7 @@ interface LigneMois {
 }
 interface LigneSite {
   siteId: string; siteCode: string; siteNom: string; region: string;
-  stockDebut: number | null; stockFin: number | null; livre: number;
+  stockDebut: number | null; stockFin: number | null; livre: number; mouvements: number;
   consoReelle: number | null; consoTheorique: number | null; ecart: number | null;
   mesure: boolean; motifNonMesure: string | null;
 }
@@ -29,6 +29,7 @@ interface Rapprochement {
   periode: { moisMin: number; moisMax: number };
   lignesMois: LigneMois[];
   conservation: LigneSite[];
+  avoirsLitres: number;
   totaux: {
     commande: number; charge: number; planifie: number;
     livrePlan: number; livreHorsPlan: number; livreTotal: number;
@@ -73,6 +74,12 @@ export default function RapprochementPage() {
         <StatCard title="Livré sur sites" value={`${fmtNumber(t.livreTotal)} L`} icon={CheckCircle2} color="bg-[#148F77]" />
         <StatCard title="Écart non expliqué" value={`${fmtNumber(t.ecartNonExplique)} L`} icon={AlertTriangle} color={t.ecartNonExplique > 0 ? 'bg-[#C0392B]' : 'bg-[#7F8C8D]'} />
       </div>
+
+      {data.avoirsLitres > 0 && (
+        <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800">
+          {fmtNumber(data.avoirsLitres)} L d’avoir fournisseur sur cette commande : ce volume est déduit du chargé ci-dessous.
+        </div>
+      )}
 
       {t.nbBlNonClos > 0 && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -139,7 +146,7 @@ export default function RapprochementPage() {
       <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-5">
         <h3 className="mb-1 text-sm font-semibold text-gray-700">Volet physique — équation de conservation par site</h3>
         <p className="mb-3 text-xs text-gray-500">
-          stock début + livré − consommé = stock fin. La consommation théorique vient des heures compteur × débit des GE actifs ;
+          stock début + livré + transferts/purges − consommé = stock fin. La consommation théorique vient des heures compteur × débit des GE actifs ;
           l’écart positif est une surconsommation (fuite, vol, ou heures mal déclarées).
           {' '}{t.nbSitesMesures}/{t.nbSites} sites mesurables sur la période.
         </p>
@@ -153,6 +160,7 @@ export default function RapprochementPage() {
                 <th className="text-left">Région</th>
                 <th className="text-right">Stock début</th>
                 <th className="text-right">Livré</th>
+                <th className="text-right">Transferts / purges</th>
                 <th className="text-right">Stock fin</th>
                 <th className="text-right">Consommé réel</th>
                 <th className="text-right">Théorique</th>
@@ -173,6 +181,9 @@ export default function RapprochementPage() {
                   <td className="text-gray-600">{c.region}</td>
                   <td className="text-right">{L(c.stockDebut)}</td>
                   <td className="text-right">{L(c.livre)}</td>
+                  {/* Transferts et purges : sortis du calcul de consommation,
+                      sinon ils ressortent en surconsommation donc en soupçon. */}
+                  <td className="text-right">{c.mouvements === 0 ? <span className="text-gray-300">—</span> : <span className={c.mouvements > 0 ? 'text-blue-600' : 'text-amber-700'}>{fmtNumber(c.mouvements)}</span>}</td>
                   <td className="text-right">{L(c.stockFin)}</td>
                   <td className="text-right font-medium">{L(c.consoReelle)}</td>
                   <td className="text-right text-gray-500">{L(c.consoTheorique)}</td>

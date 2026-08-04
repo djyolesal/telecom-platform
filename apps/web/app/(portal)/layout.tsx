@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   LayoutDashboard, MapPin, Wrench, Fuel, Zap, AlertTriangle,
-  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2, WifiOff, Network
+  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2, WifiOff, Network, ArrowLeftRight
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -35,6 +35,8 @@ const NAV_ITEMS = [
   // hors-menu /carburant lui refusait la fiche d'un BL.
   { href: '/carburant/livraisons',      label: 'Mes chargements',   icon: Truck,            roles: ['TRANSPORTEUR','SUPERVISEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR'] },
   { href: '/carburant/pertes',         label: 'Pertes carburant',  icon: ShieldAlert,      roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  // Transferts, purges et avoirs : écritures hors chaîne BC → BL → dépotage.
+  { href: '/carburant/mouvements',     label: 'Mouvements gasoil', icon: ArrowLeftRight,   roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   // Référentiels camions/chauffeurs : le transporteur y gère SON parc (l'API le
   // filtre), le pilotage y renseigne les capacités de citerne.
   { href: '/carburant/flotte',         label: 'Flotte transport',  icon: Truck,            roles: ['TRANSPORTEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR','MANAGER','ADMIN'] },

@@ -30,6 +30,7 @@ import * as tachesCtrl from '../controllers/taches.controller';
 import * as configCtrl from '../controllers/config.controller';
 import * as carburantCtrl from '../controllers/carburantLogistique.controller';
 import * as refTransportCtrl from '../controllers/referentielTransport.controller';
+import * as mouvementsCtrl from '../controllers/mouvementsCarburant.controller';
 import * as coupuresCtrl from '../controllers/coupuresReseau.controller';
 import { uploadMiddleware, uploadSpreadsheet, verifierSignature } from '../middlewares/upload';
 import * as filesCtrl from '../controllers/files.controller';
@@ -281,6 +282,16 @@ router.get('/bons-livraison/:id/plan.pdf', carburantCtrl.exportPlanLivraisonPdf)
 router.put('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), carburantCtrl.updateBonLivraison);
 router.put('/bons-livraison/:id/plan', rbac(['MANAGER', 'ADMIN']), carburantCtrl.setPlanLivraison);
 router.delete('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.deleteBonLivraison); // MANAGER : brouillons uniquement (vérifié dans le contrôleur)
+// ── Mouvements de carburant hors livraison ──
+// Transfert entre sites (deux jambes), purge de cuve, avoir fournisseur : ces
+// écritures font disparaître ou apparaître du carburant sans pièce de
+// livraison, donc réservées au pilotage et toutes motivées.
+router.get('/mouvements-carburant', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), mouvementsCtrl.getMouvements);
+router.post('/mouvements-carburant/transfert', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.createTransfert);
+router.post('/mouvements-carburant/purge', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.createPurge);
+router.post('/mouvements-carburant/avoir', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.createAvoir);
+router.delete('/mouvements-carburant/:id', rbac(['ADMIN']), mouvementsCtrl.deleteMouvement);
+
 // ── Référentiels transport (véhicules & chauffeurs) ──
 // Ils se peuplent à l'usage ; ces routes servent à les enrichir (capacité de
 // citerne, téléphone, permis). Un transporteur est enfermé dans son parc.

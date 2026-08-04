@@ -3,12 +3,13 @@ import { prisma } from '../config/database';
 
 /**
  * Références lisibles des interventions : MNT-2026-00481, INC-2026-00112,
- * DEP-2026-01893 — séquentielles par type et par ANNÉE MÉTIER (date planifiée /
- * d'ouverture / de dépotage). Compteur en base (compteurs_reference) incrémenté
+ * DEP-2026-01893, MVT-2026-00042 — séquentielles par type et par ANNÉE MÉTIER
+ * (date planifiée / d'ouverture / de dépotage / du mouvement). Compteur en base (compteurs_reference) incrémenté
  * atomiquement : fiable même sous créations simultanées. Les UUID restent les
  * clés techniques ; la référence sert aux humains (téléphone, PDF, recherche).
  */
-export type TypeReference = 'MNT' | 'INC' | 'DEP';
+// MVT : mouvements de carburant hors livraison (transfert, purge, avoir).
+export type TypeReference = 'MNT' | 'INC' | 'DEP' | 'MVT';
 
 type Db = PrismaClient | Prisma.TransactionClient;
 

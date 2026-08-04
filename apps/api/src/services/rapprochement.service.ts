@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { litresParHeureGE } from '../utils/calculator';
 import { geParams } from './settings.service';
 import { memo } from '../utils/memo';
+import { signeMouvement, avoirsBonCommande } from './mouvementsCarburant.service';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 const r0 = (v: number) => Math.round(v);
@@ -52,6 +53,7 @@ export interface LigneSiteConservation {
   stockDebut: number | null;
   stockFin: number | null;
   livre: number;
+  mouvements: number;              // transferts entrants − sortants − purges
   consoReelle: number | null;      // stockDébut + livré − stockFin
   consoTheorique: number | null;   // heures compteur × débit L/h des GE actifs
   ecart: number | null;            // réelle − théorique (surconsommation si > 0)
@@ -97,6 +99,12 @@ async function rapprochementBcImpl(bonCommandeId: string) {
     where: { ligneLivraisonId: null, dateDepotage: { gte: debut, lt: fin } },
     select: { siteId: true, dateDepotage: true, volumeLitres: true, site: { select: { code: true, nom: true, region: true } } },
   });
+
+  // Avoir fournisseur : volume repris sur la commande. Il ne touche aucune cuve
+  // mais corrige ce que la commande a réellement coûté, donc il vient en
+  // déduction du chargé — sinon le trimestre affiche un écart non expliqué
+  // exactement égal au volume repris.
+  const avoirs = await avoirsBonCommande(bonCommandeId);
 
   type Acc = Omit<LigneMoisRapprochement, 'mois' | 'livreTotal' | 'ecartNonExplique'>;
   const vide = (): Acc => ({
@@ -158,6 +166,14 @@ async function rapprochementBcImpl(bonCommandeId: string) {
       };
     });
 
+  // L'avoir est imputé au premier mois de la période : il porte sur la commande,
+  // pas sur un chargement daté.
+  if (avoirs > 0 && lignesMois.length) {
+    const l = lignesMois[0];
+    l.charge = r0(l.charge - avoirs);
+    l.ecartNonExplique = r0(l.ecartNonExplique - avoirs);
+  }
+
   const conservation = await conservationParSite([...sitesVus.entries()], livreParSite, debut, fin);
 
   const somme = <K extends keyof LigneMoisRapprochement>(k: K) =>
@@ -168,6 +184,7 @@ async function rapprochementBcImpl(bonCommandeId: string) {
     periode: { debut: debut.toISOString(), fin: fin.toISOString(), moisMin, moisMax },
     lignesMois,
     conservation,
+    avoirsLitres: r0(avoirs),
     totaux: {
       commande: somme('commande'), charge: somme('charge'), planifie: somme('planifie'),
       livrePlan: somme('livrePlan'), livreHorsPlan: somme('livreHorsPlan'), livreTotal: somme('livreTotal'),
@@ -198,7 +215,7 @@ async function conservationParSite(
   const ids = sites.map(([id]) => id);
 
   // Jauge et compteur horaire aux deux bornes : dernier relevé GE ≤ borne.
-  const [avant, apres, groupes] = await Promise.all([
+  const [avant, apres, groupes, mvts] = await Promise.all([
     prisma.releveEnergie.findMany({
       where: { siteId: { in: ids }, source: 'GE', volumeGasoilLitres: { not: null }, dateReleve: { lte: debut } },
       orderBy: [{ siteId: 'asc' }, { dateReleve: 'desc' }],
@@ -215,7 +232,24 @@ async function conservationParSite(
       where: { siteId: { in: ids }, isActive: true },
       select: { siteId: true, puissanceKva: true, statut: true },
     }),
+    // Transferts et purges de la période : du carburant sort de la cuve sans
+    // être brûlé. Sans les retirer, ils ressortiraient en surconsommation —
+    // c'est-à-dire en soupçon de vol sur un site qui a simplement dépanné un
+    // voisin.
+    prisma.mouvementCarburant.findMany({
+      where: {
+        siteId: { in: ids },
+        dateMouvement: { gt: debut, lte: fin },
+        type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] },
+      },
+      select: { siteId: true, type: true, volumeLitres: true },
+    }),
   ]);
+  const mvtParSite = new Map<string, number>();
+  for (const m of mvts) {
+    if (!m.siteId) continue;
+    mvtParSite.set(m.siteId, (mvtParSite.get(m.siteId) ?? 0) + signeMouvement(m.type) * n(m.volumeLitres));
+  }
 
   const gp = geParams();
   const debitParSite = new Map<string, number>();
@@ -240,7 +274,9 @@ async function conservationParSite(
       // du site est retombé des deux côtés, la « consommation » vaudrait le
       // volume livré — un chiffre faux présenté comme mesuré.
       const mesure = stockDebut != null && stockFin != null && a !== b;
-      const consoReelle = mesure ? stockDebut! + livre - stockFin! : null;
+      // stock_début + livré + mouvements − consommé = stock_fin
+      const mouvements = Math.round(mvtParSite.get(siteId) ?? 0);
+      const consoReelle = mesure ? stockDebut! + livre + mouvements - stockFin! : null;
 
       let consoTheorique: number | null = null;
       const debit = debitParSite.get(siteId) ?? 0;
@@ -254,6 +290,7 @@ async function conservationParSite(
         stockDebut: stockDebut != null ? Math.round(stockDebut) : null,
         stockFin: stockFin != null ? Math.round(stockFin) : null,
         livre,
+        mouvements,
         consoReelle: consoReelle != null ? Math.round(consoReelle) : null,
         consoTheorique,
         ecart: consoReelle != null && consoTheorique != null ? Math.round(consoReelle - consoTheorique) : null,

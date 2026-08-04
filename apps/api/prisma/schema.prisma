@@ -156,6 +156,7 @@ model User {
   maintenances      Maintenance[]   @relation("TechnicienMaintenances")
   depotages         Depotage[]      @relation("TechnicienDepotages")
   bonsLivraisonClotures BonLivraison[] @relation("ClotureBonsLivraison")
+  mouvementsCarburant   MouvementCarburant[]
   releves           ReleveEnergie[]
   incidents         Incident[]      @relation("TechnicienIncidents")
   incidentsDeclares Incident[]      @relation("DeclarantIncidents")
@@ -200,6 +201,8 @@ model Site {
   gardiennagePrestataire Prestataire? @relation("GardiennageSites", fields: [gardiennagePrestataireId], references: [id])
   maintenances    Maintenance[]
   depotages       Depotage[]
+  mouvementsCarburant   MouvementCarburant[] @relation("MouvementsSite")
+  mouvementsContrepartie MouvementCarburant[] @relation("MouvementsContrepartie")
   releves         ReleveEnergie[]
   incidents       Incident[]
   groupes         GroupeElectrogene[]
@@ -739,6 +742,54 @@ enum StatutLigneLivraison {
   ANNULE
 }
 
+enum TypeMouvementCarburant {
+  TRANSFERT_SORTIE  // gasoil qui quitte un site vers un autre
+  TRANSFERT_ENTREE  // la jambe d'arrivée du même transfert
+  PURGE             // vidange/purge de cuve : retiré, jamais consommé par le GE
+  AVOIR_FOURNISSEUR // reprise du fournisseur sur un bon de commande (volume repris)
+}
+
+// MOUVEMENTS DE CARBURANT hors chaîne BC → BL → dépotage.
+//
+// Trois cas d'exploitation n'avaient aucune écriture possible :
+//  - un transfert entre sites obligeait à inventer un faux dépotage, ce qui
+//    déclenchait une fausse alerte de vol sur le site donneur (sa cuve baisse
+//    sans consommation) ;
+//  - une reprise fournisseur (avoir) était impossible, les volumes négatifs
+//    étant interdits partout ;
+//  - une purge de cuve était comptée comme une surconsommation.
+//
+// Un transfert s'écrit en DEUX jambes partageant `groupeId` : neutre au bilan
+// du parc, mais visible et signé de chaque côté.
+model MouvementCarburant {
+  id             String                 @id @default(uuid())
+  reference      String?                @unique @db.VarChar(20) // MVT-2026-00123
+  type           TypeMouvementCarburant
+  groupeId       String?                @map("groupe_id")  // relie les deux jambes d'un transfert
+  siteId         String?                @map("site_id")    // null pour un avoir fournisseur
+  contrepartieId String?                @map("contrepartie_id") // site d'en face (transfert)
+  bonCommandeId  String?                @map("bon_commande_id") // avoir : commande créditée
+  volumeLitres   Decimal                @map("volume_litres") @db.Decimal(10, 2) // toujours > 0, le SENS vient du type
+  dateMouvement  DateTime               @map("date_mouvement")
+  motif          String
+  documentPath   String?                @map("document_path") // bon de transfert / avoir signé
+  auteurId       String?                @map("auteur_id")
+  latitude       Decimal?               @db.Decimal(10, 8)
+  longitude      Decimal?               @db.Decimal(11, 8)
+  createdAt      DateTime               @default(now()) @map("created_at")
+
+  site         Site?        @relation("MouvementsSite", fields: [siteId], references: [id])
+  contrepartie Site?        @relation("MouvementsContrepartie", fields: [contrepartieId], references: [id])
+  bonCommande  BonCommande? @relation(fields: [bonCommandeId], references: [id])
+  auteur       User?        @relation(fields: [auteurId], references: [id])
+
+  @@index([siteId, dateMouvement])
+  @@index([groupeId])
+  @@index([bonCommandeId])
+  @@index([type])
+  @@map("mouvements_carburant")
+}
+
 // Référentiel VÉHICULE : sans lui, aucune question sur un camion n'avait de
 // réponse. L'immatriculation vivait en texte libre sur chaque BL, non indexée,
 // avec deux graphies natives (l'OCR produit « TG 1234 AB », l'interface suggère
@@ -804,6 +855,7 @@ model BonCommande {
 
   volumesMensuels VolumeMensuel[]
   bonsLivraison   BonLivraison[]
+  mouvements      MouvementCarburant[]
 
   @@index([annee, trimestre])
   @@map("bons_commande")

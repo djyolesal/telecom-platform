@@ -1379,8 +1379,14 @@ export async function getLignesLivraisonForSite(req: Request, res: Response, nex
     const lignes = await prisma.ligneLivraison.findMany({
       where: {
         siteId: req.params.id,
-        statut: { in: ['PREVU', 'PARTIEL'] },
-        bonLivraison: { statut: { not: 'ANNULE' }, isBrouillon: false }, // pas de dépotage sur un brouillon
+        // Les lignes DÉJÀ SOLDÉES restent proposées : un même camion peut
+        // repasser sur un site dans la même tournée (plan réajusté en route,
+        // cuve qui déborde au premier passage). Elles disparaissaient de la
+        // liste, et le technicien n'avait plus que le dépotage « hors plan » —
+        // qui laissait le BL non soldé et le site en manquant chaque nuit.
+        statut: { in: ['PREVU', 'PARTIEL', 'LIVRE'] },
+        // Un chargement clôturé, lui, est définitivement soldé.
+        bonLivraison: { statut: { not: 'ANNULE' }, isBrouillon: false, dateCloture: null },
       },
       orderBy: { createdAt: 'desc' },
       take: 20,
