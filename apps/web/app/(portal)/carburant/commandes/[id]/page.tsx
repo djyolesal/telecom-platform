@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { TableSkeleton, ErrorState } from '@/components/shared/states';
+import { Loading, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Field, Input, Select, Textarea } from '@/components/shared/Form';
@@ -247,7 +247,7 @@ export default function BonCommandeDetailPage() {
     queryFn: () => api.get(`/bons-commande/${id}`).then((r) => r.data.data as BC),
   });
 
-  if (isLoading) return <div className="p-6"><TableSkeleton cols={4} /></div>;
+  if (isLoading) return <Loading />;
   if (isError || !data) return <div className="p-6"><ErrorState /></div>;
 
   const totalPrevu = data.suivi.reduce((s, v) => s + v.prevu, 0);

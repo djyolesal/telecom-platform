@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable, Column } from '@/components/shared/DataTable';
-import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
+import { Loading, EmptyState, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { fmtNumber, fmtFCFA } from '@/lib/utils';
 
@@ -95,7 +95,7 @@ export default function PertesCarburantPage() {
       </div>
 
       {isLoading ? (
-        <TableSkeleton cols={6} />
+        <Loading />
       ) : isError ? (
         <ErrorState />
       ) : rows.length === 0 ? (

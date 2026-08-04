@@ -1,5 +1,30 @@
 import { Inbox, AlertCircle } from 'lucide-react';
 
+/**
+ * ── RÈGLE D'ATTENTE DU PORTAIL ──────────────────────────────────────────────
+ * Deux traitements, chacun là où il est le meilleur — ne pas les mélanger :
+ *
+ *  • `<TableSkeleton />` → pages de LISTE / TABLEAU (sites, incidents, relevés,
+ *    dépotages, utilisateurs…). Le squelette préfigure les lignes : la page ne
+ *    « saute » pas quand les données arrivent.
+ *
+ *  • `<Loading />` → pages de DÉTAIL, de RAPPORT et tableaux de bord composés
+ *    (fiche d'un site, d'un BC/BL, disponibilité réseau, fiche de validation…).
+ *    Aucune structure régulière à préfigurer : on affiche le loader de marque.
+ *
+ *  • FORMULAIRES de saisie (« nouveau ») et formulaires de génération de
+ *    rapport → AUCUN bloc d'attente : les champs s'affichent immédiatement et
+ *    les listes déroulantes se remplissent à l'arrivée des données. Bloquer le
+ *    formulaire entier serait plus lent à l'usage. L'état d'envoi est porté par
+ *    le bouton (`loading={isPending}`).
+ *    Convention : quand une liste déroulante attend sa source, son `placeholder`
+ *    l'annonce (« Chargement des prestataires… ») — un menu vide qui invite à
+ *    choisir laisse croire qu'il n'y a rien à sélectionner.
+ *
+ * Toute nouvelle page doit se ranger dans l'un de ces trois cas.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+
 /** Loader de marque : l'Écrou-signal « émet » et la Ligne de vie se trace en boucle. */
 export function Loading({ label = 'Chargement…' }: { label?: string }) {
   return (

@@ -25,14 +25,14 @@ export default function FicheValidationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const { data: prestataires } = useQuery({
+  const { data: prestataires, isLoading: chargePrestataires } = useQuery({
     queryKey: ['prestataires-select'],
     queryFn: () => api.get('/prestataires', { params: { is_active: true, limit: 200 } }).then((r) => r.data.data),
   });
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
   // Lots passifs attribués au prestataire sélectionné.
-  const { data: prestaDetail } = useQuery({
+  const { data: prestaDetail, isFetching: chargeLots } = useQuery({
     queryKey: ['prestataire-lots', prestataireId],
     queryFn: () => api.get(`/prestataires/${prestataireId}`).then((r) => r.data.data),
     enabled: !!prestataireId,
@@ -82,10 +82,10 @@ export default function FicheValidationPage() {
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field label="Prestataire" required className="md:col-span-3">
-            <Select value={prestataireId} onChange={(e) => { setPrestataireId(e.target.value); setLotId(''); }} options={prestataireOptions} placeholder="Sélectionner un prestataire…" />
+            <Select value={prestataireId} onChange={(e) => { setPrestataireId(e.target.value); setLotId(''); }} options={prestataireOptions} placeholder={chargePrestataires ? 'Chargement des prestataires…' : 'Sélectionner un prestataire…'} />
           </Field>
           <Field label="Lot / zone" className="md:col-span-3">
-            <Select value={lotId} onChange={(e) => setLotId(e.target.value)} disabled={!prestataireId} options={lotOptions} placeholder={prestataireId ? 'Tous les lots du prestataire' : 'Choisissez d’abord un prestataire'} />
+            <Select value={lotId} onChange={(e) => setLotId(e.target.value)} disabled={!prestataireId} options={lotOptions} placeholder={!prestataireId ? 'Choisissez d’abord un prestataire' : chargeLots ? 'Chargement des lots…' : 'Tous les lots du prestataire'} />
           </Field>
           <Field label="Mois" required>
             <Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS} />

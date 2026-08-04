@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { StatCard } from '@/components/shared/StatCard';
-import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
+import { Loading, EmptyState, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
 import { fmtDate } from '@/lib/utils';
 
@@ -117,7 +117,7 @@ export default function EcheancierPreventifPage() {
       />
 
       {isLoading ? (
-        <TableSkeleton cols={8} />
+        <Loading />
       ) : isError ? (
         <ErrorState />
       ) : lignes.length === 0 ? (

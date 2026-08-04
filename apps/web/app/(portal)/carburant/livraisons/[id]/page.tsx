@@ -8,7 +8,7 @@ import { CheckCircle2, AlertTriangle, Plus, X, Trash2, Download, FileText, Penci
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { TableSkeleton, ErrorState } from '@/components/shared/states';
+import { Loading, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Field, Input, Select } from '@/components/shared/Form';
@@ -204,7 +204,7 @@ export default function BonLivraisonDetailPage() {
     queryFn: () => api.get(`/bons-livraison/${id}`).then((r) => r.data.data as BL),
   });
 
-  if (isLoading) return <div className="p-6"><TableSkeleton cols={4} /></div>;
+  if (isLoading) return <Loading />;
   if (isError || !data) return <div className="p-6"><ErrorState /></div>;
 
   const totalLivreReel = data.lignes.reduce((s, l) => s + l.volumeLivreReel, 0);
