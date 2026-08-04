@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Download, GitCompare, AlertTriangle, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -163,6 +164,14 @@ export default function BonsCommandePage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  // Le transporteur CONSULTE les bons de commande (pour y rattacher ses
+  // chargements) mais ne les crée pas : création, modification, export et
+  // rapports de pilotage sont réservés MANAGER/ADMIN côté API. Sans ce test, il
+  // voyait cinq actions qui ne pouvaient que renvoyer 403 ou « accès refusé »,
+  // y compris le lien de retour vers une page hors de son périmètre.
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string })?.role ?? '';
+  const peutGerer = role === 'MANAGER' || role === 'ADMIN';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bons-commande', { page }],
@@ -185,9 +194,11 @@ export default function BonsCommandePage() {
     <div>
       <PageHeader
         title="Bons de commande carburant"
-        subtitle="Commandes trimestrielles et volumes mensuels"
-        backHref="/carburant/stock"
-        actions={
+        subtitle={peutGerer
+          ? 'Commandes trimestrielles et volumes mensuels'
+          : 'Commandes en cours — ouvrez-en une pour y déclarer un chargement'}
+        backHref={peutGerer ? '/carburant/stock' : '/dashboard'}
+        actions={peutGerer ? (
           <div className="flex gap-2">
             <ButtonLink href="/carburant/reapprovisionnement" variant="secondary" icon={Sparkles}>Réappro prédictif</ButtonLink>
             <ButtonLink href="/carburant/manquants" variant="secondary" icon={AlertTriangle}>Manquants</ButtonLink>
@@ -195,7 +206,7 @@ export default function BonsCommandePage() {
             <ExportButtons base="/bons-commande/export" name="bons-commande" />
             <Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de commande</Button>
           </div>
-        }
+        ) : undefined}
       />
 
       {isLoading ? (
