@@ -147,8 +147,24 @@ class _Entete extends StatelessWidget {
             const Divider(height: 20),
             _Ligne(label: 'Chargé au dépôt', valeur: fmtLitres(bl.volumeChargeLitres)),
             _Ligne(label: 'Déjà déposé', valeur: fmtLitres(bl.totalLivre)),
-            _Ligne(label: 'Reste à livrer', valeur: fmtLitres(reste), fort: reste > 0),
+            _Ligne(
+              label: bl.estClos ? 'Reste soldé à la clôture' : 'Reste à livrer',
+              valeur: fmtLitres(reste),
+              fort: reste > 0 && !bl.estClos,
+            ),
             _Ligne(label: 'Date de chargement', valeur: fmtDate(bl.dateChargement)),
+            if (bl.estClos)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: const Color(0xFF15803D).withValues(alpha: 0.10), borderRadius: BorderRadius.circular(8)),
+                  child: Text(
+                    'Chargement clôturé le ${fmtDate(bl.dateCloture)} — reste ventilé, plus rien à livrer.',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF15803D), fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

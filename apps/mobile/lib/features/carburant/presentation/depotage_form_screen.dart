@@ -190,10 +190,10 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         if (wanted != null && _ligneLivraisonId == null && _lignes.any((x) => x.id == wanted)) {
           _ligneLivraisonId = wanted;
           final l = _lignes.firstWhere((x) => x.id == wanted);
-          if (_volumeAnnonce.text.isEmpty) {
-            final v = l.restant > 0 ? l.restant : l.volumePrevuLitres;
-            _volumeAnnonce.text = v.toStringAsFixed(0);
-          }
+          // Le volume ANNONCÉ n'est plus pré-rempli avec celui du PLAN : ce sont
+          // deux mesures différentes. L'écart jauge − annoncé alimente la
+          // détection de détournement ; le pré-remplir transformait un simple
+          // écart de plan en faux signal de vol, et masquait les vrais.
           if (_bon.text.isEmpty && l.numeroBL != null) _bon.text = l.numeroBL!;
         }
       });
@@ -204,16 +204,23 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     }
   }
 
+  /// Volume prévu au plan pour la ligne rattachée — affiché en repère, jamais
+  /// recopié dans le champ « annoncé ».
+  double? get _lignePrevue {
+    if (_ligneLivraisonId == null) return null;
+    for (final l in _lignes) {
+      if (l.id == _ligneLivraisonId) return l.restant > 0 ? l.restant : l.volumePrevuLitres;
+    }
+    return null;
+  }
+
   void _selectLigne(String? ligneId) {
     final l = ligneId == null ? null : _lignes.firstWhere((x) => x.id == ligneId);
     setState(() {
       _ligneLivraisonId = ligneId;
       if (l != null) {
-        // Volume annoncé = ce que le plan/BL prévoit de livrer ici.
-        if (_volumeAnnonce.text.isEmpty) {
-          final v = l.restant > 0 ? l.restant : l.volumePrevuLitres;
-          _volumeAnnonce.text = v.toStringAsFixed(0);
-        }
+        // Volume annoncé : saisi par le technicien d'après le bordereau du
+        // chauffeur, JAMAIS recopié du plan (cf. commentaire ci-dessus).
         if (_bon.text.isEmpty && l.numeroBL != null) _bon.text = l.numeroBL!;
       }
     });
@@ -464,7 +471,25 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             TextFormField(
               controller: _volumeAnnonce,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Volume annoncé (BL/bordereau, litres)', prefixIcon: Icon(Icons.receipt_long)),
+              decoration: InputDecoration(
+                labelText: 'Volume annoncé par le chauffeur (litres) *',
+                prefixIcon: const Icon(Icons.receipt_long),
+                // Le volume du plan est rappelé mais JAMAIS recopié : le
+                // technicien doit lire le bordereau, pas valider un chiffre
+                // pré-rempli. C'est cette saisie qui fait foi contre la jauge.
+                helperText: _lignePrevue == null
+                    ? 'À lire sur le bordereau remis par le chauffeur.'
+                    : 'Plan pour ce site : ${_lignePrevue!.toStringAsFixed(0)} L — saisissez ce que le chauffeur annonce.',
+                helperMaxLines: 2,
+              ),
+              validator: (v) {
+                // Obligatoire quand le dépotage est rattaché à un plan : sans
+                // annoncé, l'écart de livraison n'est pas calculable.
+                if (_ligneLivraisonId != null && _num(_volumeAnnonce) == null) {
+                  return 'Volume annoncé requis (bordereau du chauffeur)';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 14),
             TextFormField(controller: _fournisseur, decoration: const InputDecoration(labelText: 'Fournisseur')),

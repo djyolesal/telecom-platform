@@ -326,6 +326,10 @@ class BonLivraisonDetail {
   final String? bcNumero;
   final List<LignePlanBL> lignes;
   final double sommeLignes;
+  /// Chargement soldé : le reste en citerne a été ventilé (retour dépôt, perte,
+  /// report). Sans cette information, le chauffeur voyait « reste à livrer »
+  /// indéfiniment sur un camion déjà rentré au dépôt.
+  final DateTime? dateCloture;
 
   const BonLivraisonDetail({
     required this.id,
@@ -339,7 +343,10 @@ class BonLivraisonDetail {
     this.bcNumero,
     this.lignes = const [],
     this.sommeLignes = 0,
+    this.dateCloture,
   });
+
+  bool get estClos => dateCloture != null;
 
   /// Volume réellement déposé sur l'ensemble des sites du plan.
   double get totalLivre => lignes.fold(0, (s, l) => s + l.volumeLivreReel);
@@ -358,5 +365,6 @@ class BonLivraisonDetail {
             .map((e) => LignePlanBL.fromJson(e as Map<String, dynamic>))
             .toList(),
         sommeLignes: Depotage._d(j['sommeLignes']),
+        dateCloture: DateTime.tryParse(j['dateCloture']?.toString() ?? ''),
       );
 }

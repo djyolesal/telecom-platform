@@ -100,7 +100,12 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
 
   for (const bl of bls) {
     const jours = Math.floor((now - bl.dateChargement.getTime()) / 86_400_000);
-    const enRetardDelai = jours > seuilJours;
+    // Un chargement CLÔTURÉ a vu son reste ventilé (retour dépôt / perte /
+    // report) : l'écart camion est expliqué, il ne doit plus alerter. Le
+    // manquant des sites reste visible dans le rapport — il attend une
+    // replanification, pas une relance du camion.
+    const clos = bl.dateCloture != null;
+    const enRetardDelai = jours > seuilJours && !clos;
     let blDistribue = 0;
     let blSitesManquants = 0;
 
@@ -109,7 +114,7 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       const livre = l.depotages.reduce((s, d) => s + n(d.volumeLitres), 0);
       const manquant = Math.max(0, prevu - livre);
       blDistribue += livre;
-      const critique = manquant >= critLitres;
+      const critique = manquant >= critLitres && !clos;
       // Alerte si manquant ≥ plancher ET (délai dépassé OU critique → immédiat).
       const enRetard = manquant >= minLitres && (enRetardDelai || critique);
       if (manquant > EPS) blSitesManquants++;
@@ -138,7 +143,8 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     const charge = n(bl.volumeChargeLitres);
     // Niveau camion : écart chargé − distribué supérieur au seuil critique (signal perte/vol).
     const ecartCamion = Math.max(0, charge - blDistribue);
-    if (ecartCamion >= critCamion) {
+    const ventile = n(bl.resteRetourDepotLitres) + n(bl.restePerteLitres) + n(bl.resteReportLitres);
+    if (ecartCamion >= critCamion && !clos) {
       camionsCritiques.push({
         numeroBL: bl.numeroBL, bcNumero: bl.bonCommande.numero,
         immatriculation: bl.immatriculation, transporteur: bl.transporteur?.nom ?? null,
@@ -152,9 +158,10 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       dateChargement: bl.dateChargement, jours,
       charge, distribue: blDistribue, manquant: Math.max(0, charge - blDistribue),
       surLivre: Math.max(0, blDistribue - charge),
+      clos, ventile: Math.round(ventile),
       nbSites: bl.lignes.length, nbSitesManquants: blSitesManquants,
       enRetard: enRetardDelai && charge - blDistribue > EPS,
-      critique: ecartCamion >= critCamion,
+      critique: ecartCamion >= critCamion && !clos,
     });
 
     // Agrégat mensuel (par bon de commande + mois).
@@ -200,6 +207,8 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
     nbCamionsCritiques: camionsCritiques.length,
     surLivreSitesLitres: round(parSite.reduce((s, x) => s + x.surLivre, 0)),
     nbSitesSurLivres: parSite.filter((s) => s.surLivre > EPS).length,
+    nbCamionsClos: parCamion.filter((c) => c['clos'] === true).length,
+    resteVentileLitres: round(parCamion.reduce((s, x) => s + n(x['ventile']), 0)),
   };
 
   return { seuilJours, parSite, parCamion: camions, parMois, parBc, totaux, lignesEnRetard, camionsCritiques };
@@ -234,6 +243,7 @@ export async function computePilotageBL(seuilJours = 2) {
       where: {
         isBrouillon: false,
         statut: { not: 'ANNULE' },
+        dateCloture: null,
         bonCommande: { statut: { not: 'ANNULE' } },
         lignes: { none: {} },
         dateChargement: { lte: limite },

@@ -156,14 +156,33 @@ Les six points sont livrés (voir le commit « carburant lot 1 »).
     un `ALTER TYPE ADD VALUE` en production pour une information déjà portée par les chiffres ne
     valait pas le risque. *(F10)*
 
-### Lot 3 — Bouclage comptable (effort moyen — le cœur de la demande)
-11. **Clôture d'un BL avec ventilation du reste** : retour dépôt / perte constatée / report sur
-    le BL suivant, avec bon de retour signé. *C'est le geste qui manque pour solder un camion.* *(F3)*
-12. **Rapport de rapprochement trimestriel par BC** : une ligne par mois, colonnes
-    `commandé | chargé | planifié | livré (dont hors plan) | retour dépôt | consommé | écart non
-    expliqué`, avec l'équation de conservation par site agrégée au trimestre. *L'artefact qui
-    répond à la question en une page.*
-13. Séparer « volume annoncé par le chauffeur » de « volume prévu au plan ». *(F9)*
+### Lot 3 — Bouclage comptable ✅ FAIT le 04/08/2026
+
+11. **Clôture d'un chargement avec ventilation du reste** *(F3)* — migration `0039`, champs
+    `date_cloture`, `reste_retour_depot_litres`, `reste_perte_litres`, `reste_report_litres`,
+    `report_sur_bl_id`, `motif_cloture`, `bon_retour_path`.
+    `POST /bons-livraison/:id/cloturer` (MANAGER/ADMIN) impose que **retour dépôt + perte +
+    report = reste en citerne** au litre près ; une perte exige un motif de 10 caractères, un
+    retour exige le **bon de retour signé** en pièce jointe, un report exige un chargement cible
+    ouvert. Réouverture ADMIN avec motif. Un chargement clôturé sort des écarts camion et de
+    l'alerte quotidienne — le manquant des **sites** reste visible, car il attend une
+    replanification, pas une relance du camion. Bouton « Clôturer » et bloc de ventilation sur la
+    fiche BL, badge « Soldé » côté manquants, et mention explicite côté mobile (le transporteur
+    voyait « reste à livrer » à vie sur un camion rentré au dépôt).
+12. **Rapport de rapprochement trimestriel par BC** — `GET /rapports/rapprochement/:id`
+    (+ export XLSX/PDF), page `/carburant/commandes/[id]/rapprochement`, accessible depuis la
+    fiche BC. Deux volets :
+    - **logistique, par mois** : `commandé | chargé | planifié | livré (dont hors plan) | retour
+      dépôt | perte | report | écart non expliqué`. Les **dépotages hors plan sont enfin comptés**
+      (principale sous-estimation du « livré »), et l'écart non expliqué est isolé en une colonne.
+    - **physique, par site** : `stock début + livré − consommé = stock fin`, avec confrontation à
+      la consommation théorique (heures compteur × débit des GE actifs). Un site sans **deux**
+      relevés de cuve distincts sur la période est marqué « non mesuré » avec son motif, jamais
+      compté à zéro — un stock supposé nul fabriquerait une consommation fantôme.
+13. **« Volume annoncé » séparé du « volume prévu au plan »** *(F9)* — le mobile ne recopie plus
+    le volume du plan dans le champ annoncé (il l'affiche en repère) et l'exige dès qu'un dépotage
+    est rattaché à un plan. L'écart jauge − annoncé redevient un vrai signal de détournement au
+    lieu d'un artefact du pré-remplissage.
 
 ### Lot 4 — Chauffeurs et camions (effort moyen)
 14. **Référentiel véhicule** + normalisation de plaque (prérequis de toute agrégation) et

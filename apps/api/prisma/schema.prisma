@@ -155,6 +155,7 @@ model User {
   prestataire       Prestataire?    @relation(fields: [prestataireId], references: [id])
   maintenances      Maintenance[]   @relation("TechnicienMaintenances")
   depotages         Depotage[]      @relation("TechnicienDepotages")
+  bonsLivraisonClotures BonLivraison[] @relation("ClotureBonsLivraison")
   releves           ReleveEnergie[]
   incidents         Incident[]      @relation("TechnicienIncidents")
   incidentsDeclares Incident[]      @relation("DeclarantIncidents")
@@ -783,6 +784,19 @@ model BonLivraison {
   bordereauPdfPath   String?            @map("bordereau_pdf_path") // PDF du bordereau de chargement
   // Brouillon généré par le réappro prédictif : exclu des agrégats (chargé/livré) jusqu'à finalisation.
   isBrouillon        Boolean            @default(false) @map("is_brouillon")
+  // ── Clôture comptable : ventilation du reste en citerne ──────────────────
+  // Le « reste » (chargé − livré) était calculé et affiché, jamais décidé : un
+  // camion rentré au dépôt avec 800 L restait un manquant perpétuel, et rien ne
+  // distinguait un retour dépôt d'un siphonnage. La clôture est le geste qui
+  // solde un chargement : les trois volumes doivent totaliser ce reste.
+  dateCloture            DateTime? @map("date_cloture")
+  clotureParId           String?   @map("cloture_par_id")
+  resteRetourDepotLitres Decimal?  @map("reste_retour_depot_litres") @db.Decimal(10, 2)
+  restePerteLitres       Decimal?  @map("reste_perte_litres") @db.Decimal(10, 2)
+  resteReportLitres      Decimal?  @map("reste_report_litres") @db.Decimal(10, 2)
+  reportSurBlId          String?   @map("report_sur_bl_id") // chargement suivant qui reprend le reste
+  motifCloture           String?   @map("motif_cloture")
+  bonRetourPath          String?   @map("bon_retour_path")  // scan du bon de retour signé au dépôt
   observations       String?
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
@@ -790,10 +804,14 @@ model BonLivraison {
   bonCommande BonCommande      @relation(fields: [bonCommandeId], references: [id])
   transporteur Prestataire?    @relation(fields: [transporteurId], references: [id])
   lignes      LigneLivraison[]
+  cloturePar    User?          @relation("ClotureBonsLivraison", fields: [clotureParId], references: [id])
+  reportSurBl   BonLivraison?  @relation("ReportReste", fields: [reportSurBlId], references: [id])
+  reportsRecus  BonLivraison[] @relation("ReportReste")
 
   @@index([bonCommandeId])
   @@index([transporteurId])
   @@index([annee, mois])
+  @@index([dateCloture])
   @@map("bons_livraison")
 }
 

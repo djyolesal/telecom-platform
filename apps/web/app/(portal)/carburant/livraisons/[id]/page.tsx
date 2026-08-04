@@ -34,6 +34,12 @@ interface BL {
   bonCommande?: { numero: string; annee: number; trimestre: number };
   transporteur?: { id: string; nom: string };
   lignes: Ligne[]; sommeLignes: number; coherenceCharge: boolean;
+  // Clôture comptable : ventilation du reste en citerne.
+  dateCloture?: string | null; estClos?: boolean;
+  resteRetourDepotLitres?: number | null; restePerteLitres?: number | null; resteReportLitres?: number | null;
+  reportSurBlId?: string | null; motifCloture?: string | null;
+  bonRetourPath?: string | null; bonRetourUrl?: string | null;
+  reste?: number; resteVentile?: number; resteAExpliquer?: number;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -41,6 +47,15 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 interface LigneEdit { siteId: string; volume: string }
+
+// Upload d'une pièce jointe (bon de retour) → renvoie la clé de stockage.
+async function uploadPdfBl(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('folder', 'documents');
+  fd.append('file', file);
+  const r = await api.post('/upload/document', fd);
+  return r.data?.data?.key as string;
+}
 
 // Éditeur de plan (réservé au manager) : associe des sites + volumes au BL.
 function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
@@ -257,6 +272,116 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
   );
 }
 
+/**
+ * Clôture d'un chargement : le geste qui SOLDE un camion. Tant que le reste en
+ * citerne n'est pas ventilé (retour dépôt / perte / report), il reste un
+ * manquant camion perpétuel — et rien ne distingue un retour honnête d'un
+ * siphonnage. La somme des trois destinations doit égaler le reste.
+ */
+function ClotureModal({ bl, reste, onClose }: { bl: BL; reste: number; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [retour, setRetour] = useState('');
+  const [perte, setPerte] = useState('');
+  const [report, setReport] = useState('');
+  const [reportSurBlId, setReportSurBlId] = useState('');
+  const [motif, setMotif] = useState('');
+  const [bonRetourPath, setBonRetourPath] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+
+  const num = (v: string) => (v.trim() === '' ? 0 : Number(v.replace(',', '.')) || 0);
+  const somme = num(retour) + num(perte) + num(report);
+  const equilibre = Math.abs(somme - reste) <= TOL;
+
+  // Cibles de report : chargements ouverts (ni brouillon, ni annulés, ni clos).
+  const { data: cibles = [] } = useQuery({
+    queryKey: ['bls-report', bl.id],
+    queryFn: () => api.get('/bons-livraison', { params: { limit: 50 } })
+      .then((r) => (r.data.data as BL[]).filter((x) => x.id !== bl.id && !x.isBrouillon && x.statut !== 'ANNULE' && !x.dateCloture)),
+    enabled: num(report) > TOL,
+  });
+
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/bons-livraison/${bl.id}/cloturer`, {
+      resteRetourDepotLitres: num(retour),
+      restePerteLitres: num(perte),
+      resteReportLitres: num(report),
+      reportSurBlId: num(report) > TOL ? reportSurBlId : undefined,
+      motifCloture: motif || undefined,
+      bonRetourPath: bonRetourPath || undefined,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bon-livraison', bl.id] });
+      onClose();
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error ?? 'Clôture impossible'),
+  });
+
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    setUploading(true);
+    try { setBonRetourPath(await uploadPdfBl(f)); }
+    catch { setError('Envoi du bon de retour impossible'); }
+    finally { setUploading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-800">Clôturer le chargement {bl.numeroBL}</h2>
+          <button onClick={onClose} className="rounded p-1 hover:bg-gray-100"><X size={18} /></button>
+        </div>
+        <p className="mb-4 text-xs text-gray-500">
+          Reste en citerne à expliquer : <strong className="text-gray-800">{fmtNumber(reste)} L</strong>
+          {' '}({fmtNumber(Number(bl.volumeChargeLitres))} L chargés − {fmtNumber(Number(bl.volumeChargeLitres) - reste)} L livrés).
+        </p>
+
+        <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
+          <Field label="Retour au dépôt (L)">
+            <Input type="number" value={retour} onChange={(e) => setRetour(e.target.value)} placeholder="0" />
+          </Field>
+          {num(retour) > TOL && (
+            <div>
+              <label className="mb-1 block text-xs text-gray-600">Bon de retour signé du dépôt *</label>
+              <input type="file" accept="application/pdf,image/*" onChange={(e) => onFile(e.target.files?.[0])}
+                className="block w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5" />
+              {uploading && <p className="mt-1 text-xs text-gray-500">Envoi…</p>}
+              {bonRetourPath && <p className="mt-1 text-xs text-green-700">Pièce jointe enregistrée.</p>}
+            </div>
+          )}
+          <Field label="Perte constatée (L)">
+            <Input type="number" value={perte} onChange={(e) => setPerte(e.target.value)} placeholder="0" />
+          </Field>
+          <Field label="Report sur un autre chargement (L)">
+            <Input type="number" value={report} onChange={(e) => setReport(e.target.value)} placeholder="0" />
+          </Field>
+          {num(report) > TOL && (
+            <Field label="Chargement qui reprend ce reste *">
+              <Select value={reportSurBlId} onChange={(e) => setReportSurBlId(e.target.value)} placeholder="Choisir un chargement"
+                options={cibles.map((c) => ({ value: c.id, label: `${c.numeroBL} · ${c.immatriculation}` }))} />
+            </Field>
+          )}
+          <Field label={num(perte) > TOL ? 'Motif (obligatoire pour une perte) *' : 'Motif / observations'}>
+            <Input value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Ex. fuite constatée au dépotage du site X" />
+          </Field>
+
+          <div className={`rounded-lg px-3 py-2 text-sm ${equilibre ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'}`}>
+            Ventilé : {fmtNumber(somme)} L / {fmtNumber(reste)} L
+            {!equilibre && ` — écart de ${fmtNumber(Math.abs(somme - reste))} L`}
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
+            <Button type="submit" loading={mutation.isPending} disabled={!equilibre || uploading}>Clôturer</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function BonLivraisonDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -266,6 +391,7 @@ export default function BonLivraisonDetailPage() {
   const isManager = role === 'MANAGER' || role === 'ADMIN';
   const [showPlan, setShowPlan] = useState(false);
   const [showHeader, setShowHeader] = useState(false);
+  const [showCloture, setShowCloture] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bon-livraison', id],
@@ -293,6 +419,9 @@ export default function BonLivraisonDetailPage() {
   // sur-livraison ne se lit pas comme un reste).
   const resteCiterne = Math.max(0, Number(data.volumeChargeLitres) - totalLivreReel);
   const hasPlan = data.lignes.length > 0;
+  const clos = !!data.dateCloture;
+  // Clôturable : un chargement réel, non annulé, pas déjà soldé.
+  const peutCloturer = isManager && !clos && !data.isBrouillon && data.statut !== 'ANNULE';
 
   return (
     <div>
@@ -306,6 +435,9 @@ export default function BonLivraisonDetailPage() {
             {hasPlan && <Button variant="secondary" icon={FileText} onClick={() => downloadFile(`/bons-livraison/${data.id}/plan.pdf`, `plan-${data.numeroBL}.pdf`)}>PDF</Button>}
             {isManager && <Button variant="secondary" icon={Pencil} onClick={() => setShowHeader(true)}>Entête</Button>}
             {isManager && <Button icon={hasPlan ? Pencil : Plus} onClick={() => setShowPlan(true)}>{hasPlan ? 'Éditer le plan' : 'Générer le plan'}</Button>}
+            {peutCloturer && (
+              <Button variant="secondary" icon={CheckCircle2} onClick={() => setShowCloture(true)}>Clôturer</Button>
+            )}
             {isManager && data.isBrouillon && (
               <Button variant="secondary" icon={Trash2} loading={supprimerBrouillon.isPending}
                 onClick={() => {
@@ -319,6 +451,13 @@ export default function BonLivraisonDetailPage() {
           </div>
         }
       />
+
+      {clos && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          Chargement clôturé le {fmtDate(data.dateCloture!)} — le reste en citerne a été ventilé, ce camion ne compte plus dans les écarts.
+          {data.motifCloture ? ` Motif : ${data.motifCloture}` : ''}
+        </div>
+      )}
 
       {data.numeroBL.startsWith('BR-') && (
         <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
@@ -356,6 +495,21 @@ export default function BonLivraisonDetailPage() {
             value={<span className={resteCiterne > 0.5 ? 'text-amber-700 font-semibold' : 'text-green-700 font-semibold'}>
               {fmtNumber(resteCiterne)} L
             </span>} />
+          {/* Ventilation du reste : la preuve que le camion est soldé. */}
+          {clos && (
+            <div className="mt-2 border-t pt-2">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Reste ventilé à la clôture</p>
+              {Number(data.resteRetourDepotLitres) > 0 && <Row label="Retour au dépôt" value={`${fmtNumber(Number(data.resteRetourDepotLitres))} L`} />}
+              {Number(data.restePerteLitres) > 0 && <Row label="Perte constatée" value={`${fmtNumber(Number(data.restePerteLitres))} L`} />}
+              {Number(data.resteReportLitres) > 0 && <Row label="Reporté sur un autre chargement" value={`${fmtNumber(Number(data.resteReportLitres))} L`} />}
+              {data.bonRetourUrl && (
+                <a href={data.bonRetourUrl} target="_blank" rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                  <FileText size={13} className="text-red-500" /> Bon de retour
+                </a>
+              )}
+            </div>
+          )}
           <p className={`mt-2 text-sm font-medium ${data.coherenceCharge ? 'text-green-700' : 'text-amber-700'}`}>
             {!hasPlan ? 'Plan non encore défini par le manager.' : data.coherenceCharge ? 'Plan cohérent : Σ sites = volume chargé.' : 'Incohérence : la somme des volumes prévus diffère du volume chargé.'}
           </p>
@@ -397,6 +551,7 @@ export default function BonLivraisonDetailPage() {
 
       {showPlan && <EditPlanModal bl={data} onClose={() => setShowPlan(false)} />}
       {showHeader && <EditHeaderModal bl={data} onClose={() => setShowHeader(false)} />}
+      {showCloture && <ClotureModal bl={data} reste={resteCiterne} onClose={() => setShowCloture(false)} />}
     </div>
   );
 }

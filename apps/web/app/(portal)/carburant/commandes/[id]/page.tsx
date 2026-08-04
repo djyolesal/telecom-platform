@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, FileText } from 'lucide-react';
+import { Plus, X, FileText, Scale } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
@@ -285,6 +285,7 @@ export default function BonCommandeDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             <Badge className={BC_COLORS[data.statut] || ''}>{data.statut}</Badge>
+            <Button variant="secondary" icon={Scale} onClick={() => router.push(`/carburant/commandes/${id}/rapprochement`)}>Rapprochement</Button>
             {isManager && data.statut !== 'ANNULE' && (
               <Button variant="secondary" loading={statutMut.isPending}
                 onClick={() => statutMut.mutate(data.statut === 'OUVERT' ? 'CLOTURE' : 'OUVERT')}>

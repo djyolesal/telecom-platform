@@ -21,7 +21,7 @@ const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juille
 
 interface ParSite { siteId: string; siteCode: string; siteNom: string; region: string; prevu: number; livre: number; manquant: number; surLivre: number; nbEnRetard: number; nbCritiques: number }
 interface SiteLigne { ligneId: string; blId: string; numeroBL: string; bcNumero: string; transporteur?: string; immatriculation: string; mois: number; annee: number; dateChargement: string; jours: number; prevu: number; livre: number; manquant: number; statut: string; enRetard: boolean }
-interface ParCamion { blId: string; numeroBL: string; bcNumero: string; mois: number; immatriculation: string; transporteur?: string; charge: number; distribue: number; manquant: number; surLivre: number; nbSitesManquants: number; jours: number; enRetard: boolean; critique: boolean }
+interface ParCamion { blId: string; numeroBL: string; bcNumero: string; mois: number; immatriculation: string; transporteur?: string; charge: number; distribue: number; manquant: number; surLivre: number; clos: boolean; ventile: number; nbSitesManquants: number; jours: number; enRetard: boolean; critique: boolean }
 interface ParMois { bcNumero: string; annee: number; mois: number; prevu: number; charge: number; livre: number; manquantCharge: number; manquantLivre: number; surCharge: number }
 interface BlEnAttente { id: string; numeroBL: string; bcNumero: string | null; immatriculation: string; transporteur: string | null; volumeChargeLitres: number; dateChargement: string | null; jours: number }
 interface ParBc { bcId: string; numero: string; annee: number; trimestre: number; prevu: number; charge: number; livre: number; manquant: number }
@@ -156,7 +156,8 @@ export default function ManquantsPage() {
     { key: 'distribue', header: 'Distribué (L)', align: 'right', render: (c) => fmtNumber(c.distribue) },
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (c) => mq(c.manquant) },
     { key: 'surLivre', header: 'Sur-livré (L)', align: 'right', render: (c) => sl(c.surLivre) },
-    { key: 'etat', header: 'État', align: 'center', render: (c) => c.critique ? <Badge className="bg-red-600 text-white">Critique</Badge> : c.enRetard ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">{c.jours} j</span> },
+    // Un camion CLÔTURÉ a son reste ventilé : il ne se relance plus, il se lit.
+    { key: 'etat', header: 'État', align: 'center', render: (c) => c.clos ? <Badge className="bg-green-100 text-green-700">Soldé</Badge> : c.critique ? <Badge className="bg-red-600 text-white">Critique</Badge> : c.enRetard ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">{c.jours} j</span> },
   ];
   const colsMois: Column<ParMois>[] = [
     { key: 'bcNumero', header: 'BC' },

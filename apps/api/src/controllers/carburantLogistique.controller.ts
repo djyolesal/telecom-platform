@@ -13,6 +13,7 @@ import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
+import { rapprochementBc } from '../services/rapprochement.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
 import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
 import { getNum } from '../services/settings.service';
@@ -366,6 +367,13 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
     });
     const sommeLignes = lignes.reduce((s, l) => s + n(l.volumePrevuLitres), 0);
 
+    // Reste en citerne et sa ventilation : le camion n'est soldé que si le reste
+    // est expliqué (retour dépôt / perte / report), pas quand il est simplement
+    // faible. `resteAExpliquer` est ce qui reste à décider.
+    const totalLivre = lignes.reduce((t, l) => t + l.volumeLivreReel, 0);
+    const reste = n(bl.volumeChargeLitres) - totalLivre;
+    const ventile = n(bl.resteRetourDepotLitres) + n(bl.restePerteLitres) + n(bl.resteReportLitres);
+
     res.json({
       success: true,
       data: {
@@ -374,7 +382,13 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
         sommeLignes,
         blPdfUrl: bl.blPdfPath ? publicFileUrl(bl.blPdfPath) : null,
         bordereauPdfUrl: bl.bordereauPdfPath ? publicFileUrl(bl.bordereauPdfPath) : null,
+        bonRetourUrl: bl.bonRetourPath ? publicFileUrl(bl.bonRetourPath) : null,
         coherenceCharge: Math.abs(sommeLignes - n(bl.volumeChargeLitres)) <= TOLERANCE_L,
+        totalLivre: Math.round(totalLivre),
+        reste: Math.round(reste),
+        resteVentile: Math.round(ventile),
+        resteAExpliquer: Math.round(reste - ventile),
+        estClos: bl.dateCloture != null,
       },
     });
   } catch (err) { next(err); }
@@ -702,6 +716,123 @@ export async function deleteBonLivraison(req: Request, res: Response, next: Next
 }
 
 /**
+ * CLÔTURE COMPTABLE d'un chargement : le geste qui manquait pour solder un camion.
+ *
+ * Le « reste » (chargé − Σ dépotages) était calculé et affiché nulle part
+ * décidé : 800 L rentrés au dépôt restaient un manquant camion perpétuel, et
+ * rien ne distinguait un retour dépôt d'un siphonnage. Le seul remède était
+ * l'annulation du BL — qui effaçait aussi les milliers de litres réellement
+ * livrés. La clôture oblige à ventiler ce reste en trois destinations, dont la
+ * somme doit égaler le reste au litre près :
+ *   retour dépôt (avec bon de retour signé) · perte constatée (avec motif) ·
+ *   report sur un autre chargement.
+ */
+export async function cloturerBonLivraison(req: Request, res: Response, next: NextFunction) {
+  try {
+    const bl = await prisma.bonLivraison.findUnique({
+      where: { id: req.params.id },
+      include: { lignes: { include: { depotages: { select: { volumeLitres: true } } } } },
+    });
+    if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+    if (bl.isBrouillon) throw new AppError("Un brouillon n'a pas de chargement réel à solder. Finalisez-le ou supprimez-le.", 400);
+    if (bl.statut === 'ANNULE') throw new AppError('Ce bon de livraison est annulé.', 409);
+    if (bl.dateCloture) throw new AppError('Ce chargement est déjà clôturé.', 409);
+
+    const livre = bl.lignes.reduce((t, l) => t + l.depotages.reduce((s, d) => s + n(d.volumeLitres), 0), 0);
+    const charge = n(bl.volumeChargeLitres);
+    const reste = charge - livre;
+    // Sur-livraison : le camion a déposé PLUS qu'il n'a chargé. Il n'y a rien à
+    // ventiler et le défaut est ailleurs (jauge, double saisie, plan) — clôturer
+    // graverait l'incohérence.
+    if (reste < -TOLERANCE_L) {
+      throw new AppError(
+        `Ce chargement affiche ${Math.round(-reste).toLocaleString('fr-FR')} L livrés EN PLUS du volume chargé. ` +
+        `Corrigez les dépotages ou le volume chargé avant de clôturer.`,
+        409
+      );
+    }
+
+    const retour = Math.max(0, n(req.body.resteRetourDepotLitres));
+    const perte = Math.max(0, n(req.body.restePerteLitres));
+    const report = Math.max(0, n(req.body.resteReportLitres));
+    const motif = String(req.body.motifCloture ?? '').trim();
+    const bonRetourPath = cleMinioValide(req.body.bonRetourPath);
+    const reportSurBlId = req.body.reportSurBlId ? String(req.body.reportSurBlId) : null;
+
+    const somme = retour + perte + report;
+    if (Math.abs(somme - Math.max(0, reste)) > TOLERANCE_L) {
+      throw new AppError(
+        `La ventilation (${Math.round(somme).toLocaleString('fr-FR')} L) doit égaler le reste en citerne ` +
+        `(${Math.round(Math.max(0, reste)).toLocaleString('fr-FR')} L = ${Math.round(charge).toLocaleString('fr-FR')} chargés − ` +
+        `${Math.round(livre).toLocaleString('fr-FR')} livrés).`,
+        400
+      );
+    }
+    // Une perte constatée est une écriture lourde (elle sort du bilan) : elle
+    // s'explique. Un retour dépôt s'appuie sur la pièce signée du dépôt.
+    if (perte > TOLERANCE_L && motif.length < 10) {
+      throw new AppError('Une perte constatée doit être expliquée (motif de 10 caractères minimum).', 400);
+    }
+    if (retour > TOLERANCE_L && !bonRetourPath) {
+      throw new AppError('Joignez le bon de retour signé du dépôt pour justifier le retour de carburant.', 400);
+    }
+
+    if (report > TOLERANCE_L) {
+      if (!reportSurBlId) throw new AppError('Indiquez le chargement sur lequel le reste est reporté.', 400);
+      if (reportSurBlId === bl.id) throw new AppError('Un chargement ne peut pas se reporter sur lui-même.', 400);
+      const cible = await prisma.bonLivraison.findUnique({
+        where: { id: reportSurBlId },
+        select: { id: true, numeroBL: true, statut: true, isBrouillon: true, dateCloture: true },
+      });
+      if (!cible) throw new AppError('Chargement de report introuvable', 404);
+      if (cible.isBrouillon || cible.statut === 'ANNULE' || cible.dateCloture) {
+        throw new AppError(`Le chargement ${cible.numeroBL} ne peut pas recevoir de report (brouillon, annulé ou déjà clôturé).`, 409);
+      }
+    }
+
+    const maj = await prisma.bonLivraison.update({
+      where: { id: bl.id },
+      data: {
+        dateCloture: new Date(),
+        cloturePar: { connect: { id: req.user!.id } },
+        resteRetourDepotLitres: retour,
+        restePerteLitres: perte,
+        resteReportLitres: report,
+        reportSurBl: report > TOLERANCE_L && reportSurBlId ? { connect: { id: reportSurBlId } } : undefined,
+        motifCloture: motif || null,
+        bonRetourPath: bonRetourPath ?? undefined,
+      },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { cloture: { reste: Math.round(reste), retour, perte, report } }, req);
+    clearMemo();
+    res.json({ success: true, data: maj, message: 'Chargement clôturé' });
+  } catch (err) { next(err); }
+}
+
+/** Réouverture d'un chargement clôturé (correction) — administrateur seul. */
+export async function rouvrirBonLivraison(req: Request, res: Response, next: NextFunction) {
+  try {
+    const bl = await prisma.bonLivraison.findUnique({ where: { id: req.params.id }, select: { id: true, dateCloture: true } });
+    if (!bl) throw new AppError('Bon de livraison introuvable', 404);
+    if (!bl.dateCloture) throw new AppError("Ce chargement n'est pas clôturé.", 409);
+    const motif = String(req.body.motif ?? '').trim();
+    if (motif.length < 5) throw new AppError('Motif de réouverture requis (5 caractères minimum).', 400);
+
+    const maj = await prisma.bonLivraison.update({
+      where: { id: bl.id },
+      data: {
+        dateCloture: null, cloturePar: { disconnect: true },
+        resteRetourDepotLitres: null, restePerteLitres: null, resteReportLitres: null,
+        reportSurBl: { disconnect: true }, motifCloture: null,
+      },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { reouverture: motif }, req);
+    clearMemo();
+    res.json({ success: true, data: maj, message: 'Chargement rouvert' });
+  } catch (err) { next(err); }
+}
+
+/**
  * Remplace les lignes d'un plan SANS détruire les livraisons réelles.
  * - upsert par (bonLivraison, site) : préserve la ligne et ses dépotages rattachés ;
  * - une ligne retirée du plan n'est supprimée QUE si aucun dépotage n'y est
@@ -885,6 +1016,74 @@ export async function getManquantsSite(req: Request, res: Response, next: NextFu
     });
 
     res.json({ success: true, data: { site, lignes: data } });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Rapprochement trimestriel d'un bon de commande : la page qui répond à
+ * « où est passé le carburant du trimestre ? ». Volet logistique par mois +
+ * équation de conservation par site.
+ */
+export async function getRapprochementBc(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await rapprochementBc(req.params.id);
+    if (!data) throw new AppError('Bon de commande introuvable', 404);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function exportRapprochementBc(req: Request, res: Response, next: NextFunction) {
+  try {
+    const m = await rapprochementBc(req.params.id);
+    if (!m) throw new AppError('Bon de commande introuvable', 404);
+    const sheets = [
+      {
+        name: 'Par mois',
+        columns: [
+          { header: 'Mois', key: 'moisLabel', width: 12 },
+          { header: 'Commandé (L)', key: 'commande', width: 14 },
+          { header: 'Chargé (L)', key: 'charge', width: 14 },
+          { header: 'Planifié (L)', key: 'planifie', width: 14 },
+          { header: 'Livré au plan (L)', key: 'livrePlan', width: 16 },
+          { header: 'Livré hors plan (L)', key: 'livreHorsPlan', width: 18 },
+          { header: 'Livré total (L)', key: 'livreTotal', width: 15 },
+          { header: 'Retour dépôt (L)', key: 'retourDepot', width: 16 },
+          { header: 'Perte (L)', key: 'perte', width: 12 },
+          { header: 'Report (L)', key: 'report', width: 12 },
+          { header: 'Écart non expliqué (L)', key: 'ecartNonExplique', width: 20 },
+          { header: 'BL non clôturés', key: 'nbBlNonClos', width: 15 },
+        ],
+        rows: m.lignesMois.map((l) => ({ ...l, moisLabel: MOIS[l.mois] ?? String(l.mois) })) as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Conservation par site',
+        columns: [
+          { header: 'Site', key: 'siteCode', width: 14 },
+          { header: 'Nom', key: 'siteNom', width: 24 },
+          { header: 'Région', key: 'region', width: 16 },
+          { header: 'Stock début (L)', key: 'stockDebut', width: 15 },
+          { header: 'Livré (L)', key: 'livre', width: 12 },
+          { header: 'Stock fin (L)', key: 'stockFin', width: 14 },
+          { header: 'Consommé réel (L)', key: 'consoReelle', width: 18 },
+          { header: 'Consommé théorique (L)', key: 'consoTheorique', width: 20 },
+          { header: 'Écart (L)', key: 'ecart', width: 12 },
+          { header: 'Mesure', key: 'motifNonMesure', width: 34 },
+        ],
+        rows: m.conservation.map((c) => ({
+          ...c,
+          stockDebut: c.stockDebut ?? '', stockFin: c.stockFin ?? '',
+          consoReelle: c.consoReelle ?? '', consoTheorique: c.consoTheorique ?? '', ecart: c.ecart ?? '',
+          motifNonMesure: c.motifNonMesure ?? 'Mesuré',
+        })) as unknown as Record<string, unknown>[],
+      },
+    ];
+    await sendTabular(
+      res, req.params.format, `rapprochement-${m.bc.numero}`,
+      `Rapprochement carburant — BC ${m.bc.numero}`, sheets,
+      `T${m.bc.trimestre} ${m.bc.annee} · commandé ${m.totaux.commande.toLocaleString('fr-FR')} L · ` +
+      `chargé ${m.totaux.charge.toLocaleString('fr-FR')} L · livré ${m.totaux.livreTotal.toLocaleString('fr-FR')} L · ` +
+      `écart non expliqué ${m.totaux.ecartNonExplique.toLocaleString('fr-FR')} L`
+    );
   } catch (err) { next(err); }
 }
 

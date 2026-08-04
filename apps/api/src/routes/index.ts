@@ -112,6 +112,7 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/anomalies-carburant$/,
   /^\/rapports\/synthese-appro$/,
   /^\/rapports\/manquants-livraison(\/|$)/,
+  /^\/rapports\/rapprochement(\/|$)/,
   /^\/rapports\/correlation-carburant$/,
   /^\/rapports\/empreinte-carbone$/,
   /^\/rapports\/mensuel(\/|$)/,
@@ -277,6 +278,9 @@ router.get('/bons-livraison/:id/plan.pdf', carburantCtrl.exportPlanLivraisonPdf)
 router.put('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN', 'TRANSPORTEUR']), carburantCtrl.updateBonLivraison);
 router.put('/bons-livraison/:id/plan', rbac(['MANAGER', 'ADMIN']), carburantCtrl.setPlanLivraison);
 router.delete('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.deleteBonLivraison); // MANAGER : brouillons uniquement (vérifié dans le contrôleur)
+// Clôture comptable : ventilation du reste en citerne (le geste qui solde un camion).
+router.post('/bons-livraison/:id/cloturer', rbac(['MANAGER', 'ADMIN']), carburantCtrl.cloturerBonLivraison);
+router.post('/bons-livraison/:id/rouvrir', rbac(['ADMIN']), carburantCtrl.rouvrirBonLivraison);
 
 // ── Rapport corrélation appro ↔ consommation énergie ──────────
 router.get('/rapports/correlation-carburant', carburantCtrl.getCorrelationCarburant);
@@ -295,6 +299,9 @@ router.post('/bons-livraison/brouillon', rbac(['MANAGER', 'ADMIN']), carburantCt
 router.get('/rapports/manquants-livraison', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.getManquantsLivraison);
 router.get('/rapports/manquants-livraison/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportManquantsLivraison);
 router.get('/rapports/manquants-livraison/site/:id', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.getManquantsSite);
+// Rapprochement trimestriel par bon de commande (bouclage comptable du carburant).
+router.get('/rapports/rapprochement/:id', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.getRapprochementBc);
+router.get('/rapports/rapprochement/:id/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN', 'DIRECTION']), carburantCtrl.exportRapprochementBc);
 
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);
