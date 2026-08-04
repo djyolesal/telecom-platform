@@ -146,6 +146,16 @@ class _BlFormScreenState extends State<BlFormScreen> {
       messenger.showSnackBar(const SnackBar(content: Text('Saisissez la date de chargement du camion'), backgroundColor: Colors.red));
       return;
     }
+    // Bordereau OBLIGATOIRE : on bloque ICI, avant la mise en file. Sans ce
+    // contrôle, une saisie hors-ligne partait en attente pour n'être refusée
+    // qu'au rejeu, loin du dépôt — le bordereau n'étant plus photographiable.
+    if (_bordereauDoc == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Scannez le bordereau de chargement avant d\'enregistrer'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
     final repo = context.read<BonLivraisonRepository>();
     final router = GoRouter.of(context);
     setState(() => _saving = true);
@@ -307,7 +317,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(_bordereauDoc != null
                         ? 'Bordereau de chargement scanné — appuyez pour reprendre'
-                        : 'Scanner le bordereau de chargement'),
+                        : 'Scanner le bordereau de chargement *'),
                   ),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),

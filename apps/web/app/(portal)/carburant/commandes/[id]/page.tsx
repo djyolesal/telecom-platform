@@ -216,11 +216,14 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
               (analysé ou simplement archivé) : plus de champ « PDF du bon de
               livraison » séparé, qui écrivait le même blPdfPath. Reste le
               bordereau de chargement, qui est un AUTRE document. */}
-          <Field label="PDF du bordereau de chargement">
+          {/* Bordereau OBLIGATOIRE : c'est la preuve de ce qui est sorti du dépôt.
+              L'API le refuse sans, on le signale donc avant l'envoi. */}
+          <Field label="PDF du bordereau de chargement" required>
             <div className="flex items-center gap-2 text-xs">
               <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, 'bordereau'); }} />
               {uploading === 'bordereau' && <span className="text-gray-400">Envoi…</span>}
-              {bordereauPdfPath && uploading !== 'bordereau' && <span className="text-green-600">✓</span>}
+              {bordereauPdfPath && uploading !== 'bordereau' && <span className="text-green-600">✓ joint</span>}
+              {!bordereauPdfPath && uploading !== 'bordereau' && <span className="text-amber-600">requis</span>}
             </div>
           </Field>
 
@@ -228,7 +231,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
           {warnings.length === 0 && (
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
-              <Button type="submit" loading={mutation.isPending} disabled={!!uploading}>Créer</Button>
+              <Button type="submit" loading={mutation.isPending} disabled={!!uploading || !bordereauPdfPath}>Créer</Button>
             </div>
           )}
         </form>
