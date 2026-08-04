@@ -253,25 +253,47 @@ class BonLivraisonLite {
       );
 }
 
-/// Une ligne du plan : le site à servir et le volume prévu/livré.
+/// Une réception réelle sur un site (preuve de ce qui a été déposé).
+class ReceptionSite {
+  final DateTime? date;
+  final double volumeLitres;
+  const ReceptionSite({this.date, required this.volumeLitres});
+
+  factory ReceptionSite.fromJson(Map<String, dynamic> j) => ReceptionSite(
+        date: DateTime.tryParse(j['dateDepotage']?.toString() ?? ''),
+        volumeLitres: Depotage._d(j['volumeLitres']),
+      );
+}
+
+/// Une ligne du plan : le site à servir, le volume prévu/livré, ses coordonnées
+/// (itinéraire) et le détail des réceptions déjà effectuées.
 class LignePlanBL {
   final String siteCode;
   final String siteNom;
   final String region;
+  final double? latitude;
+  final double? longitude;
   final double volumePrevuLitres;
   final double volumeLivreReel;
   final String statut;
+  final List<ReceptionSite> receptions;
 
   const LignePlanBL({
     required this.siteCode,
     required this.siteNom,
     required this.region,
+    this.latitude,
+    this.longitude,
     required this.volumePrevuLitres,
     required this.volumeLivreReel,
     required this.statut,
+    this.receptions = const [],
   });
 
   double get restant => (volumePrevuLitres - volumeLivreReel).clamp(0, double.infinity);
+
+  /// Un itinéraire n'est proposable que si le site est géolocalisé.
+  bool get aItineraire => latitude != null && longitude != null;
 
   factory LignePlanBL.fromJson(Map<String, dynamic> j) {
     final s = j['site'] as Map<String, dynamic>?;
@@ -279,9 +301,14 @@ class LignePlanBL {
       siteCode: s?['code'] as String? ?? '',
       siteNom: s?['nom'] as String? ?? '',
       region: s?['region'] as String? ?? '',
+      latitude: Depotage._dn(s?['latitude']),
+      longitude: Depotage._dn(s?['longitude']),
       volumePrevuLitres: Depotage._d(j['volumePrevuLitres']),
       volumeLivreReel: Depotage._d(j['volumeLivreReel']),
       statut: j['statut'] as String? ?? 'PREVU',
+      receptions: ((j['depotages'] as List?) ?? const [])
+          .map((e) => ReceptionSite.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

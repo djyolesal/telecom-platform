@@ -63,4 +63,29 @@ void main() {
     });
     expect(l.restant, 0);
   });
+
+  test('coordonnées et réceptions du site sont lues (itinéraire + preuve)', () {
+    final l = LignePlanBL.fromJson({
+      'site': {'code': 'ABA', 'nom': 'ABASSE', 'region': 'Maritime', 'latitude': '6.1725', 'longitude': '1.2314'},
+      'volumePrevuLitres': '5000', 'volumeLivreReel': '3000', 'statut': 'PARTIEL',
+      'depotages': [
+        {'id': 'd1', 'dateDepotage': '2025-08-05T09:00:00.000Z', 'volumeLitres': '2000'},
+        {'id': 'd2', 'dateDepotage': '2025-08-07T14:00:00.000Z', 'volumeLitres': '1000'},
+      ],
+    });
+    expect(l.aItineraire, isTrue);
+    expect(l.latitude, closeTo(6.1725, 0.0001));
+    expect(l.receptions.length, 2);
+    expect(l.receptions.first.volumeLitres, 2000);
+    expect(l.restant, 2000);
+  });
+
+  test('un site sans coordonnées ne propose pas d\'itinéraire', () {
+    final l = LignePlanBL.fromJson({
+      'site': {'code': 'X', 'nom': 'X', 'region': 'R'},
+      'volumePrevuLitres': '1000', 'volumeLivreReel': '0', 'statut': 'PREVU',
+    });
+    expect(l.aItineraire, isFalse);
+    expect(l.receptions, isEmpty);
+  });
 }

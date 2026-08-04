@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, AlertTriangle, Plus, X, Trash2, Download, FileText, Pencil } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Plus, X, Trash2, Download, FileText, Pencil, Navigation } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -22,7 +22,7 @@ const LIGNE_COLORS: Record<string, string> = { PREVU: 'bg-gray-100 text-gray-600
 interface SiteLite { id: string; code: string; nom: string }
 interface Ligne {
   id: string; volumePrevuLitres: number; volumeLivreReel: number; ecart: number; statut: string;
-  site: { code: string; nom: string; region: string };
+  site: { code: string; nom: string; region: string; latitude?: number | null; longitude?: number | null };
   depotages: { id: string; dateDepotage: string; volumeLitres: number }[];
 }
 interface BL {
@@ -191,6 +191,72 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
   );
 }
 
+
+/**
+ * Une ligne du plan. Deux apports pour le transporteur :
+ *  — « Itinéraire » : le chauffeur doit trouver le site (coordonnées du site).
+ *  — le détail des dépotages RÉELS (date + volume) : l'API les envoyait déjà
+ *    mais l'écran n'affichait qu'un total ; c'est pourtant la preuve de ce qui
+ *    a été réceptionné, et ce sur quoi porte tout litige.
+ */
+function LignePlan({ ligne: l }: { ligne: Ligne }) {
+  const [ouvert, setOuvert] = useState(false);
+  const aCoord = l.site.latitude != null && l.site.longitude != null;
+  const nbDepotages = l.depotages?.length ?? 0;
+
+  return (
+    <>
+      <tr className="border-b last:border-0">
+        <td className="py-2">
+          <span className="font-medium text-gray-800">{l.site.nom}</span>
+          <span className="ml-1.5 text-xs text-gray-400">{l.site.code}</span>
+          {aCoord && (
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${l.site.latitude},${l.site.longitude}`}
+              target="_blank" rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Ouvrir l'itinéraire vers ce site"
+              className="ml-2 inline-flex items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50"
+            >
+              <Navigation size={11} /> Itinéraire
+            </a>
+          )}
+        </td>
+        <td className="text-gray-600">{l.site.region}</td>
+        <td className="text-right">{fmtNumber(Number(l.volumePrevuLitres))}</td>
+        <td className="text-right">
+          {l.volumeLivreReel > 0 ? fmtNumber(l.volumeLivreReel) : '—'}
+          {nbDepotages > 0 && (
+            <button type="button" onClick={() => setOuvert((o) => !o)}
+              className="ml-1.5 text-[11px] text-blue-600 hover:underline">
+              {ouvert ? 'masquer' : `${nbDepotages} dépotage${nbDepotages > 1 ? 's' : ''}`}
+            </button>
+          )}
+        </td>
+        <td className={`text-right font-medium ${Math.abs(l.ecart) <= 0.5 ? 'text-gray-400' : l.ecart > 0 ? 'text-blue-600' : 'text-amber-600'}`}>
+          {l.volumeLivreReel > 0 ? `${l.ecart > 0 ? '+' : ''}${fmtNumber(l.ecart)}` : '—'}
+        </td>
+        <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{l.statut}</Badge></td>
+      </tr>
+      {ouvert && nbDepotages > 0 && (
+        <tr className="bg-gray-50/60">
+          <td colSpan={6} className="px-3 py-2">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Réceptions sur ce site</p>
+            <ul className="space-y-0.5">
+              {l.depotages.map((d) => (
+                <li key={d.id} className="flex justify-between text-xs text-gray-700">
+                  <span>{fmtDate(d.dateDepotage)}</span>
+                  <span className="tabular-nums font-medium">{fmtNumber(Number(d.volumeLitres))} L</span>
+                </li>
+              ))}
+            </ul>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 export default function BonLivraisonDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session } = useSession();
@@ -208,6 +274,9 @@ export default function BonLivraisonDetailPage() {
   if (isError || !data) return <div className="p-6"><ErrorState /></div>;
 
   const totalLivreReel = data.lignes.reduce((s, l) => s + l.volumeLivreReel, 0);
+  // Ce qui n'est pas encore descendu du camion (jamais négatif : une
+  // sur-livraison ne se lit pas comme un reste).
+  const resteCiterne = Math.max(0, Number(data.volumeChargeLitres) - totalLivreReel);
   const hasPlan = data.lignes.length > 0;
 
   return (
@@ -256,6 +325,12 @@ export default function BonLivraisonDetailPage() {
           <Row label="Total du plan (prévu)" value={`${fmtNumber(data.sommeLignes)} L`} />
           <Row label="Volume chargé camion" value={`${fmtNumber(Number(data.volumeChargeLitres))} L`} />
           <Row label="Total livré (réel)" value={`${fmtNumber(totalLivreReel)} L`} />
+          {/* Ce qui reste dans la citerne : c'est l'écart camion sur lequel le
+              pilotage interpelle le transporteur — il doit le voir en premier. */}
+          <Row label="Reste à livrer (citerne)"
+            value={<span className={resteCiterne > 0.5 ? 'text-amber-700 font-semibold' : 'text-green-700 font-semibold'}>
+              {fmtNumber(resteCiterne)} L
+            </span>} />
           <p className={`mt-2 text-sm font-medium ${data.coherenceCharge ? 'text-green-700' : 'text-amber-700'}`}>
             {!hasPlan ? 'Plan non encore défini par le manager.' : data.coherenceCharge ? 'Plan cohérent : Σ sites = volume chargé.' : 'Incohérence : la somme des volumes prévus diffère du volume chargé.'}
           </p>
@@ -281,16 +356,7 @@ export default function BonLivraisonDetailPage() {
             </thead>
             <tbody>
               {data.lignes.map((l) => (
-                <tr key={l.id} className="border-b last:border-0">
-                  <td className="py-2"><span className="font-medium text-gray-800">{l.site.nom}</span></td>
-                  <td className="text-gray-600">{l.site.region}</td>
-                  <td className="text-right">{fmtNumber(Number(l.volumePrevuLitres))}</td>
-                  <td className="text-right">{l.volumeLivreReel > 0 ? fmtNumber(l.volumeLivreReel) : '—'}</td>
-                  <td className={`text-right font-medium ${Math.abs(l.ecart) <= 0.5 ? 'text-gray-400' : l.ecart > 0 ? 'text-blue-600' : 'text-amber-600'}`}>
-                    {l.volumeLivreReel > 0 ? `${l.ecart > 0 ? '+' : ''}${fmtNumber(l.ecart)}` : '—'}
-                  </td>
-                  <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{l.statut}</Badge></td>
-                </tr>
+                <LignePlan key={l.id} ligne={l} />
               ))}
             </tbody>
           </table>

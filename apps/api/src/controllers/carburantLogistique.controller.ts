@@ -286,8 +286,11 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
         lignes: {
           orderBy: { createdAt: 'asc' },
           include: {
-            site: { select: { code: true, nom: true, region: true } },
-            depotages: { select: { id: true, dateDepotage: true, volumeLitres: true } },
+            // Coordonnées incluses : le transporteur doit rejoindre physiquement
+            // CES sites (uniquement ceux de SON plan) — elles alimentent le
+            // bouton « Itinéraire » du web et du mobile.
+            site: { select: { code: true, nom: true, region: true, latitude: true, longitude: true } },
+            depotages: { select: { id: true, dateDepotage: true, volumeLitres: true }, orderBy: { dateDepotage: 'asc' } },
           },
         },
       },

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/services/maps_launcher.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/depotage_model.dart';
@@ -176,13 +177,33 @@ class _Ligne extends StatelessWidget {
   }
 }
 
-class _CarteLigne extends StatelessWidget {
+class _CarteLigne extends StatefulWidget {
   final LignePlanBL ligne;
   const _CarteLigne({required this.ligne});
 
   @override
+  State<_CarteLigne> createState() => _CarteLigneState();
+}
+
+class _CarteLigneState extends State<_CarteLigne> {
+  bool _receptionsOuvertes = false;
+
+  /// Ouvre la navigation vers le site (le chauffeur doit le trouver).
+  Future<void> _itineraire() async {
+    final l = widget.ligne;
+    final ok = await MapsLauncher.directionsTo(l.latitude!, l.longitude!);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucune application de navigation disponible.')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final ligne = widget.ligne;
     final couleur = _statutLigne[ligne.statut] ?? Colors.grey;
+    final nb = ligne.receptions.length;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -219,6 +240,41 @@ class _CarteLigne extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                // Itinéraire : seulement si le site est géolocalisé.
+                if (ligne.aItineraire)
+                  TextButton.icon(
+                    onPressed: _itineraire,
+                    icon: const Icon(Icons.navigation_outlined, size: 16),
+                    label: const Text('Itinéraire'),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: Size.zero),
+                  ),
+                const Spacer(),
+                // Réceptions réelles : la preuve de ce qui a été déposé ici.
+                if (nb > 0)
+                  TextButton(
+                    onPressed: () => setState(() => _receptionsOuvertes = !_receptionsOuvertes),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: Size.zero),
+                    child: Text(_receptionsOuvertes ? 'Masquer' : '$nb réception${nb > 1 ? 's' : ''}'),
+                  ),
+              ],
+            ),
+            if (_receptionsOuvertes && nb > 0) ...[
+              const Divider(height: 12),
+              ...ligne.receptions.map((r) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(fmtDate(r.date), style: const TextStyle(fontSize: 12.5)),
+                        Text(fmtLitres(r.volumeLitres),
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  )),
+            ],
           ],
         ),
       ),
