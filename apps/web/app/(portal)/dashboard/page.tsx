@@ -3,9 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { AlertTriangle, Fuel, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Loading } from '@/components/shared/states';
+import { TransporteurDashboard } from '@/components/dashboard/TransporteurDashboard';
 import { useSupervisionSocket, StockUpdatedEvent } from '@/lib/hooks/useSupervisionSocket';
 
 /** Vignette temps réel du dernier dépotage (photo + site + volume). */
@@ -100,7 +103,23 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
   );
 }
 
+/**
+ * Aiguillage par rôle. Le TRANSPORTEUR (prestataire externe) n'a pas accès aux
+ * agrégats du parc : /rapports/dashboard lui est fermé côté API et le canal
+ * supervision lui est refusé. On rend donc un tableau de bord distinct, bâti
+ * sur ses seuls chargements — au lieu de le laisser tomber sur « Accès refusé ».
+ * On attend que la session soit chargée : sinon le rôle est vide une fraction de
+ * seconde et la requête interdite partirait quand même (403 dans la console).
+ */
 export default function DashboardPage() {
+  const { data: session, status } = useSession();
+  if (status === 'loading') return <Loading />;
+  const role = (session?.user as { role?: string })?.role ?? '';
+  if (role === 'TRANSPORTEUR') return <TransporteurDashboard />;
+  return <DashboardInterne />;
+}
+
+function DashboardInterne() {
   const router = useRouter();
   const { data: dashData, isLoading } = useQuery({
     queryKey: ['dashboard'],

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -27,6 +28,10 @@ interface BL {
 export default function BonsLivraisonPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
+  // L'export global des BL est réservé au pilotage (rbac MANAGER/ADMIN) : sans
+  // ce test, le transporteur voyait un bouton qui ne pouvait que renvoyer 403.
+  const { data: session } = useSession();
+  const estTransporteur = (session?.user as { role?: string })?.role === 'TRANSPORTEUR';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bons-livraison', { page }],
@@ -50,10 +55,12 @@ export default function BonsLivraisonPage() {
   return (
     <div>
       <PageHeader
-        title="Bons de livraison carburant"
-        subtitle="Chargements de camions et plans de livraison"
-        backHref="/carburant/commandes"
-        actions={<ExportButtons base="/bons-livraison/export" name="bons-livraison" />}
+        title={estTransporteur ? 'Mes chargements' : 'Bons de livraison carburant'}
+        subtitle={estTransporteur
+          ? 'Vos camions chargés et leur plan de livraison'
+          : 'Chargements de camions et plans de livraison'}
+        backHref={estTransporteur ? '/dashboard' : '/carburant/commandes'}
+        actions={estTransporteur ? undefined : <ExportButtons base="/bons-livraison/export" name="bons-livraison" />}
       />
 
       {isLoading ? (

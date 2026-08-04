@@ -15,7 +15,7 @@ import { NotificationBell } from '@/components/shared/NotificationBell';
 import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
 
 const NAV_ITEMS = [
-  { href: '/dashboard',               label: 'Tableau de bord',  icon: LayoutDashboard,  roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
+  { href: '/dashboard',               label: 'Tableau de bord',  icon: LayoutDashboard,  roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC','TRANSPORTEUR'] },
   { href: '/direction',                label: 'Pilotage',          icon: LineChart,        roles: ['MANAGER','ADMIN','DIRECTION'] },
   { href: '/fiabilite-ge',   label: 'Fiabilité GE',      icon: Gauge,            roles: ['MANAGER','ADMIN','DIRECTION'] },
   { href: '/supervision/carte',        label: 'Supervision carte', icon: MapPin,           roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC'] },
@@ -30,6 +30,10 @@ const NAV_ITEMS = [
   { href: '/actifs',                   label: "Parc d'actifs",     icon: Boxes,            roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/carburant/stock',          label: 'Carburant',         icon: Fuel,             roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/carburant/commandes',       label: 'Appro. carburant',  icon: Truck,            roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
+  // Fiches de chargement : le transporteur n'ouvre que LES SIENNES (l'API
+  // filtre et revérifie son prestataire) — sans cette entrée, la section
+  // hors-menu /carburant lui refusait la fiche d'un BL.
+  { href: '/carburant/livraisons',      label: 'Mes chargements',   icon: Truck,            roles: ['TRANSPORTEUR','SUPERVISEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR'] },
   { href: '/carburant/pertes',         label: 'Pertes carburant',  icon: ShieldAlert,      roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { href: '/energie',                  label: 'Énergie',           icon: Zap,              roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { href: '/incidents',                label: 'Incidents',         icon: AlertTriangle,    roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
