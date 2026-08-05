@@ -20,7 +20,7 @@ export async function resoudreVehicule(
   immatriculation: unknown,
   prestataireId: string | null | undefined,
   db: Db = prisma
-): Promise<{ id: string; capaciteCiterneLitres: Prisma.Decimal | null } | null> {
+): Promise<{ id: string; capaciteCiterneLitres: Prisma.Decimal | null; certificatJaugeageExpiration: Date | null } | null> {
   if (!plaqueUtilisable(immatriculation)) return null;
   const cle = normaliserPlaque(immatriculation);
   const libelle = String(immatriculation).trim().slice(0, 30);
@@ -35,13 +35,13 @@ export async function resoudreVehicule(
     // Aucune mise à jour à la volée : réaffecter un camion à un transporteur est
     // une décision d'administration, pas un effet de bord d'une saisie de BL.
     update: {},
-    select: { id: true, capaciteCiterneLitres: true, prestataireId: true },
+    select: { id: true, capaciteCiterneLitres: true, prestataireId: true, certificatJaugeageExpiration: true },
   });
   // Seul cas rattrapé : un camion encore rattaché à personne.
   if (!v.prestataireId && prestataireId) {
     await db.vehicule.update({ where: { id: v.id }, data: { prestataireId } });
   }
-  return { id: v.id, capaciteCiterneLitres: v.capaciteCiterneLitres };
+  return { id: v.id, capaciteCiterneLitres: v.capaciteCiterneLitres, certificatJaugeageExpiration: v.certificatJaugeageExpiration };
 }
 
 /** Chauffeur correspondant à un nom, créé au besoin. `null` si inexploitable. */

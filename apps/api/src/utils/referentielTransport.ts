@@ -66,3 +66,23 @@ export function memeChauffeur(a: unknown, b: unknown): boolean {
   const [court, long] = ma.length <= mb.length ? [ma, mb] : [mb, ma];
   return court.every((w) => long.includes(w));
 }
+
+/** Fenêtre d'alerte avant l'échéance du certificat de jaugeage. */
+export const JAUGEAGE_PREAVIS_JOURS = 30;
+
+export type StatutJaugeage = 'VALIDE' | 'EXPIRE_BIENTOT' | 'EXPIRE' | 'ABSENT';
+
+/**
+ * État du certificat de jaugeage d'une citerne à une date donnée.
+ * ABSENT n'est pas assimilé à EXPIRE : un camion jamais renseigné est un trou
+ * de données à combler, pas une infraction avérée — les deux ne déclenchent
+ * pas le même geste (réclamer la pièce vs replanifier un jaugeage).
+ */
+export function statutJaugeage(expiration: Date | string | null | undefined, ref: Date = new Date()): StatutJaugeage {
+  if (!expiration) return 'ABSENT';
+  const exp = new Date(expiration);
+  if (Number.isNaN(exp.getTime())) return 'ABSENT';
+  if (exp < ref) return 'EXPIRE';
+  const preavis = new Date(ref.getTime() + JAUGEAGE_PREAVIS_JOURS * 86_400_000);
+  return exp <= preavis ? 'EXPIRE_BIENTOT' : 'VALIDE';
+}

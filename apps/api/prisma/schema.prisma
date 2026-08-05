@@ -804,6 +804,13 @@ model Vehicule {
   prestataireId         String?  @map("prestataire_id")  // transporteur propriétaire
   capaciteCiterneLitres Decimal? @map("capacite_citerne_litres") @db.Decimal(10, 2)
   marque                String?  @db.VarChar(60)
+  // ── Certificat de jaugeage (métrologie légale) ────────────────────────────
+  // C'est la pièce qui rend le volume chargé OPPOSABLE : le bordereau s'appuie
+  // sur le barème des compartiments de la citerne. Un certificat expiré rend
+  // l'annoncé contestable en litige — d'où l'échéance suivie et alertée.
+  certificatJaugeagePath       String?   @map("certificat_jaugeage_path")       // scan PDF/photo
+  certificatJaugeageNumero     String?   @map("certificat_jaugeage_numero") @db.VarChar(60)
+  certificatJaugeageExpiration DateTime? @map("certificat_jaugeage_expiration")
   isActive              Boolean  @default(true) @map("is_active")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")

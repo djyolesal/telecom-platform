@@ -5,7 +5,8 @@ import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
 import { paginate } from '../utils/paginator';
 import { clearMemo } from '../utils/memo';
-import { normaliserPlaque, plaqueUtilisable, normaliserNom, nomUtilisable } from '../utils/referentielTransport';
+import { normaliserPlaque, plaqueUtilisable, normaliserNom, nomUtilisable, statutJaugeage } from '../utils/referentielTransport';
+import { cleMinioValide, publicFileUrl } from '../services/storage.service';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 
@@ -62,8 +63,40 @@ export async function getVehicules(req: Request, res: Response, next: NextFuncti
       },
       { page: parseInt(String(req.query.page ?? '1')), limit: parseInt(String(req.query.limit ?? '50')) }
     );
-    res.json({ success: true, data, meta });
+    // Statut du certificat calculé côté serveur (une seule définition de la
+    // fenêtre de préavis) + URL signée du scan (bucket privé).
+    const avecJaugeage = (data as Array<{ certificatJaugeagePath: string | null; certificatJaugeageExpiration: Date | null }>).map((v) => ({
+      ...v,
+      certificatJaugeageUrl: v.certificatJaugeagePath ? publicFileUrl(v.certificatJaugeagePath) : null,
+      statutJaugeage: statutJaugeage(v.certificatJaugeageExpiration),
+    }));
+    res.json({ success: true, data: avecJaugeage, meta });
   } catch (err) { next(err); }
+}
+
+/** Champs du certificat de jaugeage, partagés entre création et édition. */
+type ChampsJaugeage = {
+  certificatJaugeagePath?: string | null;
+  certificatJaugeageNumero?: string | null;
+  certificatJaugeageExpiration?: Date | null;
+};
+function champsJaugeage(body: Record<string, unknown>): ChampsJaugeage {
+  const data: ChampsJaugeage = {};
+  if (body.certificatJaugeagePath !== undefined) {
+    data.certificatJaugeagePath = body.certificatJaugeagePath ? cleMinioValide(body.certificatJaugeagePath) : null;
+  }
+  if (body.certificatJaugeageNumero !== undefined) {
+    data.certificatJaugeageNumero = body.certificatJaugeageNumero ? String(body.certificatJaugeageNumero).slice(0, 60) : null;
+  }
+  if (body.certificatJaugeageExpiration !== undefined) {
+    if (!body.certificatJaugeageExpiration) data.certificatJaugeageExpiration = null;
+    else {
+      const d = new Date(String(body.certificatJaugeageExpiration));
+      if (Number.isNaN(d.getTime())) throw new AppError("Date d'expiration du certificat invalide.", 400);
+      data.certificatJaugeageExpiration = d;
+    }
+  }
+  return data;
 }
 
 export async function createVehicule(req: Request, res: Response, next: NextFunction) {
@@ -83,6 +116,7 @@ export async function createVehicule(req: Request, res: Response, next: NextFunc
         prestataireId: mien ?? (req.body.prestataireId ? String(req.body.prestataireId) : null),
         capaciteCiterneLitres: cap,
         marque: marque ? String(marque).slice(0, 60) : null,
+        ...champsJaugeage(req.body),
       },
     });
     await auditLog(req.user!.id, 'CREATE', 'vehicules', v.id, req.body, req);
@@ -114,6 +148,7 @@ export async function updateVehicule(req: Request, res: Response, next: NextFunc
       data.capaciteCiterneLitres = cap;
     }
     if (req.body.marque !== undefined) data.marque = req.body.marque ? String(req.body.marque).slice(0, 60) : null;
+    Object.assign(data, champsJaugeage(req.body));
     if (req.body.isActive != null) data.isActive = !!req.body.isActive;
     // Le rattachement à un transporteur reste une décision interne.
     if (req.body.prestataireId !== undefined && !mien) {

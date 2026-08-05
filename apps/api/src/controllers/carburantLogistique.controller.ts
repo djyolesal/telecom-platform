@@ -15,7 +15,7 @@ import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { rapprochementBc } from '../services/rapprochement.service';
 import { resoudreVehicule, resoudreChauffeur, depassementCiterne } from '../services/referentielTransport.service';
-import { nomUtilisable } from '../utils/referentielTransport';
+import { nomUtilisable, statutJaugeage } from '../utils/referentielTransport';
 import { verrouSiteCarburant } from '../services/verrou.service';
 import { forecastSites, suggestTournees } from '../services/replenishment.service';
 import { detectAnomalies, generateSynthese } from '../services/intelligence.service';
@@ -562,6 +562,17 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
       // camion). Quand sa capacité est connue, un chargement qui la dépasse est
       // physiquement impossible et trahit une saisie fausse.
       const vehicule = await resoudreVehicule(immatriculation, transporteurId, tx);
+      // Certificat de jaugeage : AVERTISSEMENT, pas blocage — le camion doit
+      // pouvoir partir, mais sans certificat valide le volume chargé s'appuie
+      // sur un barème non opposable : le manager doit le savoir AVANT le litige.
+      const jaugeage = statutJaugeage(vehicule?.certificatJaugeageExpiration);
+      if (jaugeage === 'EXPIRE') {
+        warnings.push(`Le certificat de jaugeage du camion ${String(immatriculation).trim()} est EXPIRÉ : le volume chargé n'est pas opposable en litige.`);
+      } else if (jaugeage === 'ABSENT') {
+        warnings.push(`Aucun certificat de jaugeage enregistré pour le camion ${String(immatriculation).trim()} — à renseigner dans Flotte transport.`);
+      } else if (jaugeage === 'EXPIRE_BIENTOT') {
+        warnings.push(`Le certificat de jaugeage du camion ${String(immatriculation).trim()} expire dans moins de 30 jours.`);
+      }
       const dep = depassementCiterne(volume, vehicule?.capaciteCiterneLitres);
       if (dep.depasse) {
         throw new AppError(

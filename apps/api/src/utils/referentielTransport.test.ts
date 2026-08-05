@@ -1,4 +1,4 @@
-import { normaliserPlaque, plaqueUtilisable, normaliserNom, nomUtilisable, memeChauffeur } from './referentielTransport';
+import { normaliserPlaque, plaqueUtilisable, normaliserNom, nomUtilisable, memeChauffeur, statutJaugeage } from './referentielTransport';
 
 describe('normaliserPlaque', () => {
   it('ramène les trois graphies natives à une seule clé', () => {
@@ -63,5 +63,22 @@ describe('memeChauffeur', () => {
   it('refuse la comparaison quand un nom manque', () => {
     expect(memeChauffeur('', 'Koffi Jean')).toBe(false);
     expect(memeChauffeur(null, null)).toBe(false);
+  });
+});
+
+describe('statutJaugeage', () => {
+  const ref = new Date('2026-08-05T00:00:00Z');
+  it('distingue ABSENT (pièce jamais fournie) d’EXPIRE (échéance dépassée)', () => {
+    // Les deux ne déclenchent pas le même geste : réclamer la pièce,
+    // vs replanifier un jaugeage.
+    expect(statutJaugeage(null, ref)).toBe('ABSENT');
+    expect(statutJaugeage('2026-08-01', ref)).toBe('EXPIRE');
+  });
+  it('prévient AVANT l’échéance (fenêtre de 30 jours)', () => {
+    expect(statutJaugeage('2026-08-20', ref)).toBe('EXPIRE_BIENTOT');
+    expect(statutJaugeage('2026-12-01', ref)).toBe('VALIDE');
+  });
+  it('traite une date illisible comme une pièce absente', () => {
+    expect(statutJaugeage('n/a', ref)).toBe('ABSENT');
   });
 });
