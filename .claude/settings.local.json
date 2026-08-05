@@ -336,7 +336,17 @@
       "Bash(pdftoppm -jpeg -r 200 \"/Volumes/DEBIAN 13_5/20260803145805671.pdf\" bl)",
       "Bash(rm -f blhr-*.jpg)",
       "Bash(pdftoppm -jpeg -r 300 -f 1 -l 1 \"/Volumes/DEBIAN 13_5/20260803145805671.pdf\" blhr)",
-      "Bash(tesseract blhr-1.jpg stdout -l fra --psm 4)"
+      "Bash(tesseract blhr-1.jpg stdout -l fra --psm 4)",
+      "Bash(grep -rn '\\\\$transaction' src/)",
+      "Bash(grep -v \"^$\")",
+      "Bash(bash -n ../../infra/scripts/restore.sh)",
+      "Bash(grep -oE '^\\\\s+[A-Z_]+: \\\\$\\\\{[A-Z_]+:-\\\\}' docker-compose.yml)",
+      "Bash(DATABASE_URL=postgresql://u:p@localhost:5432/db JWT_SECRET=0123456789abcdef0123456789abcdef JWT_REFRESH_SECRET=fedcba9876543210fedcba9876543210 FILE_URL_SECRET='' npx ts-node -e ' *)",
+      "Bash(DATABASE_URL=postgresql://u:p@localhost:5432/db JWT_SECRET=0123456789abcdef0123456789abcdef JWT_REFRESH_SECRET=fedcba9876543210fedcba9876543210 MINIO_ACCESS_KEY=minio MINIO_SECRET_KEY=minio12345 FILE_URL_SECRET='' npx ts-node -e ' *)",
+      "Bash(awk -F: '$2>650 && $2<700')",
+      "Bash(git reset *)",
+      "Bash(awk 'NR==225' src/services/rapprochement.service.ts)",
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/web *)"
     ]
   }
 }
