@@ -1,14 +1,13 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
 
 function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   // Anti open-redirect : on n'accepte qu'un chemin interne (commençant par « / »
   // et pas « // »), jamais une URL absolue vers un site tiers (hameçonnage).
@@ -31,8 +30,12 @@ function LoginForm() {
     if (res?.error) {
       setError('Email ou mot de passe incorrect');
     } else {
-      router.push(callbackUrl);
-      router.refresh();
+      // Navigation COMPLÈTE (pas router.push) : après un signIn sans
+      // rechargement, la session du SessionProvider n'est pas propagée
+      // immédiatement — le menu et les pages qui lisent le rôle côté client
+      // partaient avec un rôle vide (un transporteur voyait le tableau de bord
+      // général). Un vrai chargement repart du cookie, session à jour partout.
+      window.location.assign(callbackUrl);
     }
   }
 
