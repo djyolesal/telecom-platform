@@ -18,7 +18,9 @@ const NAV_ITEMS = [
   { href: '/dashboard',               label: 'Tableau de bord',  icon: LayoutDashboard,  roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC','TRANSPORTEUR'] },
   { href: '/direction',                label: 'Pilotage',          icon: LineChart,        roles: ['MANAGER','ADMIN','DIRECTION'] },
   { href: '/fiabilite-ge',   label: 'Fiabilité GE',      icon: Gauge,            roles: ['MANAGER','ADMIN','DIRECTION'] },
-  { href: '/supervision/carte',        label: 'Supervision carte', icon: MapPin,           roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC'] },
+  // TRANSPORTEUR inclus : l'API lui sert une vue dédiée (ses sites à livrer,
+  // sans aucune donnée d'exploitation dans l'info-bulle).
+  { href: '/supervision/carte',        label: 'Supervision carte', icon: MapPin,           roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC','TRANSPORTEUR'] },
   { href: '/supervision/incidents',    label: 'Incidents live',    icon: Activity,         roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { href: '/supervision/coupures',     label: 'Coupures réseau',   icon: WifiOff,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
   { href: '/supervision/topologie',    label: 'Topologie',         icon: Network,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },

@@ -39,6 +39,9 @@ export default function CartePage() {
   });
 
   const all: SiteFeature[] = useMemo(() => data?.features ?? [], [data]);
+  // Vue transporteur : l'API ne sert que SES sites à livrer, sans stock ni
+  // statut GE — les filtres et la légende d'exploitation n'ont pas de sens.
+  const vueLivraison = data?.vue === 'transporteur';
 
   // Régions présentes (pour le filtre).
   const regionOptions = useMemo(
@@ -64,21 +67,32 @@ export default function CartePage() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader title="Carte de supervision" subtitle={`${features.length} / ${all.length} sites · temps réel`} />
+      <PageHeader
+        title={vueLivraison ? 'Carte de mes livraisons' : 'Carte de supervision'}
+        subtitle={vueLivraison
+          ? `${all.length} site(s) à livrer selon vos plans en cours`
+          : `${features.length} / ${all.length} sites · temps réel`}
+      />
 
       <div className="flex flex-wrap items-center gap-3 mb-3">
+        {!vueLivraison && (<>
         <div className="w-44"><Select value={region} onChange={(e) => setRegion(e.target.value)} options={regionOptions} placeholder="Toutes régions" /></div>
         <div className="w-40"><Select value={statut} onChange={(e) => setStatut(e.target.value)} options={STATUT_OPTIONS} placeholder="Tous statuts GE" /></div>
         <div className="w-48"><Select value={stock} onChange={(e) => setStock(e.target.value)} options={STOCK_OPTIONS} placeholder="Niveau stock" /></div>
         {(region || statut || stock) && (
           <button onClick={() => { setRegion(''); setStatut(''); setStock(''); }} className="text-sm text-blue-600 underline hover:no-underline">Réinitialiser</button>
         )}
+        </>)}
         <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#DC2626]" /> Stock critique</span>
-          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#F59E0B]" /> Stock faible</span>
-          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> GE permanent</span>
-          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#2471A3]" /> GE secours</span>
-          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-gray-400" /> Pas de GE</span>
+          {vueLivraison ? (
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#2471A3]" /> Site à livrer</span>
+          ) : (<>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#DC2626]" /> Stock critique</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#F59E0B]" /> Stock faible</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> GE permanent</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#2471A3]" /> GE secours</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-gray-400" /> Pas de GE</span>
+          </>)}
         </div>
       </div>
 

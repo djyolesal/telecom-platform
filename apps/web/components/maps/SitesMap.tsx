@@ -28,6 +28,10 @@ export interface SiteFeature {
     heuresGEJour?: number | null;
     dernierDepotageVol?: number | null;
     dernierDepotageDate?: string | null;
+    // Vue TRANSPORTEUR : seuls champs servis (avec l'identité du site) — le
+    // volume restant à déposer selon SON plan, et les BL concernés.
+    aLivrerLitres?: number;
+    numerosBL?: string[];
   };
 }
 
@@ -152,8 +156,11 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
       {features.map((f) => {
         const [lng, lat] = f.geometry.coordinates;
         const n = f.properties.niveauStock;
+        // Vue transporteur : un site = une livraison à faire, toujours en bleu.
+        const vueLivraison = f.properties.aLivrerLitres != null;
         // Priorité au stock : rouge = critique/vide, orange = faible ; sinon couleur du statut GE.
-        const color = n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
+        const color = vueLivraison ? '#2471A3'
+          : n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
           : n === 'FAIBLE' ? '#F59E0B'
           : (STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF');
         return (
@@ -167,8 +174,20 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
             <Popup>
               <div className="text-xs">
                 <p className="font-bold text-gray-800">{f.properties.nom}</p>
-                <p className="text-gray-500">{f.properties.region}</p>
-                <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
+                <p className="text-gray-500">{f.properties.code} · {f.properties.region}</p>
+                {/* Vue transporteur : rien de l'exploitation ne sort — seulement
+                    ce que SON plan prévoit encore de déposer ici. */}
+                {vueLivraison && (
+                  <div className="mt-1 rounded bg-blue-50 p-1.5 leading-snug">
+                    <p>À livrer : <b>{Math.round(f.properties.aLivrerLitres!)} L</b></p>
+                    {f.properties.numerosBL && f.properties.numerosBL.length > 0 && (
+                      <p className="text-gray-500">BL : {f.properties.numerosBL.join(', ')}</p>
+                    )}
+                  </div>
+                )}
+                {!vueLivraison && (
+                  <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
+                )}
                 {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (() => {
                   const badge = (
                     <span style={{ color: NIVEAU_STOCK[f.properties.niveauStock!]?.color ?? '#6B7280', fontWeight: 600 }}>
@@ -206,7 +225,7 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
                   );
                 })()}
                 <div className="mt-1 flex flex-col gap-0.5">
-                  <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>
+                  {!vueLivraison && <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>}
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`} target="_blank" rel="noreferrer" className="text-[#0E7C6B] underline">🧭 Itinéraire →</a>
                 </div>
               </div>

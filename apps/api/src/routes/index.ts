@@ -67,6 +67,7 @@ const TRANSPORTEUR_ALLOW: RegExp[] = [
   /^\/auth\//,                      // profil, mot de passe, logout, FCM
   /^\/bons-commande(\/|$)/,         // lecture pour rattacher un BL
   /^\/bons-livraison(\/|$)/,        // ses chargements (filtrés côté contrôleur)
+  /^\/sites\/geojson$/,            // carte de SES livraisons (vue dédiée, sans données d'exploitation)
   /^\/vehicules(\/|$)/,            // son parc (filtré côté contrôleur)
   /^\/chauffeurs(\/|$)/,           // son effectif (filtré côté contrôleur)
   /^\/upload\/(image|document)$/,   // photos du BL et du bordereau
@@ -156,7 +157,9 @@ router.post('/auth/fcm-token', authCtrl.updateFcmToken);
 
 // ── Sites ─────────────────────────────────────────────────────
 router.get('/sites', sitesCtrl.getSites);
-router.get('/sites/geojson', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), sitesCtrl.getSitesGeoJSON);
+// TRANSPORTEUR : vue dédiée dans le contrôleur — ses seuls sites à livrer,
+// sans aucune donnée d'exploitation (ni stock, ni autonomie, ni rupture).
+router.get('/sites/geojson', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','TRANSPORTEUR']), sitesCtrl.getSitesGeoJSON);
 router.get('/sites/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);

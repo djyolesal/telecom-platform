@@ -31,9 +31,13 @@ export function useSupervisionSocket(handlers: SupervisionEvents = {}) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const token = (session as { accessToken?: string } | null)?.accessToken;
+  const role = (session?.user as { role?: string } | undefined)?.role;
 
   useEffect(() => {
     if (!token) return;
+    // Le namespace /supervision refuse le rôle TRANSPORTEUR côté serveur :
+    // inutile d'ouvrir une connexion qui sera rejetée en boucle.
+    if (role === 'TRANSPORTEUR') return;
     const socket = getSocket('/supervision', token);
 
     const invalidate = (keys: string[]) =>
@@ -61,5 +65,5 @@ export function useSupervisionSocket(handlers: SupervisionEvents = {}) {
       socket.off('stock:updated', onStockUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, role]);
 }

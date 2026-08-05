@@ -517,6 +517,62 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
 /** GeoJSON pour Leaflet — avec mise en cache Redis 5min */
 export async function getSitesGeoJSON(req: Request, res: Response, next: NextFunction) {
   try {
+    // ── Vue TRANSPORTEUR : la carte de SES livraisons, données minimales ──
+    // Le transporteur a besoin de LOCALISER les sites à servir (itinéraire),
+    // pas de l'état d'exploitation. Les niveaux de cuve, autonomies et dates
+    // de rupture révèlent où se trouve le carburant — exactement l'information
+    // qu'on ne met pas entre toutes les mains. L'info-bulle se limite donc au
+    // site et à ce que SON plan prévoit encore d'y déposer.
+    if (req.user!.role === 'TRANSPORTEUR') {
+      const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+      if (!me?.prestataireId) throw new AppError("Votre compte n'est rattaché à aucun transporteur", 403);
+
+      const lignes = await prisma.ligneLivraison.findMany({
+        where: {
+          statut: { in: ['PREVU', 'PARTIEL'] },
+          bonLivraison: { transporteurId: me.prestataireId, statut: { not: 'ANNULE' }, isBrouillon: false, dateCloture: null },
+          site: { isActive: true, latitude: { not: null }, longitude: { not: null } },
+        },
+        select: {
+          volumePrevuLitres: true,
+          depotages: { select: { volumeLitres: true } },
+          bonLivraison: { select: { numeroBL: true } },
+          site: { select: { id: true, nom: true, code: true, region: true, latitude: true, longitude: true } },
+        },
+      });
+
+      type SiteLite = (typeof lignes)[number]['site'];
+      const parSite = new Map<string, { site: SiteLite; aLivrer: number; bls: Set<string> }>();
+      for (const l of lignes) {
+        const livre = l.depotages.reduce((t, d) => t + Number(d.volumeLitres), 0);
+        const restant = Math.max(0, Number(l.volumePrevuLitres) - livre);
+        if (restant <= 0.5) continue; // ligne soldée : plus rien à y déposer
+        const a = parSite.get(l.site.id) ?? { site: l.site, aLivrer: 0, bls: new Set<string>() };
+        a.aLivrer += restant;
+        a.bls.add(l.bonLivraison.numeroBL);
+        parSite.set(l.site.id, a);
+      }
+
+      // Pas de cache : requête petite, propre à l'utilisateur, et le plan
+      // change plus vite que les 5 min du cache de la carte interne.
+      return res.json({
+        type: 'FeatureCollection',
+        vue: 'transporteur',
+        features: [...parSite.values()].map(({ site, aLivrer, bls }) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [Number(site.longitude), Number(site.latitude)] },
+          properties: {
+            id: site.id, nom: site.nom, code: site.code, region: site.region,
+            // Champs requis par le type SiteFeature, neutralisés : rien de
+            // l'exploitation ne sort sur cette vue.
+            statutGE: '', powerConfig: '', puissanceGEkva: 0, hasStock: false, niveauStock: 'NA',
+            aLivrerLitres: Math.round(aLivrer),
+            numerosBL: [...bls].sort(),
+          },
+        })),
+      });
+    }
+
     // Même périmètre que la liste des sites : un utilisateur rattaché à un
     // prestataire ne voit sur la carte QUE les sites des lots de sa société.
     // Le cache est décliné par périmètre pour ne jamais servir la carte
