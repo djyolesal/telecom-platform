@@ -310,14 +310,24 @@ async function resoudreIncidentSiPlusDeCoupure(
   if (!incidentId) return false;
   const reste = await tx.coupureReseau.count({ where: { incidentId, dateFin: null } });
   if (reste > 0) return false;
-  const inc = await tx.incident.findUnique({ where: { id: incidentId }, select: { statut: true, dateOuverture: true } });
+  const inc = await tx.incident.findUnique({
+    where: { id: incidentId },
+    select: { statut: true, dateOuverture: true, dateIntervention: true, actionCorrective: true },
+  });
   if (!inc || !['OUVERT', 'EN_COURS'].includes(inc.statut)) return false;
+  // Rétabli SANS passage sur site (aucune intervention enregistrée) : le dire
+  // explicitement — sinon l'incident résolu ressemble, dans les stats et à la
+  // relecture, à une intervention terrain qui n'a jamais eu lieu.
+  const sansIntervention = inc.dateIntervention == null;
   await tx.incident.update({
     where: { id: incidentId },
     data: {
       statut: 'RESOLU',
       dateResolution: quand,
       dureeCoupureMinutes: minutesEntre(inc.dateOuverture, quand),
+      ...(sansIntervention && !inc.actionCorrective
+        ? { actionCorrective: 'Rétablissement constaté par le NOC — aucune intervention terrain.' }
+        : {}),
     },
   });
   return true;
@@ -531,7 +541,18 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
 
 export async function deleteCoupure(req: Request, res: Response, next: NextFunction) {
   try {
-    await prisma.coupureReseau.delete({ where: { id: req.params.id } });
+    const existante = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { incidentId: true },
+    });
+    if (!existante) throw new AppError('Coupure introuvable', 404);
+    // Supprimer la DERNIÈRE coupure ouverte d'un incident (saisie erronée du
+    // NOC) doit reboucler l'incident, comme une clôture : sinon il reste
+    // OUVERT sans plus aucune coupure — jamais résolvable, escaladé à vie.
+    await prisma.$transaction(async (tx) => {
+      await tx.coupureReseau.delete({ where: { id: req.params.id } });
+      await resoudreIncidentSiPlusDeCoupure(tx, existante.incidentId, new Date());
+    });
     await auditLog(req.user!.id, 'DELETE', 'coupure_reseau', req.params.id, {}, req);
     res.json({ success: true });
   } catch (err) { next(err); }
@@ -711,11 +732,12 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     // downtime recalculé, infos d'intervention reprises). Le stock d'obsolètes
     // se résorbe donc en ré-important simplement le dernier rapport NOC.
     let clotureesParImport = 0;
+    let incidentsResolus = 0;
     const avecFin = lots.filter((l) => l.dateFin instanceof Date);
     if (avecFin.length) {
       const ouvertes = await prisma.coupureReseau.findMany({
         where: { dateFin: null, siteId: { in: [...new Set(avecFin.map((l) => String(l.siteId)))] } },
-        select: { id: true, siteId: true, technologie: true, frequence: true, dateDebut: true },
+        select: { id: true, siteId: true, technologie: true, frequence: true, dateDebut: true, incidentId: true },
       });
       const cleDe = (siteId: string, techno: string, freq: string | null, debut: Date) =>
         `${siteId}|${techno}|${freq ?? '-'}|${debut.getTime()}`;
@@ -737,12 +759,31 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
           },
         });
       }
+      // Incidents des coupures apurées : à reboucler après la clôture. Sans ce
+      // rebouclage — le trou exact du scénario « le site remonte via le rapport,
+      // personne ne va sur site » — l'incident restait OUVERT à perpétuité,
+      // avec escalade horaire et SMS de situation sans fin.
+      const finParIncident = new Map<string, Date>();
+      const incidentDeCoupure = new Map(ouvertes.map((o) => [o.id, o.incidentId]));
+      for (const m of maj) {
+        const incId = incidentDeCoupure.get(m.id);
+        const fin = m.data.dateFin as Date;
+        if (!incId || !(fin instanceof Date)) continue;
+        const deja = finParIncident.get(incId);
+        if (!deja || fin > deja) finParIncident.set(incId, fin); // la DERNIÈRE remontée fait foi
+      }
+
       for (let i = 0; i < maj.length; i += 100) {
         await prisma.$transaction(
           maj.slice(i, i + 100).map((m) => prisma.coupureReseau.update({ where: { id: m.id }, data: m.data }))
         );
       }
       clotureesParImport = maj.length;
+
+      for (const [incId, fin] of finParIncident) {
+        const resolu = await prisma.$transaction((tx) => resoudreIncidentSiPlusDeCoupure(tx, incId, fin));
+        if (resolu) incidentsResolus++;
+      }
     }
 
     // Reclassement des impacts d'aval AVANT le rattachement : les lignes de même
@@ -763,7 +804,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
       [...new Set(lots.map((l) => String(l.siteId)))]
     );
 
-    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, clotureesParImport, heriteesDetectees, incidentsCrees }, req);
+    await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, clotureesParImport, incidentsResolus, heriteesDetectees, incidentsCrees }, req);
     res.json({
       success: true,
       data: {
@@ -771,6 +812,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
         crees,
         doublonsIgnores: doublons,
         clotureesParImport,
+        incidentsResolus,
         heriteesDetectees,
         incidentsCrees,
         sitesNonApparies: [...nonApparies.entries()].map(([site, lignes]) => ({ site, lignes })).sort((a, b) => b.lignes - a.lignes),
