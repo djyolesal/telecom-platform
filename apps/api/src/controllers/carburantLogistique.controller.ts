@@ -1216,6 +1216,8 @@ export async function exportRapprochementBc(req: Request, res: Response, next: N
           { header: 'Livré (L)', key: 'livre', width: 12 },
           { header: 'Stock fin (L)', key: 'stockFin', width: 14 },
           { header: 'Consommé réel (L)', key: 'consoReelle', width: 18 },
+          { header: 'Projection fin de mois (L)', key: 'projectionLitres', width: 20 },
+          { header: 'Stock fin estimé (L)', key: 'stockFinEstime', width: 18 },
           { header: 'Consommé théorique (L)', key: 'consoTheorique', width: 20 },
           { header: 'Écart (L)', key: 'ecart', width: 12 },
           { header: 'Mesure', key: 'motifNonMesure', width: 34 },
@@ -1224,6 +1226,7 @@ export async function exportRapprochementBc(req: Request, res: Response, next: N
           ...c,
           stockDebut: c.stockDebut ?? '', stockFin: c.stockFin ?? '',
           consoReelle: c.consoReelle ?? '', consoTheorique: c.consoTheorique ?? '', ecart: c.ecart ?? '',
+          projectionLitres: c.projectionLitres ?? '', stockFinEstime: c.stockFinEstime ?? '',
           motifNonMesure: c.motifNonMesure ?? 'Mesuré',
         })) as unknown as Record<string, unknown>[],
       },
@@ -1233,7 +1236,13 @@ export async function exportRapprochementBc(req: Request, res: Response, next: N
       `Rapprochement carburant — BC ${m.bc.numero}`, sheets,
       `T${m.bc.trimestre} ${m.bc.annee} · commandé ${m.totaux.commande.toLocaleString('fr-FR')} L · ` +
       `chargé ${m.totaux.charge.toLocaleString('fr-FR')} L · livré ${m.totaux.livreTotal.toLocaleString('fr-FR')} L · ` +
-      `écart non expliqué ${m.totaux.ecartNonExplique.toLocaleString('fr-FR')} L`
+      `écart non expliqué ${m.totaux.ecartNonExplique.toLocaleString('fr-FR')} L` +
+      // Un arrêté anticipé exporté doit se lire comme tel : la mention voyage
+      // avec le document, pas seulement avec l'écran.
+      (m.arrete.anticipe
+        ? ` · ARRÊTÉ ANTICIPÉ au ${new Date(m.arrete.dateArrete).toLocaleDateString('fr-FR')} — ` +
+          `${m.arrete.joursProjetes} j estimés (${m.totaux.projectionLitres.toLocaleString('fr-FR')} L projetés)`
+        : '')
     );
   } catch (err) { next(err); }
 }

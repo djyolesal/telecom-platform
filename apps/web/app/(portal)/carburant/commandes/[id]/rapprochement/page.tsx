@@ -23,6 +23,8 @@ interface LigneSite {
   stockDebut: number | null; stockFin: number | null; livre: number; mouvements: number;
   consoReelle: number | null; consoTheorique: number | null; ecart: number | null;
   mesure: boolean; motifNonMesure: string | null;
+  projectionLitres: number | null; consoProjetee: number | null;
+  stockFinEstime: number | null; sourceProjection: string | null;
 }
 interface Rapprochement {
   bc: { id: string; numero: string; annee: number; trimestre: number; statut: string };
@@ -30,11 +32,13 @@ interface Rapprochement {
   lignesMois: LigneMois[];
   conservation: LigneSite[];
   avoirsLitres: number;
+  arrete: { anticipe: boolean; dateArrete: string; joursProjetes: number };
   totaux: {
     commande: number; charge: number; planifie: number;
     livrePlan: number; livreHorsPlan: number; livreTotal: number;
     retourDepot: number; perte: number; report: number; ecartNonExplique: number;
     nbBl: number; nbBlNonClos: number; nbSites: number; nbSitesMesures: number; consoReelleLitres: number;
+    projectionLitres: number; consoProjeteeLitres: number;
   };
 }
 
@@ -78,6 +82,15 @@ export default function RapprochementPage() {
       {data.avoirsLitres > 0 && (
         <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800">
           {fmtNumber(data.avoirsLitres)} L d’avoir fournisseur sur cette commande : ce volume est déduit du chargé ci-dessous.
+        </div>
+      )}
+
+      {data.arrete.anticipe && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          <b>Arrêté anticipé au {new Date(data.arrete.dateArrete).toLocaleDateString('fr-FR')}</b> — les{' '}
+          {data.arrete.joursProjetes} jour(s) restants jusqu'à la fin de la période sont <b>estimés</b> sur la
+          consommation journalière mesurée de chaque site ({fmtNumber(t.projectionLitres)} L projetés au total).
+          Relancez le rapport après la fin du mois pour l'arrêté définitif.
         </div>
       )}
 
@@ -149,6 +162,7 @@ export default function RapprochementPage() {
           stock début + livré + transferts/purges − consommé = stock fin. La consommation théorique vient des heures compteur × débit des GE actifs ;
           l’écart positif est une surconsommation (fuite, vol, ou heures mal déclarées).
           {' '}{t.nbSitesMesures}/{t.nbSites} sites mesurables sur la période.
+          {data.arrete.anticipe && ' Les colonnes bleues sont projetées jusqu\u2019à la fin de la période.'}
         </p>
         {data.conservation.length === 0 ? (
           <EmptyState title="Aucun site livré sur ce bon de commande" />
@@ -163,6 +177,8 @@ export default function RapprochementPage() {
                 <th className="text-right">Transferts / purges</th>
                 <th className="text-right">Stock fin</th>
                 <th className="text-right">Consommé réel</th>
+                {data.arrete.anticipe && <th className="text-right">Projection fin de mois</th>}
+                {data.arrete.anticipe && <th className="text-right">Stock fin estimé</th>}
                 <th className="text-right">Théorique</th>
                 <th className="text-right">Écart</th>
               </tr>
@@ -186,6 +202,14 @@ export default function RapprochementPage() {
                   <td className="text-right">{c.mouvements === 0 ? <span className="text-gray-300">—</span> : <span className={c.mouvements > 0 ? 'text-blue-600' : 'text-amber-700'}>{fmtNumber(c.mouvements)}</span>}</td>
                   <td className="text-right">{L(c.stockFin)}</td>
                   <td className="text-right font-medium">{L(c.consoReelle)}</td>
+                  {data.arrete.anticipe && (
+                    <td className="text-right text-blue-700">
+                      {c.projectionLitres != null
+                        ? <span title={`Source : ${c.sourceProjection ?? '—'}`}>+{fmtNumber(c.projectionLitres)}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                  )}
+                  {data.arrete.anticipe && <td className="text-right text-blue-700">{L(c.stockFinEstime)}</td>}
                   <td className="text-right text-gray-500">{L(c.consoTheorique)}</td>
                   <td className="text-right">{c.ecart == null ? <span className="text-gray-300">—</span> : ecartCell(c.ecart)}</td>
                 </tr>

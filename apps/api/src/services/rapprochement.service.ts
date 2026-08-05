@@ -3,6 +3,7 @@ import { litresParHeureGE } from '../utils/calculator';
 import { geParams } from './settings.service';
 import { memo } from '../utils/memo';
 import { signeMouvement, avoirsBonCommande } from './mouvementsCarburant.service';
+import { forecastSites } from './replenishment.service';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 const r0 = (v: number) => Math.round(v);
@@ -59,6 +60,11 @@ export interface LigneSiteConservation {
   ecart: number | null;            // réelle − théorique (surconsommation si > 0)
   mesure: boolean;                 // les deux bornes de jauge existent
   motifNonMesure: string | null;
+  // ── Arrêté anticipé (clôture du 25) : projection jusqu'à la fin du mois ──
+  projectionLitres: number | null;   // conso estimée des jours restants
+  consoProjetee: number | null;      // consommé mesuré + projection
+  stockFinEstime: number | null;     // stock projeté à la fin de la période
+  sourceProjection: string | null;   // horametre / historique / regional / theorique
 }
 
 export function rapprochementBc(bonCommandeId: string) {
@@ -172,7 +178,32 @@ async function rapprochementBcImpl(bonCommandeId: string) {
   // premier mois pouvait afficher un « chargé » négatif quand ce mois ne portait
   // aucun chargement. Il est donc exposé à part et déduit des seuls TOTAUX.
 
+  // ── Arrêté anticipé ────────────────────────────────────────────────────
+  // La clôture trimestrielle se fait le 25 du dernier mois : lancé AVANT la fin
+  // de la période, le rapport devient un « arrêté anticipé » — le réel s'arrête
+  // à la date du jour, et les jours restants sont ESTIMÉS sur la consommation
+  // journalière mesurée de chaque site (même échelle de sources que le réappro,
+  // affichée : un chiffre projeté sur du théorique doit se lire comme tel).
+  const maintenant = new Date();
+  const anticipe = maintenant < fin;
+  const joursProjetes = anticipe ? Math.ceil((fin.getTime() - maintenant.getTime()) / 86_400_000) : 0;
+
   const conservation = await conservationParSite([...sitesVus.entries()], livreParSite, debut, fin);
+
+  if (anticipe && joursProjetes > 0) {
+    const forecasts = await forecastSites({ all: true });
+    const parSiteFc = new Map(forecasts.map((f) => [f.siteId, f]));
+    for (const c of conservation) {
+      const fc = parSiteFc.get(c.siteId);
+      if (!fc || !(fc.consoJour > 0)) continue;
+      const projection = Math.round(fc.consoJour * joursProjetes);
+      c.projectionLitres = projection;
+      c.sourceProjection = fc.source;
+      c.consoProjetee = c.consoReelle != null ? Math.round(c.consoReelle + projection) : null;
+      // Le stock ne descend pas sous zéro : une cuve vide s'arrête de consommer.
+      c.stockFinEstime = c.stockFin != null ? Math.max(0, Math.round(c.stockFin - projection)) : null;
+    }
+  }
 
   const somme = <K extends keyof LigneMoisRapprochement>(k: K) =>
     lignesMois.reduce((s, l) => s + (l[k] as number), 0);
@@ -187,6 +218,11 @@ async function rapprochementBcImpl(bonCommandeId: string) {
     lignesMois,
     conservation,
     avoirsLitres: r0(avoirs),
+    arrete: {
+      anticipe,
+      dateArrete: (anticipe ? maintenant : fin).toISOString(),
+      joursProjetes,
+    },
     totaux: {
       commande: somme('commande'), charge: r0(chargeNet), chargeBrut: somme('charge'), planifie: somme('planifie'),
       livrePlan: somme('livrePlan'), livreHorsPlan: somme('livreHorsPlan'), livreTotal: somme('livreTotal'),
@@ -196,6 +232,8 @@ async function rapprochementBcImpl(bonCommandeId: string) {
       nbSites: conservation.length,
       nbSitesMesures: conservation.filter((c) => c.mesure).length,
       consoReelleLitres: r0(conservation.reduce((s, c) => s + (c.consoReelle ?? 0), 0)),
+      projectionLitres: r0(conservation.reduce((s, c) => s + (c.projectionLitres ?? 0), 0)),
+      consoProjeteeLitres: r0(conservation.reduce((s, c) => s + (c.consoProjetee ?? c.consoReelle ?? 0), 0)),
     },
   };
 }
@@ -297,6 +335,10 @@ async function conservationParSite(
         consoTheorique,
         ecart: consoReelle != null && consoTheorique != null ? Math.round(consoReelle - consoTheorique) : null,
         mesure,
+        projectionLitres: null,
+        consoProjetee: null,
+        stockFinEstime: null,
+        sourceProjection: null,
         motifNonMesure: mesure
           ? null
           : stockDebut == null && stockFin == null
