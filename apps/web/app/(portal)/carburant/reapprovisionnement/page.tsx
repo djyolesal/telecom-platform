@@ -19,6 +19,13 @@ const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juille
 const PRIO_COLORS: Record<string, string> = { CRITIQUE: 'bg-red-600 text-white', URGENT: 'bg-amber-100 text-amber-700', A_PLANIFIER: 'bg-gray-100 text-gray-600' };
 const PRIO_LABEL: Record<string, string> = { CRITIQUE: 'Critique', URGENT: 'Urgent', A_PLANIFIER: 'À planifier' };
 
+const SOURCES_CONSO: Record<string, { label: string; classe: string; aide: string }> = {
+  horametre:  { label: 'Mesurée',    classe: 'bg-green-100 text-green-700', aide: 'Débit réel × heures de marche mesurées (compteur horaire)' },
+  historique: { label: 'Historique', classe: 'bg-blue-100 text-blue-700',   aide: "Moyenne mobile des litres/jour d'après les relevés de cuve" },
+  regional:   { label: 'Régionale',  classe: 'bg-amber-100 text-amber-700', aide: 'Heures de coupure médianes de la région × débit du GE' },
+  theorique:  { label: 'Théorique',  classe: 'bg-gray-200 text-gray-600',   aide: 'Formule kVA × facteur de charge — aucune mesure terrain disponible' },
+};
+
 interface SiteForecast { siteId: string; code: string; nom: string; region: string; stockActuel: number; consoJour: number; source: string; tendance: string; autonomieJours: number | null; dateLivraisonCible: string | null; joursAvantLivraison: number | null; quantiteRecommandee: number; priorite: string }
 interface Anomalie { siteId: string; code: string; nom: string; region: string; consoReelleJour: number; consoTheoriqueJour: number; ecartPct: number; type: string; tendance: string; manquantAssocie: boolean; severite: string }
 interface Tournee { region: string; sites: Array<{ siteId: string; code: string; nom: string; quantite: number; passage?: number; nbPassages?: number }>; total: number; capacite: number; distanceKm: number; tauxRemplissage: number }
@@ -68,12 +75,14 @@ export default function ReapprovisionnementPage() {
     { key: 'nom', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'stockActuel', header: 'Stock (L)', align: 'right', render: (s) => fmtNumber(s.stockActuel) },
-    { key: 'consoJour', header: 'Conso/j (L)', align: 'right', render: (s) => <span title={
-        s.source === 'horametre' ? 'Débit réel × heures de marche mesurées (compteur horaire)'
-        : s.source === 'historique' ? 'D’après l’historique des relevés'
-        : s.source === 'regional' ? 'Heures de coupure médianes de la région × débit du GE'
-        : 'Estimation théorique (GE)'
-      }>{fmtNumber(s.consoJour)}{s.source === 'theorique' ? ' *' : s.source === 'regional' ? ' °' : ''}</span> },
+    { key: 'consoJour', header: 'Conso/j (L)', align: 'right', render: (s) => fmtNumber(s.consoJour) },
+    // La SOURCE du chiffre, en clair : un manager doit voir d'un coup d'œil si
+    // la conso d'un site est MESURÉE (compteur horaire), déduite de l'historique,
+    // ou simplement supposée — l'infobulle au survol ne suffisait pas.
+    { key: 'source', header: 'Source', align: 'center', render: (s) => {
+      const src = SOURCES_CONSO[s.source] ?? SOURCES_CONSO.theorique;
+      return <Badge className={src.classe}><span title={src.aide}>{src.label}</span></Badge>;
+    } },
     { key: 'tendance', header: 'Tend.', align: 'center', render: (s) => <span title={`Tendance ${s.tendance.toLowerCase()}`} className={s.tendance === 'HAUSSE' ? 'text-red-600' : s.tendance === 'BAISSE' ? 'text-green-600' : 'text-gray-400'}>{s.tendance === 'HAUSSE' ? '↗' : s.tendance === 'BAISSE' ? '↘' : '→'}</span> },
     { key: 'autonomie', header: 'Autonomie', align: 'right', render: (s) => s.autonomieJours != null ? `${s.autonomieJours} j` : '—' },
     { key: 'livraison', header: 'À livrer le', render: (s) => s.dateLivraisonCible ? <span className={(s.joursAvantLivraison ?? 1) <= 0 ? 'text-red-600 font-medium' : ''}>{fmtDate(s.dateLivraisonCible)}</span> : '—' },
@@ -123,7 +132,7 @@ export default function ReapprovisionnementPage() {
 
       {tab === 'sites' && (data?.sites.length
         ? <><DataTable columns={cols} data={data.sites} rowKey={(s) => s.siteId} rowClassName={(s) => s.priorite === 'CRITIQUE' ? 'bg-red-50' : undefined} />
-            <p className="text-xs text-gray-400 mt-2">° conso estimée d&apos;après les coupures médianes de la région · * estimation théorique (GE), faute de toute donnée. Sans marque : mesurée (compteur horaire ou relevés du site).</p></>
+            <p className="text-xs text-gray-400 mt-2">La colonne « Source » indique d&apos;où vient chaque conso : mesurée (compteur horaire), historique (relevés de cuve), régionale (coupures médianes) ou théorique (formule kVA). Survolez le badge pour le détail.</p></>
         : <EmptyState title="Aucun site à livrer sur l'horizon" hint="Tous les sites ont une autonomie supérieure à l'horizon choisi." />)}
 
       {tab === 'tournees' && (

@@ -48,7 +48,9 @@ export default function StockCarburantPage() {
     { key: 'region', header: 'Région' },
     { key: 'stockLitres', header: 'Stock (L)', align: 'right', render: (s) => fmtNumber(s.stockLitres) },
     { key: 'autonomieJours', header: 'Autonomie', align: 'right', render: (s) => (s.autonomieJours != null ? `${s.autonomieJours} j` : '—') },
-    { key: 'litresMois', header: 'Conso/mois (L)', align: 'right', render: (s) => fmtNumber(s.litresMois) },
+    // Théorique assumé : cette page lit la formule kVA (budget), pas la mesure.
+    // La conso MESURÉE par site est sur « Réapprovisionnement » avec sa source.
+    { key: 'litresMois', header: 'Conso/mois théorique (L)', align: 'right', render: (s) => fmtNumber(s.litresMois) },
     { key: 'coutMoisFCFA', header: 'Coût/mois', align: 'right', render: (s) => fmtFCFA(s.coutMoisFCFA) },
     { key: 'niveauAlerte', header: 'Niveau', align: 'center', render: (s) => <NiveauStockBadge value={s.niveauAlerte} /> },
   ];

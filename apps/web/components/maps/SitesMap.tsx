@@ -27,6 +27,7 @@ export interface SiteFeature {
     dateRupture?: string | null;
     tendance?: string | null;
     heuresGEJour?: number | null;
+    sourceConso?: string | null;
     dernierDepotageVol?: number | null;
     dernierDepotageDate?: string | null;
     // Vue TRANSPORTEUR : seuls champs servis (avec l'identité du site) — le
@@ -223,6 +224,11 @@ export function SitesMap({ features, couleurParCamion }: { features: SiteFeature
                       )}
                       {f.properties.heuresGEJour != null && (
                         <p className="text-gray-500">GE : ~{f.properties.heuresGEJour} h/jour</p>
+                      )}
+                      {f.properties.sourceConso && (
+                        <p className="text-gray-400">
+                          Conso {({ horametre: 'mesurée (compteur)', historique: 'd’après relevés', regional: 'estimée (région)', theorique: 'théorique' } as Record<string, string>)[f.properties.sourceConso] ?? f.properties.sourceConso}
+                        </p>
                       )}
                       {fmtDateCourt(f.properties.dateRupture) && (
                         <p className="text-gray-500">Rupture estimée : {fmtDateCourt(f.properties.dateRupture)}</p>

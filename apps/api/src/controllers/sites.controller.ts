@@ -653,6 +653,9 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
             autonomieJours: fc?.autonomieJours ?? null,
             dateRupture: fc?.dateRupture ?? null,
             tendance: fc?.tendance ?? null,
+            // Source de l'estimation : l'info-bulle doit dire si le chiffre est
+            // mesuré ou supposé (même code couleur que la page Réappro).
+            sourceConso: fc?.source ?? null,
             heuresGEJour: fc?.heuresGEJour ?? null,
             // Dernier dépotage.
             dernierDepotageVol: depotMap.has(site.id) ? Number(depotMap.get(site.id)!.volumeLitres) : null,
