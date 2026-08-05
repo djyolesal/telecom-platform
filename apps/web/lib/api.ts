@@ -12,13 +12,18 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Petit cache de session (5 s) : évite un fetch /api/auth/session à CHAQUE requête
-// API (le token est rafraîchi côté serveur dans le callback jwt).
+// Cache de session (30 s) : évite un fetch /api/auth/session à CHAQUE requête
+// API (le token est rafraîchi côté serveur dans le callback jwt, avec une marge
+// de 2 min — un cache de 30 s ne fait jamais partir un jeton périmé). À 5 s, un
+// tableau de bord chargé multipliait les appels /session et nourrissait le
+// rate-limit nginx.
 let sessionCache: { value: Session | null; at: number } | null = null;
 async function cachedSession(): Promise<Session | null> {
-  if (sessionCache && Date.now() - sessionCache.at < 5000) return sessionCache.value;
+  if (sessionCache && Date.now() - sessionCache.at < 30_000) return sessionCache.value;
   const value = (await getSession()) as Session | null;
-  sessionCache = { value, at: Date.now() };
+  // Une session nulle n'est jamais mise en cache : sinon, au retour du login,
+  // les requêtes partiraient sans jeton pendant toute la durée du cache.
+  sessionCache = value ? { value, at: Date.now() } : null;
   return value;
 }
 
