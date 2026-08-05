@@ -14,38 +14,58 @@ import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
 
+// ── Menu latéral, par domaines ──────────────────────────────────────────────
+// `groupe` regroupe visuellement ; un groupe sans entrée visible pour le rôle
+// n'affiche pas son titre. `roles` = accès à la section ; `menu` (optionnel)
+// restreint l'AFFICHAGE dans la barre sans retirer l'accès.
+const GROUPES: Array<{ key: string; titre: string | null }> = [
+  { key: 'accueil',     titre: null },
+  { key: 'terrain',     titre: 'Terrain' },
+  { key: 'carburant',   titre: 'Carburant' },
+  { key: 'supervision', titre: 'Supervision' },
+  { key: 'pilotage',    titre: 'Pilotage' },
+];
+
 const NAV_ITEMS = [
-  { href: '/dashboard',               label: 'Tableau de bord',  icon: LayoutDashboard,  roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC','TRANSPORTEUR'] },
-  { href: '/direction',                label: 'Pilotage',          icon: LineChart,        roles: ['MANAGER','ADMIN','DIRECTION'] },
-  { href: '/fiabilite-ge',   label: 'Fiabilité GE',      icon: Gauge,            roles: ['MANAGER','ADMIN','DIRECTION'] },
-  // TRANSPORTEUR inclus : l'API lui sert une vue dédiée (ses sites à livrer,
-  // sans aucune donnée d'exploitation dans l'info-bulle).
-  { href: '/supervision/carte',        label: 'Supervision carte', icon: MapPin,           roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC','TRANSPORTEUR'] },
-  { href: '/supervision/incidents',    label: 'Incidents live',    icon: Activity,         roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC'] },
-  { href: '/supervision/coupures',     label: 'Coupures réseau',   icon: WifiOff,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
-  { href: '/supervision/topologie',    label: 'Topologie',         icon: Network,          roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
-  // Entrée directe pour le NOC (les autres rôles y accèdent via la page Rapports :
-  // `menu` restreint l'affichage dans la barre, `roles` reste la liste d'accès).
-  { href: '/rapports/disponibilite-reseau', label: 'Dispo réseau',  icon: BarChart3,        roles: ['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION'], menu: ['NOC'] },
-  { href: '/sites',                    label: 'Sites',             icon: MapPin,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
-  { href: '/maintenance',              label: 'Maintenance',       icon: Wrench,           roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
-  { href: '/actifs',                   label: "Parc d'actifs",     icon: Boxes,            roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
-  { href: '/carburant/stock',          label: 'Carburant',         icon: Fuel,             roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
-  { href: '/carburant/commandes',       label: 'Appro. carburant',  icon: Truck,            roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
+  { groupe: 'accueil', href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC','TRANSPORTEUR'] },
+
+  // ── Terrain : le quotidien des équipes d'exploitation ──
+  { groupe: 'terrain', href: '/sites',       label: 'Sites',         icon: MapPin,        roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
+  { groupe: 'terrain', href: '/maintenance', label: 'Maintenance',   icon: Wrench,        roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
+  { groupe: 'terrain', href: '/incidents',   label: 'Incidents',     icon: AlertTriangle, roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
+  { groupe: 'terrain', href: '/actifs',      label: "Parc d'actifs", icon: Boxes,         roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
+  { groupe: 'terrain', href: '/energie',     label: 'Énergie',       icon: Zap,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
+
+  // ── Carburant : stock, appro et flotte ──
+  { groupe: 'carburant', href: '/carburant/stock',      label: 'Stock carburant',  icon: Fuel,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
+  { groupe: 'carburant', href: '/carburant/commandes',  label: 'Appro. carburant', icon: Truck,          roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
   // Fiches de chargement : le transporteur n'ouvre que LES SIENNES (l'API
   // filtre et revérifie son prestataire) — sans cette entrée, la section
   // hors-menu /carburant lui refusait la fiche d'un BL.
-  { href: '/carburant/livraisons',      label: 'Mes chargements',   icon: Truck,            roles: ['TRANSPORTEUR','SUPERVISEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR'] },
-  { href: '/carburant/pertes',         label: 'Pertes carburant',  icon: ShieldAlert,      roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  { groupe: 'carburant', href: '/carburant/livraisons', label: 'Mes chargements',  icon: Truck,          roles: ['TRANSPORTEUR','SUPERVISEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR'] },
   // Transferts, purges et avoirs : écritures hors chaîne BC → BL → dépotage.
-  { href: '/carburant/mouvements',     label: 'Mouvements gasoil', icon: ArrowLeftRight,   roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  { groupe: 'carburant', href: '/carburant/mouvements', label: 'Mouvements gasoil', icon: ArrowLeftRight, roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  { groupe: 'carburant', href: '/carburant/pertes',     label: 'Pertes carburant', icon: ShieldAlert,    roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   // Référentiels camions/chauffeurs : le transporteur y gère SON parc (l'API le
-  // filtre), le pilotage y renseigne les capacités de citerne.
-  { href: '/carburant/flotte',         label: 'Flotte transport',  icon: Truck,            roles: ['TRANSPORTEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR','MANAGER','ADMIN'] },
-  { href: '/energie',                  label: 'Énergie',           icon: Zap,              roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
-  { href: '/incidents',                label: 'Incidents',         icon: AlertTriangle,    roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
-  { href: '/rapports',                 label: 'Rapports',          icon: BarChart3,        roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
-  { href: '/administration',           label: 'Administration',    icon: Settings,         roles: ['ADMIN'] },
+  // filtre), le pilotage y renseigne capacités de citerne et jaugeages.
+  { groupe: 'carburant', href: '/carburant/flotte',     label: 'Flotte transport', icon: Truck,          roles: ['TRANSPORTEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR','MANAGER','ADMIN'] },
+
+  // ── Supervision réseau : temps réel et topologie ──
+  // TRANSPORTEUR inclus sur la carte : l'API lui sert une vue dédiée (ses sites
+  // à livrer, sans aucune donnée d'exploitation dans l'info-bulle).
+  { groupe: 'supervision', href: '/supervision/carte',     label: 'Carte',           icon: MapPin,   roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC','TRANSPORTEUR'] },
+  { groupe: 'supervision', href: '/supervision/incidents', label: 'Incidents live',  icon: Activity, roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC'] },
+  { groupe: 'supervision', href: '/supervision/coupures',  label: 'Coupures réseau', icon: WifiOff,  roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
+  { groupe: 'supervision', href: '/supervision/topologie', label: 'Topologie',       icon: Network,  roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
+  // Entrée directe pour le NOC (les autres rôles y accèdent via la page Rapports :
+  // `menu` restreint l'affichage dans la barre, `roles` reste la liste d'accès).
+  { groupe: 'supervision', href: '/rapports/disponibilite-reseau', label: 'Dispo réseau', icon: BarChart3, roles: ['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION'], menu: ['NOC'] },
+
+  // ── Pilotage : direction, analyses et administration ──
+  { groupe: 'pilotage', href: '/direction',      label: 'Direction',      icon: LineChart, roles: ['MANAGER','ADMIN','DIRECTION'] },
+  { groupe: 'pilotage', href: '/fiabilite-ge',   label: 'Fiabilité GE',   icon: Gauge,     roles: ['MANAGER','ADMIN','DIRECTION'] },
+  { groupe: 'pilotage', href: '/rapports',       label: 'Rapports',       icon: BarChart3, roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  { groupe: 'pilotage', href: '/administration', label: 'Administration', icon: Settings,  roles: ['ADMIN'] },
 ];
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -72,8 +92,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   const visibleItems = [
     ...NAV_ITEMS.filter(item => ((item as { menu?: string[] }).menu ?? item.roles).includes(userRole)),
-    ...(userRole === 'SUPERVISEUR' && maSociete ? [{ href: '/ma-societe', label: 'Ma société', icon: Building2, roles: ['SUPERVISEUR'] }] : []),
+    ...(userRole === 'SUPERVISEUR' && maSociete ? [{ groupe: 'pilotage', href: '/ma-societe', label: 'Ma société', icon: Building2, roles: ['SUPERVISEUR'] }] : []),
   ];
+  // Groupes affichés : ceux où le rôle a au moins une entrée. Le titre n'apparaît
+  // que barre ouverte ; repliée, un simple filet sépare les groupes.
+  const groupesVisibles = GROUPES
+    .map((g) => ({ ...g, items: visibleItems.filter((i) => (i as { groupe?: string }).groupe === g.key) }))
+    .filter((g) => g.items.length > 0);
 
   // Garde de rôle. La déduction par préfixe de menu laissait SANS AUCUNE GARDE
   // les pages qu'aucune entrée ne préfixe (/carburant/depotages, /carburant/
@@ -123,27 +148,38 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto py-4 space-y-1 px-2">
-          {visibleItems.map((item) => {
-            const Icon = item.icon;
-            const active = pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                  active
-                    ? 'bg-[#2471A3] text-white font-medium'
-                    : 'text-blue-100 hover:bg-[#2471A3]/60'
-                )}
-                title={!sidebarOpen ? item.label : undefined}
-              >
-                <Icon size={18} className="flex-shrink-0" />
-                {sidebarOpen && <span>{item.label}</span>}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto py-3 px-2">
+          {groupesVisibles.map((g, gi) => (
+            <div key={g.key} className={gi > 0 ? 'mt-3' : undefined}>
+              {g.titre && (sidebarOpen ? (
+                <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#7E9CBF]">{g.titre}</p>
+              ) : (
+                <div className="mx-2 mb-2 border-t border-[#2471A3]/60" />
+              ))}
+              <div className="space-y-1">
+                {g.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                        active
+                          ? 'bg-[#2471A3] text-white font-medium'
+                          : 'text-blue-100 hover:bg-[#2471A3]/60'
+                      )}
+                      title={!sidebarOpen ? item.label : undefined}
+                    >
+                      <Icon size={18} className="flex-shrink-0" />
+                      {sidebarOpen && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* User info */}
