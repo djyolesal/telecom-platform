@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import L from 'leaflet';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import { Search, X } from 'lucide-react';
+import { COULEUR_MULTI_CAMIONS } from './couleursCamions';
 
 export interface SiteFeature {
   type: 'Feature';
@@ -32,6 +33,8 @@ export interface SiteFeature {
     // volume restant à déposer selon SON plan, et les BL concernés.
     aLivrerLitres?: number;
     numerosBL?: string[];
+    camions?: string[];
+    livraisons?: { immatriculation: string; numeroBL: string; restant: number }[];
   };
 }
 
@@ -125,7 +128,7 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
   );
 }
 
-export function SitesMap({ features }: { features: SiteFeature[] }) {
+export function SitesMap({ features, couleurParCamion }: { features: SiteFeature[]; couleurParCamion?: Record<string, string> }) {
   const markers = useRef<MarkerMap>({});
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
@@ -156,10 +159,15 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
       {features.map((f) => {
         const [lng, lat] = f.geometry.coordinates;
         const n = f.properties.niveauStock;
-        // Vue transporteur : un site = une livraison à faire, toujours en bleu.
+        // Vue transporteur : la pastille porte la couleur DU CAMION qui dessert
+        // le site — violet quand plusieurs camions se partagent le même site.
         const vueLivraison = f.properties.aLivrerLitres != null;
+        const camions = f.properties.camions ?? [];
+        const couleurLivraison = camions.length > 1
+          ? COULEUR_MULTI_CAMIONS
+          : (couleurParCamion?.[camions[0] ?? ''] ?? '#2471A3');
         // Priorité au stock : rouge = critique/vide, orange = faible ; sinon couleur du statut GE.
-        const color = vueLivraison ? '#2471A3'
+        const color = vueLivraison ? couleurLivraison
           : n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
           : n === 'FAIBLE' ? '#F59E0B'
           : (STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF');
@@ -180,9 +188,13 @@ export function SitesMap({ features }: { features: SiteFeature[] }) {
                 {vueLivraison && (
                   <div className="mt-1 rounded bg-blue-50 p-1.5 leading-snug">
                     <p>À livrer : <b>{Math.round(f.properties.aLivrerLitres!)} L</b></p>
-                    {f.properties.numerosBL && f.properties.numerosBL.length > 0 && (
-                      <p className="text-gray-500">BL : {f.properties.numerosBL.join(', ')}</p>
-                    )}
+                    {(f.properties.livraisons ?? []).map((lv) => (
+                      <p key={`${lv.numeroBL}-${lv.immatriculation}`} className="mt-0.5 flex items-center gap-1.5 text-gray-600">
+                        <span className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
+                          style={{ background: couleurParCamion?.[lv.immatriculation] ?? '#2471A3' }} />
+                        <span>{lv.immatriculation} · {lv.numeroBL} · <b>{lv.restant} L</b></span>
+                      </p>
+                    ))}
                   </div>
                 )}
                 {!vueLivraison && (

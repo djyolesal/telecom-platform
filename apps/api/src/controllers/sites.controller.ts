@@ -536,20 +536,28 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
         select: {
           volumePrevuLitres: true,
           depotages: { select: { volumeLitres: true } },
-          bonLivraison: { select: { numeroBL: true } },
+          bonLivraison: { select: { numeroBL: true, immatriculation: true } },
           site: { select: { id: true, nom: true, code: true, region: true, latitude: true, longitude: true } },
         },
       });
 
       type SiteLite = (typeof lignes)[number]['site'];
-      const parSite = new Map<string, { site: SiteLite; aLivrer: number; bls: Set<string> }>();
+      type Livraison = { immatriculation: string; numeroBL: string; restant: number };
+      const parSite = new Map<string, { site: SiteLite; aLivrer: number; bls: Set<string>; livraisons: Livraison[] }>();
       for (const l of lignes) {
         const livre = l.depotages.reduce((t, d) => t + Number(d.volumeLitres), 0);
         const restant = Math.max(0, Number(l.volumePrevuLitres) - livre);
         if (restant <= 0.5) continue; // ligne soldée : plus rien à y déposer
-        const a = parSite.get(l.site.id) ?? { site: l.site, aLivrer: 0, bls: new Set<string>() };
+        const a = parSite.get(l.site.id) ?? { site: l.site, aLivrer: 0, bls: new Set<string>(), livraisons: [] };
         a.aLivrer += restant;
         a.bls.add(l.bonLivraison.numeroBL);
+        // Détail PAR CAMION : plusieurs camions du même transporteur peuvent
+        // desservir le même site — la carte doit dire lequel apporte quoi.
+        a.livraisons.push({
+          immatriculation: l.bonLivraison.immatriculation,
+          numeroBL: l.bonLivraison.numeroBL,
+          restant: Math.round(restant),
+        });
         parSite.set(l.site.id, a);
       }
 
@@ -558,7 +566,7 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
       return res.json({
         type: 'FeatureCollection',
         vue: 'transporteur',
-        features: [...parSite.values()].map(({ site, aLivrer, bls }) => ({
+        features: [...parSite.values()].map(({ site, aLivrer, bls, livraisons }) => ({
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [Number(site.longitude), Number(site.latitude)] },
           properties: {
@@ -568,6 +576,8 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
             statutGE: '', powerConfig: '', puissanceGEkva: 0, hasStock: false, niveauStock: 'NA',
             aLivrerLitres: Math.round(aLivrer),
             numerosBL: [...bls].sort(),
+            camions: [...new Set(livraisons.map((x) => x.immatriculation))].sort(),
+            livraisons: livraisons.sort((x, y) => x.immatriculation.localeCompare(y.immatriculation)),
           },
         })),
       });
