@@ -68,6 +68,10 @@ dans `make update`, ne pas l'oublier : sans lui, les sessions web continueront d
 - [ ] `docker compose logs --tail=50 nginx` → pas d'erreur de syntaxe de configuration.
 - [ ] `docker compose logs --tail=100 api` → démarrage propre, scheduler lancé, pas de
       `MissingSecret` ni d'erreur Prisma.
+- [ ] **Prisma 7** (premier démarrage sur cette version) :
+      `docker compose exec api npx prisma migrate status` répond depuis l'image (la CLI est
+      embarquée — plus de téléchargement npx) et sans erreur de configuration ; les logs API ne
+      montrent aucune erreur d'adapter pg.
 - [ ] `migrate deploy` a listé 0038, 0039, 0040, 0041, 0042 appliquées. Les backfills 0040
       (véhicules/chauffeurs depuis l'existant) s'exécutent dans la migration : vérifier
       `docker compose exec postgres psql -U <user> -d <db> -c "SELECT count(*) FROM vehicules;"`
@@ -85,7 +89,23 @@ additives (`IF NOT EXISTS` partout) : un échec signalerait un état de base ina
 
 ## Phase 3 — Recette humaine (la partie que rien n'automatise)
 
-Sur **navigation privée** (aucun cookie d'avant la bascule). Dans l'ordre :
+**D'abord la recette AUTOMATISÉE** (couvre l'auth, la stabilité de session, l'aiguillage
+transporteur et les pages de synthèse — en lecture seule, aucun SMS déclenché) :
+
+```bash
+cd apps/web
+npx playwright install chromium          # une fois par machine
+E2E_BASE_URL=https://emops.uk \
+E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... \
+E2E_TRANSPORTEUR_EMAIL=... E2E_TRANSPORTEUR_PASSWORD=... \
+npm run e2e
+```
+
+- [ ] Les 11 tests passent (rapport HTML dans `playwright-report/` en cas d'échec).
+      Identifiants saisis par l'opérateur, jamais écrits dans un fichier.
+
+Puis la recette MANUELLE, sur **navigation privée** (aucun cookie d'avant la bascule) — elle
+couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
 
 **Authentification (critique — Next 15/next-auth ont changé)**
 - [ ] Connexion admin → menu complet par groupes, nom affiché en bas de barre (pas « U »).
@@ -212,5 +232,6 @@ Notes :
 - Exercice de restauration complet chronométré sur une machine vierge (mesurer le vrai RTO).
 - Supervision externe (ping + alerte) et traçage d'erreurs applicatif.
 - Version minimale d'APK exigée par l'API (éviter les APK zombies à la prochaine rupture).
-- Dette de tests E2E (auth web en premier) — chaque montée de version se paie en recette
-  manuelle tant qu'elle existe.
+- Étendre la suite E2E (11 tests aujourd'hui : auth, session, transporteur, synthèses) aux
+  parcours d'ÉCRITURE sur un environnement de test dédié (création BL, plan, clôture) — ils ne
+  peuvent pas tourner contre la prod (SMS réels, données réelles).
