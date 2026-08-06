@@ -35,7 +35,7 @@ test.describe('Authentification', () => {
 
   test('déconnexion : retour au login, plus d’accès aux pages protégées', async ({ page }) => {
     await seConnecter(page, admin.email, admin.password);
-    await page.locator('aside button').last().click(); // bouton de déconnexion en bas de barre
+    await page.getByTitle('Déconnexion').click();
     await page.waitForURL('**/login**', { timeout: 15_000 });
     await page.goto('/dashboard');
     await page.waitForURL('**/login**');

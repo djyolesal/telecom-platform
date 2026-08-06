@@ -27,6 +27,6 @@ test.describe('Transporteur', () => {
   test('sa carte des livraisons se charge, sans données d’exploitation', async ({ page }) => {
     await seConnecter(page, transporteur.email, transporteur.password);
     await page.goto('/supervision/carte');
-    await expect(page.getByText('Carte de mes livraisons')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: 'Carte de mes livraisons' })).toBeVisible({ timeout: 20_000 });
   });
 });

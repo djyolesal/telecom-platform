@@ -16,7 +16,18 @@ export async function seConnecter(page: Page, email: string, password: string): 
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
   // Le login fait une navigation COMPLÈTE vers /dashboard (correctif session).
-  await page.waitForURL('**/dashboard', { timeout: 20_000 });
+  try {
+    await page.waitForURL('**/dashboard', { timeout: 20_000 });
+  } catch (e) {
+    // Diagnostic actionnable plutôt qu'un timeout muet : la cause n°1 est un
+    // identifiant refusé par l'API (mauvais mot de passe, compte inexistant
+    // ou désactivé) — le formulaire reste alors sur /login avec son message.
+    const refus = await page.getByText('Email ou mot de passe incorrect').isVisible().catch(() => false);
+    if (refus) {
+      throw new Error(`Connexion REFUSÉE par l'API pour ${email} — vérifier le compte (existe ? actif ? bon mot de passe ?).`);
+    }
+    throw e;
+  }
 }
 
 /**

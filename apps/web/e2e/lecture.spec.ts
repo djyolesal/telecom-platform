@@ -11,22 +11,25 @@ test.describe('Pages de synthèse', () => {
   test('bilan carburant : période, KPIs et courbe répondent', async ({ page }) => {
     await seConnecter(page, admin.email, admin.password);
     await page.goto('/carburant/bilan');
-    await expect(page.getByText('Bilan conso & stock')).toBeVisible();
-    await expect(page.getByText('Stock début')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText('Sites mesurés')).toBeVisible();
+    // getByRole h1 : « Bilan conso & stock » existe AUSSI dans le menu latéral,
+    // et « Stock début » dans l'en-tête du tableau — getByText nu violait le
+    // mode strict de Playwright (plusieurs correspondances).
+    await expect(page.getByRole('heading', { name: 'Bilan conso & stock' })).toBeVisible();
+    await expect(page.getByText('Stock début').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('Sites mesurés').first()).toBeVisible();
   });
 
   test('bilan énergie : KPIs et sources affichés', async ({ page }) => {
     await seConnecter(page, admin.email, admin.password);
     await page.goto('/energie/bilan');
-    await expect(page.getByText('Bilan énergie CEET')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bilan énergie CEET' })).toBeVisible();
     await expect(page.getByText(/delta d.index/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   test('suivi des manquants : les onglets répondent', async ({ page }) => {
     await seConnecter(page, admin.email, admin.password);
     await page.goto('/carburant/manquants');
-    await expect(page.getByText('Suivi des manquants de livraison')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: 'Suivi des manquants de livraison' })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: 'Par chauffeur' }).click();
     await page.getByRole('button', { name: 'À traiter' }).click();
   });
