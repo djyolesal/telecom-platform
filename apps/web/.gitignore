@@ -2,3 +2,4 @@
 # Artefacts Playwright (recette E2E)
 playwright-report/
 test-results/
+e2e/.auth/

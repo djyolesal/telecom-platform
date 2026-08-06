@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { admin, seConnecter, verifierSessionVivante } from './outils';
+import { admin, verifierSessionVivante } from './outils';
 
 /**
  * Stabilité de session en navigation soutenue — la reproduction du bug de
@@ -8,12 +8,12 @@ import { admin, seConnecter, verifierSessionVivante } from './outils';
  */
 test.describe('Stabilité de session', () => {
   test.skip(!admin.email, 'E2E_ADMIN_EMAIL/PASSWORD non fournis');
+  // Session du setup : zéro login supplémentaire (quota API 10/compte/15 min).
+  test.use({ storageState: 'e2e/.auth/admin.json' });
 
   test('la session survit à une navigation rapide sur 8 pages, sans aucun 429', async ({ page }) => {
     const refus429: string[] = [];
     page.on('response', (r) => { if (r.status() === 429) refus429.push(r.url()); });
-
-    await seConnecter(page, admin.email, admin.password);
 
     const pages = [
       '/dashboard', '/sites', '/carburant/stock', '/carburant/commandes',

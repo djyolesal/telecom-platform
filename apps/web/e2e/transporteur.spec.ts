@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { transporteur, seConnecter, verifierSessionVivante } from './outils';
+import { transporteur, verifierSessionVivante } from './outils';
 
 /**
  * Parcours transporteur — l'aiguillage par rôle qui a conflictué avec le
@@ -7,9 +7,11 @@ import { transporteur, seConnecter, verifierSessionVivante } from './outils';
  */
 test.describe('Transporteur', () => {
   test.skip(!transporteur.email, 'E2E_TRANSPORTEUR_EMAIL/PASSWORD non fournis');
+  // Session du setup : zéro login supplémentaire (quota API 10/compte/15 min).
+  test.use({ storageState: 'e2e/.auth/transporteur.json' });
 
   test('atterrit sur SON tableau de bord, jamais le général', async ({ page }) => {
-    await seConnecter(page, transporteur.email, transporteur.password);
+    await page.goto('/dashboard');
     await expect(page.getByText('Mes chargements').first()).toBeVisible({ timeout: 15_000 });
     // Le général afficherait « Pouls du parc » : sa présence serait la régression.
     await expect(page.getByText('POULS DU PARC')).toHaveCount(0);
@@ -17,7 +19,7 @@ test.describe('Transporteur', () => {
   });
 
   test('son menu est cloisonné : pas d’administration ni de rapports du parc', async ({ page }) => {
-    await seConnecter(page, transporteur.email, transporteur.password);
+    await page.goto('/dashboard');
     const menu = page.locator('aside nav');
     await expect(menu.getByText('Administration')).toHaveCount(0);
     await expect(menu.getByText('Rapports')).toHaveCount(0);
@@ -25,7 +27,6 @@ test.describe('Transporteur', () => {
   });
 
   test('sa carte des livraisons se charge, sans données d’exploitation', async ({ page }) => {
-    await seConnecter(page, transporteur.email, transporteur.password);
     await page.goto('/supervision/carte');
     await expect(page.getByRole('heading', { name: 'Carte de mes livraisons' })).toBeVisible({ timeout: 20_000 });
   });

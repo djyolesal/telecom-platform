@@ -11,7 +11,9 @@ test.describe('Authentification', () => {
 
   test('un mauvais mot de passe est refusé, sans fuite d’information', async ({ page }) => {
     await page.goto('/login');
-    await page.getByPlaceholder('vous@telecom.tg').fill(admin.email);
+    // Compte FICTIF : frapper le vrai compte admin consommait ses tentatives
+    // auprès de l'anti-bruteforce de l'API (10/compte/15 min).
+    await page.getByPlaceholder('vous@telecom.tg').fill('inexistant@e2e.test');
     await page.locator('input[type="password"]').fill('mauvais-mot-de-passe');
     await page.locator('button[type="submit"]').click();
     await expect(page.getByText('Email ou mot de passe incorrect')).toBeVisible();
@@ -33,19 +35,27 @@ test.describe('Authentification', () => {
     expect(page.url()).toContain('callbackUrl');
   });
 
-  test('déconnexion : retour au login, plus d’accès aux pages protégées', async ({ page }) => {
-    await seConnecter(page, admin.email, admin.password);
-    await page.getByTitle('Déconnexion').click();
-    await page.waitForURL('**/login**', { timeout: 15_000 });
-    // La preuve forte, en ÉVENTUEL : une lecture de session partie avant le
-    // clic peut ressusciter le cookie un instant (Auth.js re-signe à chaque
-    // lecture) — la page de login détecte et achève alors la déconnexion.
-    // On tolère cette fenêtre de finalisation, pas sa persistance.
-    await expect
-      .poll(async () => (await page.context().cookies()).filter((c) => c.name.includes('session-token')).length,
-        { timeout: 10_000, message: 'des cookies de session survivent à la déconnexion' })
-      .toBe(0);
-    await page.goto('/dashboard');
-    await page.waitForURL('**/login**');
+  test.describe('avec session préchargée', () => {
+    // Session du setup : la déconnexion n'a pas besoin d'un login de plus —
+    // le jeton étant sans état, tuer les cookies de CE contexte n'affecte pas
+    // le fichier d'état réutilisé par les autres specs.
+    test.use({ storageState: 'e2e/.auth/admin.json' });
+
+    test('déconnexion : retour au login, plus d’accès aux pages protégées', async ({ page }) => {
+      await page.goto('/dashboard');
+      await verifierSessionVivante(page, 5);
+      await page.getByTitle('Déconnexion').click();
+      await page.waitForURL('**/login**', { timeout: 15_000 });
+      // La preuve forte, en ÉVENTUEL : une lecture de session partie avant le
+      // clic peut ressusciter le cookie un instant (Auth.js re-signe à chaque
+      // lecture) — la page de login détecte et achève alors la déconnexion.
+      // On tolère cette fenêtre de finalisation, pas sa persistance.
+      await expect
+        .poll(async () => (await page.context().cookies()).filter((c) => c.name.includes('session-token')).length,
+          { timeout: 10_000, message: 'des cookies de session survivent à la déconnexion' })
+        .toBe(0);
+      await page.goto('/dashboard');
+      await page.waitForURL('**/login**');
+    });
   });
 });

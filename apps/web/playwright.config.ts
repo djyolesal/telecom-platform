@@ -27,4 +27,8 @@ export default defineConfig({
     locale: 'fr-FR',
   },
   reporter: [['list'], ['html', { open: 'never' }]],
+  projects: [
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    { name: 'chromium', dependencies: ['setup'], testIgnore: /auth\.setup\.ts/ },
+  ],
 });
