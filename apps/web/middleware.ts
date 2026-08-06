@@ -30,5 +30,12 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // /api/auth EXCLU DU MATCHER — pas seulement liste « publique » dans le
+  // handler : le wrapper auth() RE-SIGNE le cookie de session sur chaque
+  // réponse qu'il traite (rolling de maxAge). Quand la déconnexion passait par
+  // lui, la même réponse portait notre Set-Cookie d'expiration ET le cookie
+  // re-signé du wrapper — qui gagnait : la session ressuscitait à l'instant
+  // même où on la tuait (constaté en E2E, cookie recréé avec 30 j d'expiration).
+  // Auth.js gère ses propres routes ; le middleware n'a rien à y faire.
+  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };
