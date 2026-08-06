@@ -103,8 +103,23 @@ E2E_TRANSPORTEUR_EMAIL=... E2E_TRANSPORTEUR_PASSWORD=... \
 npm run e2e
 ```
 
-- [ ] Les 11 tests passent (rapport HTML dans `playwright-report/` en cas d'échec).
+- [ ] Les 12 tests passent (rapport HTML dans `playwright-report/` en cas d'échec).
       Identifiants saisis par l'opérateur, jamais écrits dans un fichier.
+
+**Règles d'exécution de la suite — apprises à la dure (validée 12/12 le 06/08) :**
+1. **Serveur au repos** : jamais pendant un `docker compose build` — le VPS ne
+   sait pas compiler et servir les pages lourdes en même temps (faux négatifs
+   en série sur les bilans et la stabilité).
+2. **Un passage par quart d'heure maximum** : la suite partage l'anti-spraying
+   de l'API (10 connexions/compte/15 min) avec les vrais utilisateurs. Elle
+   n'en consomme plus qu'une par rôle (storageState), mais des passages en
+   rafale mordent quand même sur le quota.
+3. **Ne pas naviguer sur emops.uk avec les comptes de recette PENDANT un
+   passage** : la session unique par plateforme révoquerait la session de la
+   suite (et réciproquement).
+4. **Verdict à la durée** : un passage sain fait ~1 minute ; au-delà de
+   3 minutes, le passage était pollué (charge/quota) — le refaire au calme
+   avant d'interpréter le moindre échec.
 
 Puis la recette MANUELLE, sur **navigation privée** (aucun cookie d'avant la bascule) — elle
 couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
