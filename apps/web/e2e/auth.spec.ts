@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { admin, seConnecter, verifierSessionVivante } from './outils';
+import { admin, verifierSessionVivante } from './outils';
 
 /**
  * Authentification — le risque n°1 de chaque montée de version (Next 15,
@@ -18,15 +18,6 @@ test.describe('Authentification', () => {
     await page.locator('button[type="submit"]').click();
     await expect(page.getByText('Email ou mot de passe incorrect')).toBeVisible();
     expect(page.url()).toContain('/login');
-  });
-
-  test('connexion admin : session complète dès le premier écran', async ({ page }) => {
-    await seConnecter(page, admin.email, admin.password);
-    // Menu peuplé = session cliente vivante (le témoin du bug de rate-limit).
-    await verifierSessionVivante(page, 5);
-    // L'avatar ne doit PAS être le repli « U » d'une session nulle : le nom
-    // de l'utilisateur est affiché à côté.
-    await expect(page.locator('aside').getByText(/[A-Za-zÀ-ÿ]{2,}/).last()).toBeVisible();
   });
 
   test('une page protégée sans session renvoie au login', async ({ page }) => {

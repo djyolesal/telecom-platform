@@ -1,5 +1,5 @@
-import { test as setup } from '@playwright/test';
-import { admin, transporteur, seConnecter } from './outils';
+import { expect, test as setup } from '@playwright/test';
+import { admin, transporteur, seConnecter, verifierSessionVivante } from './outils';
 
 /**
  * Connexion UNIQUE par rôle, session réutilisée par les specs (storageState).
@@ -13,8 +13,18 @@ import { admin, transporteur, seConnecter } from './outils';
  * Le fichier d'état est TOUJOURS écrit (même vide, sans identifiants) : les
  * specs le chargent à la création du contexte, avant leurs test.skip.
  */
-setup('session admin', async ({ page }) => {
-  if (admin.email) await seConnecter(page, admin.email, admin.password);
+setup('session admin (et test de connexion)', async ({ page }) => {
+  if (admin.email) {
+    await seConnecter(page, admin.email, admin.password);
+    // Le setup EST le test de connexion : la plateforme n'autorise qu'UNE
+    // session web par compte (sid — durcissement audit nº2), donc tout login
+    // admin ultérieur RÉVOQUERAIT la session sauvée ici et ferait échouer
+    // toutes les specs qui la rejouent (constaté : le test de connexion
+    // séparé tuait la session du setup). Un seul login, assertions incluses.
+    await verifierSessionVivante(page, 5);
+    // L'avatar ne doit pas être le repli « U » d'une session nulle.
+    await expect(page.locator('aside').getByText(/[A-Za-zÀ-ÿ]{2,}/).last()).toBeVisible();
+  }
   await page.context().storageState({ path: 'e2e/.auth/admin.json' });
 });
 
