@@ -7,6 +7,7 @@ import { geParams } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
 import { bilanCarburant } from '../services/bilanCarburant.service';
+import { bilanEnergie } from '../services/bilanEnergie.service';
 import { sendTabular } from '../utils/exporter';
 import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
 import { geReliabilityByMarque } from '../services/geReliability.service';
@@ -707,5 +708,62 @@ export async function exportBilanCarburant(req: Request, res: Response, next: Ne
     `stock ${b.totaux.stockDebutLitres.toLocaleString('fr-FR')} → ${b.totaux.stockFinLitres.toLocaleString('fr-FR')} L · ` +
     `livré ${b.totaux.livreLitres.toLocaleString('fr-FR')} L · consommé ${b.totaux.consoLitres.toLocaleString('fr-FR')} L ` +
     `(${b.totaux.nbSitesMesures}/${b.totaux.nbSites} sites mesurés)`);
+  } catch (err) { next(err); }
+}
+
+/** Bilan énergie commerciale (CEET) sur période : index aux bornes, conso, courbe 12 mois. */
+export async function getBilanEnergie(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { debut, fin } = bornesBilan(req);
+    const data = await bilanEnergie(debut, fin, (req.query.region as string) || undefined);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function exportBilanEnergie(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { debut, fin } = bornesBilan(req);
+    const b = await bilanEnergie(debut, fin, (req.query.region as string) || undefined);
+    await auditLog(req.user!.id, 'EXPORT', 'bilan_energie', undefined, { debut, fin }, req);
+    await sendTabular(res, req.params.format, 'bilan-energie', 'Bilan énergie CEET sur période', [
+      {
+        name: 'Par site',
+        columns: [
+          { header: 'Site', key: 'code', width: 14 },
+          { header: 'Nom', key: 'nom', width: 24 },
+          { header: 'Région', key: 'region', width: 16 },
+          { header: 'Index début (kWh)', key: 'indexDebut', width: 16 },
+          { header: 'Index fin (kWh)', key: 'indexFin', width: 16 },
+          { header: 'Consommation (kWh)', key: 'consoKwh', width: 18 },
+          { header: 'Coût (FCFA)', key: 'coutFCFA', width: 14 },
+          { header: 'Relevés', key: 'nbReleves', width: 10 },
+          { header: 'Source', key: 'sourceLabel', width: 34 },
+        ],
+        rows: b.lignes.map((l) => ({
+          ...l,
+          indexDebut: l.indexDebut ?? '', indexFin: l.indexFin ?? '',
+          consoKwh: l.consoKwh ?? '', coutFCFA: l.coutFCFA ?? '',
+          sourceLabel: l.source === 'index' ? 'Delta index compteur' : l.motif ?? '',
+        })) as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Courbe 12 mois',
+        columns: [
+          { header: 'Mois', key: 'label', width: 16 },
+          { header: 'Conso index (kWh)', key: 'consoKwh', width: 18 },
+          { header: 'Conso déclarée (kWh)', key: 'declareKwh', width: 20 },
+          { header: 'Coût (FCFA)', key: 'coutFCFA', width: 14 },
+          { header: 'Sites mesurés', key: 'nbSitesMesures', width: 14 },
+        ],
+        rows: b.courbe.map((c) => ({
+          label: `${MOIS_LABELS[c.mois]} ${c.annee}`,
+          consoKwh: c.consoKwh ?? '', declareKwh: c.declareKwh, coutFCFA: c.coutFCFA,
+          nbSitesMesures: `${c.nbSitesMesures}/${c.nbSites}`,
+        })) as unknown as Record<string, unknown>[],
+      },
+    ],
+    `Du ${debut.toLocaleDateString('fr-FR')} au ${fin.toLocaleDateString('fr-FR')} · ` +
+    `${b.totaux.consoKwh.toLocaleString('fr-FR')} kWh · ${b.totaux.coutFCFA.toLocaleString('fr-FR')} FCFA · ` +
+    `${b.totaux.nbSitesMesures}/${b.totaux.nbSites} sites au delta d'index (tarif ${b.prixKwh} FCFA/kWh)`);
   } catch (err) { next(err); }
 }

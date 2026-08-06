@@ -119,6 +119,7 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/manquants-livraison(\/|$)/,
   /^\/rapports\/rapprochement(\/|$)/,
   /^\/rapports\/bilan-carburant(\/|$)/,
+  /^\/rapports\/bilan-energie(\/|$)/,
   // Vue consolidée des transferts/purges/avoirs du parc : jamais pour un
   // compte prestataire, même superviseur (le contrôleur périmètre en plus).
   /^\/mouvements-carburant(\/|$)/,
@@ -359,6 +360,9 @@ router.get('/rapports/stock-carburant', rbac(['NOC','SUPERVISEUR','MANAGER','ADM
 // Bilan carburant sur période : stock aux bornes + conso par conservation + courbe 12 mois.
 router.get('/rapports/bilan-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getBilanCarburant);
 router.get('/rapports/bilan-carburant/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanCarburant);
+// Bilan énergie CEET : même logique, l'index compteur joue le rôle de la jauge.
+router.get('/rapports/bilan-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getBilanEnergie);
+router.get('/rapports/bilan-energie/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanEnergie);
 router.get('/rapports/conso-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConsoEnergie);
 router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMaintenance);
 router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportIncidents);

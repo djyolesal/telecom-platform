@@ -35,6 +35,8 @@ const NAV_ITEMS = [
   { groupe: 'terrain', href: '/incidents',   label: 'Incidents',     icon: AlertTriangle, roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { groupe: 'terrain', href: '/actifs',      label: "Parc d'actifs", icon: Boxes,         roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { groupe: 'terrain', href: '/energie',     label: 'Énergie',       icon: Zap,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
+  // Bilan CEET sur période : pendant du bilan carburant (index = jauge).
+  { groupe: 'terrain', href: '/energie/bilan', label: 'Bilan énergie', icon: Zap,           roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
 
   // ── Carburant : stock, appro et flotte ──
   { groupe: 'carburant', href: '/carburant/stock',      label: 'Stock carburant',  icon: Fuel,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
