@@ -5,12 +5,18 @@ import { defineConfig, env } from 'prisma/config';
  *
  * Depuis la v7, l'URL de connexion ne vit plus dans schema.prisma : la CLI la
  * lit ici, et le CLIENT reçoit la sienne par l'adapter pg (config/database.ts).
- * `env('DATABASE_URL')` est résolu AU MOMENT de la commande — docker compose
- * fournit la variable au conteneur, et les commandes locales la préfixent
- * (`DATABASE_URL=... npx prisma ...`) : la v7 ne charge plus .env toute seule.
+ *
+ * La datasource est CONDITIONNELLE : `env('DATABASE_URL')` est résolu au
+ * chargement du fichier, or `prisma generate` tourne dans l'étage de build
+ * Docker, où aucune base n'existe — la déclarer sans condition y faisait
+ * échouer le build. Sans la variable : generate fonctionne (il n'a pas besoin
+ * de base), et migrate échoue avec le message clair de Prisma « datasource
+ * requise ». Avec : docker compose la fournit au conteneur, et les commandes
+ * locales la préfixent (`DATABASE_URL=... npx prisma ...`) — la v7 ne charge
+ * plus .env toute seule.
  */
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: { path: 'prisma/migrations' },
-  datasource: { url: env('DATABASE_URL') },
+  ...(process.env.DATABASE_URL ? { datasource: { url: env('DATABASE_URL') } } : {}),
 });
