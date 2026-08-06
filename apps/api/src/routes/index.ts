@@ -118,6 +118,7 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/synthese-appro$/,
   /^\/rapports\/manquants-livraison(\/|$)/,
   /^\/rapports\/rapprochement(\/|$)/,
+  /^\/rapports\/bilan-carburant(\/|$)/,
   // Vue consolidée des transferts/purges/avoirs du parc : jamais pour un
   // compte prestataire, même superviseur (le contrôleur périmètre en plus).
   /^\/mouvements-carburant(\/|$)/,
@@ -355,6 +356,9 @@ router.post('/incidents/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','
 // ── Rapports ──────────────────────────────────────────────────
 router.get('/rapports/dashboard', rapportsCtrl.getDashboard);
 router.get('/rapports/stock-carburant', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
+// Bilan carburant sur période : stock aux bornes + conso par conservation + courbe 12 mois.
+router.get('/rapports/bilan-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getBilanCarburant);
+router.get('/rapports/bilan-carburant/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanCarburant);
 router.get('/rapports/conso-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConsoEnergie);
 router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMaintenance);
 router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportIncidents);

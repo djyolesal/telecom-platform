@@ -38,6 +38,8 @@ const NAV_ITEMS = [
 
   // ── Carburant : stock, appro et flotte ──
   { groupe: 'carburant', href: '/carburant/stock',      label: 'Stock carburant',  icon: Fuel,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
+  // Bilan sur période libre : stock aux bornes + conso par conservation.
+  { groupe: 'carburant', href: '/carburant/bilan',      label: 'Bilan conso & stock', icon: BarChart3,   roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { groupe: 'carburant', href: '/carburant/commandes',  label: 'Appro. carburant', icon: Truck,          roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
   // Fiches de chargement : le transporteur n'ouvre que LES SIENNES (l'API
   // filtre et revérifie son prestataire) — sans cette entrée, la section

@@ -6,6 +6,8 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
+import { bilanCarburant } from '../services/bilanCarburant.service';
+import { sendTabular } from '../utils/exporter';
 import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
 import { geReliabilityByMarque } from '../services/geReliability.service';
 import { computeSla } from '../services/slaCompliance.service';
@@ -628,5 +630,82 @@ export async function getRapportGardiennage(req: Request, res: Response, next: N
     });
 
     res.json({ success: true, data: { periodeJours: jours, societes: data, sitesNonRattaches: orphelins } });
+  } catch (err) { next(err); }
+}
+
+const MOIS_LABELS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+/** Bornes de période du bilan carburant : jour plein, fin bornée à maintenant. */
+function bornesBilan(req: Request): { debut: Date; fin: Date } {
+  const { debut, fin } = req.query as Record<string, string>;
+  const d = debut ? new Date(`${debut}T00:00:00.000Z`) : null;
+  // La borne de fin est INCLUSIVE (fin de journée) : « au 31 » veut dire 31 compris.
+  const f = fin ? new Date(`${fin}T23:59:59.999Z`) : null;
+  if (!d || !f || Number.isNaN(d.getTime()) || Number.isNaN(f.getTime())) {
+    throw new AppError('Période invalide : paramètres debut et fin requis (AAAA-MM-JJ).', 400);
+  }
+  if (f <= d) throw new AppError('La fin de période doit suivre le début.', 400);
+  const maintenant = new Date();
+  return { debut: d, fin: f > maintenant ? maintenant : f };
+}
+
+/**
+ * Bilan carburant sur période : stock aux deux bornes, consommation par
+ * conservation, détail par site, courbe 12 mois.
+ */
+export async function getBilanCarburant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { debut, fin } = bornesBilan(req);
+    const data = await bilanCarburant(debut, fin, (req.query.region as string) || undefined);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function exportBilanCarburant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { debut, fin } = bornesBilan(req);
+    const b = await bilanCarburant(debut, fin, (req.query.region as string) || undefined);
+    await auditLog(req.user!.id, 'EXPORT', 'bilan_carburant', undefined, { debut, fin }, req);
+    await sendTabular(res, req.params.format, 'bilan-carburant', 'Bilan carburant sur période', [
+      {
+        name: 'Par site',
+        columns: [
+          { header: 'Site', key: 'code', width: 14 },
+          { header: 'Nom', key: 'nom', width: 24 },
+          { header: 'Région', key: 'region', width: 16 },
+          { header: 'Stock début (L)', key: 'stockDebut', width: 15 },
+          { header: 'Livré (L)', key: 'livre', width: 12 },
+          { header: 'Transferts/purges (L)', key: 'mouvements', width: 18 },
+          { header: 'Stock fin (L)', key: 'stockFin', width: 14 },
+          { header: 'Consommation (L)', key: 'conso', width: 16 },
+          { header: 'Théorique (L)', key: 'consoTheorique', width: 14 },
+          { header: 'Écart (L)', key: 'ecart', width: 12 },
+          { header: 'Mesure', key: 'motifNonMesure', width: 34 },
+        ],
+        rows: b.lignes.map((l) => ({
+          ...l,
+          stockDebut: l.stockDebut ?? '', stockFin: l.stockFin ?? '',
+          conso: l.conso ?? '', ecart: l.ecart ?? '',
+          motifNonMesure: l.motifNonMesure ?? 'Mesuré',
+        })) as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Courbe 12 mois',
+        columns: [
+          { header: 'Mois', key: 'label', width: 16 },
+          { header: 'Livré (L)', key: 'livre', width: 14 },
+          { header: 'Consommé mesuré (L)', key: 'conso', width: 20 },
+          { header: 'Sites mesurés', key: 'nbSitesMesures', width: 14 },
+        ],
+        rows: b.courbe.map((c) => ({
+          label: `${MOIS_LABELS[c.mois]} ${c.annee}`,
+          livre: c.livre, conso: c.conso ?? '', nbSitesMesures: `${c.nbSitesMesures}/${c.nbSites}`,
+        })) as unknown as Record<string, unknown>[],
+      },
+    ],
+    `Du ${debut.toLocaleDateString('fr-FR')} au ${fin.toLocaleDateString('fr-FR')} · ` +
+    `stock ${b.totaux.stockDebutLitres.toLocaleString('fr-FR')} → ${b.totaux.stockFinLitres.toLocaleString('fr-FR')} L · ` +
+    `livré ${b.totaux.livreLitres.toLocaleString('fr-FR')} L · consommé ${b.totaux.consoLitres.toLocaleString('fr-FR')} L ` +
+    `(${b.totaux.nbSitesMesures}/${b.totaux.nbSites} sites mesurés)`);
   } catch (err) { next(err); }
 }
