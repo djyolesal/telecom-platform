@@ -30,10 +30,27 @@ function LoginForm() {
   const deconnexionEnCours = params.has('deconnexion');
   useEffect(() => {
     if (!deconnexionEnCours || status !== 'authenticated') return;
+    let annule = false;
     (async () => {
-      try { await fetch('/api/auth/deconnexion', { method: 'POST' }); } catch { /* on recharge quand même */ }
-      window.location.replace('/login');
+      // On ne quitte cette page qu'avec une session VÉRIFIÉE morte. Un simple
+      // « tuer puis recharger » perdait encore la course : une lecture de
+      // session partie au chargement atterrissait APRÈS le kill, ressuscitait
+      // le cookie, et le middleware renvoyait le « connecté » au dashboard.
+      // Ici : tuer → laisser retomber les lectures en vol → sonder. La sonde
+      // sans cookie ne ressuscite rien, et toute résurrection intermédiaire
+      // est re-tuée à l'itération suivante — convergence garantie.
+      for (let i = 0; i < 10 && !annule; i++) {
+        try { await fetch('/api/auth/deconnexion', { method: 'POST' }); } catch { /* re-tentée juste après */ }
+        await new Promise((r) => setTimeout(r, 400));
+        try {
+          const s = await fetch('/api/auth/session').then((r) => r.json());
+          if (!s || !s.user) { window.location.replace('/login'); return; }
+        } catch { /* réseau : on réessaie */ }
+      }
+      // Filet : même sans confirmation propre, on repart au login.
+      if (!annule) window.location.replace('/login');
     })();
+    return () => { annule = true; };
   }, [deconnexionEnCours, status]);
 
   async function handleSubmit(e: React.FormEvent) {
