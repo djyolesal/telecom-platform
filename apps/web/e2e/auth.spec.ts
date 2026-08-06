@@ -37,10 +37,14 @@ test.describe('Authentification', () => {
     await seConnecter(page, admin.email, admin.password);
     await page.getByTitle('Déconnexion').click();
     await page.waitForURL('**/login**', { timeout: 15_000 });
-    // La preuve forte : plus AUCUN cookie de session (y compris les morceaux
-    // .0/.1 d'un jeton découpé — le bug exact du signOut d'Auth.js bêta).
-    const cookies = await page.context().cookies();
-    expect(cookies.filter((c) => c.name.includes('session-token'))).toHaveLength(0);
+    // La preuve forte, en ÉVENTUEL : une lecture de session partie avant le
+    // clic peut ressusciter le cookie un instant (Auth.js re-signe à chaque
+    // lecture) — la page de login détecte et achève alors la déconnexion.
+    // On tolère cette fenêtre de finalisation, pas sa persistance.
+    await expect
+      .poll(async () => (await page.context().cookies()).filter((c) => c.name.includes('session-token')).length,
+        { timeout: 10_000, message: 'des cookies de session survivent à la déconnexion' })
+      .toBe(0);
     await page.goto('/dashboard');
     await page.waitForURL('**/login**');
   });

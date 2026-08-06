@@ -31,7 +31,7 @@ async function cachedSession(): Promise<Session | null> {
  * d'Auth.js bêta laissait vivre les cookies de session découpés en morceaux. */
 async function deconnecter(): Promise<void> {
   try { await fetch('/api/auth/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
-  window.location.assign('/login');
+  window.location.assign('/login?deconnexion=1');
 }
 
 api.interceptors.request.use(async (config) => {

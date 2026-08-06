@@ -22,7 +22,12 @@ export default auth((req) => {
     return NextResponse.redirect(url);
   }
 
-  if (isLoggedIn && pathname === '/login') {
+  // `?deconnexion=1` : déconnexion en cours de finalisation. Une lecture de
+  // session partie AVANT la déconnexion peut ressusciter le cookie (Auth.js
+  // re-signe le jeton à CHAQUE lecture) — sans cette exception, le middleware
+  // renverrait l'utilisateur au dashboard avant que la page de login ait pu
+  // détecter et achever la déconnexion.
+  if (isLoggedIn && pathname === '/login' && !req.nextUrl.searchParams.has('deconnexion')) {
     return NextResponse.redirect(new URL('/dashboard', req.nextUrl.origin));
   }
 

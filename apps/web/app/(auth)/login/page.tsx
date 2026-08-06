@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { LogoIcon, LogoWordmark } from '@/components/shared/Logo';
 
@@ -18,6 +18,23 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // ── Finalisation de la déconnexion ────────────────────────────────────────
+  // Auth.js re-signe le cookie de session à CHAQUE lecture de /api/auth/session.
+  // Une lecture partie AVANT la déconnexion peut donc RESSUSCITER le cookie
+  // après son expiration (course perdue d'avance côté client). Ici, la boucle
+  // se referme sans course : si la session a survécu à une déconnexion
+  // (`?deconnexion=1`), on re-tue et on recharge — événementiel, pas de délai
+  // arbitraire. Au rechargement, la session est réellement morte.
+  const { status } = useSession();
+  const deconnexionEnCours = params.has('deconnexion');
+  useEffect(() => {
+    if (!deconnexionEnCours || status !== 'authenticated') return;
+    (async () => {
+      try { await fetch('/api/auth/deconnexion', { method: 'POST' }); } catch { /* on recharge quand même */ }
+      window.location.replace('/login');
+    })();
+  }, [deconnexionEnCours, status]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

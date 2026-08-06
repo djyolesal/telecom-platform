@@ -205,7 +205,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   // les cookies de session découpés en morceaux (cf.
                   // app/api/deconnexion/route.ts). Navigation complète ensuite.
                   try { await fetch('/api/auth/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
-                  window.location.assign('/login');
+                  window.location.assign('/login?deconnexion=1');
                 }}
                 className="p-1 hover:text-red-300 transition-colors" title="Déconnexion">
                 <LogOut size={16} />
