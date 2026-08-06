@@ -651,13 +651,24 @@ function bornesBilan(req: Request): { debut: Date; fin: Date } {
 }
 
 /**
+ * Portée des bilans : un compte prestataire ne voit que les sites de SES lots
+ * (même schéma que le rapport de disponibilité) — les internes voient le parc.
+ * La clé de cache est l'utilisateur : deux prestataires ne partagent jamais
+ * une entrée mémoïsée.
+ */
+async function porteeBilan(req: Request): Promise<{ where: Record<string, unknown>; cle: string } | undefined> {
+  const perimetre = await sitePerimetre(req.user!.id);
+  return isRestreint(perimetre) ? { where: perimetre, cle: req.user!.id } : undefined;
+}
+
+/**
  * Bilan carburant sur période : stock aux deux bornes, consommation par
  * conservation, détail par site, courbe 12 mois.
  */
 export async function getBilanCarburant(req: Request, res: Response, next: NextFunction) {
   try {
     const { debut, fin } = bornesBilan(req);
-    const data = await bilanCarburant(debut, fin, (req.query.region as string) || undefined);
+    const data = await bilanCarburant(debut, fin, (req.query.region as string) || undefined, await porteeBilan(req));
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -665,7 +676,7 @@ export async function getBilanCarburant(req: Request, res: Response, next: NextF
 export async function exportBilanCarburant(req: Request, res: Response, next: NextFunction) {
   try {
     const { debut, fin } = bornesBilan(req);
-    const b = await bilanCarburant(debut, fin, (req.query.region as string) || undefined);
+    const b = await bilanCarburant(debut, fin, (req.query.region as string) || undefined, await porteeBilan(req));
     await auditLog(req.user!.id, 'EXPORT', 'bilan_carburant', undefined, { debut, fin }, req);
     await sendTabular(res, req.params.format, 'bilan-carburant', 'Bilan carburant sur période', [
       {
@@ -715,7 +726,7 @@ export async function exportBilanCarburant(req: Request, res: Response, next: Ne
 export async function getBilanEnergie(req: Request, res: Response, next: NextFunction) {
   try {
     const { debut, fin } = bornesBilan(req);
-    const data = await bilanEnergie(debut, fin, (req.query.region as string) || undefined);
+    const data = await bilanEnergie(debut, fin, (req.query.region as string) || undefined, await porteeBilan(req));
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -723,7 +734,7 @@ export async function getBilanEnergie(req: Request, res: Response, next: NextFun
 export async function exportBilanEnergie(req: Request, res: Response, next: NextFunction) {
   try {
     const { debut, fin } = bornesBilan(req);
-    const b = await bilanEnergie(debut, fin, (req.query.region as string) || undefined);
+    const b = await bilanEnergie(debut, fin, (req.query.region as string) || undefined, await porteeBilan(req));
     await auditLog(req.user!.id, 'EXPORT', 'bilan_energie', undefined, { debut, fin }, req);
     await sendTabular(res, req.params.format, 'bilan-energie', 'Bilan énergie CEET sur période', [
       {

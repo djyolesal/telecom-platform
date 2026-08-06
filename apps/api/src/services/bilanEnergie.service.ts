@@ -71,17 +71,22 @@ function declareEntre(rels: Rel[], apres: number, jusqua: number): { kwh: number
   return { kwh, cout, nb };
 }
 
-export function bilanEnergie(debut: Date, fin: Date, region?: string) {
-  const key = `bilan-energie:${debut.getTime()}:${fin.getTime()}:${region ?? '*'}`;
-  return memo(key, 60_000, () => bilanEnergieImpl(debut, fin, region));
+// `portee` : périmètre d'un compte prestataire (sites de SES lots). La clé de
+// cache doit l'inclure — sans elle, le bilan périmétré d'un prestataire
+// pouvait être servi à un interne, et réciproquement.
+export type PorteeBilan = { where: Record<string, unknown>; cle: string };
+
+export function bilanEnergie(debut: Date, fin: Date, region?: string, portee?: PorteeBilan) {
+  const key = `bilan-energie:${debut.getTime()}:${fin.getTime()}:${region ?? '*'}:${portee?.cle ?? '*'}`;
+  return memo(key, 60_000, () => bilanEnergieImpl(debut, fin, region, portee));
 }
 
-async function bilanEnergieImpl(debut: Date, fin: Date, region?: string) {
+async function bilanEnergieImpl(debut: Date, fin: Date, region?: string, portee?: PorteeBilan) {
   const prixKwh = getNum('energie.prixKwhFCFA', 105);
 
   const sites = await prisma.site.findMany({
     // Seuls les sites raccordés au réseau commercial ont un bilan CEET.
-    where: { isActive: true, powerConfig: { not: 'GE_UNIQUEMENT' }, ...(region ? { region } : {}) },
+    where: { isActive: true, powerConfig: { not: 'GE_UNIQUEMENT' }, ...(region ? { region } : {}), ...(portee?.where ?? {}) },
     orderBy: { code: 'asc' },
     select: { id: true, code: true, nom: true, region: true },
   });

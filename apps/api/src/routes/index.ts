@@ -118,8 +118,9 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/synthese-appro$/,
   /^\/rapports\/manquants-livraison(\/|$)/,
   /^\/rapports\/rapprochement(\/|$)/,
-  /^\/rapports\/bilan-carburant(\/|$)/,
-  /^\/rapports\/bilan-energie(\/|$)/,
+  // /rapports/bilan-carburant et /rapports/bilan-energie : OUVERTS aux
+  // prestataires — le contrôleur applique le périmètre (chacun ne voit que les
+  // sites de ses lots), comme /rapports/disponibilite-reseau.
   // Vue consolidée des transferts/purges/avoirs du parc : jamais pour un
   // compte prestataire, même superviseur (le contrôleur périmètre en plus).
   /^\/mouvements-carburant(\/|$)/,
