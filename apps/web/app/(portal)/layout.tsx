@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import {
   LayoutDashboard, MapPin, Wrench, Fuel, Zap, AlertTriangle,
   BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2, WifiOff, Network, ArrowLeftRight
@@ -199,7 +199,15 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               </div>
             )}
             {sidebarOpen && (
-              <button onClick={() => signOut()} className="p-1 hover:text-red-300 transition-colors" title="Déconnexion">
+              <button
+                onClick={async () => {
+                  // Route maison : le signOut() d'Auth.js (bêta) laissait vivre
+                  // les cookies de session découpés en morceaux (cf.
+                  // app/api/deconnexion/route.ts). Navigation complète ensuite.
+                  try { await fetch('/api/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
+                  window.location.assign('/login');
+                }}
+                className="p-1 hover:text-red-300 transition-colors" title="Déconnexion">
                 <LogOut size={16} />
               </button>
             )}

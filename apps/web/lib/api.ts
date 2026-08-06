@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getSession, signOut } from 'next-auth/react';
+import { getSession } from 'next-auth/react';
 import type { Session } from 'next-auth';
 
 /**
@@ -27,13 +27,20 @@ async function cachedSession(): Promise<Session | null> {
   return value;
 }
 
+/** Déconnexion déterministe (cf. app/api/deconnexion/route.ts) : le signOut()
+ * d'Auth.js bêta laissait vivre les cookies de session découpés en morceaux. */
+async function deconnecter(): Promise<void> {
+  try { await fetch('/api/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
+  window.location.assign('/login');
+}
+
 api.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
     const session = await cachedSession();
     // Le rafraîchissement du token a échoué → session morte : on déconnecte
     // proprement (supprime le cookie NextAuth) au lieu de boucler sur des 401.
     if (session?.error === 'RefreshTokenError') {
-      await signOut({ callbackUrl: '/login' });
+      await deconnecter();
       throw new axios.Cancel('Session expirée');
     }
     let token = session?.accessToken;
@@ -64,7 +71,7 @@ api.interceptors.response.use(
       // middleware, voyant le cookie encore valide, renverrait vers le dashboard
       // → nouvelle salve de 401 → boucle infinie.
       sessionCache = null;
-      await signOut({ callbackUrl: '/login' });
+      await deconnecter();
     }
     return Promise.reject(error);
   }

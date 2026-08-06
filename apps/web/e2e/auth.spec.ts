@@ -37,6 +37,10 @@ test.describe('Authentification', () => {
     await seConnecter(page, admin.email, admin.password);
     await page.getByTitle('Déconnexion').click();
     await page.waitForURL('**/login**', { timeout: 15_000 });
+    // La preuve forte : plus AUCUN cookie de session (y compris les morceaux
+    // .0/.1 d'un jeton découpé — le bug exact du signOut d'Auth.js bêta).
+    const cookies = await page.context().cookies();
+    expect(cookies.filter((c) => c.name.includes('session-token'))).toHaveLength(0);
     await page.goto('/dashboard');
     await page.waitForURL('**/login**');
   });
