@@ -28,8 +28,10 @@ recette, utiliser des contacts de test ou vérifier le plafond SMS avant.
 - [ ] **APK construit et testé sur un téléphone réel** AVANT la fenêtre (phase 4 ci-dessous —
       le build peut se faire la veille, seule la distribution attend la bascule).
 - [ ] Vérifier l'espace disque serveur : `df -h` (les images Docker + le backup doivent tenir).
-- [ ] Lister les migrations en attente pour confirmer l'état :
-      `docker compose exec api npx prisma migrate status` → doit annoncer 0038…0042 non appliquées.
+- [ ] Confirmer l'état des migrations :
+      `docker compose exec api npx prisma migrate status` → « Database schema is up to date! »
+      attendu (les 43 migrations, dont 0038…0042, ont été appliquées le 05/08). Toute migration
+      listée en attente ici est une anomalie à comprendre AVANT la bascule.
 
 ✋ **Contrôle** : APK testé OK sur téléphone, fenêtre annoncée, disque > 5 Go libres.
 
