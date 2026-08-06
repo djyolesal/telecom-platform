@@ -13,6 +13,11 @@ import { cookies } from 'next/headers';
  * Ici, pas de dépendance aux internes de la bibliothèque : on fait expirer
  * TOUS les cookies de session effectivement présents dans la requête, quel
  * que soit leur nom exact (préfixe __Secure-, morceaux .0/.1/…).
+ *
+ * Sous /api/auth/ à dessein : nginx n'envoie vers Next QUE /api/auth/* — tout
+ * autre /api/* part vers l'API Express (la première version de cette route en
+ * /api/deconnexion recevait une 404 Express, et les cookies survivaient). La
+ * route STATIQUE prime sur le catch-all [...nextauth] d'Auth.js.
  */
 export async function POST(req: Request) {
   // Hygiène anti-CSRF : la déconnexion n'accepte que la même origine.

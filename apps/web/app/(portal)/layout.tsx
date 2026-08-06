@@ -204,7 +204,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   // Route maison : le signOut() d'Auth.js (bêta) laissait vivre
                   // les cookies de session découpés en morceaux (cf.
                   // app/api/deconnexion/route.ts). Navigation complète ensuite.
-                  try { await fetch('/api/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
+                  try { await fetch('/api/auth/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
                   window.location.assign('/login');
                 }}
                 className="p-1 hover:text-red-300 transition-colors" title="Déconnexion">

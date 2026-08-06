@@ -30,7 +30,7 @@ async function cachedSession(): Promise<Session | null> {
 /** Déconnexion déterministe (cf. app/api/deconnexion/route.ts) : le signOut()
  * d'Auth.js bêta laissait vivre les cookies de session découpés en morceaux. */
 async function deconnecter(): Promise<void> {
-  try { await fetch('/api/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
+  try { await fetch('/api/auth/deconnexion', { method: 'POST' }); } catch { /* on navigue quand même */ }
   window.location.assign('/login');
 }
 
