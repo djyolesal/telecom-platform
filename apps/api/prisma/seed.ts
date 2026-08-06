@@ -1,8 +1,12 @@
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, PowerConfig, StatutGE, RoleUser } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 
-const prisma = new PrismaClient();
+// Prisma 7 : le client ne lit plus l'URL dans le schéma — adapter pg explicite.
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+});
 const SALT_ROUNDS = 12;
 
 // Régions du Togo et préfixes de codes site

@@ -43,6 +43,10 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-seed ./dist-seed
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma/
+# Prisma 7 : la CLI (désormais en dependencies, plus de téléchargement npx au
+# `make migrate`) lit l'URL de connexion dans ce fichier — sans lui, migrate
+# deploy échoue dans le conteneur.
+COPY prisma.config.ts ./
 
 RUN mkdir -p /app/logs && chown -R appuser:appgroup /app
 

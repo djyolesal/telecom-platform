@@ -6,7 +6,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Prisma 7 : l'URL ne vit plus dans le schéma — la CLI la lit dans
+  // prisma.config.ts, le client la reçoit via l'adapter pg (config/database.ts).
 }
 
 // ── Enums ─────────────────────────────────────────────────────
