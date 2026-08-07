@@ -45,14 +45,21 @@ class _SignaturePadScreenState extends State<SignaturePadScreen> {
           IconButton(onPressed: _validate, icon: const Icon(Icons.check)),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(child: Signature(controller: _controller, backgroundColor: Colors.white)),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: FilledButton.icon(onPressed: _validate, icon: const Icon(Icons.check), label: const Text('Valider la signature')),
-          ),
-        ],
+      // SafeArea : sans elle, le bouton passait sous la barre de navigation
+      // système sur les téléphones à navigation gestuelle.
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(child: Signature(controller: _controller, backgroundColor: Colors.white)),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(onPressed: _validate, icon: const Icon(Icons.check), label: const Text('Valider la signature')),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

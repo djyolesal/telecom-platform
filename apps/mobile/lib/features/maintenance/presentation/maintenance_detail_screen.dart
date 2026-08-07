@@ -859,11 +859,22 @@ class _CloseSheetState extends State<_CloseSheet> {
     final minPhotos = m.type == 'PREVENTIVE' ? AppConfig.minPhotosPreventive : (m.natureTravaux != 'ENTRETIEN' ? AppConfig.minPhotosMouvement : 0);
     const numKb = TextInputType.numberWithOptions(decimal: true);
 
+    // Le bouton de validation est ÉPINGLÉ sous la zone défilante (et sous une
+    // SafeArea) : en fin de formulaire il finissait sous la barre système ou
+    // sous le clavier — les techniciens ne le trouvaient pas.
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1017,15 +1028,31 @@ class _CloseSheetState extends State<_CloseSheet> {
             ],
             TextField(controller: _obs, maxLines: 3, decoration: const InputDecoration(labelText: 'Observations / travaux réalisés')),
             _agentSelector(),
-            if (_error != null)
-              Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12))),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(onPressed: _submit, child: const Text('Continuer (signature)')),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ],
+                  ),
+                ),
+              ),
+              // Pied épinglé : erreur + bouton, toujours visibles sans défiler.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                      ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(onPressed: _submit, child: const Text('Continuer (signature)')),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

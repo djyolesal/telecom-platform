@@ -415,7 +415,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          // Marge basse large : le bouton « Enregistrer » en fin de liste doit
+          // rester atteignable au-dessus de la barre système (navigation gestuelle).
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom),
           children: [
             SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
             const SizedBox(height: 14),
