@@ -10,7 +10,8 @@ import { DataTable, Column } from '@/components/shared/DataTable';
 import { TableSkeleton, EmptyState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
-import { Field, Input, Select, Textarea } from '@/components/shared/Form';
+import { Field, Input, Textarea } from '@/components/shared/Form';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
 interface SiteLite { id: string; code: string; nom: string }
@@ -179,11 +180,11 @@ function TransfertModal({ onClose }: { onClose: () => void }) {
         });
       }} className="space-y-3">
         <Field label="Site de départ" required>
-          <Select value={form.source} onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))} placeholder="Choisir"
+          <SearchSelect value={form.source} onChange={(v) => setForm((f) => ({ ...f, source: v }))} placeholder="Rechercher un site (nom ou code)…"
             options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
         </Field>
         <Field label="Site d’arrivée" required>
-          <Select value={form.destination} onChange={(e) => setForm((f) => ({ ...f, destination: e.target.value }))} placeholder="Choisir"
+          <SearchSelect value={form.destination} onChange={(v) => setForm((f) => ({ ...f, destination: v }))} placeholder="Rechercher un site (nom ou code)…"
             options={sites.filter((s) => s.id !== form.source).map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
         </Field>
         <Field label="Volume transféré (L)" required>
@@ -221,7 +222,7 @@ function PurgeModal({ onClose }: { onClose: () => void }) {
         mutation.mutate({ siteId: form.site, volumeLitres: Number(form.volume) || 0, dateMouvement: form.date, motif: form.motif });
       }} className="space-y-3">
         <Field label="Site" required>
-          <Select value={form.site} onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))} placeholder="Choisir"
+          <SearchSelect value={form.site} onChange={(v) => setForm((f) => ({ ...f, site: v }))} placeholder="Rechercher un site (nom ou code)…"
             options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
         </Field>
         <Field label="Volume purgé (L)" required>
@@ -261,7 +262,7 @@ function AvoirModal({ onClose }: { onClose: () => void }) {
         mutation.mutate({ bonCommandeId: form.bc, volumeLitres: Number(form.volume) || 0, dateMouvement: form.date, motif: form.motif });
       }} className="space-y-3">
         <Field label="Bon de commande" required>
-          <Select value={form.bc} onChange={(e) => setForm((f) => ({ ...f, bc: e.target.value }))} placeholder="Choisir"
+          <SearchSelect value={form.bc} onChange={(v) => setForm((f) => ({ ...f, bc: v }))} placeholder="Rechercher un bon de commande…"
             options={bcs.map((b) => ({ value: b.id, label: b.numero }))} />
         </Field>
         <Field label="Volume repris (L)" required>

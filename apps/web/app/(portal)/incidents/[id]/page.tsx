@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
 import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
-import { Select } from '@/components/shared/Form';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
 import { TYPES_INCIDENT } from '@/lib/constants';
 import { fmtDateTime } from '@/lib/utils';
@@ -91,7 +91,7 @@ export default function IncidentDetailPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-5">
               <h3 className="font-semibold text-gray-700 text-sm mb-3">Assigner un technicien</h3>
               <div className="flex gap-2">
-                <Select value={technicienId} onChange={(e) => setTechnicienId(e.target.value)} options={techOptions} placeholder="Choisir…" className="flex-1" />
+                <div className="flex-1"><SearchSelect value={technicienId} onChange={setTechnicienId} options={techOptions} placeholder="Rechercher un technicien…" /></div>
                 <Button icon={UserPlus} disabled={!technicienId} loading={assign.isPending} onClick={() => assign.mutate()}>Assigner</Button>
               </div>
             </div>

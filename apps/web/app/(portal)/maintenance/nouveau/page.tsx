@@ -7,7 +7,7 @@ import { Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select, Textarea } from '@/components/shared/Form';
-import { SearchableSelect } from '@/components/shared/SearchableSelect';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Button } from '@/components/shared/Button';
 
 interface TacheContractuelle { key: string; libelle: string; categorie: string; frequenceLabel: string; }
@@ -64,7 +64,7 @@ export default function NouvelleMaintenancePage() {
   });
   const geOptions = (gesDuSite ?? []).map((g) => ({ value: g.id, label: g.libelle ?? 'GE' }));
 
-  const siteOptions = (sites ?? []).map((s: { id: string; nom: string }) => ({ value: s.id, label: s.nom }));
+  const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} — ${s.nom}` }));
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
   const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: t.libelle }));
   const actifOptions = (actifs ?? []).map((a) => ({ value: `${a.actifType}:${a.id}`, label: `${a.libelle ?? a.categorie}${a.site ? ` — ${a.site.nom}` : ' — Dépôt'}` }));
@@ -144,7 +144,7 @@ export default function NouvelleMaintenancePage() {
           {isEntretien ? (
             <>
               <Field label="Site" required className="md:col-span-2">
-                <SearchableSelect value={form.siteId} onChange={(v) => { set('siteId', v); set('tacheKey', ''); }} options={siteOptions} placeholder="Rechercher / sélectionner un site…" />
+                <SearchSelect value={form.siteId} onChange={(v) => { set('siteId', v); set('tacheKey', ''); }} options={siteOptions} placeholder="Rechercher un site (nom ou code)…" />
               </Field>
               <Field label="Tâche contractuelle" required className="md:col-span-2">
                 <Select value={form.tacheKey} onChange={(e) => set('tacheKey', e.target.value)} required disabled={!form.siteId} options={tacheOptions} placeholder={form.siteId ? 'Sélectionner une tâche…' : 'Choisissez d’abord un site'} />
@@ -153,7 +153,7 @@ export default function NouvelleMaintenancePage() {
           ) : isCurative ? (
             <>
               <Field label="Site" required className="md:col-span-2">
-                <SearchableSelect value={form.siteId} onChange={(v) => { set('siteId', v); set('actifKey', ''); }} options={siteOptions} placeholder="Rechercher / sélectionner un site…" />
+                <SearchSelect value={form.siteId} onChange={(v) => { set('siteId', v); set('actifKey', ''); }} options={siteOptions} placeholder="Rechercher un site (nom ou code)…" />
               </Field>
               <Field label="GE concerné" required className="md:col-span-2">
                 <Select value={form.actifKey} onChange={(e) => set('actifKey', e.target.value)} required disabled={!form.siteId}
@@ -167,7 +167,7 @@ export default function NouvelleMaintenancePage() {
               </Field>
               {needsDest && (
                 <Field label="Site de destination" required className="md:col-span-2">
-                  <SearchableSelect value={form.siteId} onChange={(v) => set('siteId', v)} options={siteOptions} placeholder="Site où poser l’actif…" />
+                  <SearchSelect value={form.siteId} onChange={(v) => set('siteId', v)} options={siteOptions} placeholder="Site où poser l’actif…" />
                 </Field>
               )}
             </>
@@ -177,7 +177,7 @@ export default function NouvelleMaintenancePage() {
             <Input type="datetime-local" min={nowLocal} value={form.datePlanifiee} onChange={(e) => set('datePlanifiee', e.target.value)} required />
           </Field>
           <Field label="Technicien">
-            <Select value={form.technicienId} onChange={(e) => set('technicienId', e.target.value)} options={techOptions} placeholder="(par défaut : moi)" />
+            <SearchSelect value={form.technicienId} onChange={(v) => set('technicienId', v)} options={techOptions} emptyLabel="(par défaut : moi)" placeholder="Rechercher un technicien…" />
           </Field>
           <Field label="Description" className="md:col-span-2">
             <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Détails de l'intervention…" />

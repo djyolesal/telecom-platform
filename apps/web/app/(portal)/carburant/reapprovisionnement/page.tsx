@@ -12,6 +12,7 @@ import { Loading, EmptyState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Select } from '@/components/shared/Form';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { regionOptions } from '@/lib/constants';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
@@ -146,7 +147,7 @@ export default function ReapprovisionnementPage() {
 
           <div className="flex flex-wrap items-center gap-3 mb-4 rounded-lg bg-gray-50 border border-gray-200 p-3">
             <span className="text-sm font-medium text-gray-600">Pour créer les brouillons :</span>
-            <div className="w-56"><Select value={bcId} onChange={(e) => setBcId(e.target.value)} placeholder="Bon de commande…" options={bcs.map((b) => ({ value: b.id, label: b.numero }))} /></div>
+            <div className="w-56"><SearchSelect value={bcId} onChange={setBcId} placeholder="Bon de commande…" options={bcs.map((b) => ({ value: b.id, label: b.numero }))} /></div>
             <div className="w-36"><Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS.slice(1).map((m, i) => ({ value: String(i + 1), label: m }))} /></div>
           </div>
 

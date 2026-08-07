@@ -14,6 +14,7 @@ import { Loading, EmptyState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Select } from '@/components/shared/Form';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { regionOptions } from '@/lib/constants';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
@@ -217,7 +218,7 @@ export default function ManquantsPage() {
 
       {/* Filtres */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="w-56"><Select value={bcId} onChange={(e) => setBcId(e.target.value)} placeholder="Tous les bons de commande" options={bcs.map((b) => ({ value: b.id, label: b.numero }))} /></div>
+        <div className="w-56"><SearchSelect value={bcId} onChange={setBcId} placeholder="Rechercher un BC…" emptyLabel="Tous les bons de commande" options={bcs.map((b) => ({ value: b.id, label: b.numero }))} /></div>
         <div className="w-40"><Select value={mois} onChange={(e) => setMois(e.target.value)} placeholder="Tous les mois" options={MOIS.slice(1).map((m, i) => ({ value: String(i + 1), label: m }))} /></div>
         <div className="w-48"><Select value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Toutes régions (sites)" options={regionOptions} /></div>
         <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">

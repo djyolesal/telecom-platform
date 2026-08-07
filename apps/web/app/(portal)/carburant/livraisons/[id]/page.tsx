@@ -12,6 +12,7 @@ import { Loading, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Field, Input, Select } from '@/components/shared/Form';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -126,9 +127,9 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
               {lignes.map((l, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <div className="flex-1">
-                    <Select value={l.siteId} onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, siteId: e.target.value } : x))}
-                      placeholder="— Choisir un site —"
-                      options={sites.map((s) => ({ value: s.id, label: s.nom }))} />
+                    <SearchSelect value={l.siteId} onChange={(v) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, siteId: v } : x))}
+                      placeholder="Rechercher un site (nom ou code)…"
+                      options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
                   </div>
                   <div className="w-28"><Input type="number" value={l.volume} placeholder="L" onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, volume: e.target.value } : x))} /></div>
                   <button type="button" onClick={() => setLignes((arr) => arr.filter((_, j) => j !== i))} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
@@ -374,7 +375,7 @@ function ClotureModal({ bl, reste, onClose }: { bl: BL; reste: number; onClose: 
           </Field>
           {num(report) > TOL && (
             <Field label="Chargement qui reprend ce reste *">
-              <Select value={reportSurBlId} onChange={(e) => setReportSurBlId(e.target.value)} placeholder="Choisir un chargement"
+              <SearchSelect value={reportSurBlId} onChange={setReportSurBlId} placeholder="Rechercher un chargement (N° BL ou camion)…"
                 options={cibles.map((c) => ({ value: c.id, label: `${c.numeroBL} · ${c.immatriculation}` }))} />
             </Field>
           )}
