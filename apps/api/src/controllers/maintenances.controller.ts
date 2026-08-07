@@ -206,22 +206,37 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
 
     if (isRestreint(perimetreListe)) where.site = { ...(where.site as object ?? {}), ...perimetreListe };
 
+    const include = {
+      ...techInclude,
+      site: { select: { nom: true, code: true, region: true } },
+      prestataire: { select: { id: true, nom: true } },
+      _count: { select: { photos: true } },
+    };
     const { data, meta } = await paginate(
       prisma.maintenance,
-      {
-        where,
-        orderBy: { datePlanifiee: 'desc' },
-        include: {
-          ...techInclude,
-          site: { select: { nom: true, code: true, region: true } },
-          prestataire: { select: { id: true, nom: true } },
-          _count: { select: { photos: true } },
-        },
-      },
+      { where, orderBy: { datePlanifiee: 'desc' }, include },
       { page: parseInt(page), limit: parseInt(limit) }
     );
 
-    res.json({ success: true, data, meta });
+    // Les maintenances EN COURS / SUSPENDUES du technicien sont ÉPINGLÉES en
+    // tête de première page : triée par date planifiée, une préventive démarrée
+    // il y a longtemps sortait de la page — le verrou « une seule maintenance
+    // en cours » la voyait, le technicien non (« j'ai une maintenance en cours
+    // mais je ne vois rien »). Le cache hors-ligne mobile en profite aussi.
+    let lignes = data as unknown[];
+    if (req.user!.role === 'TECHNICIEN' && !statut && !search && !site_id && parseInt(page) === 1) {
+      const miennes = await prisma.maintenance.findMany({
+        where: { technicienId: req.user!.id, statut: { in: ['EN_COURS', 'SUSPENDUE'] } },
+        orderBy: { dateDebut: 'desc' },
+        include,
+      });
+      if (miennes.length) {
+        const epinglees = new Set(miennes.map((m) => m.id));
+        lignes = [...miennes, ...lignes.filter((m) => !epinglees.has((m as { id: string }).id))];
+      }
+    }
+
+    res.json({ success: true, data: lignes, meta });
   } catch (err) { next(err); }
 }
 
@@ -453,10 +468,17 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
     const technicienId = existing.technicienId ?? req.user!.id;
     const dejaEnCours = await prisma.maintenance.findFirst({
       where: { statut: 'EN_COURS', technicienId, id: { not: existing.id } },
-      select: { id: true },
+      select: { id: true, reference: true, equipement: true, site: { select: { nom: true, code: true } } },
     });
     if (dejaEnCours) {
-      throw new AppError('Vous avez déjà une maintenance en cours. Clôturez-la avant d\'en démarrer une autre.', 409);
+      // Nommer la maintenance bloquante : sans référence ni site, le technicien
+      // ne sait pas quoi clôturer (elle est désormais épinglée en tête de liste).
+      const quoi = [dejaEnCours.reference, dejaEnCours.site?.nom ?? dejaEnCours.site?.code, dejaEnCours.equipement]
+        .filter(Boolean).join(' · ');
+      throw new AppError(
+        `Vous avez déjà une maintenance en cours${quoi ? ` : ${quoi}` : ''}. Clôturez-la avant d'en démarrer une autre (elle apparaît en tête de votre liste Maintenances).`,
+        409
+      );
     }
 
     // Tout ticket doit être DÉMARRÉ sur le site. Pour un DÉPLACEMENT, la dépose se
