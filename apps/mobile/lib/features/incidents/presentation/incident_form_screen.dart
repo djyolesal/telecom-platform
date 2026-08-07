@@ -5,6 +5,7 @@ import '../../../core/constants/enums.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/site_picker.dart';
 import '../data/incident_repository.dart';
+import '../../../core/theme/app_theme.dart';
 
 class IncidentFormScreen extends StatefulWidget {
   final String? initialSiteId;
@@ -69,7 +70,7 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: paddingEcran(context),
           children: [
             SitePicker(initialSiteId: _siteId, onChanged: (v) => _siteId = v),
             const SizedBox(height: 14),

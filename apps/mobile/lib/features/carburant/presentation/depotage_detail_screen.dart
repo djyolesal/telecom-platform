@@ -4,6 +4,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/depotage_model.dart';
 import '../data/depotage_repository.dart';
+import '../../../core/theme/app_theme.dart';
 
 class DepotageDetailScreen extends StatefulWidget {
   final String id;
@@ -47,7 +48,7 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
           }
           final d = snap.data!;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: paddingEcran(context),
             children: [
               _card('Livraison', [
                 if (d.reference != null) _row('Référence', d.reference!),

@@ -167,7 +167,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
           final resolu = inc.statut == 'RESOLU' || inc.statut == 'CLOS';
           final demarre = inc.dateIntervention != null && inc.statut == 'EN_COURS';
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: paddingEcran(context),
             children: [
               Row(
                 children: [

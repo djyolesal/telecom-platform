@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+/// Marge standard d'un écran défilant : 16 sur les côtés, plus la hauteur de
+/// la barre système en bas (navigation gestuelle) — sans elle, le dernier
+/// élément de la liste (souvent le bouton d'action) finit sous la barre.
+EdgeInsets paddingEcran(BuildContext context) =>
+    EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom);
+
 /// Thème de l'application — couleurs alignées sur le portail web.
 class AppColors {
   AppColors._();

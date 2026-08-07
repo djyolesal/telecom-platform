@@ -9,6 +9,7 @@ import '../../sites/data/site_model.dart';
 import '../../sites/data/site_repository.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
+import '../../../core/theme/app_theme.dart';
 
 const _natureOptions = [
   ('ENTRETIEN', 'Entretien (tâche contractuelle)'),
@@ -191,7 +192,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: paddingEcran(context),
           children: [
             DropdownButtonFormField<String>(
               initialValue: _nature,

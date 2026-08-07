@@ -6,6 +6,7 @@ import '../../../core/errors/exceptions.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../data/depotage_model.dart';
 import '../data/bon_livraison_repository.dart';
+import '../../../core/theme/app_theme.dart';
 
 const _moisLabels = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -213,7 +214,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
           return Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: paddingEcran(context),
               children: [
                 OutlinedButton.icon(
                   onPressed: _analysing ? null : _scannerBl,

@@ -17,6 +17,7 @@ import '../../../core/widgets/photo_gallery.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
+import '../../../core/theme/app_theme.dart';
 
 
 class MaintenanceDetailScreen extends StatefulWidget {
@@ -332,7 +333,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           if (snap.hasError || !snap.hasData) return ErrorView(message: 'Indisponible', onRetry: _reload);
           final m = snap.data!;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: paddingEcran(context),
             children: [
               if (m.reference != null)
                 Text(m.reference!, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600, letterSpacing: 0.5)),

@@ -5,6 +5,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/releve_model.dart';
 import '../data/releve_repository.dart';
+import '../../../core/theme/app_theme.dart';
 
 class ReleveDetailScreen extends StatefulWidget {
   final String id;
@@ -40,7 +41,7 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
           }
           final r = snap.data!;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: paddingEcran(context),
             children: [
               _card('Relevé', [
                 _row('Site', r.siteNom ?? '—'),

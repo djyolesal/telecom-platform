@@ -15,6 +15,7 @@ import '../../../core/widgets/site_picker.dart';
 import '../data/depotage_model.dart';
 import '../data/depotage_repository.dart';
 import '../data/depotage_draft.dart';
+import '../../../core/theme/app_theme.dart';
 
 /// Seuil d'écart de livraison (%) au-delà duquel une photo de preuve est exigée.
 /// Aligné sur le réglage serveur `carburant.seuilEcartLivraisonPct` (défaut 5).
@@ -415,9 +416,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          // Marge basse large : le bouton « Enregistrer » en fin de liste doit
-          // rester atteignable au-dessus de la barre système (navigation gestuelle).
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom),
+          padding: paddingEcran(context),
           children: [
             SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
             const SizedBox(height: 14),

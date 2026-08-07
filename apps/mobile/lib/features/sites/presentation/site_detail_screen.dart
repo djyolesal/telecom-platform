@@ -74,7 +74,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
           }
           final s = snap.data!;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: paddingEcran(context),
             children: [
               Text(s.nom, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.brand)),
               Text('${s.region}${s.ville != null ? ' · ${s.ville}' : ''}', style: TextStyle(color: Colors.grey.shade600)),

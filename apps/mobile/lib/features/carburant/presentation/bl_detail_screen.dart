@@ -6,6 +6,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/depotage_model.dart';
 import '../data/bon_livraison_repository.dart';
+import '../../../core/theme/app_theme.dart';
 
 const _moisLabels = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -79,7 +80,7 @@ class _BlDetailScreenState extends State<BlDetailScreen> {
           return RefreshIndicator(
             onRefresh: () async => setState(_charger),
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: paddingEcran(context),
               children: [
                 _Entete(bl: bl),
                 const SizedBox(height: 16),
