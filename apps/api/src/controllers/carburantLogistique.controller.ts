@@ -1,7 +1,7 @@
 import { publicFileUrl, uploadBuffer, cleMinioValide } from '../services/storage.service';
 import { analyserBonCommandePdf as analyserBcPdf } from '../services/bcPdf.service';
 import { analyserBonLivraisonDocument as analyserBlDoc } from '../services/blPdf.service';
-import { syncStatutBonLivraison } from './depotages.controller';
+import { syncStatutBonLivraison, syncLigneLivraison, statutLigneAttendu } from './depotages.controller';
 import { Request, Response, NextFunction } from 'express';
 import { assertSiteInPerimetre } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
@@ -368,12 +368,21 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
     await assertTransporteurAccess(req, bl.transporteurId);
 
-    // Écart prévu (plan) vs livré (dépotages réels) par ligne.
+    // Écart prévu (plan) vs livré (dépotages réels) par ligne. Le statut est
+    // RECALCULÉ à la lecture : si un recalcul post-dépotage a été manqué par le
+    // passé, le plan affiché ne doit pas mentir (ligne « PREVU » avec des
+    // dépotages dessus) — et la ligne est réparée en base au passage.
+    const seuilLigne = getNum('carburant.seuilLivraisonMinPct', 5);
     const lignes = bl.lignes.map((l) => {
       const livre = l.depotages.reduce((s, d) => s + n(d.volumeLitres), 0);
       const prevu = n(l.volumePrevuLitres);
-      return { ...l, volumeLivreReel: livre, ecart: livre - prevu };
+      const statut = l.statut === 'ANNULE' ? l.statut : statutLigneAttendu(prevu, livre, seuilLigne);
+      return { ...l, statut, volumeLivreReel: livre, ecart: livre - prevu };
     });
+    const desynchronisees = bl.lignes.filter((l, i) => lignes[i].statut !== l.statut);
+    for (const l of desynchronisees) {
+      await syncLigneLivraison(l.id).catch(() => {/* best effort : la réponse est déjà juste */});
+    }
     const sommeLignes = lignes.reduce((s, l) => s + n(l.volumePrevuLitres), 0);
 
     // Reste en citerne et sa ventilation : le camion n'est soldé que si le reste

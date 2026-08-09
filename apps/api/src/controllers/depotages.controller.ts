@@ -134,30 +134,36 @@ async function reconcileDepotage(opts: {
  * reste comptabilisé par le rapport des manquants (calcul par volume, indépendant
  * du statut). En deçà du seuil (goutte / jauge erronée), la ligne reste PREVU.
  */
-async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
+/**
+ * Trois états : au-delà de (100 − seuil) % du prévu → LIVRE (complet, tolérance) ;
+ * au-dessus du seuil mais en-deçà → PARTIEL (reste proposé au mobile pour un 2e
+ * passage) ; livraison négligeable → PREVU. Le manquant (prévu − livré) reste
+ * comptabilisé par volume indépendamment du statut.
+ */
+export function statutLigneAttendu(prevu: number, livre: number, seuilPct: number): 'PREVU' | 'PARTIEL' | 'LIVRE' {
+  if (livre <= 0) return 'PREVU';
+  if (prevu <= 0 || livre >= prevu * (1 - seuilPct / 100)) return 'LIVRE';
+  if (livre >= prevu * (seuilPct / 100)) return 'PARTIEL';
+  return 'PREVU';
+}
+
+export async function syncLigneLivraison(
+  ligneLivraisonId: string | null | undefined,
+  db: Prisma.TransactionClient | typeof prisma = prisma
+) {
   if (!ligneLivraisonId) return;
-  const ligne = await prisma.ligneLivraison.findUnique({
+  const ligne = await db.ligneLivraison.findUnique({
     where: { id: ligneLivraisonId },
     include: { depotages: { select: { volumeLitres: true } } },
   });
   if (!ligne) return;
   const livre = ligne.depotages.reduce((s, d) => s + Number(d.volumeLitres), 0);
-  const prevu = Number(ligne.volumePrevuLitres);
-  const seuilPct = getNum('carburant.seuilLivraisonMinPct', 5);
-  // Trois états : au-delà de (100 − seuil) % du prévu → LIVRE (complet, tolérance) ;
-  // au-dessus du seuil mais en-deçà → PARTIEL (reste proposé au mobile pour un 2e
-  // passage) ; livraison négligeable → PREVU. Le manquant (prévu − livré) reste
-  // comptabilisé par volume indépendamment du statut.
-  let statut: 'PREVU' | 'PARTIEL' | 'LIVRE';
-  if (livre <= 0) statut = 'PREVU';
-  else if (prevu <= 0 || livre >= prevu * (1 - seuilPct / 100)) statut = 'LIVRE';
-  else if (livre >= prevu * (seuilPct / 100)) statut = 'PARTIEL';
-  else statut = 'PREVU';
-  await prisma.ligneLivraison.update({
+  const statut = statutLigneAttendu(Number(ligne.volumePrevuLitres), livre, getNum('carburant.seuilLivraisonMinPct', 5));
+  await db.ligneLivraison.update({
     where: { id: ligne.id },
     data: { volumeLivreLitres: livre, statut },
   });
-  await syncStatutBonLivraison(ligne.bonLivraisonId);
+  await syncStatutBonLivraison(ligne.bonLivraisonId, db);
 }
 
 /**
@@ -173,8 +179,11 @@ async function syncLigneLivraison(ligneLivraisonId: string | null | undefined) {
  * ANNULE n'est jamais posé ni levé ici : c'est une décision humaine, protégée
  * par ailleurs (motif obligatoire, refus si des dépotages existent).
  */
-export async function syncStatutBonLivraison(bonLivraisonId: string) {
-  const bl = await prisma.bonLivraison.findUnique({
+export async function syncStatutBonLivraison(
+  bonLivraisonId: string,
+  db: Prisma.TransactionClient | typeof prisma = prisma
+) {
+  const bl = await db.bonLivraison.findUnique({
     where: { id: bonLivraisonId },
     select: { id: true, statut: true, isBrouillon: true, lignes: { select: { statut: true } } },
   });
@@ -188,7 +197,7 @@ export async function syncStatutBonLivraison(bonLivraisonId: string) {
   else statut = 'CHARGE';
 
   if (statut !== bl.statut) {
-    await prisma.bonLivraison.update({ where: { id: bl.id }, data: { statut } });
+    await db.bonLivraison.update({ where: { id: bl.id }, data: { statut } });
   }
   return statut;
 }
@@ -269,7 +278,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // Sans ce contrôle, un technicien pouvait injecter un dépotage sur le site
     // d'un concurrent et corrompre sa réconciliation carburant.
     await assertSiteInPerimetre(req.user!.id, siteId);
-    const ligneLivraisonId = b.ligneLivraisonId ? String(b.ligneLivraisonId) : null;
+    let ligneLivraisonId = b.ligneLivraisonId ? String(b.ligneLivraisonId) : null;
 
     // Idempotence : le mobile envoie un UUID stable via le header Idempotency-Key,
     // réutilisé comme identifiant du dépotage. Un rejeu de la file (réponse perdue
@@ -285,6 +294,28 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       const ligne = await prisma.ligneLivraison.findUnique({ where: { id: ligneLivraisonId }, select: { siteId: true } });
       if (!ligne) throw new AppError('Ligne de livraison introuvable', 404);
       if (ligne.siteId !== siteId) throw new AppError('La ligne de plan ne correspond pas au site du dépotage', 400);
+    }
+
+    // RATTACHEMENT AUTOMATIQUE : un dépotage saisi hors-ligne arrive sans ligne
+    // (la liste des lignes n'est pas disponible sans réseau), et la ligne restait
+    // PREVU pour toujours — plan jamais soldé, manquant fantôme. Si UNE seule
+    // ligne ouverte existe pour ce site sur un chargement réel non clos, elle est
+    // la destination évidente ; plusieurs candidates → on ne devine pas.
+    let rattachementAuto = false;
+    if (!ligneLivraisonId) {
+      const ouvertes = await prisma.ligneLivraison.findMany({
+        where: {
+          siteId,
+          statut: { in: ['PREVU', 'PARTIEL'] },
+          bonLivraison: { statut: { not: 'ANNULE' }, isBrouillon: false, dateCloture: null },
+        },
+        select: { id: true, bonLivraison: { select: { numeroBL: true } } },
+        take: 2,
+      });
+      if (ouvertes.length === 1) {
+        ligneLivraisonId = ouvertes[0].id;
+        rattachementAuto = true;
+      }
     }
 
     // Preuve de présence : le dépotage engage plus de valeur qu'un incident, et
@@ -430,7 +461,11 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           gasoilAttenduLitres: recon.gasoilAttenduLitres,
           ecartConsoLitres: recon.ecartConsoLitres,
           ecartLivraisonLitres: recon.ecartLivraisonLitres,
-          analyseDepotage: [anomalieChauffeur, recon.analyseDepotage].filter(Boolean).join('\n') || null,
+          analyseDepotage: [
+            rattachementAuto ? 'Rattaché automatiquement à la seule ligne de plan ouverte du site (dépotage saisi sans ligne — probablement hors-ligne).' : null,
+            anomalieChauffeur,
+            recon.analyseDepotage,
+          ].filter(Boolean).join('\n') || null,
           heuresGE: { create: heuresGE.map((h) => ({ groupeId: h.groupeId, indexHeuresGE: h.indexHeuresGE })) },
         },
         include: { site: { select: { code: true, nom: true } } },
@@ -442,6 +477,12 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
         .map((p) => ({ entityType: 'depotage', entityId: dep.id, url: p.url ?? '', minioKey: p.key! }));
       if (photosData.length) await tx.photo.createMany({ data: photosData });
 
+      // Statut de la ligne de plan recalculé DANS la transaction : en post-commit
+      // « best effort », un échec laissait la ligne PREVU pour toujours (dépotage
+      // enregistré, plan jamais soldé). Atomique désormais — et un rollback est
+      // rejoué proprement par la sync mobile (idempotence par UUID, pas de doublon).
+      await syncLigneLivraison(dep.ligneLivraisonId, tx);
+
       return dep;
     });
 
@@ -449,7 +490,6 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // renvoyer 500 (sinon la sync mobile rejouerait et créerait un doublon).
     clearMemo(); // toujours : nouvelles données → invalide manquants/forecast (avant la sync, pour ne pas le sauter en cas d'échec)
     try {
-      await syncLigneLivraison(depotage.ligneLivraisonId);
       await auditLog(req.user!.id, 'CREATE', 'depotages', depotage.id, req.body, req);
       const firstPhotoKey = photosIn.find((p) => p && p.key)?.key;
       io.of('/supervision').emit('stock:updated', {
@@ -463,9 +503,8 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
         photoUrl: firstPhotoKey ? publicFileUrl(firstPhotoKey) : null,
       });
     } catch (e) {
-      // Pas de 500 (le dépotage est créé) ; on trace pour exploitation (ligne de plan
-      // potentiellement non resynchronisée jusqu'au prochain dépotage).
-      logger.error(`Post-commit dépotage ${depotage.id} : sync ligne/emit échoué`, e);
+      // Pas de 500 (le dépotage est créé) ; on trace pour exploitation.
+      logger.error(`Post-commit dépotage ${depotage.id} : audit/emit échoué`, e);
     }
 
     res.status(201).json({ success: true, data: depotage });
