@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/bloc/list_cubit.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/barre_recherche.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
@@ -22,18 +23,31 @@ class IncidentsListScreen extends StatelessWidget {
   }
 }
 
-class _IncidentsView extends StatelessWidget {
+class _IncidentsView extends StatefulWidget {
   const _IncidentsView();
+
+  @override
+  State<_IncidentsView> createState() => _IncidentsViewState();
+}
+
+class _IncidentsViewState extends State<_IncidentsView> {
+  String _query = '';
 
   void _reload(BuildContext context) {
     final repo = context.read<IncidentRepository>();
-    context.read<ListCubit<Incident>>().run(() => repo.getIncidents());
+    context.read<ListCubit<Incident>>().run(() => repo.getIncidents(search: _query));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Incidents')),
+      appBar: AppBar(
+        title: const Text('Incidents'),
+        bottom: BarreRecherche(
+          hint: 'Rechercher (référence, site, description)…',
+          onChanged: (q) { _query = q; _reload(context); },
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.critique,
         foregroundColor: Colors.white, // sinon libellé marine illisible sur fond rouge

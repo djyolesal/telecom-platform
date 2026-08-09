@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/bloc/list_cubit.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/barre_recherche.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/depotage_model.dart';
 import '../data/bon_livraison_repository.dart';
@@ -32,8 +33,15 @@ class BlListScreen extends StatelessWidget {
   }
 }
 
-class _BlListView extends StatelessWidget {
+class _BlListView extends StatefulWidget {
   const _BlListView();
+
+  @override
+  State<_BlListView> createState() => _BlListViewState();
+}
+
+class _BlListViewState extends State<_BlListView> {
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +52,10 @@ class _BlListView extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Mes chargements'),
         actions: [IconButton(onPressed: recharger, icon: const Icon(Icons.refresh))],
+        bottom: BarreRecherche(
+          hint: 'Rechercher (N° BL, camion)…',
+          onChanged: (q) => setState(() => _query = q),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
@@ -59,20 +71,26 @@ class _BlListView extends StatelessWidget {
           if (state.status == ResourceStatus.failure) {
             return ErrorView(message: state.error ?? 'Erreur', onRetry: recharger);
           }
-          if (state.items.isEmpty) {
-            return const EmptyView(
+          final q = _query.toLowerCase();
+          final items = q.isEmpty
+              ? state.items
+              : state.items
+                  .where((b) => b.numeroBL.toLowerCase().contains(q) || b.immatriculation.toLowerCase().contains(q))
+                  .toList();
+          if (items.isEmpty) {
+            return EmptyView(
               icon: Icons.local_shipping_outlined,
-              title: 'Aucun chargement',
-              hint: 'Vos bons de livraison apparaîtront ici.',
+              title: q.isEmpty ? 'Aucun chargement' : 'Aucun résultat',
+              hint: q.isEmpty ? 'Vos bons de livraison apparaîtront ici.' : 'Aucun chargement ne correspond à « $_query ».',
             );
           }
           return RefreshIndicator(
             onRefresh: () async => recharger(),
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
-              itemCount: state.items.length,
+              itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, i) => _CarteBl(bl: state.items[i]),
+              itemBuilder: (context, i) => _CarteBl(bl: items[i]),
             ),
           );
         },

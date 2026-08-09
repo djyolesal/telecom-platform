@@ -88,11 +88,14 @@ class _SiteSearchSheetState extends State<_SiteSearchSheet> {
   @override
   Widget build(BuildContext context) {
     final q = _q.trim().toLowerCase();
+    // Le CODE site fait partie de la recherche : les techniciens le connaissent
+    // souvent mieux que le libellé exact (« MARI1-6 » plutôt qu'« Agomeseva »).
     final filtered = q.isEmpty
         ? widget.sites
         : widget.sites
             .where((s) =>
                 s.nom.toLowerCase().contains(q) ||
+                s.code.toLowerCase().contains(q) ||
                 s.region.toLowerCase().contains(q))
             .toList();
 
@@ -109,7 +112,7 @@ class _SiteSearchSheetState extends State<_SiteSearchSheet> {
               child: TextField(
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Rechercher un site (nom, région)…',
+                  hintText: 'Rechercher un site (nom, code, région)…',
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
                   isDense: true,
@@ -128,7 +131,7 @@ class _SiteSearchSheetState extends State<_SiteSearchSheet> {
                         final s = filtered[i];
                         return ListTile(
                           title: Text(s.nom, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text(s.region),
+                          subtitle: Text('${s.code} · ${s.region}'),
                           onTap: () => Navigator.pop(context, s),
                         );
                       },

@@ -11,13 +11,14 @@ class IncidentRepository {
 
   IncidentRepository(this._client, this._network, this._sync);
 
-  Future<List<Incident>> getIncidents({String? statut, String? severite}) async {
+  Future<List<Incident>> getIncidents({String? statut, String? severite, String? search}) async {
     if (!await _network.isConnected) return [];
     return _client.request(
       (dio) => dio.get('/incidents', queryParameters: {
         'limit': 50,
         if (statut != null && statut.isNotEmpty) 'statut': statut,
         if (severite != null && severite.isNotEmpty) 'severite': severite,
+        if (search != null && search.isNotEmpty) 'search': search,
       }),
       (data) => (data['data'] as List).map((e) => Incident.fromJson(e as Map<String, dynamic>)).toList(),
     );

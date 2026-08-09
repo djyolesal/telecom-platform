@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +5,7 @@ import '../../../core/bloc/list_cubit.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/barre_recherche.dart';
 import '../../../core/widgets/gps_refine_sheet.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
@@ -35,26 +35,7 @@ class _MaintenanceView extends StatefulWidget {
 }
 
 class _MaintenanceViewState extends State<_MaintenanceView> {
-  final _searchCtrl = TextEditingController();
-  Timer? _debounce;
   String _query = '';
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onSearchChanged(String v) {
-    setState(() {}); // rafraîchit l'icône d'effacement
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () {
-      if (!mounted) return;
-      _query = v.trim();
-      _reload(context);
-    });
-  }
 
   Color _statutColor(String s) {
     switch (s) {
@@ -182,30 +163,9 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Maintenances'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: _onSearchChanged,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Rechercher (site, équipement)…',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchCtrl.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () { _searchCtrl.clear(); _query = ''; _reload(context); setState(() {}); },
-                      )
-                    : null,
-                isDense: true,
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-          ),
+        bottom: BarreRecherche(
+          hint: 'Rechercher (site, équipement)…',
+          onChanged: (q) { _query = q; _reload(context); },
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
