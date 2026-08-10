@@ -171,10 +171,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               if (v == 'logout') context.read<AuthCubit>().logout();
                               if (v == 'biometric') _toggleBiometric();
                             },
-                            itemBuilder: (_) => [
-                              const PopupMenuItem(value: 'biometric', child: Text('Activer/désactiver biométrie')),
-                              const PopupMenuItem(value: 'logout', child: Text('Déconnexion')),
-                            ],
+                            // Construit à l'OUVERTURE du menu : la coche reflète
+                            // l'état réel (« activer/désactiver » ne disait pas
+                            // où on en était). Masquée si l'appareil n'a pas de
+                            // biométrie — le geste n'aurait aucun effet.
+                            itemBuilder: (_) {
+                              final auth = context.read<AuthCubit>().state;
+                              return [
+                                if (auth.biometricAvailable)
+                                  CheckedPopupMenuItem(
+                                    value: 'biometric',
+                                    checked: auth.biometricEnabled,
+                                    child: const Text('Biométrie au déverrouillage'),
+                                  ),
+                                const PopupMenuItem(value: 'logout', child: Text('Déconnexion')),
+                              ];
+                            },
                           ),
                         ],
                       ),
