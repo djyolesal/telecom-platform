@@ -74,6 +74,10 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'maintenance.seuilEcartGasoilPct', label: 'Tolérance écart gasoil', groupe: 'Maintenance', unite: '%', defaut: env.SEUIL_ECART_GASOIL_PCT },
     { key: 'maintenance.minPhotosMouvement', label: 'Photos min. mouvement d’actif', groupe: 'Maintenance', unite: 'photos', defaut: 2 },
     { key: 'ge.intervalleVidangeHeures', label: 'Intervalle vidange GE', groupe: 'Maintenance', unite: 'h', defaut: 250 },
+    // Interrupteur du planning automatique : 1 = les préventives contractuelles
+    // sont générées le 1er du mois ; 0 = planification manuelle uniquement
+    // (utile pendant une renégociation de contrats ou une reprise de données).
+    { key: 'planning.autoActif', label: 'Planning préventif automatique (1 = actif, 0 = coupé)', groupe: 'Maintenance', unite: '0/1', defaut: 1 },
     // Carburant — stock
     { key: 'ge.seuilCritiqueLitres', label: 'Stock critique', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilCritiqueLitres },
     { key: 'ge.seuilFaibleLitres', label: 'Stock faible', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilFaibleLitres },
