@@ -22,8 +22,12 @@ class Depotage {
     this.photoCount = 0,
   });
 
-  static double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
-  static double? _dn(dynamic v) => v == null ? null : (v is num ? v.toDouble() : double.tryParse(v.toString()));
+  static double _d(dynamic v) => v == null
+      ? 0
+      : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
+  static double? _dn(dynamic v) => v == null
+      ? null
+      : (v is num ? v.toDouble() : double.tryParse(v.toString()));
 
   factory Depotage.fromJson(Map<String, dynamic> j) {
     final site = j['site'] as Map<String, dynamic>?;
@@ -113,9 +117,16 @@ class DepotageDetail {
       observations: j['observations'] as String?,
       nomChauffeur: j['nomChauffeur'] as String?,
       nomAgentSecurite: j['nomAgentSecurite'] as String?,
-      technicienNom: tech == null ? null : '${tech['prenom'] ?? ''} ${tech['nom'] ?? ''}'.trim(),
-      heuresGE: heures.map((e) => DepotageHeureGE.fromJson(e as Map<String, dynamic>)).toList(),
-      photoUrls: photos.map((e) => (e as Map<String, dynamic>)['url'] as String?).whereType<String>().toList(),
+      technicienNom: tech == null
+          ? null
+          : '${tech['prenom'] ?? ''} ${tech['nom'] ?? ''}'.trim(),
+      heuresGE: heures
+          .map((e) => DepotageHeureGE.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      photoUrls: photos
+          .map((e) => (e as Map<String, dynamic>)['url'] as String?)
+          .whereType<String>()
+          .toList(),
     );
   }
 }
@@ -127,7 +138,11 @@ class DepotageHeureGE {
   final double? puissanceKva;
   final String? statut;
 
-  const DepotageHeureGE({required this.indexHeuresGE, this.numero, this.puissanceKva, this.statut});
+  const DepotageHeureGE(
+      {required this.indexHeuresGE,
+      this.numero,
+      this.puissanceKva,
+      this.statut});
 
   factory DepotageHeureGE.fromJson(Map<String, dynamic> j) {
     final g = j['groupe'] as Map<String, dynamic>?;
@@ -147,7 +162,11 @@ class GroupeGE {
   final double puissanceKva;
   final String statut;
 
-  const GroupeGE({required this.id, required this.numero, required this.puissanceKva, required this.statut});
+  const GroupeGE(
+      {required this.id,
+      required this.numero,
+      required this.puissanceKva,
+      required this.statut});
 
   factory GroupeGE.fromJson(Map<String, dynamic> j) => GroupeGE(
         id: j['id'] as String,
@@ -165,7 +184,12 @@ class BonCommandeLite {
   final int trimestre;
   final List<int> mois; // mois disponibles (volumes prévus)
 
-  const BonCommandeLite({required this.id, required this.numero, required this.annee, required this.trimestre, required this.mois});
+  const BonCommandeLite(
+      {required this.id,
+      required this.numero,
+      required this.annee,
+      required this.trimestre,
+      required this.mois});
 
   factory BonCommandeLite.fromJson(Map<String, dynamic> j) {
     final vols = (j['volumesMensuels'] as List?) ?? const [];
@@ -200,7 +224,8 @@ class PlanLigne {
     this.dateChargement,
   });
 
-  double get restant => (volumePrevuLitres - (volumeLivreLitres ?? 0)).clamp(0, double.infinity);
+  double get restant =>
+      (volumePrevuLitres - (volumeLivreLitres ?? 0)).clamp(0, double.infinity);
 
   factory PlanLigne.fromJson(Map<String, dynamic> j) {
     final bl = j['bonLivraison'] as Map<String, dynamic>?;
@@ -211,7 +236,8 @@ class PlanLigne {
       statut: j['statut'] as String? ?? 'PREVU',
       numeroBL: bl?['numeroBL'] as String?,
       immatriculation: bl?['immatriculation'] as String?,
-      dateChargement: DateTime.tryParse(bl?['dateChargement']?.toString() ?? ''),
+      dateChargement:
+          DateTime.tryParse(bl?['dateChargement']?.toString() ?? ''),
     );
   }
 }
@@ -247,9 +273,12 @@ class BonLivraisonLite {
         annee: (j['annee'] as num?)?.toInt() ?? 0,
         immatriculation: j['immatriculation'] as String? ?? '',
         volumeChargeLitres: Depotage._d(j['volumeChargeLitres']),
-        dateChargement: DateTime.tryParse(j['dateChargement']?.toString() ?? ''),
+        dateChargement:
+            DateTime.tryParse(j['dateChargement']?.toString() ?? ''),
         statut: j['statut'] as String? ?? 'PLANIFIE',
-        nbSites: ((j['lignes'] as List?)?.length) ?? (j['_count']?['lignes'] as num?)?.toInt() ?? 0,
+        nbSites: ((j['lignes'] as List?)?.length) ??
+            (j['_count']?['lignes'] as num?)?.toInt() ??
+            0,
       );
 }
 
@@ -290,7 +319,8 @@ class LignePlanBL {
     this.receptions = const [],
   });
 
-  double get restant => (volumePrevuLitres - volumeLivreReel).clamp(0, double.infinity);
+  double get restant =>
+      (volumePrevuLitres - volumeLivreReel).clamp(0, double.infinity);
 
   /// Un itinéraire n'est proposable que si le site est géolocalisé.
   bool get aItineraire => latitude != null && longitude != null;
@@ -326,6 +356,7 @@ class BonLivraisonDetail {
   final String? bcNumero;
   final List<LignePlanBL> lignes;
   final double sommeLignes;
+
   /// Chargement soldé : le reste en citerne a été ventilé (retour dépôt, perte,
   /// report). Sans cette information, le chauffeur voyait « reste à livrer »
   /// indéfiniment sur un camion déjà rentré au dépôt.
@@ -351,16 +382,19 @@ class BonLivraisonDetail {
   /// Volume réellement déposé sur l'ensemble des sites du plan.
   double get totalLivre => lignes.fold(0, (s, l) => s + l.volumeLivreReel);
 
-  factory BonLivraisonDetail.fromJson(Map<String, dynamic> j) => BonLivraisonDetail(
+  factory BonLivraisonDetail.fromJson(Map<String, dynamic> j) =>
+      BonLivraisonDetail(
         id: j['id'] as String,
         numeroBL: j['numeroBL'] as String? ?? '',
         mois: (j['mois'] as num?)?.toInt() ?? 0,
         annee: (j['annee'] as num?)?.toInt() ?? 0,
         immatriculation: j['immatriculation'] as String? ?? '',
         volumeChargeLitres: Depotage._d(j['volumeChargeLitres']),
-        dateChargement: DateTime.tryParse(j['dateChargement']?.toString() ?? ''),
+        dateChargement:
+            DateTime.tryParse(j['dateChargement']?.toString() ?? ''),
         statut: j['statut'] as String? ?? 'PLANIFIE',
-        bcNumero: (j['bonCommande'] as Map<String, dynamic>?)?['numero'] as String?,
+        bcNumero:
+            (j['bonCommande'] as Map<String, dynamic>?)?['numero'] as String?,
         lignes: ((j['lignes'] as List?) ?? const [])
             .map((e) => LignePlanBL.fromJson(e as Map<String, dynamic>))
             .toList(),

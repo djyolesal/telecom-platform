@@ -39,7 +39,8 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _controller.start();
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       _controller.stop();
     }
   }
@@ -53,9 +54,9 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_handling) return;
-    final raw = capture.barcodes
-        .map((b) => b.rawValue)
-        .firstWhere((v) => v != null && v.startsWith('EMOPS:'), orElse: () => null);
+    final raw = capture.barcodes.map((b) => b.rawValue).firstWhere(
+        (v) => v != null && v.startsWith('EMOPS:'),
+        orElse: () => null);
     if (raw == null) return;
 
     setState(() {
@@ -79,7 +80,9 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
         return;
       }
       if (type == 'GE') {
-        final siteId = await context.read<MaintenanceRepository>().resolveActifSiteId('GE', id);
+        final siteId = await context
+            .read<MaintenanceRepository>()
+            .resolveActifSiteId('GE', id);
         if (!mounted) return;
         if (siteId == null) {
           _rejeter('Ce GE n’est rattaché à aucun site (au dépôt).');
@@ -128,7 +131,8 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
             width: 240,
             height: 240,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 3),
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.9), width: 3),
               borderRadius: BorderRadius.circular(20),
             ),
           ),
@@ -144,7 +148,10 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                     child: Padding(
                       padding: EdgeInsets.all(14),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
                         SizedBox(width: 12),
                         Text('Ouverture…'),
                       ]),
@@ -156,12 +163,18 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                     child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Row(children: [
-                        const Icon(Icons.error_outline, color: Colors.white, size: 18),
+                        const Icon(Icons.error_outline,
+                            color: Colors.white, size: 18),
                         const SizedBox(width: 10),
-                        Expanded(child: Text(_erreur!, style: const TextStyle(color: Colors.white))),
+                        Expanded(
+                            child: Text(_erreur!,
+                                style: const TextStyle(color: Colors.white))),
                         TextButton(
                           onPressed: () => setState(() => _erreur = null),
-                          child: const Text('Réessayer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          child: const Text('Réessayer',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold)),
                         ),
                       ]),
                     ),

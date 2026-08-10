@@ -35,9 +35,13 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
       body: FutureBuilder<ReleveDetail>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) return const LoadingView();
+          if (snap.connectionState != ConnectionState.done) {
+            return const LoadingView();
+          }
           if (snap.hasError || !snap.hasData) {
-            return ErrorView(message: 'Détail indisponible (connexion requise)', onRetry: () => setState(_load));
+            return ErrorView(
+                message: 'Détail indisponible (connexion requise)',
+                onRetry: () => setState(_load));
           }
           final r = snap.data!;
           return ListView(
@@ -46,29 +50,45 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
               _card('Relevé', [
                 _row('Site', r.siteNom ?? '—'),
                 _row('Date', fmtDateTime(r.dateReleve)),
-                if (r.provenance != null && r.provenance!.isNotEmpty) _row('Provenance', r.provenance!),
+                if (r.provenance != null && r.provenance!.isNotEmpty)
+                  _row('Provenance', r.provenance!),
                 _row('Source', r.source),
-                if (r.indexCompteur != null) _row('Index compteur', fmtNum(r.indexCompteur!)),
-                if (r.consommationKwh != null) _row('Consommation', '${fmtNum(r.consommationKwh!)} kWh'),
-                if (r.volumeGasoilLitres != null) _row('Niveau cuve', '${fmtNum(r.volumeGasoilLitres!)} L'),
-                if (r.gasoilConsommeLitres != null) _row('Gasoil consommé', '${fmtNum(r.gasoilConsommeLitres!)} L'),
-                if (r.heuresFonctGE != null) _row('Heures GE', '${fmtNum(r.heuresFonctGE!)} h'),
-                if (r.groupeNumero != null) _row('Groupe électrogène', 'GE n°${r.groupeNumero}'),
-                if (r.puissanceKva != null) _row('Puissance solaire', '${fmtNum(r.puissanceKva!)} kVA'),
-                if (r.coutEstime != null) _row('Coût estimé', fmtFcfa(r.coutEstime)),
-                if (r.technicienNom != null && r.technicienNom!.isNotEmpty) _row('Technicien', r.technicienNom!),
+                if (r.indexCompteur != null)
+                  _row('Index compteur', fmtNum(r.indexCompteur!)),
+                if (r.consommationKwh != null)
+                  _row('Consommation', '${fmtNum(r.consommationKwh!)} kWh'),
+                if (r.volumeGasoilLitres != null)
+                  _row('Niveau cuve', '${fmtNum(r.volumeGasoilLitres!)} L'),
+                if (r.gasoilConsommeLitres != null)
+                  _row('Gasoil consommé',
+                      '${fmtNum(r.gasoilConsommeLitres!)} L'),
+                if (r.heuresFonctGE != null)
+                  _row('Heures GE', '${fmtNum(r.heuresFonctGE!)} h'),
+                if (r.groupeNumero != null)
+                  _row('Groupe électrogène', 'GE n°${r.groupeNumero}'),
+                if (r.puissanceKva != null)
+                  _row('Puissance solaire', '${fmtNum(r.puissanceKva!)} kVA'),
+                if (r.coutEstime != null)
+                  _row('Coût estimé', fmtFcfa(r.coutEstime)),
+                if (r.technicienNom != null && r.technicienNom!.isNotEmpty)
+                  _row('Technicien', r.technicienNom!),
               ]),
               if (r.observations != null && r.observations!.isNotEmpty)
-                _card('Observations', [Text(r.observations!, style: const TextStyle(fontSize: 14))]),
+                _card('Observations', [
+                  Text(r.observations!, style: const TextStyle(fontSize: 14))
+                ]),
               if (r.maintenanceId != null)
                 Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
                     leading: const Icon(Icons.build),
                     title: const Text('Maintenance d\'origine'),
-                    subtitle: Text([r.maintenanceType, r.maintenanceEquipement].where((e) => e != null && e.isNotEmpty).join(' · ')),
+                    subtitle: Text([r.maintenanceType, r.maintenanceEquipement]
+                        .where((e) => e != null && e.isNotEmpty)
+                        .join(' · ')),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push('/maintenance/${r.maintenanceId}'),
+                    onTap: () =>
+                        context.push('/maintenance/${r.maintenanceId}'),
                   ),
                 ),
             ],
@@ -98,8 +118,17 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(flex: 5, child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-            Expanded(flex: 4, child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
+            Expanded(
+                flex: 5,
+                child: Text(label,
+                    style:
+                        TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+            Expanded(
+                flex: 4,
+                child: Text(value,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w500, fontSize: 13))),
           ],
         ),
       );

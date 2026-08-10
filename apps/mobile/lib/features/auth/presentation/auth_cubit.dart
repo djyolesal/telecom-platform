@@ -4,7 +4,13 @@ import '../../../core/errors/exceptions.dart';
 import '../data/auth_repository.dart';
 import '../domain/user.dart';
 
-enum AuthStatus { unknown, authenticating, authenticated, unauthenticated, failure }
+enum AuthStatus {
+  unknown,
+  authenticating,
+  authenticated,
+  unauthenticated,
+  failure
+}
 
 class AuthState extends Equatable {
   final AuthStatus status;
@@ -38,7 +44,8 @@ class AuthState extends Equatable {
   }
 
   @override
-  List<Object?> get props => [status, user, message, biometricAvailable, biometricEnabled];
+  List<Object?> get props =>
+      [status, user, message, biometricAvailable, biometricEnabled];
 }
 
 class AuthCubit extends Cubit<AuthState> {
@@ -52,7 +59,10 @@ class AuthCubit extends Cubit<AuthState> {
     final hasSession = await _repo.hasSession;
 
     if (!hasSession) {
-      emit(state.copyWith(status: AuthStatus.unauthenticated, biometricAvailable: available, biometricEnabled: enabled));
+      emit(state.copyWith(
+          status: AuthStatus.unauthenticated,
+          biometricAvailable: available,
+          biometricEnabled: enabled));
       return;
     }
 
@@ -69,7 +79,9 @@ class AuthCubit extends Cubit<AuthState> {
     }
 
     emit(state.copyWith(
-      status: cached != null ? AuthStatus.authenticated : AuthStatus.unauthenticated,
+      status: cached != null
+          ? AuthStatus.authenticated
+          : AuthStatus.unauthenticated,
       user: cached,
       biometricAvailable: available,
       biometricEnabled: enabled,
@@ -82,14 +94,17 @@ class AuthCubit extends Cubit<AuthState> {
       final user = await _repo.login(email, password);
       emit(state.copyWith(status: AuthStatus.authenticated, user: user));
     } on UnauthorizedException {
-      emit(state.copyWith(status: AuthStatus.failure, message: 'Email ou mot de passe incorrect'));
+      emit(state.copyWith(
+          status: AuthStatus.failure,
+          message: 'Email ou mot de passe incorrect'));
     } on NetworkException {
       // Une PREMIÈRE connexion exige le serveur (vérification du mot de passe).
       // Le dire explicitement : le réflexe « je me déconnecte en partant » prive
       // du mode hors-ligne — la session locale doit rester ouverte.
       emit(state.copyWith(
         status: AuthStatus.failure,
-        message: 'Pas de connexion internet. La connexion par mot de passe exige le réseau — '
+        message:
+            'Pas de connexion internet. La connexion par mot de passe exige le réseau — '
             'restez connecté avant de partir en zone sans couverture : l\'application fonctionne alors hors-ligne.',
       ));
     } on ServerException catch (e) {
@@ -104,7 +119,9 @@ class AuthCubit extends Cubit<AuthState> {
       final user = state.user ?? await _repo.cachedUser();
       emit(state.copyWith(status: AuthStatus.authenticated, user: user));
     } else {
-      emit(state.copyWith(status: AuthStatus.failure, message: 'Échec de l\'authentification biométrique'));
+      emit(state.copyWith(
+          status: AuthStatus.failure,
+          message: 'Échec de l\'authentification biométrique'));
     }
   }
 

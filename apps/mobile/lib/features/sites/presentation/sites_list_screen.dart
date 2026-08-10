@@ -31,7 +31,9 @@ class _SitesViewState extends State<_SitesView> {
 
   void _reload() {
     final repo = context.read<SiteRepository>();
-    context.read<ListCubit<Site>>().run(() => repo.getSites(search: _search.text.trim()));
+    context
+        .read<ListCubit<Site>>()
+        .run(() => repo.getSites(search: _search.text.trim()));
   }
 
   @override
@@ -53,7 +55,8 @@ class _SitesViewState extends State<_SitesView> {
               decoration: InputDecoration(
                 hintText: 'Rechercher (nom, région)…',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(icon: const Icon(Icons.tune), onPressed: _reload),
+                suffixIcon: IconButton(
+                    icon: const Icon(Icons.tune), onPressed: _reload),
               ),
               onSubmitted: (_) => _reload(),
             ),
@@ -61,11 +64,16 @@ class _SitesViewState extends State<_SitesView> {
           Expanded(
             child: BlocBuilder<ListCubit<Site>, ListState<Site>>(
               builder: (context, state) {
-                if (state.status == ResourceStatus.loading) return const LoadingView();
-                if (state.status == ResourceStatus.failure) {
-                  return ErrorView(message: state.error ?? 'Erreur', onRetry: _reload);
+                if (state.status == ResourceStatus.loading) {
+                  return const LoadingView();
                 }
-                if (state.items.isEmpty) return const EmptyView(title: 'Aucun site');
+                if (state.status == ResourceStatus.failure) {
+                  return ErrorView(
+                      message: state.error ?? 'Erreur', onRetry: _reload);
+                }
+                if (state.items.isEmpty) {
+                  return const EmptyView(title: 'Aucun site');
+                }
                 return RefreshIndicator(
                   onRefresh: () async => _reload(),
                   child: ListView.separated(
@@ -75,13 +83,19 @@ class _SitesViewState extends State<_SitesView> {
                       final s = state.items[i];
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: AppColors.brand.withValues(alpha: 0.1),
-                          child: const Icon(Icons.cell_tower, color: AppColors.brand, size: 20),
+                          backgroundColor:
+                              AppColors.brand.withValues(alpha: 0.1),
+                          child: const Icon(Icons.cell_tower,
+                              color: AppColors.brand, size: 20),
                         ),
-                        title: Text(s.nom, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(s.nom,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text(s.region),
-                        trailing: Text('${s.puissanceGeKva.toStringAsFixed(0)} kVA',
-                            style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                        trailing: Text(
+                            '${s.puissanceGeKva.toStringAsFixed(0)} kVA',
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 12)),
                         onTap: () => context.push('/sites/${s.id}'),
                       );
                     },

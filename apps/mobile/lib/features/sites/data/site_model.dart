@@ -6,14 +6,16 @@ class LotAttribution {
   final String scope; // PASSIVE / ACTIVE / LES_DEUX
   final String prestataireNom;
   final String? prestataireTel;
-  const LotAttribution({required this.scope, required this.prestataireNom, this.prestataireTel});
+  const LotAttribution(
+      {required this.scope, required this.prestataireNom, this.prestataireTel});
 
   factory LotAttribution.fromJson(Map<String, dynamic> j) {
     final p = j['prestataire'] as Map<String, dynamic>?;
     return LotAttribution(
       scope: j['scope'] as String? ?? '',
       prestataireNom: p?['nom'] as String? ?? '—',
-      prestataireTel: (p?['contactTechnique'] ?? p?['contactCommercial']) as String?,
+      prestataireTel:
+          (p?['contactTechnique'] ?? p?['contactCommercial']) as String?,
     );
   }
 }
@@ -26,7 +28,12 @@ class TacheSite {
   final String categorie;
   final String frequenceLabel;
   final String statut; // JAMAIS / EN_RETARD / A_JOUR
-  const TacheSite({required this.key, required this.libelle, required this.categorie, required this.frequenceLabel, required this.statut});
+  const TacheSite(
+      {required this.key,
+      required this.libelle,
+      required this.categorie,
+      required this.frequenceLabel,
+      required this.statut});
 
   factory TacheSite.fromJson(Map<String, dynamic> j) => TacheSite(
         key: j['key'] as String,
@@ -89,8 +96,12 @@ class Site {
     this.telephoneSite,
   });
 
-  static double _toD(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
-  static double? _toDn(dynamic v) => v == null ? null : (v is num ? v.toDouble() : double.tryParse(v.toString()));
+  static double _toD(dynamic v) => v == null
+      ? 0
+      : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
+  static double? _toDn(dynamic v) => v == null
+      ? null
+      : (v is num ? v.toDouble() : double.tryParse(v.toString()));
 
   factory Site.fromJson(Map<String, dynamic> j) {
     final lot = j['lot'] as Map<String, dynamic>?;
@@ -108,7 +119,9 @@ class Site {
       longitude: _toDn(j['longitude']),
       lotCode: lot?['code'] as String?,
       lotNom: lot?['nom'] as String?,
-      attributions: assignments.map((a) => LotAttribution.fromJson(a as Map<String, dynamic>)).toList(),
+      attributions: assignments
+          .map((a) => LotAttribution.fromJson(a as Map<String, dynamic>))
+          .toList(),
       hasClimatiseur: j['hasClimatiseur'] == true,
       hasExtincteurs: j['hasExtincteurs'] == true,
       typePylone: j['typePylone'] as String?,

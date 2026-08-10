@@ -24,7 +24,8 @@ const double _seuilEcartLivraisonPct = 5;
 class DepotageFormScreen extends StatefulWidget {
   final String? initialSiteId;
   final String? initialLigneId;
-  const DepotageFormScreen({super.key, this.initialSiteId, this.initialLigneId});
+  const DepotageFormScreen(
+      {super.key, this.initialSiteId, this.initialLigneId});
 
   @override
   State<DepotageFormScreen> createState() => _DepotageFormScreenState();
@@ -76,14 +77,24 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     // Recalcule le volume dérivé (après − avant) + sauvegarde le brouillon.
     _stockAvant.addListener(_onFieldChanged);
     _stockApres.addListener(_onFieldChanged);
-    for (final c in [_volumeAnnonce, _fournisseur, _bon, _obs, _nomChauffeur, _nomAgent]) {
+    for (final c in [
+      _volumeAnnonce,
+      _fournisseur,
+      _bon,
+      _obs,
+      _nomChauffeur,
+      _nomAgent
+    ]) {
       c.addListener(_scheduleDraftSave);
     }
     // Propose de reprendre un brouillon (app tuée pendant la saisie).
     WidgetsBinding.instance.addPostFrameCallback((_) => _proposerBrouillon());
   }
 
-  void _onFieldChanged() { setState(() {}); _scheduleDraftSave(); }
+  void _onFieldChanged() {
+    setState(() {});
+    _scheduleDraftSave();
+  }
 
   Timer? _draftTimer;
   void _scheduleDraftSave() {
@@ -94,15 +105,28 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   Future<void> _saveDraft() async {
     if (!mounted || _saving) return;
     // Rien de significatif saisi → pas de brouillon (évite un faux « reprendre »).
-    final vide = _siteId == null && _photos.isEmpty && _stockAvant.text.isEmpty && _sigChauffeur == null;
+    final vide = _siteId == null &&
+        _photos.isEmpty &&
+        _stockAvant.text.isEmpty &&
+        _sigChauffeur == null;
     if (vide) return;
     await DepotageDraft.save({
-      'siteId': _siteId, 'ligneLivraisonId': _ligneLivraisonId, 'agentPresent': _agentPresent,
-      'stockAvant': _stockAvant.text, 'stockApres': _stockApres.text, 'volumeAnnonce': _volumeAnnonce.text,
-      'fournisseur': _fournisseur.text, 'bon': _bon.text, 'obs': _obs.text,
-      'nomChauffeur': _nomChauffeur.text, 'nomAgent': _nomAgent.text,
-      'sigChauffeur': _sigChauffeur, 'sigAgent': _sigAgent, 'sigTechnicien': _sigTechnicien,
-      'photos': _photos, 'geIndex': _geIndex.map((k, v) => MapEntry(k, v.text)),
+      'siteId': _siteId,
+      'ligneLivraisonId': _ligneLivraisonId,
+      'agentPresent': _agentPresent,
+      'stockAvant': _stockAvant.text,
+      'stockApres': _stockApres.text,
+      'volumeAnnonce': _volumeAnnonce.text,
+      'fournisseur': _fournisseur.text,
+      'bon': _bon.text,
+      'obs': _obs.text,
+      'nomChauffeur': _nomChauffeur.text,
+      'nomAgent': _nomAgent.text,
+      'sigChauffeur': _sigChauffeur,
+      'sigAgent': _sigAgent,
+      'sigTechnicien': _sigTechnicien,
+      'photos': _photos,
+      'geIndex': _geIndex.map((k, v) => MapEntry(k, v.text)),
     });
   }
 
@@ -116,10 +140,15 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Reprendre le dépotage en cours ?'),
-        content: const Text('Une saisie de dépotage non terminée a été retrouvée (jauges, photos, signatures). La reprendre ?'),
+        content: const Text(
+            'Une saisie de dépotage non terminée a été retrouvée (jauges, photos, signatures). La reprendre ?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Repartir de zéro')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reprendre')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Repartir de zéro')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Reprendre')),
         ],
       ),
     );
@@ -151,9 +180,13 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       _photos
         ..clear()
         ..addAll(((d['photos'] as List?) ?? const []).map((e) => e as String));
-      _pendingGeIndex = ((d['geIndex'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, v as String));
+      _pendingGeIndex = ((d['geIndex'] as Map?) ?? const {})
+          .map((k, v) => MapEntry(k as String, v as String));
     });
-    if (_siteId != null) _loadSiteData(_siteId!); // recharge plan/GE, puis applique _pendingGeIndex
+    if (_siteId != null) {
+      _loadSiteData(
+          _siteId!); // recharge plan/GE, puis applique _pendingGeIndex
+    }
   }
 
   Future<void> _onSiteChanged(String? siteId) async {
@@ -175,7 +208,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     final repo = context.read<DepotageRepository>();
     setState(() => _loadingLignes = true);
     try {
-      final results = await Future.wait([repo.getLignesLivraison(siteId), repo.getGroupes(siteId)]);
+      final results = await Future.wait(
+          [repo.getLignesLivraison(siteId), repo.getGroupes(siteId)]);
       if (!mounted) return;
       setState(() {
         _lignes = results[0] as List<PlanLigne>;
@@ -188,7 +222,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         _pendingGeIndex = {};
         // Pré-rattachement à la ligne planifiée choisie (bouton intelligent).
         final wanted = widget.initialLigneId;
-        if (wanted != null && _ligneLivraisonId == null && _lignes.any((x) => x.id == wanted)) {
+        if (wanted != null &&
+            _ligneLivraisonId == null &&
+            _lignes.any((x) => x.id == wanted)) {
           _ligneLivraisonId = wanted;
           final l = _lignes.firstWhere((x) => x.id == wanted);
           // Le volume ANNONCÉ n'est plus pré-rempli avec celui du PLAN : ce sont
@@ -210,13 +246,16 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   double? get _lignePrevue {
     if (_ligneLivraisonId == null) return null;
     for (final l in _lignes) {
-      if (l.id == _ligneLivraisonId) return l.restant > 0 ? l.restant : l.volumePrevuLitres;
+      if (l.id == _ligneLivraisonId) {
+        return l.restant > 0 ? l.restant : l.volumePrevuLitres;
+      }
     }
     return null;
   }
 
   void _selectLigne(String? ligneId) {
-    final l = ligneId == null ? null : _lignes.firstWhere((x) => x.id == ligneId);
+    final l =
+        ligneId == null ? null : _lignes.firstWhere((x) => x.id == ligneId);
     setState(() {
       _ligneLivraisonId = ligneId;
       if (l != null) {
@@ -232,7 +271,16 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     _draftTimer?.cancel();
     _stockAvant.removeListener(_onFieldChanged);
     _stockApres.removeListener(_onFieldChanged);
-    for (final c in [_stockAvant, _stockApres, _volumeAnnonce, _fournisseur, _bon, _obs, _nomChauffeur, _nomAgent]) {
+    for (final c in [
+      _stockAvant,
+      _stockApres,
+      _volumeAnnonce,
+      _fournisseur,
+      _bon,
+      _obs,
+      _nomChauffeur,
+      _nomAgent
+    ]) {
       c.dispose();
     }
     for (final c in _geIndex.values) {
@@ -241,7 +289,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     super.dispose();
   }
 
-  double? _num(TextEditingController c) => c.text.isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
+  double? _num(TextEditingController c) =>
+      c.text.isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
 
   /// Volume livré dérivé de la jauge (stock après − stock avant), ≥ 0.
   double? get _derivedVolume {
@@ -252,7 +301,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   }
 
   Future<void> _capturePhoto() async {
-    final img = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 2000);
+    final img = await _picker.pickImage(
+        source: ImageSource.camera, imageQuality: 70, maxWidth: 2000);
     if (img == null) return;
     final bytes = await img.readAsBytes();
     final ts = DateTime.now().microsecondsSinceEpoch;
@@ -292,7 +342,10 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             _agentPresent = value;
             // Passer à « Absent » efface la signature/le nom d'agent éventuels
             // (sinon agentPresent=false + signature d'agent = contradiction).
-            if (value == false) { _sigAgent = null; _nomAgent.clear(); }
+            if (value == false) {
+              _sigAgent = null;
+              _nomAgent.clear();
+            }
           });
           _scheduleDraftSave();
         },
@@ -308,30 +361,42 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   }
 
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
+    if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) {
+      return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     // Validation tripartite obligatoire (chauffeur + technicien ; agent optionnel).
     if (_sigChauffeur == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('Signature du chauffeur requise'), backgroundColor: Colors.red));
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Signature du chauffeur requise'),
+          backgroundColor: Colors.red));
       return;
     }
     if (_sigTechnicien == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('Votre signature (technicien) est requise'), backgroundColor: Colors.red));
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Votre signature (technicien) est requise'),
+          backgroundColor: Colors.red));
       return;
     }
     // Déclaration gardiennage obligatoire + signature de l'agent s'il est présent.
     if (_agentPresent == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('Indiquez si l\'agent de sécurité est présent sur le site'), backgroundColor: Colors.red));
+      messenger.showSnackBar(const SnackBar(
+          content:
+              Text('Indiquez si l\'agent de sécurité est présent sur le site'),
+          backgroundColor: Colors.red));
       return;
     }
     if (_agentPresent == true && _sigAgent == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('L\'agent est présent : sa signature est requise'), backgroundColor: Colors.red));
+      messenger.showSnackBar(const SnackBar(
+          content: Text('L\'agent est présent : sa signature est requise'),
+          backgroundColor: Colors.red));
       return;
     }
     // Preuve terrain : minimum de photos prises sur place.
     if (_photos.length < _kMinPhotos) {
       messenger.showSnackBar(SnackBar(
-        content: Text('Au moins $_kMinPhotos photos sont requises (${_photos.length} prise(s))'),
+        content: Text(
+            'Au moins $_kMinPhotos photos sont requises (${_photos.length} prise(s))'),
         backgroundColor: Colors.red,
       ));
       return;
@@ -343,7 +408,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       final ecartPct = ((vol - annonce).abs() / annonce) * 100;
       if (ecartPct > _seuilEcartLivraisonPct) {
         messenger.showSnackBar(SnackBar(
-          content: Text('Écart de livraison ${ecartPct.round()}% : ajoutez au moins une photo de preuve.'),
+          content: Text(
+              'Écart de livraison ${ecartPct.round()}% : ajoutez au moins une photo de preuve.'),
           backgroundColor: Colors.red,
         ));
         return;
@@ -357,7 +423,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       // Index d'heures saisis par GE → [{groupeId, indexHeuresGE}].
       final heuresGE = <Map<String, dynamic>>[
         for (final g in _groupes)
-          if (_num(_geIndex[g.id]!) != null) {'groupeId': g.id, 'indexHeuresGE': _num(_geIndex[g.id]!)},
+          if (_num(_geIndex[g.id]!) != null)
+            {'groupeId': g.id, 'indexHeuresGE': _num(_geIndex[g.id]!)},
       ];
       Future<SubmitResult> envoyer(bool confirmer) => repo.create(
             siteId: _siteId!,
@@ -396,14 +463,20 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
         }
         res = await envoyer(true);
       }
-      await DepotageDraft.clear(); // saisie envoyée (ou en file) → brouillon obsolète
+      await DepotageDraft
+          .clear(); // saisie envoyée (ou en file) → brouillon obsolète
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(
-        content: Text(res.isQueued ? 'Hors-ligne : dépotage mis en file de synchronisation' : 'Dépotage enregistré'),
+        content: Text(res.isQueued
+            ? 'Hors-ligne : dépotage mis en file de synchronisation'
+            : 'Dépotage enregistré'),
       ));
       router.pop();
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red));
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+            content: Text('Erreur : $e'), backgroundColor: Colors.red));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -434,7 +507,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                   prefixIcon: Icon(Icons.local_shipping),
                 ),
                 items: [
-                  const DropdownMenuItem<String>(value: null, child: Text('Hors plan (aucune)')),
+                  const DropdownMenuItem<String>(
+                      value: null, child: Text('Hors plan (aucune)')),
                   // Une ligne DÉJÀ SOLDÉE reste proposée : un même camion peut
                   // repasser sur le site dans la même tournée. Elle est
                   // étiquetée « 2e passage » pour qu'on la choisisse en
@@ -458,19 +532,28 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             // ── Jauge cuve : le volume livré est DÉRIVÉ (après − avant) ──
             TextFormField(
               controller: _stockAvant,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Stock avant dépotage (jauge, litres) *', prefixIcon: Icon(Icons.opacity)),
-              validator: (v) => _num(_stockAvant) == null ? 'Jauge avant requise' : null,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Stock avant dépotage (jauge, litres) *',
+                  prefixIcon: Icon(Icons.opacity)),
+              validator: (v) =>
+                  _num(_stockAvant) == null ? 'Jauge avant requise' : null,
             ),
             const SizedBox(height: 14),
             TextFormField(
               controller: _stockApres,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Stock après dépotage (jauge, litres) *', prefixIcon: Icon(Icons.water_drop)),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Stock après dépotage (jauge, litres) *',
+                  prefixIcon: Icon(Icons.water_drop)),
               validator: (v) {
                 final a = _num(_stockAvant), b = _num(_stockApres);
                 if (b == null) return 'Jauge après requise';
-                if (a != null && b < a) return 'La jauge après doit être ≥ jauge avant';
+                if (a != null && b < a) {
+                  return 'La jauge après doit être ≥ jauge avant';
+                }
                 return null;
               },
             ),
@@ -479,7 +562,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _volumeAnnonce,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: 'Volume annoncé par le chauffeur (litres) *',
                 prefixIcon: const Icon(Icons.receipt_long),
@@ -501,11 +585,19 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
               },
             ),
             const SizedBox(height: 14),
-            TextFormField(controller: _fournisseur, decoration: const InputDecoration(labelText: 'Fournisseur')),
+            TextFormField(
+                controller: _fournisseur,
+                decoration: const InputDecoration(labelText: 'Fournisseur')),
             const SizedBox(height: 14),
-            TextFormField(controller: _bon, decoration: const InputDecoration(labelText: 'N° bon de livraison')),
+            TextFormField(
+                controller: _bon,
+                decoration:
+                    const InputDecoration(labelText: 'N° bon de livraison')),
             const SizedBox(height: 14),
-            TextFormField(controller: _obs, maxLines: 2, decoration: const InputDecoration(labelText: 'Observations')),
+            TextFormField(
+                controller: _obs,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Observations')),
             const SizedBox(height: 20),
 
             // ── Relevé d'heures par GE (réconciliation conso) ──
@@ -513,16 +605,19 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
               const Divider(),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 6),
-                child: Text('Relevé heures groupes électrogènes', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: Text('Relevé heures groupes électrogènes',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
               ),
               ..._groupes.map((g) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: TextFormField(
                       controller: _geIndex[g.id],
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         labelText: 'GE n°${g.numero} — index heures',
-                        helperText: '${g.puissanceKva.toStringAsFixed(0)} kVA · ${g.statut == 'GE_PERMANENT' ? 'permanent' : 'secours'}',
+                        helperText:
+                            '${g.puissanceKva.toStringAsFixed(0)} kVA · ${g.statut == 'GE_PERMANENT' ? 'permanent' : 'secours'}',
                         prefixIcon: const Icon(Icons.timer_outlined),
                         suffixText: 'h',
                       ),
@@ -539,7 +634,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                 'Photos du dépotage (${_photos.length}/$_kMinPhotos minimum) *',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: _photos.length >= _kMinPhotos ? const Color(0xFF0E7C6B) : null,
+                  color: _photos.length >= _kMinPhotos
+                      ? const Color(0xFF0E7C6B)
+                      : null,
                 ),
               ),
             ),
@@ -551,14 +648,20 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(File(e.value), width: 84, height: 84, fit: BoxFit.cover),
+                          child: Image.file(File(e.value),
+                              width: 84, height: 84, fit: BoxFit.cover),
                         ),
                         Positioned(
                           top: -6,
                           right: -6,
                           child: IconButton(
-                            icon: const CircleAvatar(radius: 12, backgroundColor: Colors.black54, child: Icon(Icons.close, size: 14, color: Colors.white)),
-                            onPressed: () => setState(() => _photos.removeAt(e.key)),
+                            icon: const CircleAvatar(
+                                radius: 12,
+                                backgroundColor: Colors.black54,
+                                child: Icon(Icons.close,
+                                    size: 14, color: Colors.white)),
+                            onPressed: () =>
+                                setState(() => _photos.removeAt(e.key)),
                           ),
                         ),
                       ],
@@ -574,7 +677,12 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                     ),
                     child: const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [Icon(Icons.add_a_photo, color: Colors.grey), SizedBox(height: 4), Text('Ajouter', style: TextStyle(fontSize: 11, color: Colors.grey))],
+                      children: [
+                        Icon(Icons.add_a_photo, color: Colors.grey),
+                        SizedBox(height: 4),
+                        Text('Ajouter',
+                            style: TextStyle(fontSize: 11, color: Colors.grey))
+                      ],
                     ),
                   ),
                 ),
@@ -586,33 +694,61 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             const Divider(),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 6),
-              child: Text('Validation sur site', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text('Validation sur site',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
             ),
-            TextFormField(controller: _nomChauffeur, decoration: const InputDecoration(labelText: 'Nom du chauffeur')),
+            TextFormField(
+                controller: _nomChauffeur,
+                decoration:
+                    const InputDecoration(labelText: 'Nom du chauffeur')),
             const SizedBox(height: 8),
-            _SignatureTile(label: 'Signature du chauffeur *', captured: _sigChauffeur != null, onTap: () => _captureSignature('chauffeur')),
+            _SignatureTile(
+                label: 'Signature du chauffeur *',
+                captured: _sigChauffeur != null,
+                onTap: () => _captureSignature('chauffeur')),
             const SizedBox(height: 14),
             const Text('AGENT DE SÉCURITÉ (GARDIENNAGE)',
-                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+                style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: Colors.grey)),
             const SizedBox(height: 6),
             Row(children: [
-              _agentBouton(true, 'Présent', Icons.verified_user, const Color(0xFF0E7C6B)),
+              _agentBouton(true, 'Présent', Icons.verified_user,
+                  const Color(0xFF0E7C6B)),
               const SizedBox(width: 8),
-              _agentBouton(false, 'Absent', Icons.person_off, const Color(0xFFC0392B)),
+              _agentBouton(
+                  false, 'Absent', Icons.person_off, const Color(0xFFC0392B)),
             ]),
             if (_agentPresent == true) ...[
               const SizedBox(height: 10),
-              TextFormField(controller: _nomAgent, decoration: const InputDecoration(labelText: 'Nom de l\'agent de sécurité')),
+              TextFormField(
+                  controller: _nomAgent,
+                  decoration: const InputDecoration(
+                      labelText: 'Nom de l\'agent de sécurité')),
               const SizedBox(height: 8),
-              _SignatureTile(label: 'Signature agent de sécurité *', captured: _sigAgent != null, onTap: () => _captureSignature('agent')),
+              _SignatureTile(
+                  label: 'Signature agent de sécurité *',
+                  captured: _sigAgent != null,
+                  onTap: () => _captureSignature('agent')),
             ],
             const SizedBox(height: 14),
-            _SignatureTile(label: 'Votre signature (technicien) *', captured: _sigTechnicien != null, onTap: () => _captureSignature('technicien')),
+            _SignatureTile(
+                label: 'Votre signature (technicien) *',
+                captured: _sigTechnicien != null,
+                onTap: () => _captureSignature('technicien')),
 
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _saving ? null : _submit,
-              icon: _saving ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
+              icon: _saving
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save),
               label: const Text('Enregistrer'),
             ),
           ],
@@ -634,20 +770,26 @@ class _DerivedVolumeBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: ok ? Colors.green.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.08),
+        color: ok
+            ? Colors.green.withValues(alpha: 0.08)
+            : Colors.grey.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: ok ? Colors.green.shade300 : Colors.grey.shade300),
+        border: Border.all(
+            color: ok ? Colors.green.shade300 : Colors.grey.shade300),
       ),
       child: Row(
         children: [
-          Icon(Icons.calculate_outlined, size: 20, color: ok ? Colors.green.shade700 : Colors.grey),
+          Icon(Icons.calculate_outlined,
+              size: 20, color: ok ? Colors.green.shade700 : Colors.grey),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               volume == null
                   ? 'Volume livré : renseignez les deux jauges'
                   : 'Volume livré déduit : ${volume!.toStringAsFixed(0)} L',
-              style: TextStyle(fontWeight: FontWeight.w600, color: ok ? Colors.green.shade800 : Colors.grey.shade700),
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: ok ? Colors.green.shade800 : Colors.grey.shade700),
             ),
           ),
         ],
@@ -661,13 +803,15 @@ class _SignatureTile extends StatelessWidget {
   final String label;
   final bool captured;
   final VoidCallback onTap;
-  const _SignatureTile({required this.label, required this.captured, required this.onTap});
+  const _SignatureTile(
+      {required this.label, required this.captured, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: onTap,
-      icon: Icon(captured ? Icons.check_circle : Icons.draw, color: captured ? Colors.green : null),
+      icon: Icon(captured ? Icons.check_circle : Icons.draw,
+          color: captured ? Colors.green : null),
       label: Align(
         alignment: Alignment.centerLeft,
         child: Text(captured ? '$label — signé' : label),

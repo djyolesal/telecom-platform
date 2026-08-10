@@ -6,6 +6,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/barre_recherche.dart';
+import '../../../core/widgets/filtre_statuts.dart';
 import '../../../core/widgets/gps_refine_sheet.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
@@ -21,7 +22,8 @@ class MaintenanceListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final repo = context.read<MaintenanceRepository>();
     return BlocProvider(
-      create: (_) => ListCubit<Maintenance>()..run(() => repo.getMaintenances()),
+      create: (_) =>
+          ListCubit<Maintenance>()..run(() => repo.getMaintenances()),
       child: const _MaintenanceView(),
     );
   }
@@ -36,6 +38,32 @@ class _MaintenanceView extends StatefulWidget {
 
 class _MaintenanceViewState extends State<_MaintenanceView> {
   String _query = '';
+  String? _statutFiltre;
+
+  static const _statuts = [
+    MapEntry('PLANIFIEE', 'À faire'),
+    MapEntry('EN_COURS', 'En cours'),
+    MapEntry('SUSPENDUE', 'Suspendues'),
+    MapEntry('TERMINEE', 'Terminées'),
+  ];
+
+  /// Filtre + tri adapté au terrain : « À faire » se lit par échéance (la plus
+  /// proche d'abord), le reste garde l'ordre du serveur (récent d'abord,
+  /// en-cours épinglés en tête).
+  List<Maintenance> _visibles(List<Maintenance> items) {
+    var l = _statutFiltre == null
+        ? items
+        : items.where((m) => m.statut == _statutFiltre).toList();
+    if (_statutFiltre == 'PLANIFIEE') {
+      l = List.of(l)
+        ..sort((a, b) {
+          final da = a.datePlanifiee, db = b.datePlanifiee;
+          if (da == null || db == null) return da == null ? 1 : -1;
+          return da.compareTo(db);
+        });
+    }
+    return l;
+  }
 
   Color _statutColor(String s) {
     switch (s) {
@@ -52,7 +80,9 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
 
   void _reload(BuildContext context) {
     final repo = context.read<MaintenanceRepository>();
-    context.read<ListCubit<Maintenance>>().run(() => repo.getMaintenances(search: _query));
+    context
+        .read<ListCubit<Maintenance>>()
+        .run(() => repo.getMaintenances(search: _query));
   }
 
   /// Planifier intelligent : AFFINE d'abord la position (feuille avec loader
@@ -70,7 +100,8 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
       final sites = await siteRepo.getSites();
       for (final s in sites) {
         if (s.latitude == null || s.longitude == null) continue;
-        final d = LocationService.distanceMeters(fix.lat, fix.lng, s.latitude!, s.longitude!);
+        final d = LocationService.distanceMeters(
+            fix.lat, fix.lng, s.latitude!, s.longitude!);
         if (d <= AppConfig.geofenceRadiusM && d < best) {
           best = d;
           onSite = s;
@@ -87,10 +118,12 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
     if (context.mounted) _reload(context);
   }
 
-  Future<void> _showOnSiteSheet(BuildContext context, Site site, double accuracyM) async {
+  Future<void> _showOnSiteSheet(
+      BuildContext context, Site site, double accuracyM) async {
     final repo = context.read<MaintenanceRepository>();
     final router = GoRouter.of(context);
-    final planifiees = await repo.getMaintenances(statut: 'PLANIFIEE', siteId: site.id);
+    final planifiees =
+        await repo.getMaintenances(statut: 'PLANIFIEE', siteId: site.id);
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -115,10 +148,12 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
               if (planifiees.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text('Aucune maintenance planifiée pour ce site.', style: TextStyle(color: Colors.grey.shade600)),
+                  child: Text('Aucune maintenance planifiée pour ce site.',
+                      style: TextStyle(color: Colors.grey.shade600)),
                 )
               else ...[
-                Text('Maintenances planifiées (${planifiees.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text('Maintenances planifiées (${planifiees.length})',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Flexible(
                   child: ListView(
@@ -165,7 +200,10 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
         title: const Text('Maintenances'),
         bottom: BarreRecherche(
           hint: 'Rechercher (site, équipement)…',
-          onChanged: (q) { _query = q; _reload(context); },
+          onChanged: (q) {
+            _query = q;
+            _reload(context);
+          },
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -175,44 +213,75 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
       ),
       body: BlocBuilder<ListCubit<Maintenance>, ListState<Maintenance>>(
         builder: (context, state) {
-          if (state.status == ResourceStatus.loading) return const LoadingView();
-          if (state.status == ResourceStatus.failure) {
-            return ErrorView(message: state.error ?? 'Erreur', onRetry: () => _reload(context));
+          if (state.status == ResourceStatus.loading) {
+            return const LoadingView();
           }
-          if (state.items.isEmpty) return const EmptyView(title: 'Aucune maintenance');
-          return RefreshIndicator(
-            onRefresh: () async => _reload(context),
-            child: ListView.separated(
-              itemCount: state.items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final m = state.items[i];
-                return ListTile(
-                  title: Text('${m.siteNom ?? '—'} · ${m.equipement}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(
-                    '${kTypeMaintenance[m.type] ?? m.type} · ${fmtDate(m.datePlanifiee)}'
-                    '${m.prestataire != null ? '\n${m.prestataire}' : ''}',
-                  ),
-                  isThreeLine: m.prestataire != null,
-                  trailing: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: _statutColor(m.statut)),
-                      if (m.photoCount > 0) ...[
-                        const SizedBox(height: 6),
-                        _PhotoBadge(count: m.photoCount),
-                      ],
-                    ],
-                  ),
-                  onTap: () async {
-                    await context.push('/maintenance/${m.id}');
-                    if (context.mounted) _reload(context);
-                  },
-                );
-              },
-            ),
+          if (state.status == ResourceStatus.failure) {
+            return ErrorView(
+                message: state.error ?? 'Erreur',
+                onRetry: () => _reload(context));
+          }
+          if (state.items.isEmpty) {
+            return const EmptyView(title: 'Aucune maintenance');
+          }
+          final comptes = <String, int>{};
+          for (final m in state.items) {
+            comptes[m.statut] = (comptes[m.statut] ?? 0) + 1;
+          }
+          final visibles = _visibles(state.items);
+          return Column(
+            children: [
+              FiltreStatuts(
+                options: _statuts,
+                comptes: comptes,
+                valeur: _statutFiltre,
+                onChanged: (v) => setState(() => _statutFiltre = v),
+              ),
+              Expanded(
+                child: visibles.isEmpty
+                    ? const EmptyView(title: 'Rien dans ce statut')
+                    : RefreshIndicator(
+                        onRefresh: () async => _reload(context),
+                        child: ListView.separated(
+                          itemCount: visibles.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final m = visibles[i];
+                            return ListTile(
+                              title: Text(
+                                  '${m.siteNom ?? '—'} · ${m.equipement}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                              subtitle: Text(
+                                '${kTypeMaintenance[m.type] ?? m.type} · ${fmtDate(m.datePlanifiee)}'
+                                '${m.prestataire != null ? '\n${m.prestataire}' : ''}',
+                              ),
+                              isThreeLine: m.prestataire != null,
+                              trailing: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  StatusChip(
+                                      label: kStatutMaintenance[m.statut] ??
+                                          m.statut,
+                                      color: _statutColor(m.statut)),
+                                  if (m.photoCount > 0) ...[
+                                    const SizedBox(height: 6),
+                                    _PhotoBadge(count: m.photoCount),
+                                  ],
+                                ],
+                              ),
+                              onTap: () async {
+                                await context.push('/maintenance/${m.id}');
+                                if (context.mounted) _reload(context);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
           );
         },
       ),
@@ -237,10 +306,14 @@ class _PhotoBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.photo_camera_rounded, size: 12, color: Color(0xFF4F46E5)),
+          const Icon(Icons.photo_camera_rounded,
+              size: 12, color: Color(0xFF4F46E5)),
           const SizedBox(width: 3),
           Text('$count',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4F46E5))),
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF4F46E5))),
         ],
       ),
     );

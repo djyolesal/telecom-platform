@@ -52,7 +52,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Feuille listant les saisies en attente de confirmation : pour chacune, les
   /// avertissements de vraisemblance, puis « Confirmer » (rejoue avec accord) ou
   /// « Abandonner » (retire la saisie et révoque l'état optimiste).
-  Future<void> _ouvrirConfirmations(BuildContext context, SyncService sync) async {
+  Future<void> _ouvrirConfirmations(
+      BuildContext context, SyncService sync) async {
     final messenger = ScaffoldMessenger.of(context);
     final entries = await sync.confirmationsEnAttente();
     if (!context.mounted || entries.isEmpty) return;
@@ -67,9 +68,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           controller: scroll,
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Saisies à confirmer', style: Theme.of(ctx).textTheme.titleMedium),
+            Text('Saisies à confirmer',
+                style: Theme.of(ctx).textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text('Le serveur a signalé des valeurs inhabituelles. Vérifiez : confirmez si elles sont exactes, sinon abandonnez la saisie.',
+            Text(
+                'Le serveur a signalé des valeurs inhabituelles. Vérifiez : confirmez si elles sont exactes, sinon abandonnez la saisie.',
                 style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
             const SizedBox(height: 12),
             for (final e in entries)
@@ -80,12 +83,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_libelleEntite(e.entityType), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(_libelleEntite(e.entityType),
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 6),
-                      for (final a in (e.avertissements ?? '').split('\n').where((s) => s.trim().isNotEmpty))
+                      for (final a in (e.avertissements ?? '')
+                          .split('\n')
+                          .where((s) => s.trim().isNotEmpty))
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
-                          child: Text('⚠ $a', style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900)),
+                          child: Text('⚠ $a',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Colors.orange.shade900)),
                         ),
                       const SizedBox(height: 8),
                       Row(
@@ -95,7 +104,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             onPressed: () async {
                               Navigator.of(ctx).pop();
                               await sync.annulerConfirmation(e);
-                              messenger.showSnackBar(const SnackBar(content: Text('Saisie abandonnée.')));
+                              messenger.showSnackBar(const SnackBar(
+                                  content: Text('Saisie abandonnée.')));
                             },
                             child: const Text('Abandonner'),
                           ),
@@ -104,7 +114,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             onPressed: () async {
                               Navigator.of(ctx).pop();
                               await sync.confirmer(e);
-                              messenger.showSnackBar(const SnackBar(content: Text('Saisie confirmée — envoi en cours.')));
+                              messenger.showSnackBar(const SnackBar(
+                                  content: Text(
+                                      'Saisie confirmée — envoi en cours.')));
                             },
                             child: const Text('Confirmer'),
                           ),
@@ -122,10 +134,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _libelleEntite(String type) {
     switch (type) {
-      case 'depotage': return 'Dépotage carburant';
-      case 'maintenance': return 'Clôture de maintenance';
-      case 'releve': return 'Relevé énergie';
-      default: return type;
+      case 'depotage':
+        return 'Dépotage carburant';
+      case 'maintenance':
+        return 'Clôture de maintenance';
+      case 'releve':
+        return 'Relevé énergie';
+      default:
+        return type;
     }
   }
 
@@ -163,15 +179,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const Spacer(),
                           IconButton(
                             icon: _syncEnCours
-                                ? const SizedBox(width: 20, height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white))
                                 : const Icon(Icons.sync, color: Colors.white),
                             onPressed: _syncEnCours ? null : _syncManuel,
                           ),
                           PopupMenuButton<String>(
                             iconColor: Colors.white,
                             onSelected: (v) {
-                              if (v == 'logout') context.read<AuthCubit>().logout();
+                              if (v == 'logout') {
+                                context.read<AuthCubit>().logout();
+                              }
                               if (v == 'biometric') _toggleBiometric();
                             },
                             // Construit à l'OUVERTURE du menu : la coche reflète
@@ -185,9 +206,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   CheckedPopupMenuItem(
                                     value: 'biometric',
                                     checked: auth.biometricEnabled,
-                                    child: const Text('Biométrie au déverrouillage'),
+                                    child: const Text(
+                                        'Biométrie au déverrouillage'),
                                   ),
-                                const PopupMenuItem(value: 'logout', child: Text('Déconnexion')),
+                                const PopupMenuItem(
+                                    value: 'logout',
+                                    child: Text('Déconnexion')),
                               ];
                             },
                           ),
@@ -195,8 +219,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text('Bonjour ${user?.prenom ?? ''} 👋',
-                          style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
-                      Text(user?.role ?? '', style: const TextStyle(color: Color(0xFF9FB3C8), fontSize: 12)),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800)),
+                      Text(user?.role ?? '',
+                          style: const TextStyle(
+                              color: Color(0xFF9FB3C8), fontSize: 12)),
                       const Padding(
                         padding: EdgeInsets.only(top: 8, right: 8),
                         child: LigneDeVie(),
@@ -209,7 +238,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             StreamBuilder<int>(
               stream: sync.pendingCount,
-              builder: (context, snap) => OfflineBanner(pendingCount: snap.data ?? 0),
+              builder: (context, snap) =>
+                  OfflineBanner(pendingCount: snap.data ?? 0),
             ),
             // Bandeau d'alerte : opérations qui n'ont pas pu partir (échec serveur
             // répété). Elles ne sont JAMAIS supprimées ; un appui relance l'envoi.
@@ -229,20 +259,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       }
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Nouvel essai des opérations en échec…')),
+                          const SnackBar(
+                              content: Text(
+                                  'Nouvel essai des opérations en échec…')),
                         );
                       }
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
                       child: Row(children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                        Icon(Icons.error_outline,
+                            color: Colors.red.shade700, size: 18),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text('$n opération(s) non envoyée(s) — vos saisies sont conservées. Touchez pour réessayer.',
-                              style: TextStyle(color: Colors.red.shade800, fontSize: 13, fontWeight: FontWeight.w500)),
+                          child: Text(
+                              '$n opération(s) non envoyée(s) — vos saisies sont conservées. Touchez pour réessayer.',
+                              style: TextStyle(
+                                  color: Colors.red.shade800,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500)),
                         ),
-                        Icon(Icons.refresh, color: Colors.red.shade700, size: 18),
+                        Icon(Icons.refresh,
+                            color: Colors.red.shade700, size: 18),
                       ]),
                     ),
                   ),
@@ -262,15 +301,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: InkWell(
                     onTap: () => _ouvrirConfirmations(context, sync),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
                       child: Row(children: [
-                        Icon(Icons.help_outline, color: Colors.orange.shade800, size: 18),
+                        Icon(Icons.help_outline,
+                            color: Colors.orange.shade800, size: 18),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text('$n saisie(s) à confirmer — valeurs inhabituelles signalées. Touchez pour vérifier.',
-                              style: TextStyle(color: Colors.orange.shade900, fontSize: 13, fontWeight: FontWeight.w500)),
+                          child: Text(
+                              '$n saisie(s) à confirmer — valeurs inhabituelles signalées. Touchez pour vérifier.',
+                              style: TextStyle(
+                                  color: Colors.orange.shade900,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500)),
                         ),
-                        Icon(Icons.chevron_right, color: Colors.orange.shade800, size: 18),
+                        Icon(Icons.chevron_right,
+                            color: Colors.orange.shade800, size: 18),
                       ]),
                     ),
                   ),
@@ -287,7 +333,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     // pouls du parc ni d'actions terrain, uniquement ses bons.
                     if ((user?.role ?? '') == 'TRANSPORTEUR') ...[
                       const Text('APPRO CARBURANT',
-                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: Colors.grey)),
                       const SizedBox(height: 8),
                       _ActionCard(
                         color: AppColors.brand,
@@ -295,7 +345,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         icon: Icons.local_shipping,
                         title: 'Nouveau bon de livraison',
                         subtitle: 'déclarer un chargement',
-                        onTap: () => context.push('/carburant/bon-livraison/nouveau'),
+                        onTap: () =>
+                            context.push('/carburant/bon-livraison/nouveau'),
                       ),
                       const SizedBox(height: 10),
                       // Ses chargements et, pour chacun, le plan de livraison
@@ -309,111 +360,135 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         onTap: () => context.push('/carburant/bons-livraison'),
                       ),
                     ] else ...[
-                    // ── Pouls du parc ──
-                    FutureBuilder<Map<String, dynamic>?>(
-                      future: _future,
-                      builder: (context, snap) {
-                        final d = snap.data;
-                        if (d == null) {
-                          return Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(children: [
-                                Icon(Icons.cloud_off, color: Colors.grey.shade400),
-                                const SizedBox(width: 10),
-                                const Expanded(child: Text('Pouls du parc indisponible hors-ligne')),
-                              ]),
-                            ),
-                          );
-                        }
-                        final critiques = _n(d['sitesCritiques']);
-                        final faibles = _n(d['sitesFaibles']);
-                        final ok = d['sitesOk'] != null
-                            ? _n(d['sitesOk'])
-                            : (_n(d['sitesActifs']) - critiques - faibles).clamp(0, 1 << 31);
-                        final incidents = _n(d['incidentsOuverts']);
-                        final incidentsCrit = _n(d['incidentsCritiques']);
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            PoulsParc(
-                              ok: ok,
-                              faible: faibles,
-                              critique: critiques,
-                              stockTotalLitres: (d['stockTotalLitres'] ?? 0) as num,
-                              onTap: () => context.push('/sites'),
-                            ),
-                            if (incidents > 0) ...[
-                              const SizedBox(height: 10),
-                              InkWell(
-                                onTap: () => context.push('/incidents'),
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: incidentsCrit > 0 ? const Color(0xFFFDE8E8) : const Color(0xFFFEF3DF),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(children: [
-                                    Icon(Icons.warning_amber,
-                                        size: 18, color: incidentsCrit > 0 ? AppColors.critique : AppColors.majeur),
-                                    const SizedBox(width: 8),
-                                    Expanded(
+                      // ── Pouls du parc ──
+                      FutureBuilder<Map<String, dynamic>?>(
+                        future: _future,
+                        builder: (context, snap) {
+                          final d = snap.data;
+                          if (d == null) {
+                            return Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(children: [
+                                  Icon(Icons.cloud_off,
+                                      color: Colors.grey.shade400),
+                                  const SizedBox(width: 10),
+                                  const Expanded(
                                       child: Text(
-                                        '$incidents incident${incidents > 1 ? 's' : ''} ouvert${incidents > 1 ? 's' : ''}'
-                                        '${incidentsCrit > 0 ? ' · dont $incidentsCrit critique${incidentsCrit > 1 ? 's' : ''}' : ''}',
-                                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                                      ),
-                                    ),
-                                    const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-                                  ]),
-                                ),
+                                          'Pouls du parc indisponible hors-ligne')),
+                                ]),
                               ),
+                            );
+                          }
+                          final critiques = _n(d['sitesCritiques']);
+                          final faibles = _n(d['sitesFaibles']);
+                          final ok = d['sitesOk'] != null
+                              ? _n(d['sitesOk'])
+                              : (_n(d['sitesActifs']) - critiques - faibles)
+                                  .clamp(0, 1 << 31);
+                          final incidents = _n(d['incidentsOuverts']);
+                          final incidentsCrit = _n(d['incidentsCritiques']);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              PoulsParc(
+                                ok: ok,
+                                faible: faibles,
+                                critique: critiques,
+                                stockTotalLitres:
+                                    (d['stockTotalLitres'] ?? 0) as num,
+                                onTap: () => context.push('/sites'),
+                              ),
+                              if (incidents > 0) ...[
+                                const SizedBox(height: 10),
+                                InkWell(
+                                  onTap: () => context.push('/incidents'),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: incidentsCrit > 0
+                                          ? const Color(0xFFFDE8E8)
+                                          : const Color(0xFFFEF3DF),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(children: [
+                                      Icon(Icons.warning_amber,
+                                          size: 18,
+                                          color: incidentsCrit > 0
+                                              ? AppColors.critique
+                                              : AppColors.majeur),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '$incidents incident${incidents > 1 ? 's' : ''} ouvert${incidents > 1 ? 's' : ''}'
+                                          '${incidentsCrit > 0 ? ' · dont $incidentsCrit critique${incidentsCrit > 1 ? 's' : ''}' : ''}',
+                                          style: const TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                      const Icon(Icons.chevron_right,
+                                          size: 18, color: Colors.grey),
+                                    ]),
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
-                        );
-                      },
-                    ),
-                    // ── Actions rapides ──
-                    const SizedBox(height: 18),
-                    const Text('ACTIONS RAPIDES',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ActionCard(
-                            color: AppColors.accent,
-                            foreground: Colors.white,
-                            icon: Icons.local_gas_station,
-                            title: 'Dépoter',
-                            subtitle: 'détection GPS du site',
-                            onTap: () => smartDepoter(context),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FutureBuilder<int?>(
-                            future: _nbPlanifiees,
-                            builder: (context, snap) => _ActionCard(
-                              color: Colors.white,
-                              foreground: AppColors.brand,
-                              outlined: true,
-                              icon: Icons.build,
-                              title: 'Mes maintenances',
-                              subtitle: snap.data != null ? '${snap.data} planifiée${(snap.data ?? 0) > 1 ? 's' : ''}' : 'voir le planning',
-                              onTap: () => context.push('/maintenance'),
+                          );
+                        },
+                      ),
+                      // ── Actions rapides ──
+                      const SizedBox(height: 18),
+                      const Text('ACTIONS RAPIDES',
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _ActionCard(
+                              color: AppColors.accent,
+                              foreground: Colors.white,
+                              icon: Icons.local_gas_station,
+                              title: 'Dépoter',
+                              subtitle: 'détection GPS du site',
+                              onTap: () => smartDepoter(context),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    // ── Modules ──
-                    const SizedBox(height: 18),
-                    const Text('MODULES',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
-                    const SizedBox(height: 8),
-                    _moduleGrid(context),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FutureBuilder<int?>(
+                              future: _nbPlanifiees,
+                              builder: (context, snap) => _ActionCard(
+                                color: Colors.white,
+                                foreground: AppColors.brand,
+                                outlined: true,
+                                icon: Icons.build,
+                                title: 'Mes maintenances',
+                                subtitle: snap.data != null
+                                    ? '${snap.data} planifiée${(snap.data ?? 0) > 1 ? 's' : ''}'
+                                    : 'voir le planning',
+                                onTap: () => context.push('/maintenance'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // ── Modules ──
+                      const SizedBox(height: 18),
+                      const Text('MODULES',
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      _moduleGrid(context),
                     ],
                   ],
                 ),
@@ -431,12 +506,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       (_M('Scanner', Icons.qr_code_scanner, '/scan', AppColors.accent)),
       (_M('Sites', Icons.cell_tower, '/sites', AppColors.brand)),
       (_M('Maintenance', Icons.build, '/maintenance', AppColors.brandLight)),
-      (_M('Carburant', Icons.local_gas_station, '/carburant', AppColors.accent)),
+      (_M('Carburant', Icons.local_gas_station, '/carburant',
+          AppColors.accent)),
       (_M('Énergie', Icons.bolt, '/energie', AppColors.brandLight)),
       (_M('Incidents', Icons.warning_amber, '/incidents', AppColors.critique)),
       // Saisie d'un bon de livraison (transporteur / manager / admin).
       if (role == 'TRANSPORTEUR' || role == 'MANAGER' || role == 'ADMIN')
-        (_M('Bon livraison', Icons.local_shipping, '/carburant/bon-livraison/nouveau', AppColors.brand)),
+        (_M('Bon livraison', Icons.local_shipping,
+            '/carburant/bon-livraison/nouveau', AppColors.brand)),
     ];
     return GridView.count(
       crossAxisCount: 3,
@@ -455,11 +532,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: m.color, borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(
+                            color: m.color,
+                            borderRadius: BorderRadius.circular(12)),
                         child: Icon(m.icon, color: Colors.white),
                       ),
                       const SizedBox(height: 8),
-                      Text(m.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                      Text(m.label,
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
@@ -500,7 +581,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await cubit.toggleBiometric(!enabled);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Biométrie ${!enabled ? 'activée' : 'désactivée'}')),
+        SnackBar(
+            content: Text('Biométrie ${!enabled ? 'activée' : 'désactivée'}')),
       );
     }
   }
@@ -537,7 +619,8 @@ class _ActionCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(13),
-            border: outlined ? Border.all(color: const Color(0xFFE4EAF0)) : null,
+            border:
+                outlined ? Border.all(color: const Color(0xFFE4EAF0)) : null,
           ),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -549,13 +632,18 @@ class _ActionCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(title,
-                        style: TextStyle(color: foreground, fontWeight: FontWeight.w800, fontSize: 13.5),
+                        style: TextStyle(
+                            color: foreground,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5),
                         overflow: TextOverflow.ellipsis),
                   ),
                 ]),
                 const SizedBox(height: 3),
                 Text(subtitle,
-                    style: TextStyle(color: foreground.withValues(alpha: 0.75), fontSize: 10.5),
+                    style: TextStyle(
+                        color: foreground.withValues(alpha: 0.75),
+                        fontSize: 10.5),
                     overflow: TextOverflow.ellipsis),
               ],
             ),

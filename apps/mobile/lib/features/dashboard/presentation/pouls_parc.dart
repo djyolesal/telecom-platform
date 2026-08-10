@@ -30,8 +30,11 @@ class PoulsParc extends StatelessWidget {
     Widget stat(String value, String label, Color color) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 15)),
-            Text(label, style: const TextStyle(color: Color(0xFFC6D5E4), fontSize: 10)),
+            Text(value,
+                style: TextStyle(
+                    color: color, fontWeight: FontWeight.w800, fontSize: 15)),
+            Text(label,
+                style: const TextStyle(color: Color(0xFFC6D5E4), fontSize: 10)),
           ],
         );
 
@@ -58,15 +61,22 @@ class PoulsParc extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('POULS DU PARC',
-                        style: TextStyle(color: Color(0xFF9FB3C8), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.4)),
+                        style: TextStyle(
+                            color: Color(0xFF9FB3C8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.4)),
                     if (onTap != null)
-                      const Text('Voir les sites →', style: TextStyle(color: tealL, fontSize: 10.5)),
+                      const Text('Voir les sites →',
+                          style: TextStyle(color: tealL, fontSize: 10.5)),
                   ],
                 ),
                 SizedBox(
                   height: 36,
                   width: double.infinity,
-                  child: CustomPaint(painter: _PoulsPainter(ok: ok, faible: faible, critique: critique)),
+                  child: CustomPaint(
+                      painter: _PoulsPainter(
+                          ok: ok, faible: faible, critique: critique)),
                 ),
                 // Jauge OK / faible / critique (segments proportionnels).
                 ClipRRect(
@@ -74,10 +84,21 @@ class PoulsParc extends StatelessWidget {
                   child: SizedBox(
                     height: 7,
                     child: Row(children: [
-                      if (ok > 0) Expanded(flex: ok, child: const ColoredBox(color: Color(0xFF0E7C6B))),
-                      if (faible > 0) Expanded(flex: faible, child: const ColoredBox(color: Color(0xFFF59E0B))),
-                      if (critique > 0) Expanded(flex: critique, child: const ColoredBox(color: Color(0xFFDC2626))),
-                      if (ok + faible + critique == 0) const Expanded(child: ColoredBox(color: Color(0xFF3A5573))),
+                      if (ok > 0)
+                        Expanded(
+                            flex: ok,
+                            child: const ColoredBox(color: Color(0xFF0E7C6B))),
+                      if (faible > 0)
+                        Expanded(
+                            flex: faible,
+                            child: const ColoredBox(color: Color(0xFFF59E0B))),
+                      if (critique > 0)
+                        Expanded(
+                            flex: critique,
+                            child: const ColoredBox(color: Color(0xFFDC2626))),
+                      if (ok + faible + critique == 0)
+                        const Expanded(
+                            child: ColoredBox(color: Color(0xFF3A5573))),
                     ]),
                   ),
                 ),
@@ -104,7 +125,8 @@ class _PoulsPainter extends CustomPainter {
   final int ok;
   final int faible;
   final int critique;
-  _PoulsPainter({required this.ok, required this.faible, required this.critique});
+  _PoulsPainter(
+      {required this.ok, required this.faible, required this.critique});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -136,7 +158,8 @@ class _PoulsPainter extends CustomPainter {
     canvas.drawPath(spike, stroke(amber));
     // Queue : colorée selon la pire tension.
     final tail = critique > 0 ? red : (faible > 0 ? amber : tealL);
-    canvas.drawLine(Offset(spikeX + 22, y), Offset(size.width - 16, y), stroke(tail));
+    canvas.drawLine(
+        Offset(spikeX + 22, y), Offset(size.width - 16, y), stroke(tail));
     canvas.drawCircle(Offset(size.width - 7, y), 3.6, Paint()..color = tail);
   }
 

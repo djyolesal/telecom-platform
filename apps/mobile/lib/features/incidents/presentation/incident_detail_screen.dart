@@ -41,19 +41,27 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         _future = context.read<IncidentRepository>().getIncident(widget.id);
       });
 
-  void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  void _snack(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   String _errMsg(Object e) {
-    if (e is ServerException) return e.message; // ex : « Vous n'êtes pas sur le site… », photos < 6
-    if (e is UnauthorizedException) return 'Session expirée — reconnectez-vous puis réessayez.';
-    if (e is NetworkException) return 'Connexion indisponible — réessayez une fois en ligne.';
+    if (e is ServerException) {
+      return e.message; // ex : « Vous n'êtes pas sur le site… », photos < 6
+    }
+    if (e is UnauthorizedException) {
+      return 'Session expirée — reconnectez-vous puis réessayez.';
+    }
+    if (e is NetworkException) {
+      return 'Connexion indisponible — réessayez une fois en ligne.';
+    }
     return 'Erreur : $e';
   }
 
   /// Vérifie la présence physique sur le site (affinage GPS ~5 m, feuille avec
   /// loader — comme le dépotage). Si le site n'a pas de coordonnées, simple
   /// capture silencieuse (le serveur laisse passer). Retourne (ok, lat, lng).
-  Future<({bool ok, double? lat, double? lng})> _verifyOnSite(Incident inc, String action) async {
+  Future<({bool ok, double? lat, double? lng})> _verifyOnSite(
+      Incident inc, String action) async {
     final hasSiteCoords = inc.siteLatitude != null && inc.siteLongitude != null;
     if (!hasSiteCoords) {
       final pos = await LocationService().freshPosition();
@@ -65,7 +73,8 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
           'Impossible de vérifier votre présence sur site pour $action. Activez la localisation (précision élevée) et réessayez.');
       return (ok: false, lat: null, lng: null);
     }
-    final dist = LocationService.distanceMeters(fix.lat, fix.lng, inc.siteLatitude!, inc.siteLongitude!);
+    final dist = LocationService.distanceMeters(
+        fix.lat, fix.lng, inc.siteLatitude!, inc.siteLongitude!);
     if (dist > AppConfig.geofenceRadiusM) {
       await _siteDialog('Vous n\'êtes pas sur le site',
           'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${inc.siteNom ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
@@ -82,7 +91,10 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         icon: const Icon(Icons.location_off, color: Colors.red, size: 32),
         title: Text(title),
         content: Text(message),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Compris'))],
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Compris'))
+        ],
       ),
     );
   }
@@ -93,9 +105,12 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     try {
       final check = await _verifyOnSite(inc, 'le démarrage');
       if (!check.ok) return;
-      final res = await repo.start(widget.id, latitude: check.lat, longitude: check.lng);
+      final res = await repo.start(widget.id,
+          latitude: check.lat, longitude: check.lng);
       if (!mounted) return;
-      _snack(res.isQueued ? 'Démarrage mis en file — il partira à la reconnexion' : 'Intervention démarrée');
+      _snack(res.isQueued
+          ? 'Démarrage mis en file — il partira à la reconnexion'
+          : 'Intervention démarrée');
       _reload();
     } catch (e) {
       if (mounted) _snack(_errMsg(e));
@@ -124,7 +139,8 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     setState(() => _busy = true);
     try {
       // Photos (caméra) → stockage persistant ; upload différé au moteur de sync.
-      final photoFiles = (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];
+      final photoFiles =
+          (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];
       final photoPaths = <String>[];
       for (final f in photoFiles) {
         photoPaths.add(await AttachmentStore.persistFile(f.path));
@@ -161,25 +177,36 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
       body: FutureBuilder<Incident>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
-          if (snap.hasError || !snap.hasData) return ErrorView(message: 'Indisponible', onRetry: _reload);
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const LoadingView();
+          }
+          if (snap.hasError || !snap.hasData) {
+            return ErrorView(message: 'Indisponible', onRetry: _reload);
+          }
           final inc = snap.data!;
           final resolu = inc.statut == 'RESOLU' || inc.statut == 'CLOS';
-          final demarre = inc.dateIntervention != null && inc.statut == 'EN_COURS';
+          final demarre =
+              inc.dateIntervention != null && inc.statut == 'EN_COURS';
           return ListView(
             padding: paddingEcran(context),
             children: [
               Row(
                 children: [
                   Expanded(
-                    child: Text('${inc.reference != null ? '${inc.reference} · ' : ''}${inc.siteNom ?? ''} · ${kTypeIncident[inc.type] ?? inc.type}',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    child: Text(
+                        '${inc.reference != null ? '${inc.reference} · ' : ''}${inc.siteNom ?? ''} · ${kTypeIncident[inc.type] ?? inc.type}',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
-                  StatusChip(label: kSeverite[inc.severite] ?? inc.severite, color: AppTheme.severiteColor(inc.severite)),
+                  StatusChip(
+                      label: kSeverite[inc.severite] ?? inc.severite,
+                      color: AppTheme.severiteColor(inc.severite)),
                 ],
               ),
               const SizedBox(height: 8),
-              StatusChip(label: kStatutIncident[inc.statut] ?? inc.statut, color: Colors.blueGrey),
+              StatusChip(
+                  label: kStatutIncident[inc.statut] ?? inc.statut,
+                  color: Colors.blueGrey),
               const SizedBox(height: 16),
               Card(
                 child: Padding(
@@ -190,19 +217,26 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                       _row('Région', inc.region ?? '—'),
                       _row('Technicien', inc.technicien ?? '—'),
                       _row('Ouverture', fmtDateTime(inc.dateOuverture)),
-                      if (inc.dateIntervention != null) _row('Intervention', fmtDateTime(inc.dateIntervention)),
+                      if (inc.dateIntervention != null)
+                        _row('Intervention', fmtDateTime(inc.dateIntervention)),
                       const Divider(),
-                      const Text('Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      const Text('Description',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
                       const SizedBox(height: 4),
                       Text(inc.description),
                       if (inc.causeProbable != null) ...[
                         const SizedBox(height: 8),
-                        const Text('Cause probable', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        const Text('Cause probable',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13)),
                         Text(inc.causeProbable!),
                       ],
                       if (inc.actionCorrective != null) ...[
                         const SizedBox(height: 8),
-                        const Text('Action corrective', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        const Text('Action corrective',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13)),
                         Text(inc.actionCorrective!),
                       ],
                     ],
@@ -218,7 +252,8 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Photos (${inc.photoUrls.length})',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13)),
                         const SizedBox(height: 10),
                         PhotoThumbnails(urls: inc.photoUrls),
                       ],
@@ -251,8 +286,12 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
   Widget _row(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
-          Expanded(child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+          Expanded(
+              child: Text(label,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+          Text(value,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
         ]),
       );
 }
@@ -312,7 +351,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
       return;
     }
     if (_agentPresent == null) {
-      setState(() => _error = 'Indiquez si l\'agent de sécurité est présent sur le site.');
+      setState(() =>
+          _error = 'Indiquez si l\'agent de sécurité est présent sur le site.');
       return;
     }
     Navigator.pop(context, {
@@ -331,7 +371,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
       final selected = _causeCategorie == value;
       return Expanded(
         child: OutlinedButton(
-          onPressed: () => setState(() => _causeCategorie = selected ? null : value),
+          onPressed: () =>
+              setState(() => _causeCategorie = selected ? null : value),
           style: OutlinedButton.styleFrom(
             backgroundColor: selected ? const Color(0xFF1B3F6B) : null,
             foregroundColor: selected ? Colors.white : const Color(0xFF1B3F6B),
@@ -346,7 +387,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
       children: [
         const SizedBox(height: 8),
         const Text('NATURE DE LA PANNE (OPTIONNEL)',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey)),
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey)),
         const SizedBox(height: 6),
         Row(children: [
           chip('ACTIF', 'Actif — radio/transmission'),
@@ -369,7 +411,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
           style: OutlinedButton.styleFrom(
             backgroundColor: selected ? color : null,
             foregroundColor: selected ? Colors.white : color,
-            side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.5)),
+            side:
+                BorderSide(color: color.withValues(alpha: selected ? 1 : 0.5)),
           ),
         ),
       );
@@ -380,7 +423,11 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
       children: [
         const SizedBox(height: 8),
         const Text('AGENT DE SÉCURITÉ (GARDIENNAGE)',
-            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+            style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: Colors.grey)),
         const SizedBox(height: 6),
         Row(children: [
           bouton(true, 'Présent', Icons.verified_user, const Color(0xFF0E7C6B)),
@@ -396,7 +443,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
     final total = widget.dejaPresentes + _photos.length;
     final ok = total >= kMinPhotosIncident;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -404,18 +452,26 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Clôturer l\'incident', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text('Clôturer l\'incident',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              TextField(controller: _cause, decoration: const InputDecoration(labelText: 'Cause probable')),
+              TextField(
+                  controller: _cause,
+                  decoration:
+                      const InputDecoration(labelText: 'Cause probable')),
               const SizedBox(height: 10),
-              TextField(controller: _action, decoration: const InputDecoration(labelText: 'Action corrective')),
+              TextField(
+                  controller: _action,
+                  decoration:
+                      const InputDecoration(labelText: 'Action corrective')),
               _categorieSelector(),
               const SizedBox(height: 6),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _creerMaint,
                 onChanged: (v) => setState(() => _creerMaint = v ?? false),
-                title: const Text('Créer une maintenance curative', style: TextStyle(fontSize: 13)),
+                title: const Text('Créer une maintenance curative',
+                    style: TextStyle(fontSize: 13)),
               ),
               _agentSelector(),
               const SizedBox(height: 6),
@@ -435,9 +491,13 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: ok ? Colors.green.shade800 : Colors.orange.shade900)),
-                    Text('À prendre sur site avec la caméra — pas d\'import galerie',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                            color: ok
+                                ? Colors.green.shade800
+                                : Colors.orange.shade900)),
+                    Text(
+                        'À prendre sur site avec la caméra — pas d\'import galerie',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey.shade600)),
                     const SizedBox(height: 8),
                     if (_photos.isNotEmpty)
                       Wrap(
@@ -450,14 +510,19 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
                                 borderRadius: BorderRadius.circular(6),
                                 // cacheWidth : décode une miniature → pas de gel mémoire.
                                 child: Image.file(File(_photos[i].path),
-                                    width: 60, height: 60, fit: BoxFit.cover, cacheWidth: 160),
+                                    width: 60,
+                                    height: 60,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 160),
                               ),
                               Positioned(
                                 top: -6,
                                 right: -6,
                                 child: IconButton(
-                                  icon: const Icon(Icons.cancel, size: 18, color: Colors.red),
-                                  onPressed: () => setState(() => _photos.removeAt(i)),
+                                  icon: const Icon(Icons.cancel,
+                                      size: 18, color: Colors.red),
+                                  onPressed: () =>
+                                      setState(() => _photos.removeAt(i)),
                                 ),
                               ),
                             ],
@@ -478,7 +543,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                Text(_error!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12)),
               ],
               const SizedBox(height: 14),
               FilledButton.icon(

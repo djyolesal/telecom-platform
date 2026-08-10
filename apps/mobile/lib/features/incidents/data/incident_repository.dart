@@ -11,7 +11,8 @@ class IncidentRepository {
 
   IncidentRepository(this._client, this._network, this._sync);
 
-  Future<List<Incident>> getIncidents({String? statut, String? severite, String? search}) async {
+  Future<List<Incident>> getIncidents(
+      {String? statut, String? severite, String? search}) async {
     if (!await _network.isConnected) return [];
     return _client.request(
       (dio) => dio.get('/incidents', queryParameters: {
@@ -20,12 +21,16 @@ class IncidentRepository {
         if (severite != null && severite.isNotEmpty) 'severite': severite,
         if (search != null && search.isNotEmpty) 'search': search,
       }),
-      (data) => (data['data'] as List).map((e) => Incident.fromJson(e as Map<String, dynamic>)).toList(),
+      (data) => (data['data'] as List)
+          .map((e) => Incident.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
   Future<Incident> getIncident(String id) async {
-    if (!await _network.isConnected) throw const ServerException('Incident indisponible hors-ligne');
+    if (!await _network.isConnected) {
+      throw const ServerException('Incident indisponible hors-ligne');
+    }
     return _client.request(
       (dio) => dio.get('/incidents/$id'),
       (data) => Incident.fromJson(data['data'] as Map<String, dynamic>),
@@ -56,10 +61,15 @@ class IncidentRepository {
   }
 
   /// Démarrage de l'intervention (offline-first) — vérifié SUR SITE côté serveur.
-  Future<SubmitResult> start(String id, {double? latitude, double? longitude}) => _sync.submit(
+  Future<SubmitResult> start(String id,
+          {double? latitude, double? longitude}) =>
+      _sync.submit(
         endpoint: '/incidents/$id/demarrer',
         entityType: 'incident_start',
-        payload: {if (latitude != null) 'latitude': latitude, if (longitude != null) 'longitude': longitude},
+        payload: {
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude
+        },
       );
 
   /// Clôture offline-first. [photoPaths] : chemins LOCAUX des photos prises sur
@@ -84,9 +94,12 @@ class IncidentRepository {
       payload: {
         'dateResolution': dateResolution.toUtc().toIso8601String(),
         'agentPresent': agentPresent,
-        if (causeProbable != null && causeProbable.isNotEmpty) 'causeProbable': causeProbable,
-        if (actionCorrective != null && actionCorrective.isNotEmpty) 'actionCorrective': actionCorrective,
-        if (causeCategorie != null && causeCategorie.isNotEmpty) 'causeCategorie': causeCategorie,
+        if (causeProbable != null && causeProbable.isNotEmpty)
+          'causeProbable': causeProbable,
+        if (actionCorrective != null && actionCorrective.isNotEmpty)
+          'actionCorrective': actionCorrective,
+        if (causeCategorie != null && causeCategorie.isNotEmpty)
+          'causeCategorie': causeCategorie,
         'creerMaintenance': creerMaintenance,
         // Position au moment de la clôture (vérification « sur site » côté serveur).
         if (latitude != null) 'latitude': latitude,

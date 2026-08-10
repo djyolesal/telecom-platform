@@ -36,7 +36,9 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
   }
 
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) return;
+    if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) {
+      return;
+    }
     final repo = context.read<IncidentRepository>();
     final messenger = ScaffoldMessenger.of(context);
     final router = GoRouter.of(context);
@@ -53,11 +55,16 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
       );
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(
-        content: Text(res.isQueued ? 'Hors-ligne : incident mis en file de synchronisation' : 'Incident déclaré'),
+        content: Text(res.isQueued
+            ? 'Hors-ligne : incident mis en file de synchronisation'
+            : 'Incident déclaré'),
       ));
       router.pop();
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red));
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+            content: Text('Erreur : $e'), backgroundColor: Colors.red));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -77,27 +84,41 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
             DropdownButtonFormField<String>(
               initialValue: _type,
               decoration: const InputDecoration(labelText: 'Type'),
-              items: kTypeIncident.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+              items: kTypeIncident.entries
+                  .map((e) =>
+                      DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .toList(),
               onChanged: (v) => setState(() => _type = v!),
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _severite,
               decoration: const InputDecoration(labelText: 'Sévérité'),
-              items: kSeverite.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+              items: kSeverite.entries
+                  .map((e) =>
+                      DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .toList(),
               onChanged: (v) => setState(() => _severite = v!),
             ),
             const SizedBox(height: 14),
             TextFormField(
               controller: _description,
               maxLines: 4,
-              decoration: const InputDecoration(labelText: 'Description *', alignLabelWithHint: true),
-              validator: (v) => (v == null || v.isEmpty) ? 'Description requise' : null,
+              decoration: const InputDecoration(
+                  labelText: 'Description *', alignLabelWithHint: true),
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'Description requise' : null,
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _saving ? null : _submit,
-              icon: _saving ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.send),
+              icon: _saving
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.send),
               label: const Text('Déclarer'),
             ),
           ],

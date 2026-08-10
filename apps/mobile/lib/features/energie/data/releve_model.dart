@@ -22,7 +22,9 @@ class Releve {
     this.heuresFonctGE,
   });
 
-  static double? _dn(dynamic v) => v == null ? null : (v is num ? v.toDouble() : double.tryParse(v.toString()));
+  static double? _dn(dynamic v) => v == null
+      ? null
+      : (v is num ? v.toDouble() : double.tryParse(v.toString()));
 
   factory Releve.fromJson(Map<String, dynamic> j) {
     final site = j['site'] as Map<String, dynamic>?;
@@ -104,7 +106,9 @@ class ReleveDetail {
       puissanceKva: Releve._dn(j['puissanceKva']),
       coutEstime: Releve._dn(j['coutEstime']),
       groupeNumero: (groupe?['numero'] as num?)?.toInt(),
-      technicienNom: tech == null ? null : '${tech['prenom'] ?? ''} ${tech['nom'] ?? ''}'.trim(),
+      technicienNom: tech == null
+          ? null
+          : '${tech['prenom'] ?? ''} ${tech['nom'] ?? ''}'.trim(),
       observations: j['observations'] as String?,
       maintenanceId: m?['id'] as String?,
       maintenanceType: m?['type'] as String?,

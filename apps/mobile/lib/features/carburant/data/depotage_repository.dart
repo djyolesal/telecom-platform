@@ -14,7 +14,9 @@ class DepotageRepository {
     if (!await _network.isConnected) return [];
     return _client.request(
       (dio) => dio.get('/depotages', queryParameters: {'limit': 50}),
-      (data) => (data['data'] as List).map((e) => Depotage.fromJson(e as Map<String, dynamic>)).toList(),
+      (data) => (data['data'] as List)
+          .map((e) => Depotage.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -23,7 +25,9 @@ class DepotageRepository {
     if (!await _network.isConnected) return [];
     return _client.request(
       (dio) => dio.get('/sites/$siteId/lignes-livraison'),
-      (data) => (data['data'] as List).map((e) => PlanLigne.fromJson(e as Map<String, dynamic>)).toList(),
+      (data) => (data['data'] as List)
+          .map((e) => PlanLigne.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -43,7 +47,9 @@ class DepotageRepository {
       (dio) => dio.get('/sites/$siteId'),
       (data) {
         final list = (data['data']?['groupes'] as List?) ?? const [];
-        return list.map((e) => GroupeGE.fromJson(e as Map<String, dynamic>)).toList();
+        return list
+            .map((e) => GroupeGE.fromJson(e as Map<String, dynamic>))
+            .toList();
       },
     );
   }
@@ -75,9 +81,24 @@ class DepotageRepository {
     bool confirmerVraisemblance = false,
   }) {
     final attachments = <Map<String, String>>[
-      if (signatureChauffeurLocalPath != null) {'path': signatureChauffeurLocalPath, 'kind': 'signature', 'field': 'signatureChauffeurPath'},
-      if (signatureAgentSecuriteLocalPath != null) {'path': signatureAgentSecuriteLocalPath, 'kind': 'signature', 'field': 'signatureAgentSecuritePath'},
-      if (signatureTechnicienLocalPath != null) {'path': signatureTechnicienLocalPath, 'kind': 'signature', 'field': 'signatureTechnicienPath'},
+      if (signatureChauffeurLocalPath != null)
+        {
+          'path': signatureChauffeurLocalPath,
+          'kind': 'signature',
+          'field': 'signatureChauffeurPath'
+        },
+      if (signatureAgentSecuriteLocalPath != null)
+        {
+          'path': signatureAgentSecuriteLocalPath,
+          'kind': 'signature',
+          'field': 'signatureAgentSecuritePath'
+        },
+      if (signatureTechnicienLocalPath != null)
+        {
+          'path': signatureTechnicienLocalPath,
+          'kind': 'signature',
+          'field': 'signatureTechnicienPath'
+        },
       for (final p in photoPaths) {'path': p, 'kind': 'photo'},
     ];
     return _sync.submit(
@@ -90,16 +111,22 @@ class DepotageRepository {
         'dateDepotage': DateTime.now().toUtc().toIso8601String(),
         if (stockAvantLitres != null) 'stockAvantLitres': stockAvantLitres,
         if (stockApresLitres != null) 'stockApresLitres': stockApresLitres,
-        if (volumeAnnonceLitres != null) 'volumeAnnonceLitres': volumeAnnonceLitres,
-        if (fournisseur != null && fournisseur.isNotEmpty) 'fournisseur': fournisseur,
-        if (numeroBonLivraison != null && numeroBonLivraison.isNotEmpty) 'numeroBonLivraison': numeroBonLivraison,
-        if (observations != null && observations.isNotEmpty) 'observations': observations,
+        if (volumeAnnonceLitres != null)
+          'volumeAnnonceLitres': volumeAnnonceLitres,
+        if (fournisseur != null && fournisseur.isNotEmpty)
+          'fournisseur': fournisseur,
+        if (numeroBonLivraison != null && numeroBonLivraison.isNotEmpty)
+          'numeroBonLivraison': numeroBonLivraison,
+        if (observations != null && observations.isNotEmpty)
+          'observations': observations,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
         if (ligneLivraisonId != null) 'ligneLivraisonId': ligneLivraisonId,
         if (heuresGE.isNotEmpty) 'heuresGE': heuresGE,
-        if (nomChauffeur != null && nomChauffeur.isNotEmpty) 'nomChauffeur': nomChauffeur,
-        if (nomAgentSecurite != null && nomAgentSecurite.isNotEmpty) 'nomAgentSecurite': nomAgentSecurite,
+        if (nomChauffeur != null && nomChauffeur.isNotEmpty)
+          'nomChauffeur': nomChauffeur,
+        if (nomAgentSecurite != null && nomAgentSecurite.isNotEmpty)
+          'nomAgentSecurite': nomAgentSecurite,
         if (confirmerVraisemblance) 'confirmerVraisemblance': true,
       },
       attachments: attachments,

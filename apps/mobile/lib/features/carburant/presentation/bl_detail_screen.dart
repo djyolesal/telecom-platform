@@ -8,7 +8,21 @@ import '../data/depotage_model.dart';
 import '../data/bon_livraison_repository.dart';
 import '../../../core/theme/app_theme.dart';
 
-const _moisLabels = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+const _moisLabels = [
+  '',
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre'
+];
 
 const _statutLigne = <String, Color>{
   'PREVU': Color(0xFF6B7280),
@@ -46,15 +60,20 @@ class _BlDetailScreenState extends State<BlDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _export = true);
     try {
-      final chemin = await context.read<BonLivraisonRepository>().telechargerPlanPdf(bl.id, bl.numeroBL);
-      final ouvert = await launchUrl(Uri.file(chemin), mode: LaunchMode.externalApplication);
+      final chemin = await context
+          .read<BonLivraisonRepository>()
+          .telechargerPlanPdf(bl.id, bl.numeroBL);
+      final ouvert = await launchUrl(Uri.file(chemin),
+          mode: LaunchMode.externalApplication);
       if (!ouvert && mounted) {
         // Aucun lecteur PDF installé : le fichier reste sur l'appareil.
-        messenger.showSnackBar(SnackBar(content: Text('PDF enregistré : $chemin')));
+        messenger
+            .showSnackBar(SnackBar(content: Text('PDF enregistré : $chemin')));
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(
-        content: Text('Export impossible : ${e is Exception ? 'vérifiez votre connexion' : e}'),
+        content: Text(
+            'Export impossible : ${e is Exception ? 'vérifiez votre connexion' : e}'),
         backgroundColor: Colors.red,
       ));
     } finally {
@@ -69,7 +88,9 @@ class _BlDetailScreenState extends State<BlDetailScreen> {
       body: FutureBuilder<BonLivraisonDetail>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const LoadingView();
+          }
           if (snap.hasError) {
             return ErrorView(
               message: 'Chargement impossible (connexion requise).',
@@ -87,23 +108,32 @@ class _BlDetailScreenState extends State<BlDetailScreen> {
                 // Sans plan défini, le PDF sortirait vide : bouton désactivé
                 // plutôt qu'un document sans aucune ligne.
                 FilledButton.icon(
-                  onPressed: (_export || bl.lignes.isEmpty) ? null : () => _exporterPdf(bl),
+                  onPressed: (_export || bl.lignes.isEmpty)
+                      ? null
+                      : () => _exporterPdf(bl),
                   icon: _export
-                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.picture_as_pdf),
                   label: Text(_export
                       ? 'Préparation du PDF…'
                       : bl.lignes.isEmpty
                           ? 'Plan à définir — export indisponible'
                           : 'Exporter le plan en PDF'),
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                  style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48)),
                 ),
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Sites à livrer', style: TextStyle(fontWeight: FontWeight.w700)),
-                    Text('${bl.lignes.length}', style: TextStyle(color: Colors.grey.shade600)),
+                    const Text('Sites à livrer',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    Text('${bl.lignes.length}',
+                        style: TextStyle(color: Colors.grey.shade600)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -130,7 +160,8 @@ class _Entete extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reste = (bl.volumeChargeLitres - bl.totalLivre).clamp(0, double.infinity);
+    final reste =
+        (bl.volumeChargeLitres - bl.totalLivre).clamp(0, double.infinity);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -138,7 +169,9 @@ class _Entete extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(bl.numeroBL, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(bl.numeroBL,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(
               '${bl.immatriculation} · ${_moisLabels[bl.mois.clamp(0, 12)]} ${bl.annee}'
@@ -146,23 +179,33 @@ class _Entete extends StatelessWidget {
               style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
             ),
             const Divider(height: 20),
-            _Ligne(label: 'Chargé au dépôt', valeur: fmtLitres(bl.volumeChargeLitres)),
+            _Ligne(
+                label: 'Chargé au dépôt',
+                valeur: fmtLitres(bl.volumeChargeLitres)),
             _Ligne(label: 'Déjà déposé', valeur: fmtLitres(bl.totalLivre)),
             _Ligne(
               label: bl.estClos ? 'Reste soldé à la clôture' : 'Reste à livrer',
               valeur: fmtLitres(reste),
               fort: reste > 0 && !bl.estClos,
             ),
-            _Ligne(label: 'Date de chargement', valeur: fmtDate(bl.dateChargement)),
+            _Ligne(
+                label: 'Date de chargement',
+                valeur: fmtDate(bl.dateChargement)),
             if (bl.estClos)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: const Color(0xFF15803D).withValues(alpha: 0.10), borderRadius: BorderRadius.circular(8)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFF15803D).withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(8)),
                   child: Text(
                     'Chargement clôturé le ${fmtDate(bl.dateCloture)} — reste ventilé, plus rien à livrer.',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF15803D), fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF15803D),
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -186,8 +229,11 @@ class _Ligne extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-          Text(valeur, style: TextStyle(fontWeight: fort ? FontWeight.w700 : FontWeight.w500)),
+          Text(label,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          Text(valeur,
+              style: TextStyle(
+                  fontWeight: fort ? FontWeight.w700 : FontWeight.w500)),
         ],
       ),
     );
@@ -211,7 +257,8 @@ class _CarteLigneState extends State<_CarteLigne> {
     final ok = await MapsLauncher.directionsTo(l.latitude!, l.longitude!);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Aucune application de navigation disponible.')),
+        const SnackBar(
+            content: Text('Aucune application de navigation disponible.')),
       );
     }
   }
@@ -235,24 +282,40 @@ class _CarteLigneState extends State<_CarteLigne> {
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: couleur.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                  child: Text(ligne.statut, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: couleur)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: couleur.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Text(ligne.statut,
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: couleur)),
                 ),
               ],
             ),
             if (ligne.region.isNotEmpty)
-              Text(ligne.region, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              Text(ligne.region,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: _Mini(label: 'Prévu', valeur: fmtLitres(ligne.volumePrevuLitres))),
-                Expanded(child: _Mini(label: 'Livré', valeur: fmtLitres(ligne.volumeLivreReel))),
+                Expanded(
+                    child: _Mini(
+                        label: 'Prévu',
+                        valeur: fmtLitres(ligne.volumePrevuLitres))),
+                Expanded(
+                    child: _Mini(
+                        label: 'Livré',
+                        valeur: fmtLitres(ligne.volumeLivreReel))),
                 Expanded(
                   child: _Mini(
                     label: 'Reste',
                     valeur: fmtLitres(ligne.restant),
-                    couleur: ligne.restant > 0 ? Colors.orange.shade800 : Colors.green.shade700,
+                    couleur: ligne.restant > 0
+                        ? Colors.orange.shade800
+                        : Colors.green.shade700,
                   ),
                 ),
               ],
@@ -266,15 +329,22 @@ class _CarteLigneState extends State<_CarteLigne> {
                     onPressed: _itineraire,
                     icon: const Icon(Icons.navigation_outlined, size: 16),
                     label: const Text('Itinéraire'),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: Size.zero),
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero),
                   ),
                 const Spacer(),
                 // Réceptions réelles : la preuve de ce qui a été déposé ici.
                 if (nb > 0)
                   TextButton(
-                    onPressed: () => setState(() => _receptionsOuvertes = !_receptionsOuvertes),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: Size.zero),
-                    child: Text(_receptionsOuvertes ? 'Masquer' : '$nb réception${nb > 1 ? 's' : ''}'),
+                    onPressed: () => setState(
+                        () => _receptionsOuvertes = !_receptionsOuvertes),
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero),
+                    child: Text(_receptionsOuvertes
+                        ? 'Masquer'
+                        : '$nb réception${nb > 1 ? 's' : ''}'),
                   ),
               ],
             ),
@@ -285,9 +355,11 @@ class _CarteLigneState extends State<_CarteLigne> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(fmtDate(r.date), style: const TextStyle(fontSize: 12.5)),
+                        Text(fmtDate(r.date),
+                            style: const TextStyle(fontSize: 12.5)),
                         Text(fmtLitres(r.volumeLitres),
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                            style: const TextStyle(
+                                fontSize: 12.5, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   )),
@@ -310,8 +382,11 @@ class _Mini extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-        Text(valeur, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: couleur)),
+        Text(label,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        Text(valeur,
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: couleur)),
       ],
     );
   }

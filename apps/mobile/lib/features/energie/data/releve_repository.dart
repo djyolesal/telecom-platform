@@ -17,7 +17,9 @@ class ReleveRepository {
         'limit': 50,
         if (siteId != null) 'site_id': siteId,
       }),
-      (data) => (data['data'] as List).map((e) => Releve.fromJson(e as Map<String, dynamic>)).toList(),
+      (data) => (data['data'] as List)
+          .map((e) => Releve.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -49,9 +51,11 @@ class ReleveRepository {
         'dateReleve': DateTime.now().toUtc().toIso8601String(),
         if (indexCompteur != null) 'indexCompteur': indexCompteur,
         if (consommationKwh != null) 'consommationKwh': consommationKwh,
-        if (volumeGasoilLitres != null) 'volumeGasoilLitres': volumeGasoilLitres,
+        if (volumeGasoilLitres != null)
+          'volumeGasoilLitres': volumeGasoilLitres,
         if (heuresFonctGE != null) 'heuresFonctGE': heuresFonctGE,
-        if (observations != null && observations.isNotEmpty) 'observations': observations,
+        if (observations != null && observations.isNotEmpty)
+          'observations': observations,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
       },

@@ -16,7 +16,8 @@ class DepotageDraft {
   static Future<void> save(Map<String, dynamic> data) async {
     try {
       final f = await _file();
-      await f.writeAsString(jsonEncode({...data, 'savedAt': DateTime.now().toIso8601String()}));
+      await f.writeAsString(
+          jsonEncode({...data, 'savedAt': DateTime.now().toIso8601String()}));
     } catch (_) {/* le brouillon est un confort, jamais bloquant */}
   }
 

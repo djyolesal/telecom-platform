@@ -45,7 +45,13 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     }
   }
 
-  String _tacheStatut(String s) => s == 'EN_RETARD' ? 'En retard' : s == 'JAMAIS' ? 'Jamais' : s == 'A_JOUR' ? 'À jour' : '—';
+  String _tacheStatut(String s) => s == 'EN_RETARD'
+      ? 'En retard'
+      : s == 'JAMAIS'
+          ? 'Jamais'
+          : s == 'A_JOUR'
+              ? 'À jour'
+              : '—';
 
   Color _stockColor(String niveau) {
     switch (niveau) {
@@ -68,7 +74,9 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       body: FutureBuilder<Site>(
         future: _siteFuture,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const LoadingView();
+          }
           if (snap.hasError || !snap.hasData) {
             return ErrorView(message: 'Site indisponible', onRetry: () {});
           }
@@ -76,8 +84,13 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
           return ListView(
             padding: paddingEcran(context),
             children: [
-              Text(s.nom, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.brand)),
-              Text('${s.region}${s.ville != null ? ' · ${s.ville}' : ''}', style: TextStyle(color: Colors.grey.shade600)),
+              Text(s.nom,
+                  style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brand)),
+              Text('${s.region}${s.ville != null ? ' · ${s.ville}' : ''}',
+                  style: TextStyle(color: Colors.grey.shade600)),
               const SizedBox(height: 16),
               Card(
                 child: Padding(
@@ -86,8 +99,11 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                     children: [
                       _row('Configuration', s.powerConfig),
                       _row('Statut GE', s.statutGe),
-                      _row('Puissance GE', '${s.puissanceGeKva.toStringAsFixed(0)} kVA'),
-                      if (s.latitude != null) _row('Coordonnées', '${s.latitude!.toStringAsFixed(4)}, ${s.longitude!.toStringAsFixed(4)}'),
+                      _row('Puissance GE',
+                          '${s.puissanceGeKva.toStringAsFixed(0)} kVA'),
+                      if (s.latitude != null)
+                        _row('Coordonnées',
+                            '${s.latitude!.toStringAsFixed(4)}, ${s.longitude!.toStringAsFixed(4)}'),
                     ],
                   ),
                 ),
@@ -99,18 +115,28 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Infrastructure', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const Text('Infrastructure',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 8),
-                      if (s.typePylone != null) _row('Type de pylône', _pyloneLabel(s.typePylone!)),
+                      if (s.typePylone != null)
+                        _row('Type de pylône', _pyloneLabel(s.typePylone!)),
                       _row('Climatiseur', s.hasClimatiseur ? 'Oui' : 'Non'),
                       _row('Extincteurs', s.hasExtincteurs ? 'Oui' : 'Non'),
-                      if (s.cuveVolumeLitres != null) _row('Volume cuve', '${s.cuveVolumeLitres!.toStringAsFixed(0)} L'),
-                      if (s.formeCuve != null) _row('Forme cuve', _formeLabel(s.formeCuve!)),
-                      if (s.cuveDimensions != null && s.cuveDimensions!.isNotEmpty) _row('Dimensions cuve', s.cuveDimensions!),
+                      if (s.cuveVolumeLitres != null)
+                        _row('Volume cuve',
+                            '${s.cuveVolumeLitres!.toStringAsFixed(0)} L'),
+                      if (s.formeCuve != null)
+                        _row('Forme cuve', _formeLabel(s.formeCuve!)),
+                      if (s.cuveDimensions != null &&
+                          s.cuveDimensions!.isNotEmpty)
+                        _row('Dimensions cuve', s.cuveDimensions!),
                       _row('Agent de sécurité', s.hasGardien ? 'Oui' : 'Non'),
-                      if (s.societeGardiennage != null && s.societeGardiennage!.isNotEmpty)
+                      if (s.societeGardiennage != null &&
+                          s.societeGardiennage!.isNotEmpty)
                         _row('Sté gardiennage', s.societeGardiennage!),
-                      if (s.telephoneSite != null && s.telephoneSite!.isNotEmpty) _phoneRow(s.telephoneSite!),
+                      if (s.telephoneSite != null &&
+                          s.telephoneSite!.isNotEmpty)
+                        _phoneRow(s.telephoneSite!),
                     ],
                   ),
                 ),
@@ -129,15 +155,21 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                         children: [
                           Row(
                             children: [
-                              const Text('Stock carburant', style: TextStyle(fontWeight: FontWeight.w600)),
+                              const Text('Stock carburant',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w600)),
                               const Spacer(),
-                              StatusChip(label: stock.niveauAlerte, color: _stockColor(stock.niveauAlerte)),
+                              StatusChip(
+                                  label: stock.niveauAlerte,
+                                  color: _stockColor(stock.niveauAlerte)),
                             ],
                           ),
                           const SizedBox(height: 8),
                           _row('Stock actuel', fmtLitres(stock.stockLitres)),
-                          if (stock.autonomieJours != null) _row('Autonomie', '${stock.autonomieJours} jours'),
-                          _row('Conso estimée', '${fmtLitres(stock.litresMois)} / mois'),
+                          if (stock.autonomieJours != null)
+                            _row('Autonomie', '${stock.autonomieJours} jours'),
+                          _row('Conso estimée',
+                              '${fmtLitres(stock.litresMois)} / mois'),
                           _row('Coût estimé', fmtFcfa(stock.coutMoisFCFA)),
                         ],
                       ),
@@ -152,24 +184,39 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Maintenance', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const Text('Maintenance',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 8),
                       if (s.lotCode == null)
-                        Text('Aucun lot attribué', style: TextStyle(color: Colors.grey.shade500, fontSize: 13))
+                        Text('Aucun lot attribué',
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 13))
                       else ...[
-                        _row('Lot', '${s.lotCode}${s.lotNom != null ? ' — ${s.lotNom}' : ''}'),
+                        _row('Lot',
+                            '${s.lotCode}${s.lotNom != null ? ' — ${s.lotNom}' : ''}'),
                         const SizedBox(height: 4),
                         if (s.attributions.isEmpty)
-                          Text('Aucun prestataire attribué', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                          Text('Aucun prestataire attribué',
+                              style: TextStyle(
+                                  color: Colors.grey.shade500, fontSize: 13)),
                         ...s.attributions.map((a) => Padding(
                               padding: const EdgeInsets.symmetric(vertical: 3),
                               child: Row(
                                 children: [
-                                  StatusChip(label: _scopeLabel(a.scope), color: AppColors.brandLight),
+                                  StatusChip(
+                                      label: _scopeLabel(a.scope),
+                                      color: AppColors.brandLight),
                                   const SizedBox(width: 8),
-                                  Expanded(child: Text(a.prestataireNom, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                                  Expanded(
+                                      child: Text(a.prestataireNom,
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500))),
                                   if (a.prestataireTel != null)
-                                    Text(a.prestataireTel!, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                                    Text(a.prestataireTel!,
+                                        style: TextStyle(
+                                            color: Colors.grey.shade500,
+                                            fontSize: 12)),
                                 ],
                               ),
                             )),
@@ -190,16 +237,28 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Tâches préventives contractuelles (${taches.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          Text(
+                              'Tâches préventives contractuelles (${taches.length})',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
                           ...taches.map((t) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 3),
                                 child: Row(
                                   children: [
-                                    StatusChip(label: _tacheStatut(t.statut), color: _tacheColor(t.statut)),
+                                    StatusChip(
+                                        label: _tacheStatut(t.statut),
+                                        color: _tacheColor(t.statut)),
                                     const SizedBox(width: 8),
-                                    Expanded(child: Text(t.libelle, style: const TextStyle(fontSize: 13))),
-                                    Text(t.frequenceLabel, style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                                    Expanded(
+                                        child: Text(t.libelle,
+                                            style:
+                                                const TextStyle(fontSize: 13))),
+                                    Text(t.frequenceLabel,
+                                        style: TextStyle(
+                                            color: Colors.grey.shade500,
+                                            fontSize: 11)),
                                   ],
                                 ),
                               )),
@@ -215,12 +274,21 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                 runSpacing: 10,
                 children: [
                   if (s.latitude != null && s.longitude != null)
-                    _action(context, Icons.navigation, 'Itinéraire', () => _navigateTo(s)),
-                  _action(context, Icons.build, 'Maintenance', () => context.push('/maintenance/nouveau?siteId=${s.id}')),
-                  _action(context, Icons.local_gas_station, 'Dépotage', () => context.push('/carburant/nouveau?siteId=${s.id}')),
+                    _action(context, Icons.navigation, 'Itinéraire',
+                        () => _navigateTo(s)),
+                  _action(
+                      context,
+                      Icons.build,
+                      'Maintenance',
+                      () =>
+                          context.push('/maintenance/nouveau?siteId=${s.id}')),
+                  _action(context, Icons.local_gas_station, 'Dépotage',
+                      () => context.push('/carburant/nouveau?siteId=${s.id}')),
                   // Consultation seule : les relevés naissent des maintenances/dépotages.
-                  _action(context, Icons.bolt, 'Relevés', () => context.push('/energie?siteId=${s.id}')),
-                  _action(context, Icons.warning_amber, 'Incident', () => context.push('/incidents/nouveau?siteId=${s.id}')),
+                  _action(context, Icons.bolt, 'Relevés',
+                      () => context.push('/energie?siteId=${s.id}')),
+                  _action(context, Icons.warning_amber, 'Incident',
+                      () => context.push('/incidents/nouveau?siteId=${s.id}')),
                 ],
               ),
             ],
@@ -244,13 +312,21 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
   Widget _phoneRow(String tel) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: InkWell(
-          onTap: () => launchUrl(Uri(scheme: 'tel', path: tel.replaceAll(' ', ''))),
+          onTap: () =>
+              launchUrl(Uri(scheme: 'tel', path: tel.replaceAll(' ', ''))),
           child: Row(
             children: [
-              Expanded(child: Text('Téléphone site', style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+              Expanded(
+                  child: Text('Téléphone site',
+                      style: TextStyle(
+                          color: Colors.grey.shade600, fontSize: 13))),
               Icon(Icons.phone, size: 15, color: Colors.teal.shade700),
               const SizedBox(width: 4),
-              Text(tel, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.teal.shade700)),
+              Text(tel,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: Colors.teal.shade700)),
             ],
           ),
         ),
@@ -260,25 +336,35 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           children: [
-            Expanded(child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-            Text(_label(value), style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+            Expanded(
+                child: Text(label,
+                    style:
+                        TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+            Text(_label(value),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
           ],
         ),
       );
 
   // Traduit certains codes enum en libellés lisibles si connus.
-  String _label(String v) =>
-      kStatutMaintenance[v] ?? kSourceEnergie[v] ?? v;
+  String _label(String v) => kStatutMaintenance[v] ?? kSourceEnergie[v] ?? v;
 
   String _pyloneLabel(String v) {
     const m = {
-      'GREENFIELD': 'Greenfield', 'ROOFTOP': 'Rooftop', 'TGC_GREENFIELD': 'TGC-Greenfield',
-      'TROTTOIR': 'Trottoir', 'RURAL': 'Rural', 'LP_GREENFIELD': 'LP-Greenfield',
+      'GREENFIELD': 'Greenfield',
+      'ROOFTOP': 'Rooftop',
+      'TGC_GREENFIELD': 'TGC-Greenfield',
+      'TROTTOIR': 'Trottoir',
+      'RURAL': 'Rural',
+      'LP_GREENFIELD': 'LP-Greenfield',
     };
     return m[v] ?? v;
   }
 
-  String _formeLabel(String v) => v == 'CYLINDRE_COUCHE' ? 'Cylindre couché' : (v == 'RECTANGULAIRE' ? 'Rectangulaire' : v);
+  String _formeLabel(String v) => v == 'CYLINDRE_COUCHE'
+      ? 'Cylindre couché'
+      : (v == 'RECTANGULAIRE' ? 'Rectangulaire' : v);
 
   String _scopeLabel(String s) {
     switch (s) {
@@ -293,13 +379,16 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     }
   }
 
-  Widget _action(BuildContext context, IconData icon, String label, VoidCallback onTap) => SizedBox(
+  Widget _action(BuildContext context, IconData icon, String label,
+          VoidCallback onTap) =>
+      SizedBox(
         width: (MediaQuery.of(context).size.width - 42) / 2,
         child: OutlinedButton.icon(
           onPressed: onTap,
           icon: Icon(icon, size: 18),
           label: Text(label),
-          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+          style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14)),
         ),
       );
 }

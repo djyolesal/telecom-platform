@@ -19,13 +19,13 @@ import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 import '../../../core/theme/app_theme.dart';
 
-
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
   const MaintenanceDetailScreen({super.key, required this.id});
 
   @override
-  State<MaintenanceDetailScreen> createState() => _MaintenanceDetailScreenState();
+  State<MaintenanceDetailScreen> createState() =>
+      _MaintenanceDetailScreenState();
 }
 
 class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
@@ -46,14 +46,16 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   void _reload() => setState(() {
         // Bloc (pas de flèche) : une flèche renverrait le Future de l'assignation,
         // ce que setState rejette ("callback argument returned a Future").
-        _future = context.read<MaintenanceRepository>().getMaintenance(widget.id);
+        _future =
+            context.read<MaintenanceRepository>().getMaintenance(widget.id);
       });
 
   /// Vérifie la présence physique sur le site avant une opération, après un
   /// AFFINAGE GPS (~5 m visés, feuille avec précision en direct). Retourne
   /// (ok, lat, lng). Si le site n'a pas de coordonnées, la vérification est
   /// ignorée (le serveur tranchera). Affiche un dialogue si hors site.
-  Future<({bool ok, double? lat, double? lng})> _verifyOnSite(Maintenance m, String action) async {
+  Future<({bool ok, double? lat, double? lng})> _verifyOnSite(
+      Maintenance m, String action) async {
     final hasSiteCoords = m.siteLatitude != null && m.siteLongitude != null;
     if (!hasSiteCoords) {
       // Site non géolocalisé : simple capture silencieuse pour tracer la position.
@@ -66,7 +68,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           'Impossible de vérifier votre présence sur site pour $action. Activez la localisation (précision élevée) et réessayez.');
       return (ok: false, lat: null, lng: null);
     }
-    final dist = LocationService.distanceMeters(fix.lat, fix.lng, m.siteLatitude!, m.siteLongitude!);
+    final dist = LocationService.distanceMeters(
+        fix.lat, fix.lng, m.siteLatitude!, m.siteLongitude!);
     if (dist > AppConfig.geofenceRadiusM) {
       await _siteDialog('Vous n\'êtes pas sur le site',
           'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${m.siteNom ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
@@ -83,7 +86,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         icon: const Icon(Icons.location_off, color: Colors.red, size: 32),
         title: Text(title),
         content: Text(message),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Compris'))],
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Compris'))
+        ],
       ),
     );
   }
@@ -94,9 +100,12 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     try {
       final check = await _verifyOnSite(m, 'le démarrage');
       if (!check.ok) return;
-      final res = await repo.start(widget.id, latitude: check.lat, longitude: check.lng);
+      final res = await repo.start(widget.id,
+          latitude: check.lat, longitude: check.lng);
       if (!mounted) return;
-      _snack(res.isQueued ? 'Démarrage mis en file — il partira à la reconnexion' : 'Maintenance démarrée');
+      _snack(res.isQueued
+          ? 'Démarrage mis en file — il partira à la reconnexion'
+          : 'Maintenance démarrée');
       _reload();
     } catch (e) {
       if (mounted) _snack(_errMsg(e));
@@ -113,12 +122,24 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     final avant = <String>[], apres = <String>[], autres = <String>[];
     for (var i = 0; i < m.photoUrls.length; i++) {
       final phase = i < m.photoPhases.length ? m.photoPhases[i] : null;
-      (phase == 'AVANT' ? avant : phase == 'APRES' ? apres : autres).add(m.photoUrls[i]);
+      (phase == 'AVANT'
+              ? avant
+              : phase == 'APRES'
+                  ? apres
+                  : autres)
+          .add(m.photoUrls[i]);
     }
     Widget titre(String txt) => Text(txt,
-        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13));
+        style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade700,
+            fontSize: 13));
     if (avant.isEmpty && apres.isEmpty) {
-      return [titre('Photos (${autres.length})'), const SizedBox(height: 10), PhotoThumbnails(urls: autres)];
+      return [
+        titre('Photos (${autres.length})'),
+        const SizedBox(height: 10),
+        PhotoThumbnails(urls: autres)
+      ];
     }
     return [
       if (avant.isNotEmpty) ...[
@@ -145,7 +166,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   Future<void> _prendrePhotoAvant() async {
     try {
       final img = await _pickerAvant.pickImage(
-        source: ImageSource.camera, maxWidth: 1600, maxHeight: 1600, imageQuality: 70,
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 70,
       );
       if (img != null) setState(() => _photosAvant.add(img));
     } catch (_) {/* annulé / permission refusée */}
@@ -162,7 +186,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       for (final x in _photosAvant) {
         paths.add(await AttachmentStore.persistFile(x.path));
       }
-      final res = await repo.addPhotos(widget.id, photoPaths: paths, phase: 'AVANT');
+      final res =
+          await repo.addPhotos(widget.id, photoPaths: paths, phase: 'AVANT');
       if (!mounted) return;
       _snack(res.isQueued
           ? '${paths.length} photo(s) en file — elles partiront à la reconnexion'
@@ -191,7 +216,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     try {
       final res = await repo.suspend(widget.id, motif: motif);
       if (!mounted) return;
-      _snack(res.isQueued ? 'Suspension mise en file — elle partira à la reconnexion' : 'Maintenance suspendue');
+      _snack(res.isQueued
+          ? 'Suspension mise en file — elle partira à la reconnexion'
+          : 'Maintenance suspendue');
       _reload();
     } catch (e) {
       if (mounted) _snack(_errMsg(e));
@@ -207,9 +234,12 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     try {
       final check = await _verifyOnSite(m, 'la reprise');
       if (!check.ok) return;
-      final res = await repo.resume(widget.id, latitude: check.lat, longitude: check.lng);
+      final res = await repo.resume(widget.id,
+          latitude: check.lat, longitude: check.lng);
       if (!mounted) return;
-      _snack(res.isQueued ? 'Reprise mise en file — elle partira à la reconnexion' : 'Maintenance reprise');
+      _snack(res.isQueued
+          ? 'Reprise mise en file — elle partira à la reconnexion'
+          : 'Maintenance reprise');
       _reload();
     } catch (e) {
       if (mounted) _snack(_errMsg(e));
@@ -228,9 +258,11 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       _snack('La maintenance doit d\'abord être démarrée.');
       return;
     }
-    final ecoule = DateTime.now().difference(debut).inMinutes - m.dureeSuspendueMinutes;
+    final ecoule =
+        DateTime.now().difference(debut).inMinutes - m.dureeSuspendueMinutes;
     if (ecoule < AppConfig.minDureeClotureMin) {
-      _snack('Clôture possible après ${AppConfig.minDureeClotureMin} min de travail (encore ${AppConfig.minDureeClotureMin - ecoule} min).');
+      _snack(
+          'Clôture possible après ${AppConfig.minDureeClotureMin} min de travail (encore ${AppConfig.minDureeClotureMin - ecoule} min).');
       return;
     }
 
@@ -254,7 +286,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     try {
       // Photos (caméra) → copie dans un stockage persistant. L'upload vers MinIO
       // est DIFFÉRÉ au moteur de sync : immédiat si en ligne, sinon à la reconnexion.
-      final photoFiles = (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];
+      final photoFiles =
+          (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];
       final photoPaths = <String>[];
       for (final f in photoFiles) {
         photoPaths.add(await AttachmentStore.persistFile(f.path));
@@ -267,10 +300,14 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         MaterialPageRoute(builder: (_) => const SignaturePadScreen()),
       );
       if (bytes != null) {
-        signaturePath = await AttachmentStore.persistBytes(bytes as Uint8List, 'signature-${widget.id}.png');
+        signaturePath = await AttachmentStore.persistBytes(
+            bytes as Uint8List, 'signature-${widget.id}.png');
       }
       if (m.natureTravaux != 'ENTRETIEN' && signaturePath == null) {
-        if (mounted) { _snack('Signature requise pour valider ce mouvement d\'actif'); setState(() => _busy = false); }
+        if (mounted) {
+          _snack('Signature requise pour valider ce mouvement d\'actif');
+          setState(() => _busy = false);
+        }
         return;
       }
 
@@ -312,13 +349,20 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     }
   }
 
-  void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  void _snack(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   /// Message clair selon le type d'erreur (au lieu d'une exception brute).
   String _errMsg(Object e) {
-    if (e is ServerException) return e.message; // ex: « Vous n'êtes pas sur le site… », photos < 6
-    if (e is UnauthorizedException) return 'Session expirée — reconnectez-vous puis réessayez.';
-    if (e is NetworkException) return 'Connexion indisponible — réessayez une fois en ligne.';
+    if (e is ServerException) {
+      return e.message; // ex: « Vous n'êtes pas sur le site… », photos < 6
+    }
+    if (e is UnauthorizedException) {
+      return 'Session expirée — reconnectez-vous puis réessayez.';
+    }
+    if (e is NetworkException) {
+      return 'Connexion indisponible — réessayez une fois en ligne.';
+    }
     return 'Erreur : $e';
   }
 
@@ -329,37 +373,58 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       body: FutureBuilder<Maintenance>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
-          if (snap.hasError || !snap.hasData) return ErrorView(message: 'Indisponible', onRetry: _reload);
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const LoadingView();
+          }
+          if (snap.hasError || !snap.hasData) {
+            return ErrorView(message: 'Indisponible', onRetry: _reload);
+          }
           final m = snap.data!;
           return ListView(
             padding: paddingEcran(context),
             children: [
               if (m.reference != null)
-                Text(m.reference!, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-              Text('${m.siteNom ?? ''} · ${m.equipement}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(m.reference!,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5)),
+              Text('${m.siteNom ?? ''} · ${m.equipement}',
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              StatusChip(label: kStatutMaintenance[m.statut] ?? m.statut, color: Colors.blue),
+              StatusChip(
+                  label: kStatutMaintenance[m.statut] ?? m.statut,
+                  color: Colors.blue),
               const SizedBox(height: 16),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(children: [
-                    if (m.natureTravaux != 'ENTRETIEN') _row('Nature', kNatureTravaux[m.natureTravaux] ?? m.natureTravaux),
+                    if (m.natureTravaux != 'ENTRETIEN')
+                      _row('Nature',
+                          kNatureTravaux[m.natureTravaux] ?? m.natureTravaux),
                     _row('Type', kTypeMaintenance[m.type] ?? m.type),
-                    _row('Catégorie', '${kCategorieEquipement[m.categorie] ?? m.categorie}${m.isPassive ? ' · passive' : ' · active'}'),
+                    _row('Catégorie',
+                        '${kCategorieEquipement[m.categorie] ?? m.categorie}${m.isPassive ? ' · passive' : ' · active'}'),
                     _row('Technicien', m.technicien ?? '—'),
-                    if (m.prestataire != null) _row('Prestataire', m.prestataire!),
+                    if (m.prestataire != null)
+                      _row('Prestataire', m.prestataire!),
                     _row('Planifiée', fmtDateTime(m.datePlanifiee)),
                     _row('Début', fmtDateTime(m.dateDebut)),
                     _row('Fin', fmtDateTime(m.dateFin)),
-                    if (m.dureeMinutes != null) _row('Durée', '${m.dureeMinutes} min'),
+                    if (m.dureeMinutes != null)
+                      _row('Durée', '${m.dureeMinutes} min'),
                   ]),
                 ),
               ),
               if (m.description != null && m.description!.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Card(child: Padding(padding: const EdgeInsets.all(14), child: Text(m.description!))),
+                Card(
+                    child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Text(m.description!))),
               ],
               if (m.analyseEnergie != null && m.analyseEnergie!.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -379,7 +444,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
               ],
               const SizedBox(height: 16),
               if (m.statut == 'PLANIFIEE')
-                FilledButton.icon(onPressed: _busy ? null : () => _start(m), icon: const Icon(Icons.play_arrow), label: const Text('Démarrer')),
+                FilledButton.icon(
+                    onPressed: _busy ? null : () => _start(m),
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Démarrer')),
               if (m.statut == 'EN_COURS') ...[
                 Card(
                   child: Padding(
@@ -388,27 +456,43 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Photos avant travaux (état des lieux)',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13)),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                                fontSize: 13)),
                         const SizedBox(height: 4),
-                        Text('Prenez l’état initial dès le démarrage — les photos de fin se prennent à la clôture.',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                        Text(
+                            'Prenez l’état initial dès le démarrage — les photos de fin se prennent à la clôture.',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade600)),
                         const SizedBox(height: 8),
                         if (_photosAvant.isNotEmpty)
                           Wrap(
-                            spacing: 6, runSpacing: 6,
-                            children: List.generate(_photosAvant.length, (i) => Stack(children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: Image.file(File(_photosAvant[i].path), width: 56, height: 56, fit: BoxFit.cover, cacheWidth: 150),
-                              ),
-                              Positioned(
-                                top: -8, right: -8,
-                                child: IconButton(
-                                  icon: const Icon(Icons.cancel, size: 18, color: Colors.red),
-                                  onPressed: () => setState(() => _photosAvant.removeAt(i)),
-                                ),
-                              ),
-                            ])),
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: List.generate(
+                                _photosAvant.length,
+                                (i) => Stack(children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Image.file(
+                                            File(_photosAvant[i].path),
+                                            width: 56,
+                                            height: 56,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 150),
+                                      ),
+                                      Positioned(
+                                        top: -8,
+                                        right: -8,
+                                        child: IconButton(
+                                          icon: const Icon(Icons.cancel,
+                                              size: 18, color: Colors.red),
+                                          onPressed: () => setState(
+                                              () => _photosAvant.removeAt(i)),
+                                        ),
+                                      ),
+                                    ])),
                           ),
                         Row(children: [
                           Expanded(
@@ -434,7 +518,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                FilledButton.icon(onPressed: _busy ? null : () => _close(m), icon: const Icon(Icons.check_circle), label: const Text('Clôturer')),
+                FilledButton.icon(
+                    onPressed: _busy ? null : () => _close(m),
+                    icon: const Icon(Icons.check_circle),
+                    label: const Text('Clôturer')),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => _suspend(m),
@@ -448,9 +535,13 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(children: [
-                      const Icon(Icons.pause_circle, color: Color(0xFFE67E22), size: 18),
+                      const Icon(Icons.pause_circle,
+                          color: Color(0xFFE67E22), size: 18),
                       const SizedBox(width: 8),
-                      Expanded(child: Text('Suspendue${m.motifSuspension != null ? ' — ${m.motifSuspension}' : ''}', style: const TextStyle(fontSize: 13))),
+                      Expanded(
+                          child: Text(
+                              'Suspendue${m.motifSuspension != null ? ' — ${m.motifSuspension}' : ''}',
+                              style: const TextStyle(fontSize: 13))),
                     ]),
                   ),
                 ),
@@ -471,8 +562,12 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   Widget _row(String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(children: [
-          Expanded(child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+          Expanded(
+              child: Text(label,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+          Text(value,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
         ]),
       );
 }
@@ -486,7 +581,9 @@ class _AnalyseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final alerte = texte.startsWith('⚠');
-    final bg = alerte ? const Color(0xFFFFF7ED) : const Color(0xFFF0FDF4); // orange50 / green50
+    final bg = alerte
+        ? const Color(0xFFFFF7ED)
+        : const Color(0xFFF0FDF4); // orange50 / green50
     final border = alerte ? const Color(0xFFFED7AA) : const Color(0xFFBBF7D0);
     final titre = alerte ? const Color(0xFF9A3412) : const Color(0xFF166534);
     return Container(
@@ -501,12 +598,20 @@ class _AnalyseCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(alerte ? Icons.warning_amber_rounded : Icons.check_circle_outline, size: 16, color: titre),
+            Icon(
+                alerte
+                    ? Icons.warning_amber_rounded
+                    : Icons.check_circle_outline,
+                size: 16,
+                color: titre),
             const SizedBox(width: 6),
-            Text('Analyse de cohérence énergie', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: titre)),
+            Text('Analyse de cohérence énergie',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 13, color: titre)),
           ]),
           const SizedBox(height: 6),
-          Text(texte.replaceFirst('⚠ ', ''), style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          Text(texte.replaceFirst('⚠ ', ''),
+              style: const TextStyle(fontSize: 13, color: Colors.black87)),
         ],
       ),
     );
@@ -582,16 +687,25 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   @override
   void dispose() {
-    for (final c in [_obs, _gasoil, _heures, _index, _puissance, ..._geCtrls.values]) {
+    for (final c in [
+      _obs,
+      _gasoil,
+      _heures,
+      _index,
+      _puissance,
+      ..._geCtrls.values
+    ]) {
       c.dispose();
     }
     super.dispose();
   }
 
-  double? _num(TextEditingController c) =>
-      c.text.trim().isEmpty ? null : double.tryParse(c.text.replaceAll(',', '.'));
+  double? _num(TextEditingController c) => c.text.trim().isEmpty
+      ? null
+      : double.tryParse(c.text.replaceAll(',', '.'));
 
-  static String _fmtV(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+  static String _fmtV(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
   static String _fmtDate(DateTime? d) => d == null
       ? ''
       : ' le ${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -603,7 +717,8 @@ class _CloseSheetState extends State<_CloseSheet> {
     final c = _ctx;
     if (c == null) return null;
     final parts = <String>[
-      if (c.cuveVolumeLitres != null) 'Capacité cuve : ${_fmtV(c.cuveVolumeLitres!)} L',
+      if (c.cuveVolumeLitres != null)
+        'Capacité cuve : ${_fmtV(c.cuveVolumeLitres!)} L',
       if (c.dernierNiveauCuve != null)
         'dernier niveau : ${_fmtV(c.dernierNiveauCuve!.valeur)} L${_fmtDate(c.dernierNiveauCuve!.date)}',
     ];
@@ -613,13 +728,18 @@ class _CloseSheetState extends State<_CloseSheet> {
   /// Repère sous un champ d'index GE : dernier index connu (par groupe ou mono).
   String? _hintIndexGE(String? groupeId) {
     final c = _ctx;
-    final v = groupeId != null ? c?.dernierIndexGE[groupeId] : c?.dernierIndexGEMono;
-    return v == null ? null : 'Dernier index connu : ${_fmtV(v.valeur)} h${_fmtDate(v.date)}';
+    final v =
+        groupeId != null ? c?.dernierIndexGE[groupeId] : c?.dernierIndexGEMono;
+    return v == null
+        ? null
+        : 'Dernier index connu : ${_fmtV(v.valeur)} h${_fmtDate(v.date)}';
   }
 
   String? _hintCeet() {
     final v = _ctx?.dernierIndexCeet;
-    return v == null ? null : 'Dernier index connu : ${_fmtV(v.valeur)} kWh${_fmtDate(v.date)}';
+    return v == null
+        ? null
+        : 'Dernier index connu : ${_fmtV(v.valeur)} kWh${_fmtDate(v.date)}';
   }
 
   /// Contrôle de vraisemblance LOCAL (miroir des règles serveur) : détection
@@ -632,8 +752,12 @@ class _CloseSheetState extends State<_CloseSheet> {
 
     final jauge = energie['volumeGasoilLitres'] as double?;
     final cuve = c.cuveVolumeLitres;
-    if (jauge != null && cuve != null && cuve > 0 && jauge > cuve * (1 + c.margeCuvePct / 100)) {
-      avert.add('Volume gasoil saisi (${_fmtV(jauge)} L) supérieur à la capacité de la cuve du site (${_fmtV(cuve)} L).');
+    if (jauge != null &&
+        cuve != null &&
+        cuve > 0 &&
+        jauge > cuve * (1 + c.margeCuvePct / 100)) {
+      avert.add(
+          'Volume gasoil saisi (${_fmtV(jauge)} L) supérieur à la capacité de la cuve du site (${_fmtV(cuve)} L).');
     }
 
     void checkIndexGE(double? saisi, ValeurConnue? dernier, String libelle) {
@@ -642,7 +766,8 @@ class _CloseSheetState extends State<_CloseSheet> {
         avert.add(
             'Index horaire $libelle saisi (${_fmtV(saisi)} h) inférieur au dernier index connu (${_fmtV(dernier.valeur)} h${_fmtDate(dernier.date)}) — un compteur horaire ne recule pas.');
       } else if (dernier.date != null) {
-        final jours = DateTime.now().difference(dernier.date!).inMinutes / 1440.0;
+        final jours =
+            DateTime.now().difference(dernier.date!).inMinutes / 1440.0;
         final deltaMax = (jours < 0 ? 0 : jours) * c.maxHeuresGEParJour + 1;
         if (saisi - dernier.valeur > deltaMax) {
           avert.add(
@@ -655,10 +780,12 @@ class _CloseSheetState extends State<_CloseSheet> {
     final multi = widget.maintenance.siteGroupes.length > 1;
     if (geHours != null) {
       for (final g in widget.maintenance.siteGroupes) {
-        checkIndexGE(geHours[g.id] as double?, c.dernierIndexGE[g.id], multi ? 'GE n°${g.numero}' : 'GE');
+        checkIndexGE(geHours[g.id] as double?, c.dernierIndexGE[g.id],
+            multi ? 'GE n°${g.numero}' : 'GE');
       }
     } else {
-      checkIndexGE(energie['indexHeuresGE'] as double?, c.dernierIndexGEMono, 'GE');
+      checkIndexGE(
+          energie['indexHeuresGE'] as double?, c.dernierIndexGEMono, 'GE');
     }
 
     final ceet = energie['indexCompteur'] as double?;
@@ -698,7 +825,8 @@ class _CloseSheetState extends State<_CloseSheet> {
     } else if (h < 0) {
       hint = 'Index inférieur à la dernière vidange (compteur remplacé ?).';
     } else {
-      hint = '${h.toStringAsFixed(0)} h depuis la dernière vidange (seuil $seuil h).';
+      hint =
+          '${h.toStringAsFixed(0)} h depuis la dernière vidange (seuil $seuil h).';
     }
     return CheckboxListTile(
       contentPadding: EdgeInsets.zero,
@@ -709,9 +837,12 @@ class _CloseSheetState extends State<_CloseSheet> {
         _vidangeTouched.add(g.id);
         _vidange[g.id] = v ?? false;
       }),
-      title: Text('Vidange GE n°${g.numero} effectuée', style: const TextStyle(fontSize: 13)),
+      title: Text('Vidange GE n°${g.numero} effectuée',
+          style: const TextStyle(fontSize: 13)),
       subtitle: Text(hint,
-          style: TextStyle(fontSize: 11, color: due ? Colors.orange.shade800 : Colors.grey.shade600)),
+          style: TextStyle(
+              fontSize: 11,
+              color: due ? Colors.orange.shade800 : Colors.grey.shade600)),
     );
   }
 
@@ -734,18 +865,23 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   Future<void> _submit() async {
     final m = widget.maintenance;
-    final sources = m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+    final sources =
+        m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
     final energie = <String, dynamic>{};
 
     // Photos obligatoires pour une maintenance préventive
-    if (m.type == 'PREVENTIVE' && _photos.length < AppConfig.minPhotosPreventive) {
-      setState(() => _error = 'Au moins ${AppConfig.minPhotosPreventive} photos sont requises (${_photos.length} prise(s)).');
+    if (m.type == 'PREVENTIVE' &&
+        _photos.length < AppConfig.minPhotosPreventive) {
+      setState(() => _error =
+          'Au moins ${AppConfig.minPhotosPreventive} photos sont requises (${_photos.length} prise(s)).');
       return;
     }
     // Preuve obligatoire pour un travail de cycle de vie (photos ; la signature
     // est imposée juste après, à l'écran de signature).
-    if (m.natureTravaux != 'ENTRETIEN' && _photos.length < AppConfig.minPhotosMouvement) {
-      setState(() => _error = 'Au moins ${AppConfig.minPhotosMouvement} photos sont requises pour ce mouvement d\'actif (${_photos.length} prise(s)).');
+    if (m.natureTravaux != 'ENTRETIEN' &&
+        _photos.length < AppConfig.minPhotosMouvement) {
+      setState(() => _error =
+          'Au moins ${AppConfig.minPhotosMouvement} photos sont requises pour ce mouvement d\'actif (${_photos.length} prise(s)).');
       return;
     }
 
@@ -754,21 +890,24 @@ class _CloseSheetState extends State<_CloseSheet> {
         setState(() => _error = 'Renseignez le volume gasoil dans la cuve.');
         return;
       }
-      energie['volumeGasoilLitres'] = _num(_gasoil); // niveau actuel de la cuve (partagée)
+      energie['volumeGasoilLitres'] =
+          _num(_gasoil); // niveau actuel de la cuve (partagée)
       final groupes = widget.maintenance.siteGroupes;
       if (groupes.isNotEmpty) {
         final geHours = <String, dynamic>{};
         for (final g in groupes) {
           final v = _num(_geCtrls[g.id]!);
           if (v == null) {
-            setState(() => _error = 'Renseignez l\'index horaire du GE n°${g.numero}.');
+            setState(() =>
+                _error = 'Renseignez l\'index horaire du GE n°${g.numero}.');
             return;
           }
           geHours[g.id] = v;
         }
         energie['geHours'] = geHours; // index horaire par GE
         // Vidange confirmée sur certains GE → le serveur fige l'index de référence.
-        final vidangeIds = groupes.where(_vidangeEffective).map((g) => g.id).toList();
+        final vidangeIds =
+            groupes.where(_vidangeEffective).map((g) => g.id).toList();
         if (vidangeIds.isNotEmpty) energie['vidangeGeIds'] = vidangeIds;
       } else {
         if (_num(_heures) == null) {
@@ -783,7 +922,8 @@ class _CloseSheetState extends State<_CloseSheet> {
         setState(() => _error = "Renseignez l'index compteur CEET.");
         return;
       }
-      energie['indexCompteur'] = _num(_index); // index cumulé ; la conso kWh est calculée côté serveur
+      energie['indexCompteur'] =
+          _num(_index); // index cumulé ; la conso kWh est calculée côté serveur
     }
     if (sources.contains('SOLAIRE')) {
       if (_num(_puissance) == null) {
@@ -794,7 +934,8 @@ class _CloseSheetState extends State<_CloseSheet> {
     }
 
     if (_agentPresent == null) {
-      setState(() => _error = 'Indiquez si l\'agent de sécurité est présent sur le site.');
+      setState(() =>
+          _error = 'Indiquez si l\'agent de sécurité est présent sur le site.');
       return;
     }
 
@@ -830,7 +971,8 @@ class _CloseSheetState extends State<_CloseSheet> {
           style: OutlinedButton.styleFrom(
             backgroundColor: selected ? color : null,
             foregroundColor: selected ? Colors.white : color,
-            side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.5)),
+            side:
+                BorderSide(color: color.withValues(alpha: selected ? 1 : 0.5)),
           ),
         ),
       );
@@ -841,7 +983,11 @@ class _CloseSheetState extends State<_CloseSheet> {
       children: [
         const SizedBox(height: 12),
         const Text('AGENT DE SÉCURITÉ (GARDIENNAGE)',
-            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+            style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: Colors.grey)),
         const SizedBox(height: 6),
         Row(children: [
           bouton(true, 'Présent', Icons.verified_user, const Color(0xFF0E7C6B)),
@@ -855,20 +1001,25 @@ class _CloseSheetState extends State<_CloseSheet> {
   @override
   Widget build(BuildContext context) {
     final m = widget.maintenance;
-    final sources = m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+    final sources =
+        m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
     // Photos requises : 6 pour une préventive, 2 pour un travail de cycle de vie.
-    final minPhotos = m.type == 'PREVENTIVE' ? AppConfig.minPhotosPreventive : (m.natureTravaux != 'ENTRETIEN' ? AppConfig.minPhotosMouvement : 0);
+    final minPhotos = m.type == 'PREVENTIVE'
+        ? AppConfig.minPhotosPreventive
+        : (m.natureTravaux != 'ENTRETIEN' ? AppConfig.minPhotosMouvement : 0);
     const numKb = TextInputType.numberWithOptions(decimal: true);
 
     // Le bouton de validation est ÉPINGLÉ sous la zone défilante (et sous une
     // SafeArea) : en fin de formulaire il finissait sous la barre système ou
     // sous le clavier — les techniciens ne le trouvaient pas.
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SafeArea(
         top: false,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -876,161 +1027,207 @@ class _CloseSheetState extends State<_CloseSheet> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                   child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Clôturer la maintenance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (m.natureTravaux != 'ENTRETIEN') ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
-                child: Row(children: [
-                  Icon(Icons.swap_horiz, size: 18, color: Colors.green.shade700),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('À la clôture, l\'actif sera ${_mouvementVerbe(m.natureTravaux)}.',
-                      style: TextStyle(fontSize: 12, color: Colors.green.shade800))),
-                ]),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (sources.isNotEmpty) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Relevés énergie requis (${m.sitePowerConfig})',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue.shade800)),
-                    const SizedBox(height: 10),
-                    if (sources.contains('GE')) ...[
-                      TextField(
-                        controller: _gasoil,
-                        keyboardType: numKb,
-                        decoration: InputDecoration(
-                          labelText: 'Volume gasoil dans la cuve (L) *',
-                          helperText: _hintGasoil(),
-                          helperMaxLines: 2,
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Clôturer la maintenance',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      if (m.natureTravaux != 'ENTRETIEN') ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Row(children: [
+                            Icon(Icons.swap_horiz,
+                                size: 18, color: Colors.green.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: Text(
+                                    'À la clôture, l\'actif sera ${_mouvementVerbe(m.natureTravaux)}.',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.green.shade800))),
+                          ]),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      if (m.siteGroupes.isNotEmpty)
-                        ...m.siteGroupes.map((g) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                        const SizedBox(height: 12),
+                      ],
+                      if (sources.isNotEmpty) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  'Relevés énergie requis (${m.sitePowerConfig})',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade800)),
+                              const SizedBox(height: 10),
+                              if (sources.contains('GE')) ...[
+                                TextField(
+                                  controller: _gasoil,
+                                  keyboardType: numKb,
+                                  decoration: InputDecoration(
+                                    labelText:
+                                        'Volume gasoil dans la cuve (L) *',
+                                    helperText: _hintGasoil(),
+                                    helperMaxLines: 2,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                if (m.siteGroupes.isNotEmpty)
+                                  ...m.siteGroupes.map((g) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 10),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            TextField(
+                                              controller: _geCtrls[g.id],
+                                              keyboardType: numKb,
+                                              // Recalcule en direct « X h depuis la dernière vidange ».
+                                              onChanged: (_) => setState(() {}),
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    'Index horaire GE n°${g.numero} (carte GE) *',
+                                                helperText: _hintIndexGE(g.id),
+                                                helperMaxLines: 2,
+                                              ),
+                                            ),
+                                            _vidangeTile(g),
+                                          ],
+                                        ),
+                                      ))
+                                else ...[
                                   TextField(
-                                    controller: _geCtrls[g.id],
+                                    controller: _heures,
                                     keyboardType: numKb,
-                                    // Recalcule en direct « X h depuis la dernière vidange ».
-                                    onChanged: (_) => setState(() {}),
                                     decoration: InputDecoration(
-                                      labelText: 'Index horaire GE n°${g.numero} (carte GE) *',
-                                      helperText: _hintIndexGE(g.id),
+                                      labelText:
+                                          'Index horaire GE (carte GE) *',
+                                      helperText: _hintIndexGE(null),
                                       helperMaxLines: 2,
                                     ),
                                   ),
-                                  _vidangeTile(g),
+                                  const SizedBox(height: 10),
                                 ],
-                              ),
-                            ))
-                      else ...[
-                        TextField(
-                          controller: _heures,
-                          keyboardType: numKb,
-                          decoration: InputDecoration(
-                            labelText: 'Index horaire GE (carte GE) *',
-                            helperText: _hintIndexGE(null),
-                            helperMaxLines: 2,
+                              ],
+                              if (sources.contains('CEET')) ...[
+                                TextField(
+                                  controller: _index,
+                                  keyboardType: numKb,
+                                  decoration: InputDecoration(
+                                    labelText: 'Index compteur CEET *',
+                                    helperText: _hintCeet(),
+                                    helperMaxLines: 2,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ],
+                              if (sources.contains('SOLAIRE'))
+                                TextField(
+                                    controller: _puissance,
+                                    keyboardType: numKb,
+                                    decoration: const InputDecoration(
+                                        labelText:
+                                            'Puissance solaire (kVA) *')),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                       ],
-                    ],
-                    if (sources.contains('CEET')) ...[
-                      TextField(
-                        controller: _index,
-                        keyboardType: numKb,
-                        decoration: InputDecoration(
-                          labelText: 'Index compteur CEET *',
-                          helperText: _hintCeet(),
-                          helperMaxLines: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    if (sources.contains('SOLAIRE'))
-                      TextField(controller: _puissance, keyboardType: numKb, decoration: const InputDecoration(labelText: 'Puissance solaire (kVA) *')),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (minPhotos > 0) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _photos.length >= minPhotos ? Colors.green.shade50 : Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Photos ${_photos.length}/$minPhotos (carte GE, compteur CEET, activités)',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _photos.length >= minPhotos ? Colors.green.shade800 : Colors.orange.shade900)),
-                    Text('À prendre sur site avec la caméra — pas d\'import galerie',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                    const SizedBox(height: 8),
-                    if (_photos.isNotEmpty)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(_photos.length, (i) {
-                          return Stack(
+                      if (minPhotos > 0) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _photos.length >= minPhotos
+                                ? Colors.green.shade50
+                                : Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                // cacheWidth : décode une miniature (pas l'image pleine
-                                // résolution) → évite la surcharge mémoire / le gel.
-                                child: Image.file(File(_photos[i].path), width: 60, height: 60, fit: BoxFit.cover, cacheWidth: 160),
-                              ),
-                              Positioned(
-                                top: -6, right: -6,
-                                child: IconButton(
-                                  icon: const Icon(Icons.cancel, size: 18, color: Colors.red),
-                                  onPressed: () => setState(() => _photos.removeAt(i)),
+                              Text(
+                                  'Photos ${_photos.length}/$minPhotos (carte GE, compteur CEET, activités)',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _photos.length >= minPhotos
+                                          ? Colors.green.shade800
+                                          : Colors.orange.shade900)),
+                              Text(
+                                  'À prendre sur site avec la caméra — pas d\'import galerie',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600)),
+                              const SizedBox(height: 8),
+                              if (_photos.isNotEmpty)
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: List.generate(_photos.length, (i) {
+                                    return Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          // cacheWidth : décode une miniature (pas l'image pleine
+                                          // résolution) → évite la surcharge mémoire / le gel.
+                                          child: Image.file(
+                                              File(_photos[i].path),
+                                              width: 60,
+                                              height: 60,
+                                              fit: BoxFit.cover,
+                                              cacheWidth: 160),
+                                        ),
+                                        Positioned(
+                                          top: -6,
+                                          right: -6,
+                                          child: IconButton(
+                                            icon: const Icon(Icons.cancel,
+                                                size: 18, color: Colors.red),
+                                            onPressed: () => setState(
+                                                () => _photos.removeAt(i)),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }),
+                                ),
+                              const SizedBox(height: 4),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _takePhoto,
+                                  icon: const Icon(Icons.camera_alt, size: 18),
+                                  label: const Text('Prendre une photo'),
                                 ),
                               ),
                             ],
-                          );
-                        }),
-                      ),
-                    const SizedBox(height: 4),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _takePhoto,
-                        icon: const Icon(Icons.camera_alt, size: 18),
-                        label: const Text('Prendre une photo'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            TextField(controller: _obs, maxLines: 3, decoration: const InputDecoration(labelText: 'Observations / travaux réalisés')),
-            _agentSelector(),
-            const SizedBox(height: 12),
-          ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      TextField(
+                          controller: _obs,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                              labelText: 'Observations / travaux réalisés')),
+                      _agentSelector(),
+                      const SizedBox(height: 12),
+                    ],
                   ),
                 ),
               ),
@@ -1043,11 +1240,15 @@ class _CloseSheetState extends State<_CloseSheet> {
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                        child: Text(_error!,
+                            style: const TextStyle(
+                                color: Colors.red, fontSize: 12)),
                       ),
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(onPressed: _submit, child: const Text('Continuer (signature)')),
+                      child: FilledButton(
+                          onPressed: _submit,
+                          child: const Text('Continuer (signature)')),
                     ),
                   ],
                 ),
@@ -1091,7 +1292,9 @@ class _MotifSuspensionDialogState extends State<_MotifSuspensionDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler')),
         // Le motif doit faire ≥ 5 caractères ; sinon retour visuel explicite.
         FilledButton(
           onPressed: () {
@@ -1100,7 +1303,8 @@ class _MotifSuspensionDialogState extends State<_MotifSuspensionDialog> {
               Navigator.pop(context, v);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Motif trop court (5 caractères minimum)')),
+                const SnackBar(
+                    content: Text('Motif trop court (5 caractères minimum)')),
               );
             }
           },

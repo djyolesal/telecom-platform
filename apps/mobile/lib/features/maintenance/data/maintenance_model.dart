@@ -2,14 +2,17 @@
 class GroupeGE {
   final String id;
   final int numero;
+
   /// Index horaire relevé à la dernière vidange confirmée (null = jamais enregistrée).
   final double? indexDerniereVidange;
-  const GroupeGE({required this.id, required this.numero, this.indexDerniereVidange});
+  const GroupeGE(
+      {required this.id, required this.numero, this.indexDerniereVidange});
   factory GroupeGE.fromJson(Map<String, dynamic> j) => GroupeGE(
         id: j['id'] as String,
         numero: (j['numero'] as num?)?.toInt() ?? 1,
         // Prisma sérialise les Decimal en chaîne.
-        indexDerniereVidange: double.tryParse(j['indexHeuresDerniereVidange']?.toString() ?? ''),
+        indexDerniereVidange:
+            double.tryParse(j['indexHeuresDerniereVidange']?.toString() ?? ''),
       );
 }
 
@@ -23,7 +26,8 @@ class Maintenance {
   final String type;
   final String categorie;
   final String equipement;
-  final String natureTravaux; // ENTRETIEN / INSTALLATION / DESINSTALLATION / DEPLACEMENT
+  final String
+      natureTravaux; // ENTRETIEN / INSTALLATION / DESINSTALLATION / DEPLACEMENT
   final String? description;
   final String statut;
   final DateTime? datePlanifiee;
@@ -40,9 +44,11 @@ class Maintenance {
   final String? analyseEnergie;
   final List<GroupeGE> siteGroupes;
   final List<String> photoUrls;
+
   /// Phases alignées sur photoUrls : 'AVANT' / 'APRES' / null (photo historique).
   final List<String?> photoPhases;
   final int photoCount;
+
   /// Vrai si la clôture exige les relevés énergie (calculé par l'API selon la tâche).
   final bool requiresEnergie;
 
@@ -120,8 +126,12 @@ class Maintenance {
       siteCode: site?['code'] as String?,
       siteNom: site?['nom'] as String?,
       sitePowerConfig: site?['powerConfig'] as String?,
-      siteLatitude: site?['latitude'] == null ? null : double.tryParse(site!['latitude'].toString()),
-      siteLongitude: site?['longitude'] == null ? null : double.tryParse(site!['longitude'].toString()),
+      siteLatitude: site?['latitude'] == null
+          ? null
+          : double.tryParse(site!['latitude'].toString()),
+      siteLongitude: site?['longitude'] == null
+          ? null
+          : double.tryParse(site!['longitude'].toString()),
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
       prestataire: presta?['nom'] as String?,
       analyseEnergie: j['analyseEnergie'] as String?,
@@ -133,7 +143,8 @@ class Maintenance {
       // Détail : fourni par l'API ; repli aligné sur la règle serveur si absent (liste) :
       // jamais de relevé pour un travail de cycle de vie.
       requiresEnergie: (j['requiresEnergieReleve'] as bool?) ??
-          ((j['natureTravaux'] as String? ?? 'ENTRETIEN') == 'ENTRETIEN' && passiveCategories.contains(j['categorie'] as String)),
+          ((j['natureTravaux'] as String? ?? 'ENTRETIEN') == 'ENTRETIEN' &&
+              passiveCategories.contains(j['categorie'] as String)),
       contexteSaisie: j['contexteSaisie'] is Map<String, dynamic>
           ? ContexteSaisie.fromJson(j['contexteSaisie'] as Map<String, dynamic>)
           : null,
@@ -151,7 +162,8 @@ class ValeurConnue {
     if (j is! Map) return null;
     final v = double.tryParse(j['valeur']?.toString() ?? '');
     if (v == null) return null;
-    return ValeurConnue(valeur: v, date: DateTime.tryParse(j['date']?.toString() ?? ''));
+    return ValeurConnue(
+        valeur: v, date: DateTime.tryParse(j['date']?.toString() ?? ''));
   }
 }
 
@@ -162,8 +174,10 @@ class ContexteSaisie {
   final double? cuveVolumeLitres;
   final ValeurConnue? dernierNiveauCuve;
   final ValeurConnue? dernierIndexCeet;
+
   /// Dernier index horaire connu, par id de groupe électrogène.
   final Map<String, ValeurConnue> dernierIndexGE;
+
   /// Cas mono-GE sans groupe déclaré.
   final ValeurConnue? dernierIndexGEMono;
   final double maxHeuresGEParJour;
@@ -186,12 +200,14 @@ class ContexteSaisie {
       if (vc != null) parGE[k.toString()] = vc;
     });
     return ContexteSaisie(
-      cuveVolumeLitres: double.tryParse(j['cuveVolumeLitres']?.toString() ?? ''),
+      cuveVolumeLitres:
+          double.tryParse(j['cuveVolumeLitres']?.toString() ?? ''),
       dernierNiveauCuve: ValeurConnue.fromJson(j['dernierNiveauCuve']),
       dernierIndexCeet: ValeurConnue.fromJson(j['dernierIndexCeet']),
       dernierIndexGE: parGE,
       dernierIndexGEMono: ValeurConnue.fromJson(j['dernierIndexGEMono']),
-      maxHeuresGEParJour: double.tryParse(j['maxHeuresGEParJour']?.toString() ?? '') ?? 24,
+      maxHeuresGEParJour:
+          double.tryParse(j['maxHeuresGEParJour']?.toString() ?? '') ?? 24,
       margeCuvePct: double.tryParse(j['margeCuvePct']?.toString() ?? '') ?? 2,
     );
   }
@@ -206,13 +222,20 @@ class ActifLite {
   final String? siteId;
   final String? siteCode;
 
-  const ActifLite({required this.id, required this.actifType, required this.categorie, this.libelle, this.siteId, this.siteCode});
+  const ActifLite(
+      {required this.id,
+      required this.actifType,
+      required this.categorie,
+      this.libelle,
+      this.siteId,
+      this.siteCode});
 
   factory ActifLite.fromJson(Map<String, dynamic> j) {
     final site = j['site'] as Map<String, dynamic>?;
     return ActifLite(
       id: j['id'] as String,
-      actifType: j['actifType'] as String? ?? (j['categorie'] as String? ?? 'GE'),
+      actifType:
+          j['actifType'] as String? ?? (j['categorie'] as String? ?? 'GE'),
       categorie: j['categorie'] as String? ?? 'GE',
       libelle: j['libelle'] as String?,
       siteId: j['siteId'] as String?,
@@ -220,5 +243,6 @@ class ActifLite {
     );
   }
 
-  String get display => '${libelle ?? categorie}${siteId != null ? '' : ' — Dépôt'}';
+  String get display =>
+      '${libelle ?? categorie}${siteId != null ? '' : ' — Dépôt'}';
 }

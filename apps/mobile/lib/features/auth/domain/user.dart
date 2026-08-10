@@ -20,7 +20,8 @@ class User extends Equatable {
   });
 
   String get fullName => '$prenom $nom';
-  String get initials => (prenom.isNotEmpty ? prenom[0] : '') + (nom.isNotEmpty ? nom[0] : '');
+  String get initials =>
+      (prenom.isNotEmpty ? prenom[0] : '') + (nom.isNotEmpty ? nom[0] : '');
 
   factory User.fromJson(Map<String, dynamic> json) => User(
         id: json['id'] as String,
@@ -41,7 +42,8 @@ class User extends Equatable {
       };
 
   String encode() => jsonEncode(toJson());
-  static User decode(String source) => User.fromJson(jsonDecode(source) as Map<String, dynamic>);
+  static User decode(String source) =>
+      User.fromJson(jsonDecode(source) as Map<String, dynamic>);
 
   @override
   List<Object?> get props => [id, email, role];

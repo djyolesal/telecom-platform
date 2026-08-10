@@ -18,7 +18,14 @@ class BlExtrait {
   final int? volumeChargeLitres;
   final List<String> avertissements;
 
-  const BlExtrait({this.numeroBL, this.bcNumero, this.dateBL, this.dateTraitement, this.immatriculation, this.volumeChargeLitres, this.avertissements = const []});
+  const BlExtrait(
+      {this.numeroBL,
+      this.bcNumero,
+      this.dateBL,
+      this.dateTraitement,
+      this.immatriculation,
+      this.volumeChargeLitres,
+      this.avertissements = const []});
 
   factory BlExtrait.fromJson(Map<String, dynamic> j) => BlExtrait(
         numeroBL: j['numeroBL'] as String?,
@@ -27,12 +34,15 @@ class BlExtrait {
         dateTraitement: j['dateTraitement'] as String?,
         immatriculation: j['immatriculation'] as String?,
         volumeChargeLitres: (j['volumeChargeLitres'] as num?)?.toInt(),
-        avertissements: ((j['avertissements'] as List?) ?? const []).map((e) => e.toString()).toList(),
+        avertissements: ((j['avertissements'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
       );
 
   static DateTime? _parse(String? d) {
     if (d == null || d.length != 10) return null;
-    return DateTime.tryParse('${d.substring(6)}-${d.substring(3, 5)}-${d.substring(0, 2)}');
+    return DateTime.tryParse(
+        '${d.substring(6)}-${d.substring(3, 5)}-${d.substring(0, 2)}');
   }
 
   /// Date de TRAITEMENT du BL (celle qui suit le n° de bon de commande).
@@ -41,6 +51,7 @@ class BlExtrait {
 
 class AnalyseBlResult {
   final List<BlExtrait> documents;
+
   /// BC reconnus en base, indexés par numéro (PO…) — pour présélectionner.
   final Map<String, BonCommandeLite> bcs;
   const AnalyseBlResult({required this.documents, required this.bcs});
@@ -59,7 +70,9 @@ class BonLivraisonRepository {
     if (!await _network.isConnected) return [];
     return _client.request(
       (dio) => dio.get('/bons-commande', queryParameters: {'limit': 50}),
-      (data) => (data['data'] as List).map((e) => BonCommandeLite.fromJson(e as Map<String, dynamic>)).toList(),
+      (data) => (data['data'] as List)
+          .map((e) => BonCommandeLite.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -77,7 +90,8 @@ class BonLivraisonRepository {
   Future<BonLivraisonDetail> getBonLivraison(String id) async {
     return _client.request(
       (dio) => dio.get('/bons-livraison/$id'),
-      (data) => BonLivraisonDetail.fromJson(data['data'] as Map<String, dynamic>),
+      (data) =>
+          BonLivraisonDetail.fromJson(data['data'] as Map<String, dynamic>),
     );
   }
 
@@ -93,7 +107,8 @@ class BonLivraisonRepository {
       (data) => (data as List).cast<int>(),
     );
     final dossier = await getTemporaryDirectory();
-    final fichier = File('${dossier.path}/plan-livraison-${numeroBL.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.pdf');
+    final fichier = File(
+        '${dossier.path}/plan-livraison-${numeroBL.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.pdf');
     await fichier.writeAsBytes(octets, flush: true);
     return fichier.path;
   }
@@ -121,11 +136,15 @@ class BonLivraisonRepository {
             numero: m['numero'] as String,
             annee: (m['annee'] as num).toInt(),
             trimestre: (m['trimestre'] as num).toInt(),
-            mois: ((m['mois'] as List?) ?? const []).map((e) => (e as num).toInt()).toList(),
+            mois: ((m['mois'] as List?) ?? const [])
+                .map((e) => (e as num).toInt())
+                .toList(),
           );
         });
         return AnalyseBlResult(
-          documents: ((d['documents'] as List?) ?? const []).map((e) => BlExtrait.fromJson(e as Map<String, dynamic>)).toList(),
+          documents: ((d['documents'] as List?) ?? const [])
+              .map((e) => BlExtrait.fromJson(e as Map<String, dynamic>))
+              .toList(),
           bcs: bcs,
         );
       },
@@ -140,6 +159,7 @@ class BonLivraisonRepository {
     required int mois,
     required int annee,
     required String immatriculation,
+
     /// Chauffeur DÉCLARÉ au départ du dépôt : confronté au chauffeur qui signera
     /// réellement sur site. L'API le refuse vide.
     required String nomChauffeur,
@@ -151,8 +171,20 @@ class BonLivraisonRepository {
     String? bordereauDocLocalPath,
   }) {
     final attachments = <Map<String, String>>[
-      if (blDocLocalPath != null) {'path': blDocLocalPath, 'kind': 'photo', 'field': 'blPdfPath', 'folder': 'documents'},
-      if (bordereauDocLocalPath != null) {'path': bordereauDocLocalPath, 'kind': 'photo', 'field': 'bordereauPdfPath', 'folder': 'documents'},
+      if (blDocLocalPath != null)
+        {
+          'path': blDocLocalPath,
+          'kind': 'photo',
+          'field': 'blPdfPath',
+          'folder': 'documents'
+        },
+      if (bordereauDocLocalPath != null)
+        {
+          'path': bordereauDocLocalPath,
+          'kind': 'photo',
+          'field': 'bordereauPdfPath',
+          'folder': 'documents'
+        },
     ];
     return _sync.submit(
       endpoint: '/bons-livraison',
@@ -170,8 +202,10 @@ class BonLivraisonRepository {
         // En UTC+1, minuit local → 23:00 UTC la veille → jour de chargement
         // faux d'un cran côté serveur. La date pure préserve le jour partout.
         'dateChargement': _dateSeule(dateChargement),
-        if (dateTraitement != null) 'dateTraitement': _dateSeule(dateTraitement),
-        if (observations != null && observations.isNotEmpty) 'observations': observations,
+        if (dateTraitement != null)
+          'dateTraitement': _dateSeule(dateTraitement),
+        if (observations != null && observations.isNotEmpty)
+          'observations': observations,
       },
       attachments: attachments,
     );

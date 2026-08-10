@@ -42,9 +42,13 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
       body: FutureBuilder<DepotageDetail>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) return const LoadingView();
+          if (snap.connectionState != ConnectionState.done) {
+            return const LoadingView();
+          }
           if (snap.hasError || !snap.hasData) {
-            return ErrorView(message: 'Détail indisponible (connexion requise)', onRetry: () => setState(_load));
+            return ErrorView(
+                message: 'Détail indisponible (connexion requise)',
+                onRetry: () => setState(_load));
           }
           final d = snap.data!;
           return ListView(
@@ -58,23 +62,35 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
                 _row('Stock avant', fmtLitres(d.stockAvantLitres)),
                 _row('Stock après', fmtLitres(d.stockApresLitres)),
                 if (d.fournisseur != null) _row('Fournisseur', d.fournisseur!),
-                if (d.numeroBonLivraison != null) _row('Bon de livraison', d.numeroBonLivraison!),
-                if (d.technicienNom != null && d.technicienNom!.isNotEmpty) _row('Technicien', d.technicienNom!),
+                if (d.numeroBonLivraison != null)
+                  _row('Bon de livraison', d.numeroBonLivraison!),
+                if (d.technicienNom != null && d.technicienNom!.isNotEmpty)
+                  _row('Technicien', d.technicienNom!),
               ]),
-              if (d.volumeAnnonceLitres != null || d.ecartLivraisonLitres != null || d.ecartConsoLitres != null || d.analyseDepotage != null)
+              if (d.volumeAnnonceLitres != null ||
+                  d.ecartLivraisonLitres != null ||
+                  d.ecartConsoLitres != null ||
+                  d.analyseDepotage != null)
                 _card('Réconciliation', [
-                  if (d.volumeAnnonceLitres != null) _row('Volume annoncé (BL)', fmtLitres(d.volumeAnnonceLitres)),
+                  if (d.volumeAnnonceLitres != null)
+                    _row('Volume annoncé (BL)',
+                        fmtLitres(d.volumeAnnonceLitres)),
                   _ecartRow('Écart livraison', d.ecartLivraisonLitres),
-                  if (d.gasoilAttenduLitres != null) _row('Gasoil attendu', fmtLitres(d.gasoilAttenduLitres)),
+                  if (d.gasoilAttenduLitres != null)
+                    _row('Gasoil attendu', fmtLitres(d.gasoilAttenduLitres)),
                   _ecartRow('Écart conso', d.ecartConsoLitres),
-                  if (d.analyseDepotage != null && d.analyseDepotage!.isNotEmpty)
+                  if (d.analyseDepotage != null &&
+                      d.analyseDepotage!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                        child: Text(d.analyseDepotage!, style: const TextStyle(fontSize: 13)),
+                        decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text(d.analyseDepotage!,
+                            style: const TextStyle(fontSize: 13)),
                       ),
                     ),
                 ]),
@@ -89,7 +105,9 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
                     ),
                 ]),
               if (d.observations != null && d.observations!.isNotEmpty)
-                _card('Observations', [Text(d.observations!, style: const TextStyle(fontSize: 14))]),
+                _card('Observations', [
+                  Text(d.observations!, style: const TextStyle(fontSize: 14))
+                ]),
               if (d.photoUrls.isNotEmpty)
                 _card('Photos (${d.photoUrls.length})', [
                   Wrap(
@@ -100,8 +118,16 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
                         onTap: () => _openViewer(d.photoUrls, e.key),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(e.value, width: 96, height: 96, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(width: 96, height: 96, color: Colors.grey.shade200, child: const Icon(Icons.broken_image, color: Colors.grey))),
+                          child: Image.network(e.value,
+                              width: 96,
+                              height: 96,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                  width: 96,
+                                  height: 96,
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.broken_image,
+                                      color: Colors.grey))),
                         ),
                       );
                     }).toList(),
@@ -134,8 +160,17 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(flex: 5, child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-            Expanded(flex: 4, child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
+            Expanded(
+                flex: 5,
+                child: Text(label,
+                    style:
+                        TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+            Expanded(
+                flex: 4,
+                child: Text(value,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w500, fontSize: 13))),
           ],
         ),
       );
@@ -143,14 +178,28 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
   /// Écart signé avec code couleur (vert ≈ 0, rouge négatif/manquant, ambre surplus).
   Widget _ecartRow(String label, double? value) {
     if (value == null) return _row(label, '—');
-    final color = value.abs() < 1 ? Colors.green.shade700 : value < 0 ? Colors.red.shade600 : Colors.amber.shade800;
+    final color = value.abs() < 1
+        ? Colors.green.shade700
+        : value < 0
+            ? Colors.red.shade600
+            : Colors.amber.shade800;
     final signe = value > 0 ? '+' : '';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Expanded(flex: 5, child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-          Expanded(flex: 4, child: Text('$signe${value.toStringAsFixed(0)} L', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: color))),
+          Expanded(
+              flex: 5,
+              child: Text(label,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+          Expanded(
+              flex: 4,
+              child: Text('$signe${value.toStringAsFixed(0)} L',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: color))),
         ],
       ),
     );
@@ -168,7 +217,8 @@ class _PhotoViewer extends StatefulWidget {
 }
 
 class _PhotoViewerState extends State<_PhotoViewer> {
-  late final PageController _controller = PageController(initialPage: widget.initial);
+  late final PageController _controller =
+      PageController(initialPage: widget.initial);
   late int _current = widget.initial;
 
   @override
@@ -194,8 +244,10 @@ class _PhotoViewerState extends State<_PhotoViewer> {
           minScale: 1,
           maxScale: 4,
           child: Center(
-            child: Image.network(widget.urls[i], fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white54, size: 64)),
+            child: Image.network(widget.urls[i],
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image,
+                    color: Colors.white54, size: 64)),
           ),
         ),
       ),

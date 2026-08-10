@@ -22,7 +22,10 @@ class AuthRepository {
       final plugin = DeviceInfoPlugin();
       if (Platform.isAndroid) {
         final info = await plugin.androidInfo;
-        return (id: info.id, label: '${info.manufacturer} ${info.model}'.trim());
+        return (
+          id: info.id,
+          label: '${info.manufacturer} ${info.model}'.trim()
+        );
       }
       if (Platform.isIOS) {
         final info = await plugin.iosInfo;
@@ -92,7 +95,8 @@ class AuthRepository {
   // ── Biométrie ──────────────────────────────────────────────
   Future<bool> get biometricAvailable async {
     try {
-      return await _localAuth.canCheckBiometrics && await _localAuth.isDeviceSupported();
+      return await _localAuth.canCheckBiometrics &&
+          await _localAuth.isDeviceSupported();
     } catch (_) {
       return false;
     }
@@ -110,7 +114,8 @@ class AuthRepository {
     try {
       return await _localAuth.authenticate(
         localizedReason: 'Authentifiez-vous pour accéder à E&M OpS',
-        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: false),
+        options:
+            const AuthenticationOptions(stickyAuth: true, biometricOnly: false),
       );
     } catch (_) {
       return false;

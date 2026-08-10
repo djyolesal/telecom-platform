@@ -35,9 +35,11 @@ class MaintenanceCache {
   }
 
   /// Remplace l'instantané (appelé après chaque liste rechargée en ligne).
-  static Future<void> saveList(List<Map<String, dynamic>> raw) => _serialise(() async {
+  static Future<void> saveList(List<Map<String, dynamic>> raw) =>
+      _serialise(() async {
         try {
-          await _ecrire({'savedAt': DateTime.now().toIso8601String(), 'items': raw});
+          await _ecrire(
+              {'savedAt': DateTime.now().toIso8601String(), 'items': raw});
         } catch (_) {/* cache = confort, jamais bloquant */}
       });
 
@@ -47,7 +49,11 @@ class MaintenanceCache {
       if (!await f.exists()) return const [];
       final raw = jsonDecode(await f.readAsString());
       final items = (raw is Map ? raw['items'] : null) as List?;
-      return items?.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList() ?? const [];
+      return items
+              ?.whereType<Map>()
+              .map((e) => e.cast<String, dynamic>())
+              .toList() ??
+          const [];
     } catch (_) {
       return const [];
     }
@@ -71,20 +77,23 @@ class MaintenanceCache {
           } else {
             items.insert(0, item);
           }
-          await _ecrire({'savedAt': DateTime.now().toIso8601String(), 'items': items});
+          await _ecrire(
+              {'savedAt': DateTime.now().toIso8601String(), 'items': items});
         } catch (_) {/* best effort */}
       });
 
   /// Transition optimiste d'une opération MISE EN FILE (hors-ligne) : l'écran
   /// doit montrer l'état réel du travail (boutons Clôturer/Suspendre après un
   /// démarrage hors réseau, etc.).
-  static Future<void> patch(String id, Map<String, dynamic> champs) => _serialise(() async {
+  static Future<void> patch(String id, Map<String, dynamic> champs) =>
+      _serialise(() async {
         try {
           final items = await readList();
           final i = items.indexWhere((m) => m['id'] == id);
           if (i < 0) return;
           items[i] = {...items[i], ...champs};
-          await _ecrire({'savedAt': DateTime.now().toIso8601String(), 'items': items});
+          await _ecrire(
+              {'savedAt': DateTime.now().toIso8601String(), 'items': items});
         } catch (_) {/* best effort */}
       });
 }

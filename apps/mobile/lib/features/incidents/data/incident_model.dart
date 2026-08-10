@@ -63,7 +63,8 @@ class Incident {
       statut: j['statut'] as String? ?? 'OUVERT',
       description: j['description'] as String? ?? '',
       dateOuverture: DateTime.tryParse(j['dateOuverture']?.toString() ?? ''),
-      dateIntervention: DateTime.tryParse(j['dateIntervention']?.toString() ?? ''),
+      dateIntervention:
+          DateTime.tryParse(j['dateIntervention']?.toString() ?? ''),
       technicien: tech != null ? '${tech['prenom']} ${tech['nom']}' : null,
       causeProbable: j['causeProbable'] as String?,
       actionCorrective: j['actionCorrective'] as String?,

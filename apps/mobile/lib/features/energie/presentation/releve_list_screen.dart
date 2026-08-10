@@ -17,7 +17,8 @@ class ReleveListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final repo = context.read<ReleveRepository>();
     return BlocProvider(
-      create: (_) => ListCubit<Releve>()..run(() => repo.getReleves(siteId: siteId)),
+      create: (_) =>
+          ListCubit<Releve>()..run(() => repo.getReleves(siteId: siteId)),
       child: _ReleveView(siteId: siteId),
     );
   }
@@ -29,7 +30,9 @@ class _ReleveView extends StatelessWidget {
 
   void _reload(BuildContext context) {
     final repo = context.read<ReleveRepository>();
-    context.read<ListCubit<Releve>>().run(() => repo.getReleves(siteId: siteId));
+    context
+        .read<ListCubit<Releve>>()
+        .run(() => repo.getReleves(siteId: siteId));
   }
 
   @override
@@ -38,12 +41,19 @@ class _ReleveView extends StatelessWidget {
       appBar: AppBar(title: const Text('Relevés énergie')),
       body: BlocBuilder<ListCubit<Releve>, ListState<Releve>>(
         builder: (context, state) {
-          if (state.status == ResourceStatus.loading) return const LoadingView();
+          if (state.status == ResourceStatus.loading) {
+            return const LoadingView();
+          }
           if (state.status == ResourceStatus.failure) {
-            return ErrorView(message: state.error ?? 'Erreur', onRetry: () => _reload(context));
+            return ErrorView(
+                message: state.error ?? 'Erreur',
+                onRetry: () => _reload(context));
           }
           if (state.items.isEmpty) {
-            return const EmptyView(title: 'Aucun relevé', hint: 'Les relevés sont enregistrés à la clôture des maintenances.');
+            return const EmptyView(
+                title: 'Aucun relevé',
+                hint:
+                    'Les relevés sont enregistrés à la clôture des maintenances.');
           }
           return RefreshIndicator(
             onRefresh: () async => _reload(context),
@@ -56,8 +66,11 @@ class _ReleveView extends StatelessWidget {
                     ? '${fmtLitres(r.volumeGasoilLitres)} · ${fmtNum(r.heuresFonctGE)} h'
                     : '${fmtNum(r.consommationKwh)} kWh';
                 return ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.bolt, size: 20)),
-                  title: Text('${r.siteNom ?? '—'} · ${r.provenance ?? kSourceEnergie[r.source] ?? r.source}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  leading:
+                      const CircleAvatar(child: Icon(Icons.bolt, size: 20)),
+                  title: Text(
+                      '${r.siteNom ?? '—'} · ${r.provenance ?? kSourceEnergie[r.source] ?? r.source}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text('${fmtDate(r.dateReleve)} · $detail'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/energie/detail/${r.id}'),

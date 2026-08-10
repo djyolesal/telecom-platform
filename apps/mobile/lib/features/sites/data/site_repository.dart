@@ -22,10 +22,13 @@ class SiteRepository {
             if (search != null && search.isNotEmpty) 'search': search,
             if (region != null && region.isNotEmpty) 'region': region,
           }),
-          (data) => (data['data'] as List).map((e) => Site.fromJson(e as Map<String, dynamic>)).toList(),
+          (data) => (data['data'] as List)
+              .map((e) => Site.fromJson(e as Map<String, dynamic>))
+              .toList(),
         );
         // Mise en cache (sans filtre on cache tout)
-        if ((search == null || search.isEmpty) && (region == null || region.isEmpty)) {
+        if ((search == null || search.isEmpty) &&
+            (region == null || region.isEmpty)) {
           await _db.upsertSites(sites.map((s) => s.toCompanion()).toList());
         }
         return sites;
@@ -41,7 +44,11 @@ class SiteRepository {
     var sites = cached.map(Site.fromCache).toList();
     if (search != null && search.isNotEmpty) {
       final q = search.toLowerCase();
-      sites = sites.where((s) => s.nom.toLowerCase().contains(q) || s.region.toLowerCase().contains(q)).toList();
+      sites = sites
+          .where((s) =>
+              s.nom.toLowerCase().contains(q) ||
+              s.region.toLowerCase().contains(q))
+          .toList();
     }
     if (region != null && region.isNotEmpty) {
       sites = sites.where((s) => s.region == region).toList();
@@ -55,7 +62,9 @@ class SiteRepository {
     try {
       return await _client.request(
         (dio) => dio.get('/sites/$id/taches-preventives'),
-        (data) => (data['data'] as List).map((e) => TacheSite.fromJson(e as Map<String, dynamic>)).toList(),
+        (data) => (data['data'] as List)
+            .map((e) => TacheSite.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
     } catch (_) {
       return [];
