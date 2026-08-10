@@ -1,0 +1,9 @@
+# Modèle de android/key.properties — la configuration de la clé de signature.
+# COPIER ce fichier en `key.properties` (ignoré par git) et remplir les valeurs.
+# La clé (.jks) vit HORS du dépôt (ex. ~/cles-emops/) et doit être sauvegardée
+# en deux endroits sûrs : la perdre = ne plus jamais pouvoir mettre à jour
+# l'application sans réinstallation générale.
+storeFile=/Users/VOTRE_UTILISATEUR/cles-emops/emops-release.jks
+storePassword=LE_MOT_DE_PASSE_DU_KEYSTORE
+keyAlias=emops
+keyPassword=LE_MOT_DE_PASSE_DE_LA_CLE
