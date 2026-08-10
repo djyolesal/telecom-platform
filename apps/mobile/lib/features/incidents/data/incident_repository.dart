@@ -79,6 +79,9 @@ class IncidentRepository {
     required String id,
     required DateTime dateResolution,
     required bool agentPresent,
+    // Agent de gardiennage PRÉSENT ⇒ il signe (exigé par le serveur).
+    String? nomAgentSecurite,
+    String? signatureAgentLocalPath,
     String? causeProbable,
     String? actionCorrective,
     // Classement de la panne : 'ACTIF' (radio/transmission) ou 'PASSIF' (énergie).
@@ -94,6 +97,8 @@ class IncidentRepository {
       payload: {
         'dateResolution': dateResolution.toUtc().toIso8601String(),
         'agentPresent': agentPresent,
+        if (nomAgentSecurite != null && nomAgentSecurite.isNotEmpty)
+          'nomAgentSecurite': nomAgentSecurite,
         if (causeProbable != null && causeProbable.isNotEmpty)
           'causeProbable': causeProbable,
         if (actionCorrective != null && actionCorrective.isNotEmpty)
@@ -107,6 +112,12 @@ class IncidentRepository {
       },
       attachments: [
         for (final p in photoPaths) {'path': p, 'kind': 'photo'},
+        if (signatureAgentLocalPath != null)
+          {
+            'path': signatureAgentLocalPath,
+            'kind': 'signature',
+            'field': 'signatureAgentSecuritePath',
+          },
       ],
     );
   }

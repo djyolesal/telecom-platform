@@ -294,6 +294,9 @@ model Maintenance {
   // Déclaration du technicien à la clôture : agent de gardiennage présent sur
   // site ? (null = clôturé avant la mise en place / ancien client)
   agentPresent   Boolean?            @map("agent_present")
+  // Présent ⇒ il signe (même règle que le dépotage) : la déclaration devient une preuve.
+  nomAgentSecurite           String? @map("nom_agent_securite") @db.VarChar(100)
+  signatureAgentSecuritePath String? @map("signature_agent_securite_path")
   // Suspension (urgence sur un autre site) : le temps suspendu est décompté de
   // la durée travaillée ; dateSuspension non-null = pause en cours.
   dureeSuspendueMinutes Int          @default(0) @map("duree_suspendue_minutes")
@@ -492,6 +495,9 @@ model Incident {
   technicienId             String?        @map("technicien_id")
   declarePar               String?        @map("declare_par")
   agentPresent             Boolean?       @map("agent_present") // agent de sécurité présent à l'intervention ?
+  // Présent ⇒ il signe (même règle que le dépotage).
+  nomAgentSecurite           String? @map("nom_agent_securite") @db.VarChar(100)
+  signatureAgentSecuritePath String? @map("signature_agent_securite_path")
   causeProbable            String?        @map("cause_probable")
   actionCorrective         String?        @map("action_corrective")
   signaturePath            String?        @map("signature_path")

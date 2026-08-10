@@ -645,9 +645,11 @@ export async function resumeMaintenance(req: Request, res: Response, next: NextF
 /** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), photos (préventive), PDF. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { observations, pieces, signaturePath, energie, photos, latitude, longitude, agentPresent } = req.body as {
+    const { observations, pieces, signaturePath, energie, photos, latitude, longitude, agentPresent, nomAgentSecurite, signatureAgentSecuritePath } = req.body as {
       observations?: string;
       agentPresent?: boolean;
+      nomAgentSecurite?: string;
+      signatureAgentSecuritePath?: string;
       pieces?: Record<string, unknown>[];
       signaturePath?: string;
       energie?: Record<string, unknown>;
@@ -696,6 +698,13 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
 
     // Tout ticket doit être CLÔTURÉ sur le site.
     assertOnSite(existing.site, latitude, longitude, 'la clôture');
+
+    // Agent de gardiennage PRÉSENT ⇒ il signe (même règle que le dépotage) :
+    // sa déclaration nourrit le rapport gardiennage — sans signature, elle ne
+    // repose que sur la parole du technicien.
+    if (agentPresent === true && !signatureAgentSecuritePath) {
+      throw new AppError("L'agent est déclaré présent : sa signature est requise.", 422);
+    }
 
     // Maintenance préventive → minimum de photos requis pour clôturer.
     if (existing.type === 'PREVENTIVE') {
@@ -809,7 +818,12 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         // count 0 → on abandonne (rejeu idempotent), aucune écriture dupliquée.
         const verrou = await tx.maintenance.updateMany({
           where: { id: req.params.id, statut: 'EN_COURS' },
-          data: { statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath, ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}) },
+          data: {
+            statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath,
+            ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}),
+            ...(nomAgentSecurite ? { nomAgentSecurite: String(nomAgentSecurite).slice(0, 100) } : {}),
+            ...(signatureAgentSecuritePath ? { signatureAgentSecuritePath: String(signatureAgentSecuritePath) } : {}),
+          },
         });
         if (verrou.count === 0) throw Object.assign(new Error('ALREADY_CLOSED'), { alreadyClosed: true });
 

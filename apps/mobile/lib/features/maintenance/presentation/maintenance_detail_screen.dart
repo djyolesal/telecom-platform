@@ -316,6 +316,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             agentPresent: result['agentPresent'] as bool,
             observations: result['observations'] as String?,
             signatureLocalPath: signaturePath,
+            nomAgentSecurite: result['nomAgentSecurite'] as String?,
+            signatureAgentLocalPath: result['signatureAgentLocalPath'] as String?,
             energie: result['energie'] as Map<String, dynamic>?,
             photoPaths: photoPaths,
             latitude: check.lat,
@@ -675,6 +677,9 @@ class _CloseSheetState extends State<_CloseSheet> {
   final Set<String> _vidangeTouched = {};
   // Déclaration obligatoire : agent de gardiennage présent sur site ?
   bool? _agentPresent;
+  // Présent ⇒ il signe (exigé par le serveur, comme au dépotage).
+  final _nomAgent = TextEditingController();
+  String? _sigAgent;
   String? _error;
 
   @override
@@ -693,6 +698,7 @@ class _CloseSheetState extends State<_CloseSheet> {
       _heures,
       _index,
       _puissance,
+      _nomAgent,
       ..._geCtrls.values
     ]) {
       c.dispose();
@@ -938,6 +944,11 @@ class _CloseSheetState extends State<_CloseSheet> {
           _error = 'Indiquez si l\'agent de sécurité est présent sur le site.');
       return;
     }
+    if (_agentPresent == true && _sigAgent == null) {
+      setState(() =>
+          _error = 'L\'agent est présent : faites-le signer avant de clôturer.');
+      return;
+    }
 
     // Pré-contrôle de vraisemblance AVANT envoi/mise en file : le technicien
     // corrige immédiatement (même hors-ligne) ou confirme explicitement —
@@ -954,6 +965,9 @@ class _CloseSheetState extends State<_CloseSheet> {
       'energie': energie,
       'photos': _photos,
       'agentPresent': _agentPresent,
+      if (_nomAgent.text.trim().isNotEmpty)
+        'nomAgentSecurite': _nomAgent.text.trim(),
+      if (_sigAgent != null) 'signatureAgentLocalPath': _sigAgent,
       if (confirme) 'confirmerVraisemblance': true,
     });
   }
@@ -965,7 +979,15 @@ class _CloseSheetState extends State<_CloseSheet> {
       final selected = _agentPresent == value;
       return Expanded(
         child: OutlinedButton.icon(
-          onPressed: () => setState(() => _agentPresent = value),
+          onPressed: () => setState(() {
+            _agentPresent = value;
+            // Passer à « Absent » efface le nom/la signature de l'agent
+            // (sinon absent + signature d'agent = contradiction).
+            if (!value) {
+              _nomAgent.clear();
+              _sigAgent = null;
+            }
+          }),
           icon: Icon(icon, size: 16, color: selected ? Colors.white : color),
           label: Text(label),
           style: OutlinedButton.styleFrom(
@@ -994,8 +1016,41 @@ class _CloseSheetState extends State<_CloseSheet> {
           const SizedBox(width: 8),
           bouton(false, 'Absent', Icons.person_off, const Color(0xFFC0392B)),
         ]),
+        // Présent ⇒ nom + signature de l'agent (même règle que le dépotage).
+        if (_agentPresent == true) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _nomAgent,
+            decoration:
+                const InputDecoration(labelText: 'Nom de l\'agent de sécurité'),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _capturerSignatureAgent,
+              icon: Icon(_sigAgent != null ? Icons.check_circle : Icons.draw,
+                  size: 18,
+                  color: _sigAgent != null ? const Color(0xFF0E7C6B) : null),
+              label: Text(_sigAgent != null
+                  ? 'Signature de l\'agent enregistrée'
+                  : 'Faire signer l\'agent *'),
+            ),
+          ),
+        ],
       ],
     );
+  }
+
+  /// Ouvre le pavé de signature pour l'AGENT et persiste le PNG localement.
+  Future<void> _capturerSignatureAgent() async {
+    final bytes = await Navigator.of(context).push<dynamic>(
+      MaterialPageRoute(builder: (_) => const SignaturePadScreen()),
+    );
+    if (bytes == null) return;
+    final path = await AttachmentStore.persistBytes(
+        bytes as Uint8List, 'signature-agent-${widget.maintenance.id}.png');
+    if (mounted) setState(() => _sigAgent = path);
   }
 
   @override

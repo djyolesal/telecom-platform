@@ -247,9 +247,11 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
 
 export async function closeIncident(req: Request, res: Response, next: NextFunction) {
   try {
-    const { dateIntervention, dateResolution, causeProbable, actionCorrective, causeCategorie, creerMaintenance, latitude, longitude, photos, agentPresent } = req.body as {
+    const { dateIntervention, dateResolution, causeProbable, actionCorrective, causeCategorie, creerMaintenance, latitude, longitude, photos, agentPresent, nomAgentSecurite, signatureAgentSecuritePath } = req.body as {
       dateIntervention?: string;
       agentPresent?: boolean;
+      nomAgentSecurite?: string;
+      signatureAgentSecuritePath?: string;
       dateResolution?: string;
       causeProbable?: string;
       actionCorrective?: string;
@@ -279,6 +281,12 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
 
     // Tout incident doit être CLÔTURÉ sur le site.
     assertOnSite(incident.site, latitude, longitude, 'la clôture');
+
+    // Agent de gardiennage PRÉSENT ⇒ il signe (même règle que le dépotage et
+    // la clôture de maintenance) : la déclaration devient une preuve.
+    if (agentPresent === true && !signatureAgentSecuritePath) {
+      throw new AppError("L'agent est déclaré présent : sa signature est requise.", 422);
+    }
 
     // Preuve terrain : minimum de photos prises sur place.
     const dejaPresentes = await prisma.photo.count({
@@ -323,6 +331,8 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
         causeProbable,
         actionCorrective,
         ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}),
+        ...(nomAgentSecurite ? { nomAgentSecurite: String(nomAgentSecurite).slice(0, 100) } : {}),
+        ...(signatureAgentSecuritePath ? { signatureAgentSecuritePath: String(signatureAgentSecuritePath) } : {}),
       },
     });
 

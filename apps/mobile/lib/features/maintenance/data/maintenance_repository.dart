@@ -222,6 +222,9 @@ class MaintenanceRepository {
     required bool agentPresent,
     String? observations,
     String? signatureLocalPath,
+    // Agent de gardiennage PRÉSENT ⇒ il signe (exigé par le serveur).
+    String? nomAgentSecurite,
+    String? signatureAgentLocalPath,
     Map<String, dynamic>? energie,
     List<String> photoPaths = const [],
     double? latitude,
@@ -233,6 +236,12 @@ class MaintenanceRepository {
       for (final p in photoPaths) {'path': p, 'kind': 'photo'},
       if (signatureLocalPath != null)
         {'path': signatureLocalPath, 'kind': 'signature'},
+      if (signatureAgentLocalPath != null)
+        {
+          'path': signatureAgentLocalPath,
+          'kind': 'signature',
+          'field': 'signatureAgentSecuritePath',
+        },
     ];
     final res = await _sync.submit(
       endpoint: '/maintenances/$id/close',
@@ -241,6 +250,8 @@ class MaintenanceRepository {
           'maintenance:$id:${(await MaintenanceCache.byId(id))?['statut'] ?? ''}',
       payload: {
         'agentPresent': agentPresent,
+        if (nomAgentSecurite != null && nomAgentSecurite.isNotEmpty)
+          'nomAgentSecurite': nomAgentSecurite,
         // Heure RÉELLE de fin : la durée minimale se mesure sur le terrain,
         // pas sur l'heure de synchronisation.
         'dateFin': DateTime.now().toUtc().toIso8601String(),
