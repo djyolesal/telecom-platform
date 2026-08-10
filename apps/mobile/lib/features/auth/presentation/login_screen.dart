@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_logo.dart';
 import 'auth_cubit.dart';
@@ -16,6 +17,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _obscure = true;
+  // Version de l'application, affichée sous le formulaire : c'est LA question
+  // du support (« quelle version vois-tu sur l'écran de connexion ? ») — en
+  // particulier pendant une mise à jour obligatoire.
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = 'v${info.version} (${info.buildNumber})');
+    });
+  }
 
   @override
   void dispose() {
@@ -103,6 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 icon: const Icon(Icons.fingerprint),
                                 label: const Text('Déverrouiller par biométrie'),
                               ),
+                            ],
+                            if (_version.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Text('E&M OpS $_version', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
                             ],
                           ],
                         ),

@@ -1,6 +1,6 @@
 {
   "name": "telecom-api",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "API REST + WebSocket — Plateforme Gestion Télécom & Énergie",
   "main": "dist/server.js",
   "scripts": {

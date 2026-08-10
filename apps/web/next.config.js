@@ -11,6 +11,9 @@ const nextConfig = {
   // surface SSRF, et le vecteur exact de l'avis GHSA-9g9p-9gw9-jx7f. Le
   // désactiver sort aussi `sharp` (libvips) du chemin d'exécution.
   images: { unoptimized: true },
+  // Version de package.json figée au build → affichée dans la barre latérale
+  // (support : « quelle version vois-tu ? »). À incrémenter à chaque livraison.
+  env: { NEXT_PUBLIC_APP_VERSION: require('./package.json').version },
 };
 
 module.exports = nextConfig;

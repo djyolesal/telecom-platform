@@ -82,11 +82,15 @@ if (env.NODE_ENV !== 'production') {
 }
 
 // ── Health check ──────────────────────────────────────────────
+// La version vient de package.json (figée à l'image Docker) : un simple
+// `curl /api/v1/health` dit ce qui tourne réellement en production.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { version: versionApi } = require('../package.json') as { version: string };
 app.get('/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     await redisClient.ping();
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), version: versionApi });
   } catch (err) {
     res.status(503).json({ status: 'error', message: String(err) });
   }

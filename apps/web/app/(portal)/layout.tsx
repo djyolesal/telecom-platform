@@ -212,6 +212,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               </button>
             )}
           </div>
+          {/* Version déployée : la question du support (« quelle version vois-tu ? »). */}
+          {sidebarOpen && (
+            <p className="mt-2 text-center text-[10px] text-blue-300/70">E&M OpS v{process.env.NEXT_PUBLIC_APP_VERSION}</p>
+          )}
         </div>
       </aside>
 
