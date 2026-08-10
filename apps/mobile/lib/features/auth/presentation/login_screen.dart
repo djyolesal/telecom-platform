@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     .unlockWithBiometric(),
                                 icon: const Icon(Icons.fingerprint),
                                 label:
-                                    const Text('Déverrouiller par biométrie'),
+                                    const Text('Déverrouiller (biométrie ou code)'),
                               ),
                             ],
                             if (_version.isNotEmpty) ...[

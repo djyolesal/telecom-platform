@@ -207,7 +207,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     value: 'biometric',
                                     checked: auth.biometricEnabled,
                                     child: const Text(
-                                        'Biométrie au déverrouillage'),
+                                        'Verrou à l\'ouverture (biométrie ou code)'),
                                   ),
                                 const PopupMenuItem(
                                     value: 'logout',
