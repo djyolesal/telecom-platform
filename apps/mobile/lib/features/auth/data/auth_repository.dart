@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:local_auth/local_auth.dart';
 import '../../../core/network/dio_client.dart';
@@ -99,9 +100,14 @@ class AuthRepository {
   /// ENREGISTRÉE — dont des Samsung déverrouillés par code ou visage.
   Future<bool> get biometricAvailable async {
     try {
-      return await _localAuth.isDeviceSupported() ||
-          await _localAuth.canCheckBiometrics;
-    } catch (_) {
+      final supporte = await _localAuth.isDeviceSupported();
+      final capteurs = await _localAuth.canCheckBiometrics;
+      // Diagnostic visible uniquement en debug (logcat) : les réponses brutes
+      // d'Android varient énormément d'un constructeur à l'autre.
+      debugPrint('[verrou] isDeviceSupported=$supporte canCheckBiometrics=$capteurs');
+      return supporte || capteurs;
+    } catch (e) {
+      debugPrint('[verrou] disponibilité indéterminable : $e');
       return false;
     }
   }

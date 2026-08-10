@@ -27,6 +27,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _load();
+    // Ré-évalue la disponibilité du verrou APRÈS l'attachement de l'activité
+    // (au boot release, la première interrogation peut échouer — cf. AuthCubit).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AuthCubit>().rafraichirVerrou();
+    });
   }
 
   void _load() {

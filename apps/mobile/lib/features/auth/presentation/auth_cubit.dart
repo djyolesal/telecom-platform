@@ -125,6 +125,21 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Réévalue la disponibilité du verrou (biométrie/code). Au démarrage en
+  /// release, l'interrogation part parfois AVANT que l'activité Android soit
+  /// prête → exception → « indisponible » figé pour la session, et l'option
+  /// disparaissait du menu (constaté sur Samsung). Rappelée une fois le
+  /// tableau de bord affiché, quand l'activité est garantie vivante.
+  Future<void> rafraichirVerrou() async {
+    final available = await _repo.biometricAvailable;
+    final enabled = await _repo.biometricEnabled;
+    if (available != state.biometricAvailable ||
+        enabled != state.biometricEnabled) {
+      emit(state.copyWith(
+          biometricAvailable: available, biometricEnabled: enabled));
+    }
+  }
+
   Future<void> toggleBiometric(bool enabled) async {
     await _repo.setBiometricEnabled(enabled);
     emit(state.copyWith(biometricEnabled: enabled));
