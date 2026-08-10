@@ -102,11 +102,15 @@ class AuthRepository {
   Future<void> setBiometricEnabled(bool v) => _storage.setBiometricEnabled(v);
 
   /// Demande l'authentification biométrique de l'utilisateur.
+  /// `biometricOnly: false` : si l'empreinte échoue (doigts mouillés, capteur),
+  /// Android propose le code/schéma de l'appareil en repli. Sans ce repli, un
+  /// technicien HORS-LIGNE était enfermé dehors : le formulaire mot de passe
+  /// exige le réseau, la biométrie était la seule porte.
   Future<bool> authenticateBiometric() async {
     try {
       return await _localAuth.authenticate(
         localizedReason: 'Authentifiez-vous pour accéder à E&M OpS',
-        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true),
+        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: false),
       );
     } catch (_) {
       return false;
