@@ -162,8 +162,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const AppWordmark(fontSize: 17, dark: true),
                           const Spacer(),
                           IconButton(
-                            icon: const Icon(Icons.sync, color: Colors.white),
-                            onPressed: () => sync.sync(),
+                            icon: _syncEnCours
+                                ? const SizedBox(width: 20, height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.sync, color: Colors.white),
+                            onPressed: _syncEnCours ? null : _syncManuel,
                           ),
                           PopupMenuButton<String>(
                             iconColor: Colors.white,
@@ -463,6 +466,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ))
           .toList(),
     );
+  }
+
+  bool _syncEnCours = false;
+
+  /// Synchronisation MANUELLE : le geste doit répondre quelque chose — un
+  /// bouton muet laissait croire qu'il ne faisait rien (ou que tout avait
+  /// échoué). Bilan chiffré : envoyées / restantes / rien à faire.
+  Future<void> _syncManuel() async {
+    final sync = context.read<SyncService>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _syncEnCours = true);
+    final avant = await sync.enAttente();
+    await sync.sync();
+    final apres = await sync.enAttente();
+    if (!mounted) return;
+    setState(() => _syncEnCours = false);
+    final envoyees = avant - apres;
+    final s = envoyees > 1 ? 's' : '';
+    final texte = avant == 0
+        ? 'Rien à synchroniser — tout est à jour'
+        : apres == 0
+            ? '$envoyees opération$s synchronisée$s'
+            : envoyees > 0
+                ? '$envoyees opération$s envoyée$s · $apres toujours en attente'
+                : '$apres opération${apres > 1 ? 's' : ''} en attente — envoi impossible (hors-ligne ou erreur, voir le bandeau)';
+    messenger.showSnackBar(SnackBar(content: Text(texte)));
   }
 
   Future<void> _toggleBiometric() async {

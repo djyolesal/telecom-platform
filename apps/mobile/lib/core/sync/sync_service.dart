@@ -59,6 +59,10 @@ class SyncService {
   void dispose() => _connSub?.cancel();
 
   Stream<int> get pendingCount => _db.watchOutboxCount();
+  /// Nombre d'opérations actuellement en attente (instantané, pour le retour
+  /// visuel du bouton de synchronisation manuelle).
+  Future<int> enAttente() async =>
+      (await _db.pendingOutbox(userId: await _storage.readUserId())).length;
   /// Opérations en échec permanent (à signaler à l'utilisateur pour revue).
   Stream<int> get failedCount => _db.watchFailedCount();
   Future<List<OutboxEntry>> failedEntries() => _db.failedOutbox();
