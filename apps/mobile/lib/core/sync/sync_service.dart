@@ -192,6 +192,15 @@ class SyncService {
             _logger.w('[sync] ${entry.entityType} en attente de confirmation');
             continue;
           }
+          // Refus de VALIDATION (4xx) : rejouer le même corps ne donnera jamais
+          // un autre résultat — 5 rejeux silencieux masquaient le vrai message
+          // du serveur pendant des heures (« ça ne synchronise pas »). Échec
+          // immédiat, visible dans le bandeau avec le motif exact.
+          final code = e.statusCode ?? 0;
+          if (code >= 400 && code < 500) {
+            await _echecImmediat(entry, e.toString());
+            continue;
+          }
           await _compterEchec(entry, e.toString());
         } catch (e) {
           // Erreur SERVEUR (validation, refus…) propre à CETTE entrée : on compte
@@ -202,6 +211,14 @@ class SyncService {
     } finally {
       _syncing = false;
     }
+  }
+
+  /// Échec DÉFINITIF immédiat (refus de validation) : l'entrée est conservée et
+  /// visible dans les échecs avec le message serveur, le patch optimiste révoqué.
+  Future<void> _echecImmediat(OutboxEntry entry, String erreur) async {
+    await _db.markOutboxError(entry.localId, AppDatabase.kMaxRetries, erreur);
+    _logger.w('[sync] ${entry.entityType} refusé par le serveur (${entry.endpoint}) : $erreur');
+    if (entry.entityRef != null) await onOptimistiqueEchoue?.call(entry.entityRef!);
   }
 
   /// Compte un essai raté sur une entrée et, au passage en échec DÉFINITIF,

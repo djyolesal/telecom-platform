@@ -208,7 +208,20 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
 
     const include = {
       ...techInclude,
-      site: { select: { nom: true, code: true, region: true } },
+      // powerConfig, coordonnées et groupes : la LISTE est la base du cache
+      // hors-ligne mobile. Sans eux, une clôture hors-ligne d'un site passif
+      // partait SANS les relevés énergie (le formulaire ne savait pas qu'il en
+      // fallait) → 422 à chaque rejeu → échec définitif silencieux.
+      site: {
+        select: {
+          nom: true, code: true, region: true, powerConfig: true, latitude: true, longitude: true,
+          groupes: {
+            where: { isActive: true },
+            orderBy: { numero: 'asc' as const },
+            select: { id: true, numero: true, indexHeuresDerniereVidange: true },
+          },
+        },
+      },
       prestataire: { select: { id: true, nom: true } },
       _count: { select: { photos: true } },
     };
@@ -236,7 +249,12 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       }
     }
 
-    res.json({ success: true, data: lignes, meta });
+    // Le drapeau « relevés requis » n'existait que sur le détail : calculé ici
+    // aussi pour que le cache hors-ligne (construit depuis la liste) le porte.
+    const lignesAvecFlag = (lignes as Array<{ categorie: string; tachePreventiveKey: string | null; natureTravaux?: string | null }>)
+      .map((m) => ({ ...m, requiresEnergieReleve: requiresEnergieReleve(m) }));
+
+    res.json({ success: true, data: lignesAvecFlag, meta });
   } catch (err) { next(err); }
 }
 
