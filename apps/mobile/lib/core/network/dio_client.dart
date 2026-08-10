@@ -62,9 +62,17 @@ class DioClient {
       final res = await call(dio);
       return parse(res.data);
     } on DioException catch (e) {
+      // TOUTES les formes d'absence de réseau doivent devenir NetworkException :
+      // selon la version d'Android et le moment de la coupure, un mode avion se
+      // manifeste aussi en `unknown` (SocketException enveloppée) ou en
+      // `sendTimeout` (coupure pendant l'envoi). Les traiter en « erreur
+      // serveur » brûlait les essais de la file de sync — l'opération hors-ligne
+      // finissait en échec définitif au lieu d'attendre le réseau.
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout) {
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          (e.type == DioExceptionType.unknown && e.error is SocketException)) {
         throw const NetworkException();
       }
       final status = e.response?.statusCode;
@@ -97,7 +105,8 @@ class _RetryInterceptor extends Interceptor {
     final retries = (err.requestOptions.extra['__retries'] as int?) ?? 0;
     final isTransient = err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
-        err.type == DioExceptionType.connectionError;
+        err.type == DioExceptionType.connectionError ||
+        (err.type == DioExceptionType.unknown && err.error is SocketException);
 
     if (isTransient && err.requestOptions.method == 'GET' && retries < _maxRetries) {
       final next = retries + 1;

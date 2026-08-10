@@ -109,10 +109,14 @@ class AuthInterceptor extends Interceptor {
       return access;
     } on DioException catch (e) {
       // Coupure/timeout réseau → pas un refus : on remonte NetworkException.
+      // `unknown` + SocketException = aussi une coupure (mode avion selon les
+      // versions d'Android) : la prendre pour un refus déconnectait la session
+      // en pleine zone blanche.
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
-          e.type == DioExceptionType.sendTimeout) {
+          e.type == DioExceptionType.sendTimeout ||
+          (e.type == DioExceptionType.unknown && e.error is SocketException)) {
         throw const NetworkException();
       }
       return null; // 4xx/5xx (refresh révoqué/invalide) → session morte
