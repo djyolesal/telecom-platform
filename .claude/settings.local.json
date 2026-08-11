@@ -349,7 +349,14 @@
       "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/web *)",
       "Read(//Users/yohaness/Downloads/**)",
       "Bash(osascript -e 'tell application \"System Events\" to get name of every process whose name contains \"Keynote\"')",
-      "Bash(osascript -e ' *)"
+      "Bash(osascript -e ' *)",
+      "Bash(node build_deck_tech.js)",
+      "Bash(cp Formation_Techniciens_EM-OPS.pptx /Users/yohaness/Downloads/)",
+      "Bash(rm -f /Users/yohaness/Downloads/deck_tech_qa.pdf /Users/yohaness/Downloads/Formation_Techniciens_EM-OPS.pptx)",
+      "Bash(osascript -e 'tell application \"Keynote\" to if \\(count of documents\\) is 0 then quit')",
+      "Bash(node build_deck_noc.js)",
+      "Bash(cp Formation_NOC_EM-OPS.pptx /Users/yohaness/Downloads/)",
+      "Bash(rm -f /Users/yohaness/Downloads/deck_noc_qa.pdf /Users/yohaness/Downloads/Formation_NOC_EM-OPS.pptx && osascript -e 'tell application \"Keynote\" to if \\(count of documents\\) is 0 then quit' 2>/dev/null; echo done)"
     ]
   }
 }
