@@ -129,7 +129,15 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
   );
 }
 
-export function SitesMap({ features, couleurParCamion }: { features: SiteFeature[]; couleurParCamion?: Record<string, string> }) {
+/** Mode RÉSEAU (vue NOC) : état de coupure par site — prime sur la couleur stock. */
+export type EtatReseau = { etat: 'DOWN' | 'IMPACTE'; note?: string };
+
+export function SitesMap({ features, couleurParCamion, etatReseauParSite }: {
+  features: SiteFeature[];
+  couleurParCamion?: Record<string, string>;
+  /** Présent = mode réseau : rouge (en coupure) / ambre (aval) / vert (en service). */
+  etatReseauParSite?: Record<string, EtatReseau>;
+}) {
   const markers = useRef<MarkerMap>({});
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
@@ -167,8 +175,12 @@ export function SitesMap({ features, couleurParCamion }: { features: SiteFeature
         const couleurLivraison = camions.length > 1
           ? COULEUR_MULTI_CAMIONS
           : (couleurParCamion?.[camions[0] ?? ''] ?? '#2471A3');
-        // Priorité au stock : rouge = critique/vide, orange = faible ; sinon couleur du statut GE.
+        // Mode RÉSEAU (NOC) : l'état de coupure prime — rouge = en coupure,
+        // ambre = aval d'un site down, vert = en service (palette topologie).
+        const reseau = etatReseauParSite?.[f.properties.id];
         const color = vueLivraison ? couleurLivraison
+          : etatReseauParSite
+            ? (reseau?.etat === 'DOWN' ? '#C0392B' : reseau?.etat === 'IMPACTE' ? '#E67E22' : '#0E7C6B')
           : n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
           : n === 'FAIBLE' ? '#F59E0B'
           : (STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF');
@@ -200,6 +212,13 @@ export function SitesMap({ features, couleurParCamion }: { features: SiteFeature
                 )}
                 {!vueLivraison && (
                   <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
+                )}
+                {etatReseauParSite && (
+                  <p className="mt-1 font-semibold" style={{ color: reseau?.etat === 'DOWN' ? '#C0392B' : reseau?.etat === 'IMPACTE' ? '#B9770E' : '#0E7C6B' }}>
+                    {reseau?.etat === 'DOWN' ? `EN COUPURE${reseau.note ? ` — ${reseau.note}` : ''}`
+                      : reseau?.etat === 'IMPACTE' ? 'Aval d\'un site en coupure'
+                      : 'En service'}
+                  </p>
                 )}
                 {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (() => {
                   const badge = (
