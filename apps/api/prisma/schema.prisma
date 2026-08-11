@@ -189,6 +189,9 @@ model Site {
   cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100)
   // Gardiennage et contact local (préparation d'intervention, litiges manquants)
   hasGardien         Boolean  @default(false) @map("has_gardien")
+  // Poste tenu UNIQUEMENT la nuit (plage paramétrable, défaut 18h→6h GMT) :
+  // une absence constatée en journée y est normale, pas une défaillance.
+  gardiennageNuitSeulement Boolean @default(false) @map("gardiennage_nuit_seulement")
   societeGardiennage String?  @map("societe_gardiennage") @db.VarChar(100) // texte hérité (affiché tant que non rapproché)
   // Société de gardiennage NORMALISÉE : lien vers un prestataire isGardiennage.
   gardiennagePrestataireId String? @map("gardiennage_prestataire_id")

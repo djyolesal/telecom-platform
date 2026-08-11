@@ -197,7 +197,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
-      'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
+      'cuveDimensions', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison',
     ]);
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
@@ -228,7 +228,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
-      'cuveDimensions', 'hasGardien', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
+      'cuveDimensions', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);

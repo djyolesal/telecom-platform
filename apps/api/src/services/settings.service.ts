@@ -78,6 +78,11 @@ export function settingsCatalog(): SettingMeta[] {
     // sont générées le 1er du mois ; 0 = planification manuelle uniquement
     // (utile pendant une renégociation de contrats ou une reprise de données).
     { key: 'planning.autoActif', label: 'Planning préventif automatique (1 = actif, 0 = coupé)', groupe: 'Maintenance', unite: '0/1', defaut: 1 },
+    // Plage des postes de gardiennage DE NUIT (heures GMT) : hors de cette
+    // plage, une absence sur un site « nuit seulement » est normale et ne
+    // pénalise pas la société dans le rapport gardiennage.
+    { key: 'gardiennage.nuitDebutHeure', label: 'Début du poste de nuit (GMT)', groupe: 'Gardiennage', unite: 'h', defaut: 18 },
+    { key: 'gardiennage.nuitFinHeure', label: 'Fin du poste de nuit (GMT)', groupe: 'Gardiennage', unite: 'h', defaut: 6 },
     // Carburant — stock
     { key: 'ge.seuilCritiqueLitres', label: 'Stock critique', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilCritiqueLitres },
     { key: 'ge.seuilFaibleLitres', label: 'Stock faible', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilFaibleLitres },

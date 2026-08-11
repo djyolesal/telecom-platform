@@ -3,7 +3,7 @@ import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import { prisma } from '../config/database';
 import { auditLog } from '../services/audit.service';
 import { calculerStockSite } from '../utils/calculator';
-import { geParams } from '../services/settings.service';
+import { geParams, getNum } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
 import { bilanCarburant } from '../services/bilanCarburant.service';
@@ -585,42 +585,65 @@ export async function getRapportGardiennage(req: Request, res: Response, next: N
       where: { isGardiennage: true, isActive: true },
       select: {
         id: true, nom: true, contactTechnique: true,
-        sitesGardes: { where: { isActive: true }, select: { id: true, code: true, hasGardien: true } },
+        sitesGardes: { where: { isActive: true }, select: { id: true, code: true, hasGardien: true, gardiennageNuitSeulement: true } },
       },
       orderBy: { nom: 'asc' },
     });
+
+    // Postes de NUIT : hors plage (défaut 18h→6h GMT), l'absence est normale —
+    // la déclaration est classée « hors plage » et ne pèse pas dans le taux.
+    const nuitDebut = getNum('gardiennage.nuitDebutHeure', 18);
+    const nuitFin = getNum('gardiennage.nuitFinHeure', 6);
+    const dansPlageNuit = (d: Date | null): boolean => {
+      if (!d) return true; // date inconnue : on ne présume pas, la déclaration compte
+      const h = d.getUTCHours();
+      // Plage qui traverse minuit (18→6) ou non (ex. 0→8).
+      return nuitDebut > nuitFin ? (h >= nuitDebut || h < nuitFin) : (h >= nuitDebut && h < nuitFin);
+    };
 
     const data = await Promise.all(societes.map(async (soc) => {
       // Seuls les sites où un gardien est effectivement déclaré comptent : une
       // absence sur un site sans poste de gardien ne doit pas pénaliser la société.
       const sitesAvecGardien = soc.sitesGardes.filter((s) => s.hasGardien);
       const siteIds = sitesAvecGardien.map((s) => s.id);
+      const nuitSeule = new Set(sitesAvecGardien.filter((s) => s.gardiennageNuitSeulement).map((s) => s.id));
       const [maint, inc, deps] = siteIds.length ? await Promise.all([
         prisma.maintenance.findMany({
           where: { siteId: { in: siteIds }, statut: 'TERMINEE', dateFin: { gte: since } },
-          select: { agentPresent: true },
+          select: { agentPresent: true, siteId: true, dateFin: true },
         }),
         prisma.incident.findMany({
           where: { siteId: { in: siteIds }, dateResolution: { gte: since } },
-          select: { agentPresent: true },
+          select: { agentPresent: true, siteId: true, dateResolution: true },
         }),
         prisma.depotage.findMany({
           where: { siteId: { in: siteIds }, dateDepotage: { gte: since } },
-          select: { agentPresent: true },
+          select: { agentPresent: true, siteId: true, dateDepotage: true },
         }),
       ]) : [[], [], []];
-      const decls = [...maint, ...inc, ...deps].map((x) => x.agentPresent);
-      const presents = decls.filter((v) => v === true).length;
-      const absents = decls.filter((v) => v === false).length;
-      const nonRenseigne = decls.filter((v) => v == null).length;
+      const decls = [
+        ...maint.map((x) => ({ v: x.agentPresent, siteId: x.siteId, quand: x.dateFin })),
+        ...inc.map((x) => ({ v: x.agentPresent, siteId: x.siteId, quand: x.dateResolution })),
+        ...deps.map((x) => ({ v: x.agentPresent, siteId: x.siteId, quand: x.dateDepotage })),
+      ];
+      // Une déclaration sur un site « nuit seulement » ne compte dans le taux
+      // que si le passage a eu lieu PENDANT le poste. Un « présent » de jour
+      // reste hors plage aussi : l'agent n'était pas censé y être, la mesure
+      // ne veut rien dire pour le contrat.
+      const comptees = decls.filter((d) => !nuitSeule.has(d.siteId) || dansPlageNuit(d.quand));
+      const horsPlage = decls.length - comptees.length;
+      const presents = comptees.filter((d) => d.v === true).length;
+      const absents = comptees.filter((d) => d.v === false).length;
+      const nonRenseigne = comptees.filter((d) => d.v == null).length;
       const renseignes = presents + absents;
       return {
         prestataireId: soc.id,
         nom: soc.nom,
         contactTechnique: soc.contactTechnique,
         nbSites: sitesAvecGardien.length,
+        nbSitesNuit: nuitSeule.size,
         interventions: decls.length,
-        presents, absents, nonRenseigne,
+        presents, absents, nonRenseigne, horsPlage,
         tauxAbsencePct: renseignes ? Math.round((absents / renseignes) * 100) : null,
       };
     }));

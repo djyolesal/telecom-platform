@@ -11,8 +11,11 @@ import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 
 interface SocieteGardiennage {
   prestataireId: string; nom: string; contactTechnique: string | null;
-  nbSites: number; interventions: number;
+  nbSites: number; nbSitesNuit: number; interventions: number;
   presents: number; absents: number; nonRenseigne: number;
+  // Passages de JOUR sur des sites gardés uniquement la nuit : absence normale,
+  // exclue du taux.
+  horsPlage: number;
   tauxAbsencePct: number | null;
 }
 interface Report { periodeJours: number; societes: SocieteGardiennage[]; sitesNonRattaches: number }
@@ -64,6 +67,7 @@ export default function GardiennagePage() {
               <th className="px-3 py-3 text-right font-medium">Agent présent</th>
               <th className="px-3 py-3 text-right font-medium">Absent</th>
               <th className="px-3 py-3 text-right font-medium">Non renseigné</th>
+              <th className="px-3 py-3 text-right font-medium">Hors plage (nuit)</th>
               <th className="px-3 py-3 pr-5 text-right font-medium">Taux d&apos;absence</th>
             </tr></thead>
             <tbody>
@@ -73,11 +77,15 @@ export default function GardiennagePage() {
                     <p className="font-medium text-gray-800">{s.nom}</p>
                     {s.contactTechnique && <p className="text-xs text-gray-400">{s.contactTechnique}</p>}
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{s.nbSites}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    {s.nbSites}
+                    {s.nbSitesNuit > 0 && <span className="ml-1 text-xs text-indigo-500" title="dont postes de nuit uniquement">({s.nbSitesNuit} nuit)</span>}
+                  </td>
                   <td className="px-3 py-3 text-right tabular-nums">{s.interventions}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-green-700">{s.presents}</td>
                   <td className={`px-3 py-3 text-right tabular-nums ${s.absents > 0 ? 'font-semibold text-red-600' : 'text-gray-400'}`}>{s.absents}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-gray-400">{s.nonRenseigne}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-indigo-400" title="Passages de jour sur des postes de nuit — absence normale, exclue du taux">{s.horsPlage ?? 0}</td>
                   <td className="px-3 py-3 pr-5 text-right tabular-nums">
                     {s.tauxAbsencePct == null ? <span className="text-gray-300">—</span> : (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.tauxAbsencePct === 0 ? 'bg-green-100 text-green-700' : s.tauxAbsencePct <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
@@ -93,6 +101,7 @@ export default function GardiennagePage() {
       )}
       <p className="mt-3 text-xs text-gray-400">
         La déclaration « Agent présent / absent » est faite par le technicien à la clôture de chaque maintenance et incident (application mobile). « Non renseigné » : interventions clôturées avant la mise en place ou depuis une ancienne version de l&apos;application.
+        « Hors plage » : passages de jour sur des sites marqués « poste de nuit uniquement » (fiche du site) — l&apos;absence y est normale et n&apos;entre pas dans le taux. La plage de nuit (défaut 18h→6h GMT) se règle dans Administration → Paramètres.
       </p>
     </div>
   );

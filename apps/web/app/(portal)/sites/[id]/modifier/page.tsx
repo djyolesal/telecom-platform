@@ -23,7 +23,7 @@ export default function ModifierSitePage() {
     latitude: '', longitude: '', lotId: '',
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
-    hasGardien: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
+    hasGardien: 'false', gardiennageNuitSeulement: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
     parentTransmissionId: '', typeLiaison: '',
     marqueGE: '',
   });
@@ -88,6 +88,7 @@ export default function ModifierSitePage() {
       formeCuve: site.formeCuve ?? '',
       cuveDimensions: site.cuveDimensions ?? '',
       hasGardien: site.hasGardien ? 'true' : 'false',
+      gardiennageNuitSeulement: site.gardiennageNuitSeulement ? 'true' : 'false',
       societeGardiennage: site.societeGardiennage ?? '',
       gardiennagePrestataireId: site.gardiennagePrestataireId ?? '',
       telephoneSite: site.telephoneSite ?? '',
@@ -120,6 +121,7 @@ export default function ModifierSitePage() {
         formeCuve: form.formeCuve || null,
         cuveDimensions: form.cuveDimensions || null,
         hasGardien: form.hasGardien === 'true',
+        gardiennageNuitSeulement: form.gardiennageNuitSeulement === 'true',
         societeGardiennage: form.societeGardiennage || null,
         gardiennagePrestataireId: form.gardiennagePrestataireId || null,
         telephoneSite: form.telephoneSite || null,
@@ -223,6 +225,12 @@ export default function ModifierSitePage() {
           <Field label="Agent de sécurité sur le site">
             <Select value={form.hasGardien} onChange={(e) => set('hasGardien', e.target.value)} options={OUI_NON} />
           </Field>
+          {form.hasGardien === 'true' && (
+            <Field label="Poste de nuit uniquement (dès 18h GMT)">
+              <Select value={form.gardiennageNuitSeulement} onChange={(e) => set('gardiennageNuitSeulement', e.target.value)} options={OUI_NON} />
+              <p className="mt-1 text-xs text-gray-400">Une absence constatée en journée sur ce site sera classée « hors plage » — elle ne comptera pas dans le taux d&apos;absence de la société.</p>
+            </Field>
+          )}
           <Field label="Société de gardiennage">
             <Select value={form.gardiennagePrestataireId} onChange={(e) => set('gardiennagePrestataireId', e.target.value)} options={gardiennageOptions} placeholder="(aucune)" />
             {form.societeGardiennage && !form.gardiennagePrestataireId && (
