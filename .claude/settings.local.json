@@ -346,7 +346,10 @@
       "Bash(awk -F: '$2>650 && $2<700')",
       "Bash(git reset *)",
       "Bash(awk 'NR==225' src/services/rapprochement.service.ts)",
-      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/web *)"
+      "Bash(cd /Users/yohaness/Downloads/telecom-platform/apps/web *)",
+      "Read(//Users/yohaness/Downloads/**)",
+      "Bash(osascript -e 'tell application \"System Events\" to get name of every process whose name contains \"Keynote\"')",
+      "Bash(osascript -e ' *)"
     ]
   }
 }
