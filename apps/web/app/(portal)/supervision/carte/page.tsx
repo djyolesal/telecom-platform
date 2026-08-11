@@ -80,14 +80,17 @@ export default function CartePage() {
       t.add(c.technologie ?? 'SITE');
       technos.set(c.siteId, t);
     }
-    const etat: Record<string, EtatReseau> = {};
-    for (const [id, t] of technos) etat[id] = { etat: 'DOWN', note: [...t].join('/') };
-    // L'aval n'est menacé que si le site amont est ENTIÈREMENT down
-    // (coupure SITE ou toutes les technologies) — même règle que la topologie.
+    // Coupure TOTALE (SITE ou toutes les technos) vs PARTIELLE (une partie) :
+    // un site qui a perdu sa 3G n'est pas un site mort — même règle de
+    // propagation que la topologie : seul un site ENTIÈREMENT down menace l'aval.
     const entierementDown = (id: string) => {
       const t = technos.get(id);
       return !!t && (t.has('SITE') || ['2G', '3G', '4G', '5G'].every((x) => t.has(x)));
     };
+    const etat: Record<string, EtatReseau> = {};
+    for (const [id, t] of technos) {
+      etat[id] = { etat: entierementDown(id) ? 'DOWN' : 'PARTIEL', note: [...t].join('/') };
+    }
     const marquerAval = (id: string) => {
       for (const e of enfants.get(id) ?? []) {
         if (!etat[e]) { etat[e] = { etat: 'IMPACTE' }; marquerAval(e); }
@@ -140,7 +143,7 @@ export default function CartePage() {
         subtitle={vueLivraison
           ? `${all.length} site(s) à livrer selon vos plans en cours`
           : modeReseau
-            ? `${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'DOWN').length} en coupure · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'IMPACTE').length} aval menacé(s) · actualisé chaque minute`
+            ? `${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'DOWN').length} coupé(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'PARTIEL').length} partiel(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'IMPACTE').length} aval menacé(s) · actualisé chaque minute`
             : `${features.length} / ${all.length} sites · temps réel`}
       />
 
@@ -185,8 +188,9 @@ export default function CartePage() {
               </span>
             )}
           </>) : modeReseau ? (<>
-            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#C0392B]" /> En coupure</span>
-            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#E67E22]" /> Aval d&apos;un site down</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#C0392B]" /> Site entièrement coupé</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#E67E22]" /> Coupure partielle</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#8E44AD]" /> Aval d&apos;un site coupé</span>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> En service</span>
           </>) : (<>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#DC2626]" /> Stock critique</span>

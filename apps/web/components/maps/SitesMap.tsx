@@ -129,8 +129,16 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
   );
 }
 
-/** Mode RÉSEAU (vue NOC) : état de coupure par site — prime sur la couleur stock. */
-export type EtatReseau = { etat: 'DOWN' | 'IMPACTE'; note?: string };
+/** Mode RÉSEAU (vue NOC) : état de coupure par site — prime sur la couleur stock.
+ *  DOWN = site entièrement coupé · PARTIEL = une partie des technologies ·
+ *  IMPACTE = aval d'un site entièrement down. */
+export type EtatReseau = { etat: 'DOWN' | 'PARTIEL' | 'IMPACTE'; note?: string };
+
+const COULEUR_RESEAU: Record<EtatReseau['etat'], string> = {
+  DOWN: '#C0392B',    // rouge : coupure totale
+  PARTIEL: '#E67E22', // orange : coupure partielle
+  IMPACTE: '#8E44AD', // violet : menace héritée de l'amont
+};
 
 export function SitesMap({ features, couleurParCamion, etatReseauParSite }: {
   features: SiteFeature[];
@@ -180,7 +188,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite }: {
         const reseau = etatReseauParSite?.[f.properties.id];
         const color = vueLivraison ? couleurLivraison
           : etatReseauParSite
-            ? (reseau?.etat === 'DOWN' ? '#C0392B' : reseau?.etat === 'IMPACTE' ? '#E67E22' : '#0E7C6B')
+            ? (reseau ? COULEUR_RESEAU[reseau.etat] : '#0E7C6B')
           : n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
           : n === 'FAIBLE' ? '#F59E0B'
           : (STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF');
@@ -214,9 +222,10 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite }: {
                   <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
                 )}
                 {etatReseauParSite && (
-                  <p className="mt-1 font-semibold" style={{ color: reseau?.etat === 'DOWN' ? '#C0392B' : reseau?.etat === 'IMPACTE' ? '#B9770E' : '#0E7C6B' }}>
-                    {reseau?.etat === 'DOWN' ? `EN COUPURE${reseau.note ? ` — ${reseau.note}` : ''}`
-                      : reseau?.etat === 'IMPACTE' ? 'Aval d\'un site en coupure'
+                  <p className="mt-1 font-semibold" style={{ color: reseau ? COULEUR_RESEAU[reseau.etat] : '#0E7C6B' }}>
+                    {reseau?.etat === 'DOWN' ? `SITE ENTIÈREMENT COUPÉ${reseau.note ? ` — ${reseau.note}` : ''}`
+                      : reseau?.etat === 'PARTIEL' ? `Coupure partielle — ${reseau.note ?? 'technologie(s) touchée(s)'}`
+                      : reseau?.etat === 'IMPACTE' ? 'Aval d\'un site entièrement coupé'
                       : 'En service'}
                   </p>
                 )}
