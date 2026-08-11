@@ -568,7 +568,24 @@ export async function getFiabiliteGE(req: Request, res: Response, next: NextFunc
 export async function getSlaPrestataires(req: Request, res: Response, next: NextFunction) {
   try {
     const jours = req.query.jours ? parseInt(String(req.query.jours), 10) : 90;
-    res.json({ success: true, data: await computeSla({ jours }) });
+    const rapport = await computeSla({ jours });
+
+    // Un compte PRESTATAIRE (superviseur) ne voit que SA ligne : ses propres
+    // indicateurs et pénalités — jamais ceux des concurrents. Le total de
+    // pénalités est recalculé sur ce périmètre (le total parc en dirait trop).
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    if (me?.prestataireId) {
+      const miennes = rapport.parPrestataire.filter((p) => p.prestataireId === me.prestataireId);
+      return res.json({
+        success: true,
+        data: {
+          ...rapport,
+          parPrestataire: miennes,
+          penaliteTotaleFCFA: miennes.reduce((s, p) => s + p.penaliteFCFA, 0),
+        },
+      });
+    }
+    res.json({ success: true, data: rapport });
   } catch (err) { next(err); }
 }
 
