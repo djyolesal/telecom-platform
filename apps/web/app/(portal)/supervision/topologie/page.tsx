@@ -16,11 +16,16 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface SiteNode {
   id: string;
+  code: string;
   nom: string;
   region: string;
   parentTransmissionId?: string | null;
   typeLiaison?: string | null;
 }
+
+/** Correspondance recherche : par NOM ou par CODE site. */
+const correspond = (s: SiteNode, terme: string) =>
+  s.nom.toLowerCase().includes(terme) || (s.code ?? '').toLowerCase().includes(terme);
 
 interface Arbre { racine: SiteNode; taille: number }
 
@@ -30,6 +35,7 @@ interface Arbre { racine: SiteNode; taille: number }
  * et sa chaîne aval en ambre (impact potentiel/hérité).
  */
 export default function TopologiePage() {
+  const router = useRouter();
   const [recherche, setRecherche] = useState('');
   const termeDebounce = useDebounce(recherche);
   const [vue, setVue] = useState<'graphe' | 'liste'>('graphe');
@@ -159,11 +165,30 @@ export default function TopologiePage() {
     if (!terme) return arbres;
     const contient = (id: string): boolean => {
       const n = parId.get(id);
-      if (n && n.nom.toLowerCase().includes(terme)) return true;
+      if (n && correspond(n, terme)) return true;
       return (enfants.get(id) ?? []).some((e) => contient(e.id));
     };
     return arbres.filter((a) => contient(a.racine.id));
   }, [terme, arbres, enfants, parId]);
+
+  // AMENER au site trouvé : les chaînes s'ouvrent (cf. ArbreCard) puis on
+  // défile jusqu'au premier nœud en surbrillance — sans ça, la recherche
+  // filtrait les chaînes mais laissait l'utilisateur chercher à l'œil.
+  useEffect(() => {
+    if (!terme) return;
+    const t = setTimeout(() => {
+      document.querySelector('[data-site-trouve="1"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200); // laisse les chaînes s'ouvrir et se rendre
+    return () => clearTimeout(t);
+  }, [terme, arbresVisibles]);
+
+  // Site qui existe mais n'appartient à aucune chaîne (liaison non déclarée) :
+  // proposer sa fiche plutôt qu'un simple « aucune chaîne ».
+  const siteIsole = useMemo(() => {
+    if (!terme || arbresVisibles.length > 0) return null;
+    return (sites ?? []).find((s) => correspond(s, terme)) ?? null;
+  }, [terme, arbresVisibles, sites]);
 
   if (isLoading) return <Loading />;
   if (isError || !sites) return <ErrorState message="Topologie indisponible" />;
@@ -306,8 +331,22 @@ export default function TopologiePage() {
             />
           ))}
           {arbresVisibles.length === 0 && (
-            <div className="rounded-xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-400">
-              Aucune chaîne ne contient « {recherche} ».
+            <div className="rounded-xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500">
+              {siteIsole ? (
+                <>
+                  <p><b>{siteIsole.nom}</b> ({siteIsole.code}) existe mais n&apos;appartient à aucune chaîne — aucune liaison de transmission déclarée.</p>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/sites/${siteIsole.id}`)}
+                    className="mt-3 rounded-lg bg-[#1B3F6B] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#2471A3]"
+                  >
+                    Ouvrir la fiche du site
+                  </button>
+                  <p className="mt-2 text-xs text-gray-400">Pour l&apos;intégrer : fiche du site → Modifier → « Site parent (transmission) ».</p>
+                </>
+              ) : (
+                <span className="text-gray-400">Aucune chaîne ne contient « {recherche} » (recherche par nom ou code).</span>
+              )}
             </div>
           )}
         </div>
@@ -414,6 +453,11 @@ function ArbreCard({ arbre, enfants, sitesDown, sitesImpactes, terme, vue, estTo
   defaultOuvert: boolean;
 }) {
   const [ouvert, setOuvert] = useState(defaultOuvert);
+  // Une recherche active OUVRE la chaîne : seules les chaînes contenant le
+  // terme sont rendues, les laisser repliées cachait le résultat.
+  useEffect(() => {
+    if (terme) setOuvert(true);
+  }, [terme]);
   const touche = estTouche;
   return (
     <div className={`rounded-xl border bg-white ${touche ? 'border-red-200' : 'border-gray-100'}`}>
@@ -629,12 +673,13 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
           const x = cx(p), y = cy(p);
           const down = sitesDown.has(s.id);
           const impacte = !down && sitesImpactes.has(s.id);
-          const surligne = terme && s.nom.toLowerCase().includes(terme);
-          const fond = down ? '#FDECEA' : impacte ? '#FEF5E7' : '#FFFFFF';
+          const surligne = terme && correspond(s, terme);
+          const fond = down ? '#FDECEA' : impacte ? '#FEF5E7' : surligne ? '#EAF1F8' : '#FFFFFF';
           const bord = down ? '#C0392B' : impacte ? '#E67E22' : surligne ? '#2471A3' : '#D5DBDB';
           return (
             <g
               key={s.id}
+              data-site-trouve={surligne ? '1' : undefined}
               onClick={() => { if (!clicApresGlissement()) router.push(`/sites/${s.id}`); }}
               className="cursor-pointer"
             >
@@ -668,12 +713,13 @@ function Noeud({ site, enfants, sitesDown, sitesImpactes, terme, profondeur }: {
   const fils = enfants.get(site.id) ?? [];
   const down = sitesDown.has(site.id);
   const impacte = !down && sitesImpactes.has(site.id);
-  const surligne = terme && site.nom.toLowerCase().includes(terme);
+  const surligne = terme && correspond(site, terme);
 
   return (
     <div className={profondeur > 0 ? 'ml-4 border-l-2 border-gray-100 pl-4' : ''}>
       <button
         type="button"
+        data-site-trouve={surligne ? '1' : undefined}
         onClick={() => router.push(`/sites/${site.id}`)}
         className={`my-1 inline-flex items-center gap-2 rounded-lg border px-2.5 py-1 text-sm transition-colors ${
           down ? 'border-red-200 bg-red-50 text-red-800'
