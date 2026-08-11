@@ -268,9 +268,13 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
  */
 export async function resetPassword(req: Request, res: Response, next: NextFunction) {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) throw new AppError('Token et nouveau mot de passe requis', 400);
-    if (String(newPassword).length < 8) throw new AppError('Mot de passe trop court (min 8 caractères)', 400);
+    // `password` : LE nom validé par resetPasswordSchema. Le contrôleur lisait
+    // `newPassword` — que la validation venait justement de retirer du corps :
+    // AUCUNE définition de mot de passe ne pouvait aboutir (« validation
+    // échouée » côté formulaire, qui envoyait aussi l'ancien nom).
+    const { token, password } = req.body;
+    if (!token || !password) throw new AppError('Token et nouveau mot de passe requis', 400);
+    if (String(password).length < 8) throw new AppError('Mot de passe trop court (min 8 caractères)', 400);
 
     const userId = await redisClient.get(`reset:${token}`);
     if (!userId) throw new AppError('Token invalide ou expiré', 400);
@@ -280,7 +284,7 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     const cible = await prisma.user.findUnique({ where: { id: userId }, select: { isActive: true } });
     if (!cible?.isActive) throw new AppError('Token invalide ou expiré', 400);
 
-    const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    const hash = await bcrypt.hash(password, SALT_ROUNDS);
     await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
 
     await redisClient.del(`reset:${token}`);

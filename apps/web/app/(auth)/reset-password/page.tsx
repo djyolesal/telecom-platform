@@ -22,11 +22,15 @@ function ResetForm() {
     if (password !== confirm) { setError('Les deux mots de passe ne correspondent pas.'); return; }
     setLoading(true);
     try {
-      await api.post('/auth/reset-password', { token, newPassword: password });
+      await api.post('/auth/reset-password', { token, password });
       setDone(true);
       setTimeout(() => router.push('/login'), 2500);
     } catch (err) {
-      setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Lien invalide ou expiré. Redemandez une réinitialisation.');
+      // Le détail de validation (ex. « au moins 8 caractères ») est plus utile
+      // que le générique « Validation échouée ».
+      const data = (err as { response?: { data?: { error?: string; details?: Record<string, string[]> } } })?.response?.data;
+      const detail = data?.details ? Object.values(data.details).flat()[0] : null;
+      setError(detail || data?.error || 'Lien invalide ou expiré. Redemandez une réinitialisation.');
     } finally {
       setLoading(false);
     }
