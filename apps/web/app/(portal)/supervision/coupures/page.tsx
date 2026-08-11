@@ -124,7 +124,22 @@ export default function CoupuresReseauPage() {
         </span>
       ),
     },
-    { key: 'technologie', header: 'Technologie', render: (c) => <TechnoBadge t={c.technologie} /> },
+    {
+      key: 'technologie', header: 'Technologie',
+      // Fréquence et secteur (fichier NOC) : stockés depuis toujours mais
+      // jamais affichés — c'est pourtant ce qui distingue deux coupures 4G
+      // du même site (L800 secteur 2 ≠ L1800 secteur 1).
+      render: (c) => (
+        <div>
+          <TechnoBadge t={c.technologie} />
+          {(c.frequence || c.secteur) && (
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              {[c.frequence, c.secteur && `sect. ${c.secteur}`].filter(Boolean).join(' · ')}
+            </p>
+          )}
+        </div>
+      ),
+    },
     { key: 'dateDebut', header: 'Début', render: (c) => fmtDateTime(c.dateDebut) },
     {
       key: 'dateFin', header: 'Fin',
@@ -208,6 +223,8 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [technos, setTechnos] = useState<Set<string>>(new Set(['SITE']));
   const [dateDebut, setDateDebut] = useState('');
   const [typeAlarme, setTypeAlarme] = useState('');
+  const [frequence, setFrequence] = useState('');
+  const [secteur, setSecteur] = useState('');
   const [cause, setCause] = useState('');
   const [technicien, setTechnicien] = useState('');
   const [observations, setObservations] = useState('');
@@ -232,6 +249,8 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
       propagerAval: siteEntier && nbAval > 0 && propagerAval,
       dateDebut,
       typeAlarme: typeAlarme || undefined,
+      frequence: frequence || undefined,
+      secteur: secteur || undefined,
       cause: cause || undefined,
       technicienContacte: technicien || undefined,
       observations: observations || undefined,
@@ -275,6 +294,14 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
         </Field>
         <Field label="Type d'alarme">
           <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="—" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Fréquence / bande">
+          <Input value={frequence} onChange={(e) => setFrequence(e.target.value)} placeholder="ex. L800, U900" />
+        </Field>
+        <Field label="Secteur">
+          <Input value={secteur} onChange={(e) => setSecteur(e.target.value)} placeholder="ex. S2" />
         </Field>
       </div>
       <Field label="Cause constatée"><Input value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" /></Field>
