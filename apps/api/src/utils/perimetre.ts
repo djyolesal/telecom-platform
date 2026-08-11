@@ -37,3 +37,13 @@ export async function assertSiteInPerimetre(userId: string, siteId: string): Pro
   const ok = await prisma.site.findFirst({ where: { id: siteId, ...p }, select: { id: true } });
   if (!ok) throw new AppError('Site introuvable', 404);
 }
+
+/**
+ * true si le compte est rattaché à un prestataire externe : les COÛTS internes
+ * (FCFA agrégés, prix négociés) lui sont masqués — les litres/kWh suffisent à
+ * l'exploitation, la structure de coûts de l'opérateur ne le regarde pas.
+ */
+export async function estPrestataire(userId: string): Promise<boolean> {
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { prestataireId: true } });
+  return !!me?.prestataireId;
+}

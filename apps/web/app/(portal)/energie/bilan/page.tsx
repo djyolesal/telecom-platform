@@ -26,7 +26,7 @@ interface LigneSite {
 }
 interface Bilan {
   periode: { debut: string; fin: string; jours: number };
-  prixKwh: number;
+  prixKwh: number | null;
   totaux: {
     nbSites: number; nbSitesMesures: number; nbSitesDeclares: number;
     consoKwh: number; consoKwhMesuree: number; coutFCFA: number; consoJourMoyenneKwh: number;
@@ -142,7 +142,7 @@ export default function BilanEnergiePage() {
             subtitle={`≈ ${fmtNumber(t!.consoJourMoyenneKwh)} kWh/jour`} icon={Zap} color="bg-[#1B3F6B]" />
           <StatCard title="Dont mesurée (index)" value={`${fmtNumber(t!.consoKwhMesuree)} kWh`} icon={Gauge} color="bg-[#0E7C6B]" />
           <StatCard title="Coût estimé" value={fmtFCFA(t!.coutFCFA)}
-            subtitle={`tarif ${data.prixKwh} FCFA/kWh`} icon={Banknote} color="bg-[#B7950B]" />
+            subtitle={data.prixKwh != null ? `tarif ${data.prixKwh} FCFA/kWh` : 'masqué (compte prestataire)'} icon={Banknote} color="bg-[#B7950B]" />
           <StatCard title="Sites au delta d'index" value={`${t!.nbSitesMesures} / ${t!.nbSites}`}
             subtitle={t!.nbSitesDeclares > 0 ? `${t!.nbSitesDeclares} en déclaré` : 'index aux deux bornes'}
             icon={FileWarning} color={t!.nbSitesMesures < t!.nbSites ? 'bg-[#B7950B]' : 'bg-[#148F77]'} />

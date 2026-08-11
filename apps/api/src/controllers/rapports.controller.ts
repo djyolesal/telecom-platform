@@ -16,7 +16,7 @@ import { computeEmpreinteCarbone, co2GasoilKg, co2ReseauKg } from '../services/c
 import { carboneFactors } from '../services/settings.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
-import { sitePerimetre, isRestreint } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, estPrestataire } from '../utils/perimetre';
 import { stockCourantParSite } from '../services/stockCourant.service';
 
 /**
@@ -128,6 +128,9 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
   try {
     const { region } = req.query as Record<string, string>;
     const perimetre = await sitePerimetre(req.user!.id);
+    // Les COÛTS (FCFA) sont une lecture de pilotage interne : masqués côté
+    // serveur pour tout compte prestataire — les litres suffisent à exploiter.
+    const masquerCouts = await estPrestataire(req.user!.id);
     const sites = await prisma.site.findMany({
       where: { isActive: true, ...(region ? { region } : {}), ...perimetre },
       orderBy: { code: 'asc' },
@@ -136,13 +139,17 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
 
     const data = sites.map((site) => {
       const stock = calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 }, geParams());
-      return { siteId: site.id, code: site.code, nom: site.nom, region: site.region, statutGE: site.statutGE, ...stock };
+      return {
+        siteId: site.id, code: site.code, nom: site.nom, region: site.region, statutGE: site.statutGE,
+        ...stock,
+        ...(masquerCouts ? { coutMoisFCFA: null } : {}),
+      };
     });
 
     const resume = {
       totalLitres: data.reduce((s, x) => s + x.stockLitres, 0),
       totalLitresMois: data.reduce((s, x) => s + x.litresMois, 0),
-      totalCoutMoisFCFA: data.reduce((s, x) => s + x.coutMoisFCFA, 0),
+      totalCoutMoisFCFA: masquerCouts ? null : data.reduce((s, x) => s + (x.coutMoisFCFA ?? 0), 0),
       nbSitesVides: data.filter((x) => x.niveauAlerte === 'VIDE').length,
       nbSitesCritiques: data.filter((x) => x.niveauAlerte === 'CRITIQUE').length,
       nbSitesFaibles: data.filter((x) => x.niveauAlerte === 'FAIBLE').length,
@@ -767,6 +774,20 @@ export async function getBilanEnergie(req: Request, res: Response, next: NextFun
   try {
     const { debut, fin } = bornesBilan(req);
     const data = await bilanEnergie(debut, fin, (req.query.region as string) || undefined, await porteeBilan(req));
+    // Compte prestataire : les kWh restent (exploitation), les FCFA et le prix
+    // du kWh NÉGOCIÉ partent — structure de coûts interne de l'opérateur.
+    if (await estPrestataire(req.user!.id)) {
+      return res.json({
+        success: true,
+        data: {
+          ...data,
+          prixKwh: null,
+          totaux: { ...data.totaux, coutFCFA: null },
+          lignes: data.lignes.map((l) => ({ ...l, coutFCFA: null })),
+          courbe: data.courbe.map((p) => ({ ...p, coutFCFA: null })),
+        },
+      });
+    }
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

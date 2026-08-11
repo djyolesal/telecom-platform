@@ -370,7 +370,7 @@ router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTI
 router.get('/rapports/conformite', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConformiteMaintenance);
 router.get('/rapports/sla-prestataires', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getSlaPrestataires);
 router.get('/rapports/gardiennage', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportGardiennage);
-router.get('/rapports/mensuel/:annee/:mois', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMensuelPdf);
+router.get('/rapports/mensuel/:annee/:mois', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMensuelPdf); // coûts complets non périmétrés : internes seulement
 router.post('/rapports/mensuel/send', rbac(['MANAGER','ADMIN']), rapportsCtrl.sendRapportMensuel);
 
 // ── Utilisateurs ──────────────────────────────────────────────
