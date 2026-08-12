@@ -24,7 +24,7 @@ export default function ModifierSitePage() {
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     hasGardien: 'false', gardiennageNuitSeulement: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
-    parentTransmissionId: '', typeLiaison: '',
+    parentTransmissionId: '', typeLiaison: '', nodeId: '',
     marqueGE: '',
   });
   const { data: societesGardiennage } = useQuery({
@@ -94,6 +94,7 @@ export default function ModifierSitePage() {
       telephoneSite: site.telephoneSite ?? '',
       parentTransmissionId: site.parentTransmissionId ?? '',
       typeLiaison: site.typeLiaison ?? '',
+      nodeId: site.nodeId ?? '',
       marqueGE: (site.groupes as { numero: number; marque?: string | null }[] | undefined)?.find((g) => g.numero === 1)?.marque ?? '',
     });
     const extras = (site.groupes ?? [])
@@ -127,6 +128,7 @@ export default function ModifierSitePage() {
         telephoneSite: form.telephoneSite || null,
         parentTransmissionId: form.parentTransmissionId || null,
         typeLiaison: form.typeLiaison || null,
+        nodeId: form.nodeId.trim() || null,
       });
       // Synchronise la liste des GE : n°1 = champs ci-dessus, n°2+ = liste supplémentaire.
       const groupes: { numero: number; puissanceKva: number; statut: string; marque?: string }[] = [];
@@ -256,6 +258,10 @@ export default function ModifierSitePage() {
               options={typeLiaisonOptions}
               placeholder="(non renseigné)"
             />
+          </Field>
+          <Field label="NodeID OSS (615-03-Macro-…)">
+            <Input value={form.nodeId} onChange={(e) => set('nodeId', e.target.value)} placeholder="ex. 2848" />
+            <p className="mt-1 text-xs text-gray-400">Identifiant eNodeB — clé de la détection automatique des coupures depuis l&apos;OSS.</p>
           </Field>
 
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">

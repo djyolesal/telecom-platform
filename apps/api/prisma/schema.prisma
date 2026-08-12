@@ -192,6 +192,9 @@ model Site {
   // Poste tenu UNIQUEMENT la nuit (plage paramétrable, défaut 18h→6h GMT) :
   // une absence constatée en journée y est normale, pas une défaillance.
   gardiennageNuitSeulement Boolean @default(false) @map("gardiennage_nuit_seulement")
+  // Identifiant eNodeB côté OSS (suffixe de « 615-03-Macro-XXXX ») : la clé du
+  // rapprochement pour la détection automatique des coupures.
+  nodeId             String?  @map("node_id") @db.VarChar(20)
   societeGardiennage String?  @map("societe_gardiennage") @db.VarChar(100) // texte hérité (affiché tant que non rapproché)
   // Société de gardiennage NORMALISÉE : lien vers un prestataire isGardiennage.
   gardiennagePrestataireId String? @map("gardiennage_prestataire_id")
@@ -994,6 +997,9 @@ model CoupureReseau {
   observations        String?
   // LOCALE = cause racine sur ce site ; HERITEE = impact d'une coupure amont.
   origine             String    @default("LOCALE") @db.VarChar(10)
+  // MANUEL (saisie/import NOC) | OSS (détection automatique eNodeB) : la
+  // clôture automatique ne touche que les coupures OSS.
+  source              String    @default("MANUEL") @db.VarChar(10)
   coupureOrigineId    String?   @map("coupure_origine_id")
   // Incident terrain créé automatiquement pour cette coupure (groupé par site).
   incidentId          String?   @map("incident_id")

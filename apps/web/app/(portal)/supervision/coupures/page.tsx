@@ -21,6 +21,7 @@ interface Coupure {
   id: string;
   technologie: string;
   frequence?: string | null;
+  source?: string; // MANUEL | OSS (détection automatique)
   secteur?: string | null;
   dateDebut: string;
   dateFin?: string | null;
@@ -132,6 +133,12 @@ export default function CoupuresReseauPage() {
       render: (c) => (
         <div>
           <TechnoBadge t={c.technologie} />
+          {c.source === 'OSS' && (
+            <span className="ml-1.5 rounded bg-indigo-50 px-1 py-px text-[10px] font-bold text-indigo-600"
+              title="Détectée automatiquement par la synchronisation OSS (état eNodeB)">
+              AUTO
+            </span>
+          )}
           {(c.frequence || c.secteur) && (
             <p className="mt-0.5 text-[11px] text-gray-500">
               {[c.frequence, c.secteur && `sect. ${c.secteur}`].filter(Boolean).join(' · ')}

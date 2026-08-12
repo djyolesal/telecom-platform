@@ -231,7 +231,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId', 'typeLiaison',
+      'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
       throw new AppError('Nom, code, région, configuration énergie et statut GE sont requis.', 400);
@@ -262,7 +262,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId', 'typeLiaison',
+      'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
     // Topologie : un parent de transmission ne doit jamais créer de cycle.

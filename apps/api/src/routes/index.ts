@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { AppError } from '../utils/AppError';
 import { rbac } from '../middlewares/rbac';
@@ -34,6 +34,7 @@ import * as mouvementsCtrl from '../controllers/mouvementsCarburant.controller';
 import * as coupuresCtrl from '../controllers/coupuresReseau.controller';
 import { uploadMiddleware, uploadSpreadsheet, verifierSignature } from '../middlewares/upload';
 import * as filesCtrl from '../controllers/files.controller';
+import * as syncOssCtrl from '../controllers/syncOss.controller';
 
 export const router = Router();
 
@@ -48,6 +49,17 @@ router.post('/auth/login', loginLimit, validate({ body: loginSchema }), authCtrl
 router.post('/auth/refresh-token', loginLimit, validate({ body: refreshTokenSchema }), authCtrl.refreshToken);
 router.post('/auth/forgot-password', resetLimit, validate({ body: forgotPasswordSchema }), authCtrl.forgotPassword);
 router.post('/auth/reset-password', resetLimit, validate({ body: resetPasswordSchema }), authCtrl.resetPassword);
+
+// ── Synchronisation OSS (jeton machine, pas de session) ───────
+// Le collecteur POSTe la sortie BRUTE de la commande d'état des eNodeB.
+// Auth par jeton dédié vérifiée DANS le contrôleur (OSS_SYNC_TOKEN).
+const ossLimit = rateLimit({ windowSec: 60, max: 10, keyPrefix: 'sync-oss' });
+router.post(
+  '/coupures-reseau/sync-oss',
+  ossLimit,
+  express.text({ type: () => true, limit: '4mb' }),
+  syncOssCtrl.syncOss
+);
 
 // ── Passerelle fichiers (signature HMAC, pas de session) ──────
 // Hors authMiddleware à dessein : une balise <img> ne peut pas poser d'en-tête
