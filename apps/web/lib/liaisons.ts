@@ -12,12 +12,18 @@ export interface TypeLiaison {
   constructeur: string; // HUAWEI | ERICSSON…
 }
 
-/** Couleur par code (repli gris pour un code hors référentiel). */
+/**
+ * Couleur par code (repli gris pour un code hors référentiel).
+ * Quatre TEINTES franchement distinctes — vert / orange / bleu / violet :
+ * FIBER et TN partageaient deux verts sarcelle quasi identiques (logique
+ * « même famille fibre »), illisibles côte à côte. Le rouge reste réservé aux
+ * coupures et l'ambre à l'aval menacé — jamais pour un type de liaison.
+ */
 export const LIAISON_COULEURS: Record<string, string> = {
-  FIBER: '#0E7C6B',
-  TN: '#148F77',
-  ML: '#2471A3',
-  RTN: '#7D3C98',
+  FIBER: '#0E7C6B', // vert — fibre
+  TN: '#CA6F1E',    // orange cuivré — transmission Huawei (était un 2e vert)
+  ML: '#2471A3',    // bleu — MiniLink Ericsson
+  RTN: '#7D3C98',   // violet — RTN Huawei
 };
 
 export const couleurLiaison = (code?: string | null) => (code && LIAISON_COULEURS[code]) || '#6B7280';
