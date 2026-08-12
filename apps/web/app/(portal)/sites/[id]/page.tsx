@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +17,8 @@ import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/compo
 import { POWER_CONFIGS, STATUTS_GE, TYPES_PYLONE, FORMES_CUVE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 import { useTypesLiaison, couleurLiaison } from '@/lib/liaisons';
+import { SearchSelect } from '@/components/shared/SearchSelect';
+import { Select } from '@/components/shared/Form';
 
 const SCOPE_LABELS: Record<string, string> = {
   PASSIVE: 'Passive',
@@ -30,6 +34,10 @@ export default function SiteDetailPage() {
   const role = (session?.user as { role?: string })?.role ?? '';
   const canEdit = role === 'MANAGER' || role === 'ADMIN';
   const isAdmin = role === 'ADMIN';
+  // La transmission est le domaine du NOC : il peut rattacher un site à son
+  // amont sans avoir la main sur le reste de la fiche.
+  const canEditTransmission = canEdit || role === 'NOC';
+  const [editTransmission, setEditTransmission] = useState(false);
 
   const remove = useMutation({
     mutationFn: () => api.delete(`/sites/${id}`),
@@ -193,6 +201,24 @@ export default function SiteDetailPage() {
             {(site.enfantsTransmission?.length ?? 0) > 0 && (
               <span className="text-gray-600"> · alimente <b>{site.enfantsTransmission.length}</b> site(s) en aval : {site.enfantsTransmission.map((e: { nom: string }) => e.nom).join(', ')}</span>
             )}
+            {canEditTransmission && (
+              <button
+                type="button"
+                onClick={() => setEditTransmission(true)}
+                className="ml-3 inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50"
+                title="Modifier le rattachement de transmission (site amont + type de liaison)"
+              >
+                <Pencil size={11} /> Rattacher
+              </button>
+            )}
+          </div>
+        )}
+        {!site.parentTransmission && (site.enfantsTransmission?.length ?? 0) === 0 && canEditTransmission && (
+          <div className="mb-3 rounded-lg bg-gray-50 px-4 py-2.5 text-sm text-gray-500">
+            Aucune liaison de transmission déclarée.
+            <button type="button" onClick={() => setEditTransmission(true)} className="ml-2 text-[#2471A3] underline hover:no-underline">
+              Rattacher ce site à son amont
+            </button>
           </div>
         )}
         {!site.lot ? (
@@ -322,6 +348,79 @@ export default function SiteDetailPage() {
             />
           )}
         </section>
+      </div>
+
+      {editTransmission && (
+        <TransmissionModal
+          siteId={id}
+          parentActuel={site.parentTransmissionId ?? ''}
+          liaisonActuelle={site.typeLiaison ?? ''}
+          onClose={() => setEditTransmission(false)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ['site', id] });
+            queryClient.invalidateQueries({ queryKey: ['site-transmission-fiche', id] });
+            setEditTransmission(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Rattachement de transmission (NOC/manager) : site amont + type de liaison. */
+function TransmissionModal({ siteId, parentActuel, liaisonActuelle, onClose, onSaved }: {
+  siteId: string; parentActuel: string; liaisonActuelle: string;
+  onClose: () => void; onSaved: () => void;
+}) {
+  const [parentId, setParentId] = useState(parentActuel);
+  const [liaison, setLiaison] = useState(liaisonActuelle);
+  const [error, setError] = useState('');
+  const { liste: typesLiaison } = useTypesLiaison();
+
+  const { data: sites = [] } = useQuery({
+    queryKey: ['sites-all'],
+    queryFn: () => api.get('/sites', { params: { all: true } }).then((r) => r.data.data as { id: string; code: string; nom: string }[]),
+  });
+
+  const mutation = useMutation({
+    mutationFn: () => api.put(`/sites/${siteId}/transmission`, {
+      parentTransmissionId: parentId || null,
+      typeLiaison: parentId ? liaison || null : null,
+    }),
+    onSuccess: onSaved,
+    onError: (e: { response?: { data?: { error?: string } } }) =>
+      setError(e.response?.data?.error ?? 'Enregistrement impossible'),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="mb-4 text-lg font-bold text-gray-800">Rattachement de transmission</h2>
+        {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Site amont</label>
+            <SearchSelect
+              value={parentId}
+              onChange={setParentId}
+              options={sites.filter((s) => s.id !== siteId).map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))}
+              placeholder="Rechercher un site (nom ou code)…"
+              emptyLabel="Aucun (raccordement direct)"
+            />
+          </div>
+          {parentId && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Type de liaison vers l&apos;amont</label>
+              <Select value={liaison} onChange={(e) => setLiaison(e.target.value)}
+                options={typesLiaison.map((t) => ({ value: t.code, label: `${t.code} — ${t.libelle}` }))}
+                placeholder="(non renseigné)" />
+            </div>
+          )}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
+          <Button type="button" loading={mutation.isPending} onClick={() => { setError(''); mutation.mutate(); }}>Enregistrer</Button>
+        </div>
       </div>
     </div>
   );

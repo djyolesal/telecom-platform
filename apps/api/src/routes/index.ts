@@ -175,11 +175,15 @@ router.get('/sites', sitesCtrl.getSites);
 // TRANSPORTEUR : vue dédiée dans le contrôleur — ses seuls sites à livrer,
 // sans aucune donnée d'exploitation (ni stock, ni autonomie, ni rupture).
 router.get('/sites/geojson', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','TRANSPORTEUR']), sitesCtrl.getSitesGeoJSON);
-router.get('/sites/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), sitesCtrl.exportSites);
+// SUPERVISEUR inclus : un prestataire exporte SES sites (périmètre appliqué dans le contrôleur).
+router.get('/sites/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
 // Topologie de transmission : rattachement en masse site → amont + type de liaison.
 router.post('/sites/import-topologie', rbac(['NOC','ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importTopologie);
+// Rattachement INDIVIDUEL site → amont : la transmission est le domaine du NOC,
+// sans lui ouvrir la modification complète de la fiche site.
+router.put('/sites/:id/transmission', rbac(['NOC','MANAGER','ADMIN']), sitesCtrl.updateSiteTransmission);
 // Export des liaisons (xlsx ré-importable / PDF tabulaire).
 router.get('/sites/topologie/export/:format(xlsx|pdf)', rbac(['NOC','MANAGER','ADMIN']), sitesCtrl.exportTopologie);
 

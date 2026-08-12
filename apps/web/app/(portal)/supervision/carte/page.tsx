@@ -40,6 +40,8 @@ export default function CartePage() {
   // (coupures + aval menacé — la question du NOC). Défaut selon le rôle.
   const [modeChoisi, setModeChoisi] = useState<'stock' | 'reseau' | null>(null);
   const mode = modeChoisi ?? (role === 'NOC' ? 'reseau' : 'stock');
+  // Filtre d'état en mode réseau : isoler les coupés, partiels ou menacés.
+  const [etatReseauFiltre, setEtatReseauFiltre] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['sites-geojson'],
@@ -131,9 +133,13 @@ export default function CartePage() {
           if (stock === 'faible' && n !== 'FAIBLE') return false;
           if (stock === 'ok' && n !== 'OK') return false;
         }
+        if (etatReseauFiltre && etatReseauParSite) {
+          const e = etatReseauParSite[f.properties.id]?.etat ?? 'OK';
+          if (e !== etatReseauFiltre) return false;
+        }
         return true;
       }),
-    [all, region, statut, stock, camion]
+    [all, region, statut, stock, camion, etatReseauFiltre, etatReseauParSite]
   );
 
   return (
@@ -168,6 +174,18 @@ export default function CartePage() {
         <div className="w-40"><Select value={statut} onChange={(e) => setStatut(e.target.value)} options={STATUT_OPTIONS} placeholder="Tous statuts GE" /></div>
         {!modeReseau && (
           <div className="w-48"><Select value={stock} onChange={(e) => setStock(e.target.value)} options={STOCK_OPTIONS} placeholder="Niveau stock" /></div>
+        )}
+        {modeReseau && (
+          <div className="w-52">
+            <Select value={etatReseauFiltre} onChange={(e) => setEtatReseauFiltre(e.target.value)}
+              options={[
+                { value: 'DOWN', label: 'Entièrement coupés' },
+                { value: 'PARTIEL', label: 'Coupures partielles' },
+                { value: 'IMPACTE', label: 'Aval menacé' },
+                { value: 'OK', label: 'En service' },
+              ]}
+              placeholder="Tous les états" />
+          </div>
         )}
         {(region || statut || stock) && (
           <button onClick={() => { setRegion(''); setStatut(''); setStock(''); }} className="text-sm text-blue-600 underline hover:no-underline">Réinitialiser</button>

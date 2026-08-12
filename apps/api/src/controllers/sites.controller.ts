@@ -178,6 +178,39 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
 }
 
 /** Topologie de transmission d'un site : parent et AVAL complet (récursif). */
+/**
+ * Rattachement de transmission d'UN site (parent + type de liaison) — le geste
+ * du NOC quand il découvre une liaison, sans lui ouvrir toute la fiche site.
+ */
+export async function updateSiteTransmission(req: Request, res: Response, next: NextFunction) {
+  try {
+    const site = await prisma.site.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!site) throw new AppError('Site introuvable', 404);
+
+    const b = req.body as { parentTransmissionId?: string | null; typeLiaison?: string | null };
+    const parentId = b.parentTransmissionId || null;
+    const liaison = b.typeLiaison || null;
+    if (parentId) {
+      if (parentId === site.id) throw new AppError('Un site ne peut pas être son propre amont', 400);
+      const parent = await prisma.site.findUnique({ where: { id: parentId }, select: { id: true } });
+      if (!parent) throw new AppError('Site amont introuvable', 404);
+      await assertSansCycle(site.id, parentId);
+    }
+    if (liaison && !typesLiaison().some((t) => t.code === liaison)) {
+      throw new AppError(`Type de liaison inconnu « ${liaison} »`, 400);
+    }
+
+    const updated = await prisma.site.update({
+      where: { id: site.id },
+      data: { parentTransmissionId: parentId, typeLiaison: parentId ? liaison : null },
+      select: { id: true, parentTransmissionId: true, typeLiaison: true },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { transmission: { parentId, liaison } }, req);
+    await cacheService.invalidate('sites:geojson*');
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
 export async function getSiteTransmission(req: Request, res: Response, next: NextFunction) {
   try {
     await assertSiteInPerimetre(req.user!.id, req.params.id);
@@ -796,6 +829,9 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
     if (region) where.region = region;
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
+    // Superviseur prestataire : il exporte SES sites (mêmes colonnes — aucune
+    // donnée financière dans ce fichier), jamais le parc entier.
+    Object.assign(where, await sitePerimetre(req.user!.id));
 
     const sites = await prisma.site.findMany({
       where,
