@@ -49,6 +49,17 @@ export default function SiteDetailPage() {
     queryFn: () => api.get(`/sites/${id}`).then((r) => r.data.data),
   });
   const { parCode: typesLiaisonParCode } = useTypesLiaison();
+  // Chaîne de transmission AMONT (racine → … → ce site) avec l'état de chaque
+  // maillon : au clic sur un site, on voit PAR OÙ il passe — et où ça casse.
+  const { data: transmission } = useQuery({
+    queryKey: ['site-transmission-fiche', id],
+    queryFn: () => api.get(`/sites/${id}/transmission`).then((r) => r.data.data as {
+      amont: { id: string; code: string; nom: string; typeLiaison: string | null }[];
+      liaisonDuSite: string | null;
+      technosCoupees: Record<string, string[]>;
+    }),
+  });
+
   const { data: stock } = useQuery({
     queryKey: ['site-stock', id],
     queryFn: () => api.get(`/sites/${id}/stock`).then((r) => r.data.data),
@@ -127,10 +138,50 @@ export default function SiteDetailPage() {
         {(site.parentTransmission || (site.enfantsTransmission?.length ?? 0) > 0) && (
           <div className="mb-3 rounded-lg bg-[#EAF1F8] px-4 py-2.5 text-sm">
             <span className="text-gray-500">Transmission : </span>
-            {site.parentTransmission
+            {/* Fil d'Ariane AMONT : racine → … → ce site. Chaque maillon est
+                cliquable, chaque flèche porte le type de liaison, un maillon
+                en coupure est marqué en rouge — le chemin ET la casse. */}
+            {(transmission?.amont?.length ?? 0) > 0 ? (
+              <span className="inline-flex flex-wrap items-center gap-1.5 align-middle">
+                {[...(transmission!.amont)].reverse().map((m, i, arr) => {
+                  const technos = transmission!.technosCoupees[m.id] ?? [];
+                  const enCoupure = technos.length > 0;
+                  const liaisonVersEnfant = i < arr.length - 1 ? arr[i + 1].typeLiaison : transmission!.liaisonDuSite;
+                  return (
+                    <span key={m.id} className="inline-flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/sites/${m.id}`)}
+                        title={enCoupure ? `En coupure : ${technos.join('/')}` : `${m.nom} (${m.code})`}
+                        className={`rounded px-1.5 py-0.5 font-medium hover:underline ${enCoupure ? 'bg-red-50 text-red-700' : 'text-gray-800'}`}
+                      >
+                        {enCoupure && <span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#C0392B] align-middle" />}
+                        {m.nom}
+                      </button>
+                      <span className="flex items-center gap-0.5 text-gray-400">
+                        {liaisonVersEnfant && (
+                          <span className="rounded px-1 py-px text-[10px] font-bold text-white"
+                            style={{ backgroundColor: couleurLiaison(liaisonVersEnfant) }}
+                            title={typesLiaisonParCode.get(liaisonVersEnfant)?.libelle ?? liaisonVersEnfant}>
+                            {liaisonVersEnfant}
+                          </span>
+                        )}
+                        →
+                      </span>
+                    </span>
+                  );
+                })}
+                <b className="text-gray-900">{site.nom}</b>
+                {(transmission!.technosCoupees[id] ?? []).length > 0 && (
+                  <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-bold text-red-700">
+                    en coupure : {transmission!.technosCoupees[id].join('/')}
+                  </span>
+                )}
+              </span>
+            ) : site.parentTransmission
               ? <>dépend de <b className="text-gray-800">{site.parentTransmission.nom}</b></>
               : <span className="text-gray-700">raccordement direct</span>}
-            {site.typeLiaison && (
+            {!transmission?.amont?.length && site.typeLiaison && (
               <span
                 className="ml-2 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
                 style={{ backgroundColor: couleurLiaison(site.typeLiaison) }}

@@ -179,11 +179,44 @@ export async function getSiteTransmission(req: Request, res: Response, next: Nex
     await assertSiteInPerimetre(req.user!.id, req.params.id);
     const site = await prisma.site.findUnique({
       where: { id: req.params.id },
-      select: { id: true, nom: true, parentTransmission: { select: { id: true, nom: true } } },
+      select: { id: true, nom: true, typeLiaison: true, parentTransmissionId: true, parentTransmission: { select: { id: true, nom: true } } },
     });
     if (!site) throw new AppError('Site introuvable', 404);
     const aval = await descendantsTransmission(site.id);
-    res.json({ success: true, data: { parent: site.parentTransmission, aval } });
+
+    // CHAÎNE AMONT complète (site → … → racine) : chaque maillon porte le type
+    // de la liaison qui le relie à SON propre amont. Avec l'état de coupure de
+    // chaque maillon, la fiche montre PAR OÙ passe le site — et où ça casse.
+    type Maillon = { id: string; code: string; nom: string; typeLiaison: string | null };
+    const amont: Maillon[] = [];
+    const vus = new Set<string>([site.id]);
+    let parentId = site.parentTransmissionId;
+    while (parentId && !vus.has(parentId) && amont.length < 30) {
+      const p = await prisma.site.findUnique({
+        where: { id: parentId },
+        select: { id: true, code: true, nom: true, typeLiaison: true, parentTransmissionId: true },
+      });
+      if (!p) break;
+      vus.add(p.id);
+      amont.push({ id: p.id, code: p.code, nom: p.nom, typeLiaison: p.typeLiaison ?? null });
+      parentId = p.parentTransmissionId;
+    }
+
+    // Coupures EN COURS sur la chaîne (site compris) : technos coupées par maillon.
+    const idsChaine = [site.id, ...amont.map((m) => m.id)];
+    const coupures = await prisma.coupureReseau.findMany({
+      where: { siteId: { in: idsChaine }, dateFin: null },
+      select: { siteId: true, technologie: true },
+    });
+    const technosCoupees: Record<string, string[]> = {};
+    for (const c of coupures) {
+      (technosCoupees[c.siteId] ??= []).push(c.technologie);
+    }
+
+    res.json({
+      success: true,
+      data: { parent: site.parentTransmission, aval, amont, liaisonDuSite: site.typeLiaison ?? null, technosCoupees },
+    });
   } catch (err) { next(err); }
 }
 
