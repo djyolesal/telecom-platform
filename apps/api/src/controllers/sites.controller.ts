@@ -38,10 +38,12 @@ const IMPORT_COLUMNS = [
   { key: 'puissanceGE2', header: 'puissanceGE2' },
   { key: 'statutGE2', header: 'statutGE2' },
   { key: 'hasGardien', header: 'gardien' },
+  { key: 'gardiennageNuitSeulement', header: 'gardienNuit' },
   { key: 'societeGardiennage', header: 'societeGardiennage' },
   { key: 'telephoneSite', header: 'telephoneSite' },
   { key: 'marqueGE', header: 'marqueGE' },
   { key: 'marqueGE2', header: 'marqueGE2' },
+  { key: 'nodeId', header: 'nodeId' },
 ];
 
 // Normalise un en-tête : minuscules, sans accents ni séparateurs.
@@ -70,6 +72,8 @@ const HEADER_ALIASES: Record<string, string> = {
   puissancege2: 'puissanceGE2', puissgege2: 'puissanceGE2', kvage2: 'puissanceGE2',
   statutge2: 'statutGE2',
   gardien: 'hasGardien', hasgardien: 'hasGardien', agentsecurite: 'hasGardien', agentdesecurite: 'hasGardien',
+  gardiennuit: 'gardiennageNuitSeulement', postedenuit: 'gardiennageNuitSeulement', nuitseulement: 'gardiennageNuitSeulement',
+  nodeid: 'nodeId', enodeb: 'nodeId', enodebid: 'nodeId',
   societegardiennage: 'societeGardiennage', gardiennage: 'societeGardiennage', societedegardiennage: 'societeGardiennage',
   telephonesite: 'telephoneSite', telephone: 'telephoneSite', tel: 'telephoneSite', contact: 'telephoneSite',
   marquege: 'marqueGE', marque: 'marqueGE',
@@ -353,8 +357,9 @@ export async function sitesImportTemplate(_req: Request, res: Response, next: Ne
         typePylone: 'GREENFIELD', hasClimatiseur: 'oui', hasExtincteurs: 'oui',
         cuveVolumeLitres: 2000, formeCuve: 'CYLINDRE_COUCHE', cuveDimensions: '2m x 1m x 1m',
         puissanceGE2: '', statutGE2: '', // remplir pour un 2e GE (ex: 100 / GE_SECOURS)
-        hasGardien: 'oui', societeGardiennage: 'SECURITOGO', telephoneSite: '+228 90 00 00 00',
+        hasGardien: 'oui', gardiennageNuitSeulement: 'non', societeGardiennage: 'SECURITOGO', telephoneSite: '+228 90 00 00 00',
         marqueGE: 'CATERPILLAR', marqueGE2: '',
+        nodeId: '2848', // identifiant eNodeB OSS (615-03-Macro-2848)
       },
     ]);
     setXlsxHeaders(res, 'modele_import_sites.xlsx');
@@ -489,8 +494,11 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           ...(colByField.hasClimatiseur != null ? { hasClimatiseur: toBool(cellText(row, 'hasClimatiseur')) } : {}),
           ...(colByField.hasExtincteurs != null ? { hasExtincteurs: toBool(cellText(row, 'hasExtincteurs')) } : {}),
           ...(colByField.hasGardien != null ? { hasGardien: toBool(cellText(row, 'hasGardien')) } : {}),
+          ...(colByField.gardiennageNuitSeulement != null ? { gardiennageNuitSeulement: toBool(cellText(row, 'gardiennageNuitSeulement')) } : {}),
           ...(colByField.societeGardiennage != null ? { societeGardiennage: cellText(row, 'societeGardiennage') || null } : {}),
           ...(colByField.telephoneSite != null ? { telephoneSite: cellText(row, 'telephoneSite') || null } : {}),
+          // NodeID OSS (rapprochement de la détection automatique des coupures).
+          ...(colByField.nodeId != null ? { nodeId: cellText(row, 'nodeId') || null } : {}),
           isActive: true,
         };
 
@@ -775,6 +783,12 @@ export async function getSiteReleves(req: Request, res: Response, next: NextFunc
 }
 
 /** Export Excel de la liste des sites (avec filtres identiques à getSites). */
+/**
+ * Export du parc — MODÈLE DE MISE À JOUR : les colonnes sont exactement celles
+ * de l'import (mêmes en-têtes), avec l'état réel des GE (parc actif). Le
+ * cycle est donc : exporter → corriger dans Excel → réimporter (upsert par
+ * code) — sans jamais reconstruire un fichier à la main.
+ */
 export async function exportSites(req: Request, res: Response, next: NextFunction) {
   try {
     const { region, statut_ge, power_config } = req.query as Record<string, string>;
@@ -783,39 +797,53 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
 
-    const sites = await prisma.site.findMany({ where, take: EXPORT_MAX, orderBy: { code: 'asc' } });
+    const sites = await prisma.site.findMany({
+      where,
+      take: EXPORT_MAX,
+      orderBy: { code: 'asc' },
+      include: {
+        lot: { select: { code: true } },
+        groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, puissanceKva: true, statut: true, marque: true } },
+      },
+    });
 
     await auditLog(req.user!.id, 'EXPORT', 'sites', undefined, { count: sites.length }, req);
-    await sendTabular(res, req.params.format, 'sites', 'Parc de sites', [{
+    const oui = (b: boolean) => (b ? 'oui' : 'non');
+    await sendTabular(res, req.params.format, 'sites', 'Parc de sites (modèle de mise à jour — ré-importable)', [{
       name: 'Sites',
-      columns: [
-        { header: 'Code', key: 'code', width: 14 },
-        { header: 'Nom', key: 'nom', width: 26 },
-        { header: 'Région', key: 'region', width: 14 },
-        { header: 'Ville', key: 'ville', width: 16 },
-        { header: 'Config énergie', key: 'powerConfig', width: 18 },
-        { header: 'Statut GE', key: 'statutGE', width: 14 },
-        { header: 'Puissance GE (kVA)', key: 'puissance', width: 16 },
-        { header: 'Latitude', key: 'lat', width: 12 },
-        { header: 'Longitude', key: 'lng', width: 12 },
-        { header: 'Gardien', key: 'gardien', width: 10 },
-        { header: 'Sté gardiennage', key: 'gardiennage', width: 18 },
-        { header: 'Téléphone site', key: 'telephone', width: 16 },
-      ],
-      rows: sites.map((s) => ({
-        code: s.code,
-        nom: s.nom,
-        region: s.region,
-        ville: s.ville ?? '',
-        powerConfig: s.powerConfig,
-        statutGE: s.statutGE,
-        puissance: Number(s.puissanceGEkva),
-        lat: s.latitude != null ? Number(s.latitude) : '',
-        lng: s.longitude != null ? Number(s.longitude) : '',
-        gardien: s.hasGardien ? 'oui' : 'non',
-        gardiennage: s.societeGardiennage ?? '',
-        telephone: s.telephoneSite ?? '',
-      })),
+      columns: IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key, width: 16 })),
+      rows: sites.map((s) => {
+        const ge1 = s.groupes[0];
+        const ge2 = s.groupes[1];
+        return {
+          code: s.code,
+          nom: s.nom,
+          region: s.region,
+          ville: s.ville ?? '',
+          adresse: s.adresse ?? '',
+          latitude: s.latitude != null ? Number(s.latitude) : '',
+          longitude: s.longitude != null ? Number(s.longitude) : '',
+          powerConfig: s.powerConfig,
+          statutGE: ge1?.statut ?? s.statutGE,
+          puissanceGEkva: ge1 ? Number(ge1.puissanceKva) : Number(s.puissanceGEkva),
+          lot: s.lot?.code ?? '',
+          typePylone: s.typePylone ?? '',
+          hasClimatiseur: oui(s.hasClimatiseur),
+          hasExtincteurs: oui(s.hasExtincteurs),
+          cuveVolumeLitres: s.cuveVolumeLitres != null ? Number(s.cuveVolumeLitres) : '',
+          formeCuve: s.formeCuve ?? '',
+          cuveDimensions: s.cuveDimensions ?? '',
+          puissanceGE2: ge2 ? Number(ge2.puissanceKva) : '',
+          statutGE2: ge2?.statut ?? '',
+          hasGardien: oui(s.hasGardien),
+          gardiennageNuitSeulement: oui(s.gardiennageNuitSeulement),
+          societeGardiennage: s.societeGardiennage ?? '',
+          telephoneSite: s.telephoneSite ?? '',
+          marqueGE: ge1?.marque ?? '',
+          marqueGE2: ge2?.marque ?? '',
+          nodeId: s.nodeId ?? '',
+        };
+      }),
     }]);
   } catch (err) { next(err); }
 }
