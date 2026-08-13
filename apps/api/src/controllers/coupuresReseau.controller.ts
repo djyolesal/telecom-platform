@@ -335,12 +335,14 @@ async function resoudreIncidentSiPlusDeCoupure(
 
 /** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
 async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
-  const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search } =
+  const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search, source } =
     req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (site_id) where.siteId = site_id;
   if (technologie) where.technologie = technologie;
   if (type_alarme) where.typeAlarme = type_alarme;
+  // MANUEL | OSS — distingue les saisies NOC des détections automatiques.
+  if (source) where.source = source;
   if (statut === 'EN_COURS') where.dateFin = null;
   if (statut === 'TERMINEE') where.dateFin = { not: null };
   if (date_debut || date_fin) {

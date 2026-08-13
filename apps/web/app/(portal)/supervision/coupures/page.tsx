@@ -75,6 +75,7 @@ export default function CoupuresReseauPage() {
   const [statut, setStatut] = useState('');
   const [technologie, setTechnologie] = useState('');
   const [typeAlarme, setTypeAlarme] = useState('');
+  const [source, setSource] = useState('');
   const [du, setDu] = useState('');
   const [au, setAu] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -83,7 +84,7 @@ export default function CoupuresReseauPage() {
   const debounced = useDebounce(search);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, du, au }],
+    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au }],
     // Poll 60 s (comme la carte NOC) : les coupures OSS arrivent toutes les
     // 5 min sans action humaine — la liste doit se rafraîchir toute seule.
     refetchInterval: 60_000,
@@ -92,6 +93,7 @@ export default function CoupuresReseauPage() {
         page, limit: 20,
         search: debounced || undefined, statut: statut || undefined,
         technologie: technologie || undefined, type_alarme: typeAlarme || undefined,
+        source: source || undefined,
         date_debut: du || undefined, date_fin: au || undefined,
       },
     }).then((r) => r.data),
@@ -103,6 +105,7 @@ export default function CoupuresReseauPage() {
     statut && `statut=${statut}`,
     technologie && `technologie=${technologie}`,
     typeAlarme && `type_alarme=${typeAlarme}`,
+    source && `source=${source}`,
     du && `date_debut=${du}`,
     au && `date_fin=${au}`,
   ].filter(Boolean).join('&');
@@ -208,6 +211,9 @@ export default function CoupuresReseauPage() {
           { key: 'statut', label: 'Tous statuts', value: statut, options: [{ value: 'EN_COURS', label: 'En cours' }, { value: 'TERMINEE', label: 'Rétablies' }], onChange: (v) => { setStatut(v); setPage(1); } },
           { key: 'techno', label: 'Toutes technologies', value: technologie, options: TECHNOS, onChange: (v) => { setTechnologie(v); setPage(1); } },
           { key: 'alarme', label: 'Toutes alarmes', value: typeAlarme, options: TYPES_ALARME, onChange: (v) => { setTypeAlarme(v); setPage(1); } },
+          { key: 'source', label: 'Toutes sources', value: source, options: [
+            { value: 'OSS', label: 'AUTO (OSS)' }, { value: 'MANUEL', label: 'Manuelles' },
+          ], onChange: (v) => { setSource(v); setPage(1); } },
         ]}
       />
 
