@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { StatCard } from '@/components/shared/StatCard';
-import { Loading, ErrorState } from '@/components/shared/states';
+import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { fmtNumber } from '@/lib/utils';
 
 interface SiteRow { nom: string; region: string; coupures: number; enCours: number; downtimeHeures: number; dispoPct: number }
@@ -23,21 +23,27 @@ interface PrestaRow {
 export default function DisponibiliteReseauPage() {
   const router = useRouter();
   const [mois, setMois] = useState('3');
+  const [du, setDu] = useState('');
+  const [au, setAu] = useState('');
+  // « Période » (option d'en-tête) et « Période libre » activent le mode du/au.
+  const libre = mois === '' || mois === 'libre';
+  const pret = !libre || (!!du && !!au);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['disponibilite-reseau', mois],
-    queryFn: () => api.get('/rapports/disponibilite-reseau', { params: { mois } }).then((r) => r.data.data),
+    queryKey: ['disponibilite-reseau', mois, du, au],
+    queryFn: () => api.get('/rapports/disponibilite-reseau', {
+      params: libre ? { date_debut: du, date_fin: au } : { mois },
+    }).then((r) => r.data.data),
+    enabled: pret,
   });
 
-  if (isLoading) return <Loading />;
-  if (isError || !data) return <ErrorState message="Disponibilité réseau indisponible" />;
-  const k = data.kpis;
+  const k = data?.kpis;
 
   return (
     <div>
       <PageHeader
         title="Disponibilité réseau"
-        subtitle={data.perimetreRestreint
+        subtitle={data?.perimetreRestreint
           ? 'Votre périmètre : downtime, sites touchés et répartition actif/passif de vos lots'
           : "Coupures radio (supervision NOC) : downtime, sites touchés, répartition actif/passif et évaluation par prestataire"}
         backHref="/rapports"
@@ -45,17 +51,34 @@ export default function DisponibiliteReseauPage() {
 
       <FilterBar
         filters={[{
-          key: 'mois', label: 'Période', value: mois, options: [
+          key: 'mois', label: 'Période', value: libre ? 'libre' : mois, options: [
             { value: '1', label: '1 mois' }, { value: '3', label: '3 mois' },
             { value: '6', label: '6 mois' }, { value: '12', label: '12 mois' },
+            { value: 'libre', label: 'Période libre (du → au)' },
           ], onChange: setMois,
         }]}
       />
 
+      {libre && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-gray-500">Du :</span>
+          <input type="date" value={du} onChange={(e) => setDu(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+          <span className="text-gray-400">→</span>
+          <input type="date" value={au} onChange={(e) => setAu(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+        </div>
+      )}
+
+      {!pret ? <EmptyState title="Période libre" hint="Choisissez les deux dates pour calculer le rapport." />
+        : isLoading ? <Loading />
+        : isError || !data || !k ? <ErrorState message="Disponibilité réseau indisponible" />
+        : <>
+
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <StatCard title="Coupures" value={fmtNumber(k.coupures)} subtitle={`${k.sitesTouches}/${k.nbSites} sites touchés`} icon={WifiOff} color="bg-[#1B3F6B]" />
         <StatCard title="En cours" value={fmtNumber(k.enCours)} subtitle="non rétablies" icon={Activity} color="bg-[#C0392B]" />
-        <StatCard title="Downtime cumulé" value={`${fmtNumber(k.downtimeHeures)} h`} subtitle={`sur ${data.periodeMois} mois`} icon={RadioTower} color="bg-[#E67E22]" />
+        <StatCard title="Downtime cumulé" value={`${fmtNumber(k.downtimeHeures)} h`} subtitle={data.periodeLibelle ?? `sur ${data.periodeMois} mois`} icon={RadioTower} color="bg-[#E67E22]" />
         <StatCard title="Part énergie" value={`${k.partEnergiePct}%`} subtitle="alarmes AE / GE / EN" icon={Zap} color="bg-[#0E7C6B]" />
         <StatCard
           title="Part passif"
@@ -155,6 +178,7 @@ export default function DisponibiliteReseauPage() {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

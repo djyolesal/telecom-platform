@@ -827,9 +827,24 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
 export async function getDisponibiliteReseau(req: Request, res: Response, next: NextFunction) {
   try {
     const mois = req.query.mois ? Math.max(1, Math.min(24, parseInt(String(req.query.mois), 10))) : 3;
-    const depuis = new Date(); depuis.setMonth(depuis.getMonth() - mois); depuis.setHours(0, 0, 0, 0);
     const maintenant = new Date();
-    const fenetreMin = minutesEntre(depuis, maintenant);
+    // Période libre (date_debut/date_fin, jours en UTC comme les heures NOC) :
+    // remplace la fenêtre glissante en mois. Une fin future est ramenée à
+    // maintenant — le futur n'a pas de downtime et fausserait la dispo %.
+    const duQ = req.query.date_debut ? new Date(`${String(req.query.date_debut)}T00:00:00.000Z`) : null;
+    const auQ = req.query.date_fin ? new Date(`${String(req.query.date_fin)}T23:59:59.999Z`) : null;
+    const libre = !!(duQ && auQ && !Number.isNaN(duQ.getTime()) && !Number.isNaN(auQ.getTime()));
+    let depuis: Date;
+    let finFenetre = maintenant;
+    if (libre) {
+      if (auQ! <= duQ!) throw new AppError('Période invalide : la date de fin doit suivre le début', 422);
+      if (duQ! >= maintenant) throw new AppError('Période invalide : le début est dans le futur', 422);
+      depuis = duQ!;
+      finFenetre = auQ! < maintenant ? auQ! : maintenant;
+    } else {
+      depuis = new Date(); depuis.setMonth(depuis.getMonth() - mois); depuis.setHours(0, 0, 0, 0);
+    }
+    const fenetreMin = minutesEntre(depuis, finFenetre);
 
     // Périmètre : un prestataire ne voit que la disponibilité de SES lots ;
     // les internes (NOC/direction) voient tout + la déclinaison par prestataire.
@@ -841,6 +856,7 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       prisma.coupureReseau.findMany({
         where: {
           OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
+          dateDebut: { lte: finFenetre },
           ...(restreint ? { site: perimetre } : {}),
         },
         // `select` explicite : l'`include` seul ramenait TOUTES les colonnes,
@@ -897,10 +913,12 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
     }
 
     for (const c of coupures) {
-      // Downtime borné à la fenêtre d'analyse (une coupure ouverte court jusqu'à maintenant).
+      // Downtime borné à la fenêtre d'analyse : une coupure ouverte court
+      // jusqu'à la fin de fenêtre (= maintenant, sauf période libre passée).
       const debut = c.dateDebut < depuis ? depuis : c.dateDebut;
-      const fin = c.dateFin ?? maintenant;
-      if (fin <= depuis) continue;
+      const finBrute = c.dateFin ?? finFenetre;
+      const fin = finBrute > finFenetre ? finFenetre : finBrute;
+      if (fin <= depuis || debut >= fin) continue;
       const iv: Intervalle = { debut, fin };
       if (!c.dateFin) enCours++;
       pousser(ivSite, c.siteId, iv);
@@ -951,9 +969,13 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
       success: true,
       data: {
         periodeMois: mois,
+        periodeLibre: libre,
+        periodeLibelle: libre
+          ? `du ${depuis.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${finFenetre.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`
+          : `sur ${mois} mois`,
         perimetreRestreint: restreint,
         kpis: {
-          coupures: coupures.filter((c) => (c.dateFin ?? maintenant) > depuis).length,
+          coupures: coupures.filter((c) => (c.dateFin ?? finFenetre) > depuis && c.dateDebut < finFenetre).length,
           enCours,
           downtimeHeures: Math.round(downtimeTotal / 60),
           partEnergiePct: downtimeTotal > 0 ? Math.round((downtimeEnergie / downtimeTotal) * 100) : 0,
