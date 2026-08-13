@@ -335,7 +335,7 @@ async function resoudreIncidentSiPlusDeCoupure(
 
 /** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
 async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
-  const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search, source } =
+  const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search, source, origine, a_qualifier } =
     req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (site_id) where.siteId = site_id;
@@ -343,6 +343,12 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   if (type_alarme) where.typeAlarme = type_alarme;
   // MANUEL | OSS — distingue les saisies NOC des détections automatiques.
   if (source) where.source = source;
+  // LOCALE = racines seulement (les héritées de l'aval noient la liste) ;
+  // HERITEE = l'inverse. Absent = tout.
+  if (origine) where.origine = origine;
+  // « À qualifier » : type d'alarme ou classement actif/passif manquant —
+  // typiquement les détections AUTO OSS, dont les rapports ont besoin.
+  if (a_qualifier === '1') where.OR = [{ typeAlarme: null }, { causeCategorie: null }];
   if (statut === 'EN_COURS') where.dateFin = null;
   if (statut === 'TERMINEE') where.dateFin = { not: null };
   if (date_debut || date_fin) {
@@ -370,7 +376,9 @@ export async function getCoupures(req: Request, res: Response, next: NextFunctio
       prisma.coupureReseau,
       {
         where,
-        orderBy: { dateDebut: 'desc' },
+        // En cours : les plus ANCIENNES d'abord (les plus graves en tête) ;
+        // sinon chronologie inverse classique.
+        orderBy: { dateDebut: (req.query.statut === 'EN_COURS' ? 'asc' : 'desc') as 'asc' | 'desc' },
         include: {
           site: { select: { nom: true, region: true } },
           coupureOrigine: { select: { id: true, site: { select: { nom: true } } } },
@@ -1033,6 +1041,38 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
   try {
     const { donnees } = await calculerDisponibiliteReseau(req);
     res.json({ success: true, data: donnees });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Situation en direct pour la page Coupures : compteurs des onglets, bandeau
+ * de synthèse et file « à qualifier » — périmètre prestataire appliqué.
+ */
+export async function getCoupuresStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const perimetre = await sitePerimetre(req.user!.id);
+    const surSite = isRestreint(perimetre) ? { site: perimetre } : {};
+    const ilYaUneHeure = new Date(Date.now() - 3600_000);
+    const [enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne] =
+      await Promise.all([
+        prisma.coupureReseau.count({ where: { dateFin: null, ...surSite } }),
+        prisma.coupureReseau.count({ where: { dateFin: null, technologie: 'SITE', ...surSite } }),
+        prisma.coupureReseau.count({ where: { dateFin: null, origine: 'HERITEE', ...surSite } }),
+        prisma.coupureReseau.count({ where: { dateFin: { not: null }, ...surSite } }),
+        prisma.coupureReseau.count({ where: { dateDebut: { gte: ilYaUneHeure }, ...surSite } }),
+        prisma.coupureReseau.count({
+          where: { dateFin: null, OR: [{ typeAlarme: null }, { causeCategorie: null }], ...surSite },
+        }),
+        prisma.coupureReseau.findFirst({
+          where: { dateFin: null, origine: 'LOCALE', ...surSite },
+          orderBy: { dateDebut: 'asc' },
+          select: { dateDebut: true, technologie: true, site: { select: { nom: true } } },
+        }),
+      ]);
+    res.json({
+      success: true,
+      data: { enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne },
+    });
   } catch (err) { next(err); }
 }
 

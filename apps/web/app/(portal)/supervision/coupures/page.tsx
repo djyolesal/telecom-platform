@@ -48,6 +48,9 @@ const TECHNOS = [
 // Référentiel NOC (INNER du rapport de supervision).
 const TYPES_ALARME = ['AE', 'GE', 'EN', 'FO', 'TX', 'RA', 'MI', 'MD', 'NA'].map((v) => ({ value: v, label: v }));
 
+const dureeDepuis = (debut: string) =>
+  fmtDowntime(Math.max(0, Math.round((Date.now() - new Date(debut).getTime()) / 60000)));
+
 const fmtDowntime = (min?: number | null) => {
   if (min == null) return '—';
   if (min < 60) return `${min} min`;
@@ -72,7 +75,12 @@ export default function CoupuresReseauPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [statut, setStatut] = useState('');
+  // Le NOC vit dans les coupures ACTIVES : la page s'ouvre dessus.
+  const [statut, setStatut] = useState('EN_COURS');
+  // Les héritées (aval d'une panne amont) noient la liste : masquées par
+  // défaut, le badge « X impacté(s) » de la racine dit déjà l'ampleur.
+  const [avecHeritees, setAvecHeritees] = useState(false);
+  const [aQualifier, setAQualifier] = useState(false);
   const [technologie, setTechnologie] = useState('');
   const [typeAlarme, setTypeAlarme] = useState('');
   const [source, setSource] = useState('');
@@ -83,8 +91,19 @@ export default function CoupuresReseauPage() {
   const [edition, setEdition] = useState<Coupure | null>(null);
   const debounced = useDebounce(search);
 
+  interface CoupuresStats {
+    enCours: number; enCoursSiteEntier: number; enCoursHeritees: number; terminees: number;
+    nouvellesDerniereHeure: number; aQualifier: number;
+    plusAncienne?: { dateDebut: string; technologie: string; site?: { nom: string } } | null;
+  }
+  const { data: stats } = useQuery({
+    queryKey: ['coupures-stats'],
+    queryFn: () => api.get('/coupures-reseau/stats').then((r) => r.data.data as CoupuresStats),
+    refetchInterval: 60_000,
+  });
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au }],
+    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au, avecHeritees, aQualifier }],
     // Poll 60 s (comme la carte NOC) : les coupures OSS arrivent toutes les
     // 5 min sans action humaine — la liste doit se rafraîchir toute seule.
     refetchInterval: 60_000,
@@ -94,6 +113,8 @@ export default function CoupuresReseauPage() {
         search: debounced || undefined, statut: statut || undefined,
         technologie: technologie || undefined, type_alarme: typeAlarme || undefined,
         source: source || undefined,
+        origine: avecHeritees ? undefined : 'LOCALE',
+        a_qualifier: aQualifier ? '1' : undefined,
         date_debut: du || undefined, date_fin: au || undefined,
       },
     }).then((r) => r.data),
@@ -106,6 +127,8 @@ export default function CoupuresReseauPage() {
     technologie && `technologie=${technologie}`,
     typeAlarme && `type_alarme=${typeAlarme}`,
     source && `source=${source}`,
+    !avecHeritees && 'origine=LOCALE',
+    aQualifier && 'a_qualifier=1',
     du && `date_debut=${du}`,
     au && `date_fin=${au}`,
   ].filter(Boolean).join('&');
@@ -156,7 +179,16 @@ export default function CoupuresReseauPage() {
     { key: 'dateDebut', header: 'Début', render: (c) => fmtDateTime(c.dateDebut) },
     {
       key: 'dateFin', header: 'Fin',
-      render: (c) => c.dateFin ? fmtDateTime(c.dateFin) : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">EN COURS</span>,
+      // En cours : la durée ÉCOULÉE court et « vieillit » (rouge dès 24 h).
+      render: (c) => {
+        if (c.dateFin) return fmtDateTime(c.dateFin);
+        const min = Math.max(0, Math.round((Date.now() - new Date(c.dateDebut).getTime()) / 60000));
+        return (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${min >= 1440 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+            EN COURS · {fmtDowntime(min)}
+          </span>
+        );
+      },
     },
     { key: 'downtimeMinutes', header: 'Downtime', align: 'right', render: (c) => fmtDowntime(c.downtimeMinutes) },
     { key: 'typeAlarme', header: 'Alarme', align: 'center', render: (c) => c.typeAlarme ?? '—' },
@@ -203,12 +235,70 @@ export default function CoupuresReseauPage() {
         }
       />
 
+      {/* Bandeau de situation : l'opérateur sait en un coup d'œil si c'est calme. */}
+      {stats && (
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+            <p className="text-xs text-gray-500">Coupures en cours</p>
+            <p className="mt-0.5 text-lg font-bold text-gray-800">
+              {stats.enCours}
+              {stats.enCoursSiteEntier > 0 && (
+                <span className="ml-1.5 text-xs font-semibold text-red-600">dont {stats.enCoursSiteEntier} site(s) entier(s)</span>
+              )}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+            <p className="text-xs text-gray-500">Plus ancienne en cours</p>
+            {stats.plusAncienne ? (
+              <p className="mt-0.5 truncate text-sm font-bold text-gray-800" title={stats.plusAncienne.site?.nom}>
+                {stats.plusAncienne.site?.nom ?? '—'}
+                <span className="ml-1.5 rounded-full bg-red-50 px-1.5 py-0.5 text-xs font-bold text-red-700">
+                  {dureeDepuis(stats.plusAncienne.dateDebut)}
+                </span>
+              </p>
+            ) : <p className="mt-0.5 text-sm font-bold text-emerald-600">aucune</p>}
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+            <p className="text-xs text-gray-500">Nouvelles (1 h)</p>
+            <p className={`mt-0.5 text-lg font-bold ${stats.nouvellesDerniereHeure > 0 ? 'text-amber-600' : 'text-gray-800'}`}>
+              {stats.nouvellesDerniereHeure}
+            </p>
+          </div>
+          <button type="button" onClick={() => { setAQualifier(!aQualifier); setPage(1); }}
+            title="Coupures en cours sans type d'alarme ou sans classement actif/passif — à compléter pour les rapports. Cliquer pour filtrer."
+            className={`rounded-xl border px-4 py-3 text-left transition-colors ${aQualifier ? 'border-[#1B3F6B] bg-[#EAF1F8]' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
+            <p className="text-xs text-gray-500">À qualifier {aQualifier && '· filtre actif'}</p>
+            <p className={`mt-0.5 text-lg font-bold ${stats.aQualifier > 0 ? 'text-[#1B3F6B]' : 'text-gray-800'}`}>{stats.aQualifier}</p>
+          </button>
+        </div>
+      )}
+
+      {/* Onglets d'état + héritées : la vue par défaut = coupures actives, racines seulement. */}
+      <div className="mb-3 flex flex-wrap items-center gap-4">
+        <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
+          {[
+            { v: 'EN_COURS', l: `En cours${stats ? ` (${Math.max(0, avecHeritees ? stats.enCours : stats.enCours - stats.enCoursHeritees)})` : ''}` },
+            { v: 'TERMINEE', l: 'Rétablies' },
+            { v: '', l: 'Toutes' },
+          ].map((o) => (
+            <button key={o.v} type="button" onClick={() => { setStatut(o.v); setPage(1); }}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${statut === o.v ? 'bg-white text-[#1B3F6B] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {o.l}
+            </button>
+          ))}
+        </div>
+        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-gray-600">
+          <input type="checkbox" checked={avecHeritees} onChange={(e) => { setAvecHeritees(e.target.checked); setPage(1); }}
+            className="h-4 w-4 rounded border-gray-300" />
+          Afficher l&apos;aval hérité{stats && stats.enCoursHeritees > 0 ? ` (${stats.enCoursHeritees} en cours)` : ''}
+        </label>
+      </div>
+
       <FilterBar
         search={search}
         onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Rechercher un site…"
         filters={[
-          { key: 'statut', label: 'Tous statuts', value: statut, options: [{ value: 'EN_COURS', label: 'En cours' }, { value: 'TERMINEE', label: 'Rétablies' }], onChange: (v) => { setStatut(v); setPage(1); } },
           { key: 'techno', label: 'Toutes technologies', value: technologie, options: TECHNOS, onChange: (v) => { setTechnologie(v); setPage(1); } },
           { key: 'alarme', label: 'Toutes alarmes', value: typeAlarme, options: TYPES_ALARME, onChange: (v) => { setTypeAlarme(v); setPage(1); } },
           { key: 'source', label: 'Toutes sources', value: source, options: [
