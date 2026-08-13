@@ -7,12 +7,20 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { WifiOff, Activity, Zap, RadioTower } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { StatCard } from '@/components/shared/StatCard';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { fmtNumber } from '@/lib/utils';
 
 interface SiteRow { nom: string; region: string; coupures: number; enCours: number; downtimeHeures: number; dispoPct: number }
+
+const TECHNOS = ['SITE', '2G', '3G', '4G', '5G'];
+const ALARMES = ['AE', 'GE', 'EN', 'FO', 'TX', 'RA', 'MI', 'MD', 'NA'];
+const basculer = (set: React.Dispatch<React.SetStateAction<Set<string>>>, v: string) =>
+  set((prev) => { const n = new Set(prev); if (n.has(v)) n.delete(v); else n.add(v); return n; });
+const puce = (actif: boolean) =>
+  `rounded-full border px-2.5 py-0.5 text-xs font-medium ${actif ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`;
 interface AlarmeRow { type: string; coupures: number; downtimeHeures: number }
 interface PrestaRow {
   nom: string; nbSites: number; coupures: number; enCours: number; sitesTouches: number;
@@ -28,12 +36,21 @@ export default function DisponibiliteReseauPage() {
   // « Période » (option d'en-tête) et « Période libre » activent le mode du/au.
   const libre = mois === '' || mois === 'libre';
   const pret = !libre || (!!du && !!au);
+  const [technos, setTechnos] = useState<Set<string>>(new Set());
+  const [alarmes, setAlarmes] = useState<Set<string>>(new Set());
+
+  // Mêmes filtres pour la page ET les exports (fidélité affichage/export).
+  const filtres: Record<string, string> = {
+    ...(libre ? { date_debut: du, date_fin: au } : { mois }),
+    ...(technos.size ? { technologies: [...technos].join(',') } : {}),
+    ...(alarmes.size ? { alarmes: [...alarmes].join(',') } : {}),
+  };
+  const exportQuery = Object.entries(filtres)
+    .map(([cle, v]) => `${cle}=${encodeURIComponent(v)}`).join('&');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['disponibilite-reseau', mois, du, au],
-    queryFn: () => api.get('/rapports/disponibilite-reseau', {
-      params: libre ? { date_debut: du, date_fin: au } : { mois },
-    }).then((r) => r.data.data),
+    queryKey: ['disponibilite-reseau', filtres],
+    queryFn: () => api.get('/rapports/disponibilite-reseau', { params: filtres }).then((r) => r.data.data),
     enabled: pret,
   });
 
@@ -47,6 +64,9 @@ export default function DisponibiliteReseauPage() {
           ? 'Votre périmètre : downtime, sites touchés et répartition actif/passif de vos lots'
           : "Coupures radio (supervision NOC) : downtime, sites touchés, répartition actif/passif et évaluation par prestataire"}
         backHref="/rapports"
+        actions={pret
+          ? <ExportButtons base="/rapports/disponibilite-reseau/export" name="disponibilite-reseau" query={exportQuery || undefined} />
+          : undefined}
       />
 
       <FilterBar
@@ -69,6 +89,32 @@ export default function DisponibiliteReseauPage() {
             className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
         </div>
       )}
+
+      {/* Filtres multi-choix — vide = tout. Une coupure « Site entier » coupe
+          toutes les technos : elle est incluse dès qu'une techno est cochée. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-gray-500">Technologies :</span>
+          {TECHNOS.map((t) => (
+            <button key={t} type="button" onClick={() => basculer(setTechnos, t)} className={puce(technos.has(t))}>
+              {t === 'SITE' ? 'Site entier' : t}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-gray-500">Alarmes :</span>
+          {ALARMES.map((a) => (
+            <button key={a} type="button" onClick={() => basculer(setAlarmes, a)} className={puce(alarmes.has(a))}>
+              {a}
+            </button>
+          ))}
+          {alarmes.size > 0 && (
+            <span className="text-xs text-amber-600" title="Les coupures sans type d'alarme renseigné — dont les détections AUTO OSS — sont exclues par ce filtre.">
+              (sans type exclues)
+            </span>
+          )}
+        </div>
+      </div>
 
       {!pret ? <EmptyState title="Période libre" hint="Choisissez les deux dates pour calculer le rapport." />
         : isLoading ? <Loading />

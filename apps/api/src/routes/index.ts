@@ -109,6 +109,7 @@ const NOC_ALLOW: RegExp[] = [
   /^\/coupures-reseau(\/|$)/,
   /^\/incidents(\/|$)/,                // suivi et déclaration ; la clôture reste terrain
   /^\/rapports\/(dashboard|disponibilite-reseau|stock-carburant|incidents)$/,
+  /^\/rapports\/disponibilite-reseau\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
 ];
 router.use((req, _res, next) => {
@@ -221,6 +222,7 @@ router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSp
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
 router.delete('/coupures-reseau/:id', rbac(['ADMIN']), coupuresCtrl.deleteCoupure);
 router.get('/rapports/disponibilite-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);
+router.get('/rapports/disponibilite-reseau/export/:format', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.exportDisponibiliteReseau);
 
 // ── Prestataires ──────────────────────────────────────────────
 // « Ma société » : le superviseur d'un prestataire complète la fiche de SA société.

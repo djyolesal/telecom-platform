@@ -11,7 +11,7 @@ import { descendantsTransmission } from '../utils/transmission';
 import { genererReference } from '../services/reference.service';
 import { notifierIncidentCoupure } from '../services/sms.service';
 import { notificationService } from '../services/notifications.service';
-import { sendTabular, EXPORT_MAX } from '../utils/exporter';
+import { sendTabular, EXPORT_MAX, TabularSheet } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
 import { construireClasseurCoupures, COLONNES_DETAIL } from '../services/coupuresExport.service';
 import { logger } from '../utils/logger';
@@ -826,8 +826,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
 
 // ── Rapport de disponibilité réseau ─────────────────────────────────────────
 
-export async function getDisponibiliteReseau(req: Request, res: Response, next: NextFunction) {
-  try {
+async function calculerDisponibiliteReseau(req: Request) {
     const mois = req.query.mois ? Math.max(1, Math.min(24, parseInt(String(req.query.mois), 10))) : 3;
     const maintenant = new Date();
     // Période libre (date_debut/date_fin, jours en UTC comme les heures NOC) :
@@ -848,6 +847,16 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
     }
     const fenetreMin = minutesEntre(depuis, finFenetre);
 
+    // Filtres facultatifs. Technologies : une coupure SITE coupe TOUTES les
+    // technos, elle est donc toujours incluse dès qu'une techno est demandée.
+    // Alarmes : les coupures SANS type (dont les AUTO OSS) sont exclues par ce
+    // filtre — c'est le comportement attendu (« montre-moi les FO »).
+    const TECHNOS_VALIDES = new Set(['SITE', '2G', '3G', '4G', '5G']);
+    const technosSel = String(req.query.technologies ?? '')
+      .split(',').map((t) => t.trim().toUpperCase()).filter((t) => TECHNOS_VALIDES.has(t));
+    const alarmesSel = String(req.query.alarmes ?? '')
+      .split(',').map((a) => a.trim().toUpperCase()).filter(Boolean);
+
     // Périmètre : un prestataire ne voit que la disponibilité de SES lots ;
     // les internes (NOC/direction) voient tout + la déclinaison par prestataire.
     const perimetre = await sitePerimetre(req.user!.id);
@@ -859,6 +868,8 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
         where: {
           OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
           dateDebut: { lte: finFenetre },
+          ...(technosSel.length ? { technologie: { in: [...new Set([...technosSel, 'SITE'])] } } : {}),
+          ...(alarmesSel.length ? { typeAlarme: { in: alarmesSel } } : {}),
           ...(restreint ? { site: perimetre } : {}),
         },
         // `select` explicite : l'`include` seul ramenait TOUTES les colonnes,
@@ -967,9 +978,11 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
         .reduce((s, [, liste]) => s + minutesUnion(liste), 0);
     }
     const nonClasse = Math.max(0, downtimeTotal - downtimeActif - downtimePassif);
-    res.json({
-      success: true,
-      data: {
+    // Liste COMPLÈTE triée (la page n'affiche que le top 15, l'export prend tout).
+    const sitesTous = [...parSite.values()]
+      .map((s) => ({ ...s, downtimeHeures: Math.round(s.downtime / 60), dispoPct: Math.max(0, Math.round((1 - s.downtime / fenetreMin) * 1000) / 10) }))
+      .sort((a, b) => b.downtime - a.downtime);
+    const donnees = {
         periodeMois: mois,
         periodeLibre: libre,
         periodeLibelle: libre
@@ -989,10 +1002,7 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
           sitesTouches: parSite.size,
           nbSites,
         },
-        topSites: [...parSite.values()]
-          .map((s) => ({ ...s, downtimeHeures: Math.round(s.downtime / 60), dispoPct: Math.max(0, Math.round((1 - s.downtime / fenetreMin) * 1000) / 10) }))
-          .sort((a, b) => b.downtime - a.downtime)
-          .slice(0, 15),
+        topSites: sitesTous.slice(0, 15),
         parTypeAlarme: [...parAlarme.values()]
           .map((a) => ({ ...a, downtimeHeures: Math.round(a.downtime / 60) }))
           .sort((a, b) => b.downtime - a.downtime),
@@ -1015,8 +1025,94 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
             };
           })
           .sort((a, b) => b.downtimeHeures - a.downtimeHeures),
+    };
+    return { donnees, sitesTous, technosSel, alarmesSel };
+}
+
+export async function getDisponibiliteReseau(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { donnees } = await calculerDisponibiliteReseau(req);
+    res.json({ success: true, data: donnees });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Export xlsx/PDF de la disponibilité réseau — mêmes filtres que la page
+ * (période glissante ou libre, technologies, types d'alarme, périmètre) ;
+ * la feuille Sites contient la liste COMPLÈTE, pas seulement le top 15.
+ */
+export async function exportDisponibiliteReseau(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { donnees, sitesTous, technosSel, alarmesSel } = await calculerDisponibiliteReseau(req);
+    const k = donnees.kpis;
+    const sousTitre = [
+      donnees.periodeLibelle,
+      technosSel.length ? `technologies : ${technosSel.join(', ')}` : 'toutes technologies',
+      alarmesSel.length ? `alarmes : ${alarmesSel.join(', ')}` : 'toutes alarmes',
+      donnees.perimetreRestreint ? 'périmètre : vos lots' : 'réseau entier',
+    ].join(' · ');
+
+    const feuilles: TabularSheet[] = [
+      {
+        name: 'Synthèse',
+        columns: [
+          { header: 'Indicateur', key: 'indicateur', width: 38 },
+          { header: 'Valeur', key: 'valeur', width: 22 },
+        ],
+        rows: [
+          { indicateur: 'Coupures', valeur: k.coupures },
+          { indicateur: 'Coupures en cours', valeur: k.enCours },
+          { indicateur: 'Sites touchés', valeur: `${k.sitesTouches} / ${k.nbSites}` },
+          { indicateur: 'Downtime cumulé (h)', valeur: k.downtimeHeures },
+          { indicateur: 'Part énergie AE/GE/EN (%)', valeur: k.partEnergiePct },
+          { indicateur: 'Downtime actif (h)', valeur: k.downtimeActifHeures },
+          { indicateur: 'Downtime passif (h)', valeur: k.downtimePassifHeures },
+          { indicateur: 'Downtime non classé (h)', valeur: k.downtimeNonClasseHeures },
+        ],
       },
-    });
+      {
+        name: 'Sites',
+        columns: [
+          { header: 'Site', key: 'nom', width: 26 },
+          { header: 'Région', key: 'region', width: 16 },
+          { header: 'Coupures', key: 'coupures', width: 10 },
+          { header: 'En cours', key: 'enCours', width: 10 },
+          { header: 'Downtime (h)', key: 'downtimeHeures', width: 13 },
+          { header: 'Dispo (%)', key: 'dispoPct', width: 10 },
+        ],
+        rows: sitesTous,
+      },
+      {
+        name: 'Par alarme',
+        columns: [
+          { header: "Type d'alarme", key: 'type', width: 14 },
+          { header: 'Coupures', key: 'coupures', width: 10 },
+          { header: 'Downtime (h)', key: 'downtimeHeures', width: 13 },
+        ],
+        rows: donnees.parTypeAlarme,
+      },
+    ];
+    if (donnees.parPrestataire?.length) {
+      feuilles.push({
+        name: 'Prestataires',
+        columns: [
+          { header: 'Prestataire', key: 'nom', width: 24 },
+          { header: 'Sites', key: 'nbSites', width: 8 },
+          { header: 'Coupures', key: 'coupures', width: 10 },
+          { header: 'Sites touchés', key: 'sitesTouches', width: 12 },
+          { header: 'Downtime (h)', key: 'downtimeHeures', width: 13 },
+          { header: 'Passif (h)', key: 'downtimePassifHeures', width: 11 },
+          { header: 'Actif (h)', key: 'downtimeActifHeures', width: 11 },
+          { header: 'Non classé (h)', key: 'downtimeNonClasseHeures', width: 13 },
+          { header: 'Dispo moyenne (%)', key: 'dispoPct', width: 16 },
+        ],
+        rows: donnees.parPrestataire,
+      });
+    }
+    if (req.query.colonnes !== '?') {
+      await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { rapport: 'disponibilite-reseau', format: req.params.format, sites: sitesTous.length }, req);
+    }
+    await sendTabular(res, req.params.format, 'disponibilite-reseau', 'Disponibilité réseau', feuilles, sousTitre);
   } catch (err) { next(err); }
 }
 
