@@ -84,6 +84,9 @@ export default function CoupuresReseauPage() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, du, au }],
+    // Poll 60 s (comme la carte NOC) : les coupures OSS arrivent toutes les
+    // 5 min sans action humaine — la liste doit se rafraîchir toute seule.
+    refetchInterval: 60_000,
     queryFn: () => api.get('/coupures-reseau', {
       params: {
         page, limit: 20,
