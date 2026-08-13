@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1092458133387",
+    "project_id": "em-ops-d0bbf",
+    "storage_bucket": "em-ops-d0bbf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1092458133387:android:be3a166bc1364458f4e18e",
+        "android_client_info": {
+          "package_name": "uk.emops.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYl8QNYGvOjgCGA-c9nG35yOIcfmrTAQE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

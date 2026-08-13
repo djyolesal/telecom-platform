@@ -46,7 +46,10 @@ const envSchema = z.object({
   SMS_SENDER: z.string().default('EMOPS'),
 
   // Firebase Cloud Messaging
-  FCM_SERVER_KEY: z.string().optional(),
+  // Push FCM (API HTTP v1) : JSON du compte de service Firebase, ou CHEMIN
+  // vers ce fichier (monté dans le conteneur). L'ancienne clé serveur
+  // (FCM_SERVER_KEY, API legacy) est morte depuis juin 2024.
+  FIREBASE_SERVICE_ACCOUNT: z.string().optional(),
 
   // Secret DÉDIÉ à la signature des URLs de fichiers (séparation de clés). À
   // défaut, retombe sur JWT_SECRET (compatibilité) — mais une variable propre
