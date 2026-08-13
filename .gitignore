@@ -34,3 +34,4 @@ apps/mobile/build/
 apps/mobile/.dart_tool/
 apps/mobile/.flutter-plugins*
 apps/api/dist-seed/
+secrets/

@@ -123,7 +123,9 @@ services:
       SMS_API_URL: ${SMS_API_URL:-}
       SMS_API_KEY: ${SMS_API_KEY:-}
       SMS_SENDER: ${SMS_SENDER:-EMOPS}
-      FCM_SERVER_KEY: ${FCM_SERVER_KEY}
+      # Push FCM v1 : chemin (dans le conteneur) du JSON de compte de service
+      # Firebase, monté depuis ./secrets — vide = push inactif (in-app/SMS seuls).
+      FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-}
       CORS_ORIGIN: https://${DOMAIN}
       # Base publique pour les URLs de fichiers MinIO (photos, signatures, PDF).
       # Sans ça l'API génère http://localhost:3000/storage/... (vignettes vides).
@@ -139,6 +141,8 @@ services:
     networks: [telecom_net]
     volumes:
       - logs_data:/app/logs
+      # Secrets hors dépôt (clé de compte de service Firebase, etc.).
+      - ./secrets:/app/secrets:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
