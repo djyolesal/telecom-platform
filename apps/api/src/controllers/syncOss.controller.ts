@@ -65,8 +65,10 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     });
     const parNodeId = new Map(sites.filter((s) => s.nodeId).map((s) => [s.nodeId!, s]));
     // Adoption automatique STRICTE : nom OSS (préfixe GL/L retiré) exactement
-    // égal au nom du site normalisé. Un rapprochement douteux ne s'invente pas.
+    // égal au nom OU au code du site normalisé (l'OSS mélange les deux, ex.
+    // « LTG111 »). Un rapprochement douteux ne s'invente pas.
     const parNomNormalise = new Map(sites.map((s) => [normaliser(s.nom), s]));
+    const parCodeNormalise = new Map(sites.map((s) => [normaliser(s.code), s]));
     let adoptes = 0;
     const nonRapproches: string[] = [];
 
@@ -74,8 +76,12 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       const direct = parNodeId.get(l.nodeId);
       if (direct) return direct;
       if (l.name && l.name !== 'undefined') {
-        const candidat = parNomNormalise.get(normaliser(l.name.replace(/^GL?/, '')))
-          ?? parNomNormalise.get(normaliser(l.name));
+        const brut = normaliser(l.name);
+        const sansPrefixe = normaliser(l.name.replace(/^GL?/, ''));
+        const candidat = parNomNormalise.get(sansPrefixe)
+          ?? parNomNormalise.get(brut)
+          ?? parCodeNormalise.get(brut)
+          ?? parCodeNormalise.get(sansPrefixe);
         if (candidat && !candidat.nodeId) {
           await prisma.site.update({ where: { id: candidat.id }, data: { nodeId: l.nodeId } });
           candidat.nodeId = l.nodeId;

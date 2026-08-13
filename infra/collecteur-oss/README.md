@@ -14,7 +14,9 @@ rapprochement, avec anti-rebond.
 
 ## Rapprochement nodeId ↔ site
 - automatique STRICT à la volée : nom OSS (préfixe GL/L retiré) exactement égal
-  au nom du site — le nodeId est alors adopté et persisté ;
+  au nom OU au code du site — le nodeId est alors adopté et persisté ;
+- les eNodeB dont le nom OSS est « undefined » ne peuvent être adoptés que par
+  la fiche site (NodeID saisi à la main) ;
 - sinon : fiche du site → Modifier → « NodeID OSS » ;
 - la réponse du POST liste `disconnectedNonRapproches` : les sites down qui
   échappent encore à la détection — à mapper en priorité.
