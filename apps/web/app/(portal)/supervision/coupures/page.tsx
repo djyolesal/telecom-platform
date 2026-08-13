@@ -155,6 +155,27 @@ export default function CoupuresReseauPage() {
     { key: 'downtimeMinutes', header: 'Downtime', align: 'right', render: (c) => fmtDowntime(c.downtimeMinutes) },
     { key: 'typeAlarme', header: 'Alarme', align: 'center', render: (c) => c.typeAlarme ?? '—' },
     { key: 'cause', header: 'Cause', render: (c) => <span className="text-gray-600">{c.cause ?? '—'}</span> },
+    // Colonnes complémentaires : masquées par défaut pour garder le tableau
+    // lisible, mais proposées dans le sélecteur « Colonnes » (choix mémorisé).
+    { key: 'region', header: 'Région', defaultHidden: true, sortValue: (c) => c.site?.region, render: (c) => c.site?.region ?? '—' },
+    { key: 'frequence', header: 'Fréquence', defaultHidden: true, render: (c) => c.frequence ?? '—' },
+    { key: 'secteur', header: 'Secteur', defaultHidden: true, render: (c) => c.secteur ?? '—' },
+    {
+      key: 'causeCategorie', header: 'Classement', defaultHidden: true,
+      render: (c) => c.causeCategorie === 'ACTIF' ? 'Actif' : c.causeCategorie === 'PASSIF' ? 'Passif' : '—',
+    },
+    { key: 'actions', header: 'Actions effectuées', defaultHidden: true, render: (c) => <span className="text-gray-600">{c.actions ?? '—'}</span> },
+    { key: 'technicienContacte', header: 'Technicien contacté', defaultHidden: true, render: (c) => c.technicienContacte ?? '—' },
+    { key: 'intervenants', header: 'Intervenant(s)', defaultHidden: true, render: (c) => c.intervenants ?? '—' },
+    { key: 'observations', header: 'Observations', defaultHidden: true, render: (c) => <span className="text-gray-600">{c.observations ?? '—'}</span> },
+    {
+      key: 'incident', header: 'Incident', defaultHidden: true, sortable: false,
+      render: (c) => c.incident ? `${c.incident.reference ?? c.incident.id.slice(0, 8)} (${c.incident.statut})` : '—',
+    },
+    {
+      key: 'source', header: 'Source', defaultHidden: true,
+      render: (c) => c.source === 'OSS' ? 'AUTO (OSS)' : 'Manuelle',
+    },
   ];
 
   return (
