@@ -34,7 +34,7 @@ export default function FiabiliteGePage() {
 
       <FilterBar
         filters={[
-          { key: 'jours', label: 'Période', value: jours, options: [
+          { key: 'jours', label: 'Période', sansVide: true, value: jours, options: [
             { value: '90', label: '3 mois' }, { value: '180', label: '6 mois' },
             { value: '365', label: '12 mois' }, { value: '730', label: '24 mois' },
           ], onChange: setJours },

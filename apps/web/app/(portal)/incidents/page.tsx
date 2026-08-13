@@ -71,9 +71,9 @@ export default function IncidentsPage() {
       <FilterBar
         filters={[
           { key: 'type', label: 'Tous types', value: type, options: TYPES_INCIDENT, onChange: (v) => { setType(v); setPage(1); } },
-          { key: 'severite', label: 'Sévérité', value: severite, options: SEVERITES, onChange: (v) => { setSeverite(v); setPage(1); } },
-          { key: 'statut', label: 'Statut', value: statut, options: STATUTS_INCIDENT, onChange: (v) => { setStatut(v); setPage(1); } },
-          { key: 'region', label: 'Région', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
+          { key: 'severite', label: 'Toutes sévérités', value: severite, options: SEVERITES, onChange: (v) => { setSeverite(v); setPage(1); } },
+          { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_INCIDENT, onChange: (v) => { setStatut(v); setPage(1); } },
+          { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
         ]}
       />
 

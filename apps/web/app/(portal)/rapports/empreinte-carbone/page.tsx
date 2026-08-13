@@ -50,7 +50,7 @@ export default function EmpreinteCarbonePage() {
 
       <FilterBar
         filters={[
-          { key: 'mois', label: 'Période', value: mois, options: [
+          { key: 'mois', label: 'Période', sansVide: true, value: mois, options: [
             { value: '3', label: '3 mois' }, { value: '6', label: '6 mois' },
             { value: '12', label: '12 mois' }, { value: '24', label: '24 mois' },
           ], onChange: setMois },

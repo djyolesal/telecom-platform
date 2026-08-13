@@ -8,6 +8,12 @@ export interface SelectFilter {
   value: string;
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
+  /**
+   * true = l'intitulé n'est PAS un choix : il disparaît de la liste déroulante.
+   * Indispensable pour les sélecteurs à valeur obligatoire (ex. « Période ») où
+   * choisir l'intitulé revenait à un retour silencieux à la valeur par défaut.
+   */
+  sansVide?: boolean;
 }
 
 export function FilterBar({
@@ -43,7 +49,7 @@ export function FilterBar({
           onChange={(e) => f.onChange(e.target.value)}
           className="rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:border-[#2471A3] outline-none"
         >
-          <option value="">{f.label}</option>
+          <option value="" disabled={f.sansVide} hidden={f.sansVide}>{f.label}</option>
           {f.options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}

@@ -97,8 +97,8 @@ export default function SitesPage() {
         searchPlaceholder="Rechercher par nom ou région…"
         filters={[
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
-          { key: 'statut', label: 'Statut GE', value: statutGe, options: STATUTS_GE, onChange: (v) => { setStatutGe(v); setPage(1); } },
-          { key: 'power', label: 'Config énergie', value: powerConfig, options: POWER_CONFIGS, onChange: (v) => { setPowerConfig(v); setPage(1); } },
+          { key: 'statut', label: 'Tous statuts GE', value: statutGe, options: STATUTS_GE, onChange: (v) => { setStatutGe(v); setPage(1); } },
+          { key: 'power', label: 'Toutes configs énergie', value: powerConfig, options: POWER_CONFIGS, onChange: (v) => { setPowerConfig(v); setPage(1); } },
         ]}
       />
 

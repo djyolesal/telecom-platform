@@ -70,7 +70,7 @@ export default function CorrelationCarburantPage() {
       <FilterBar
         filters={[
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: setRegion },
-          { key: 'periode', label: 'Période', value: periode, options: PERIODES, onChange: setPeriode },
+          { key: 'periode', label: 'Période', sansVide: true, value: periode, options: PERIODES, onChange: setPeriode },
         ]}
       />
 

@@ -44,7 +44,7 @@ export default function SlaPage() {
 
       <FilterBar
         filters={[
-          { key: 'jours', label: 'Période', value: jours, options: [
+          { key: 'jours', label: 'Période', sansVide: true, value: jours, options: [
             { value: '30', label: '30 jours' }, { value: '90', label: '90 jours' },
             { value: '180', label: '6 mois' }, { value: '365', label: '12 mois' },
           ], onChange: setJours },

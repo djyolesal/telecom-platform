@@ -53,7 +53,7 @@ export default function EnergieRapportsPage() {
       <PageHeader title="Rapports énergie" subtitle="Tendances de consommation" backHref="/energie" />
 
       <FilterBar
-        filters={[{ key: 'periode', label: 'Période', value: periode, options: [
+        filters={[{ key: 'periode', label: 'Période', sansVide: true, value: periode, options: [
           { value: '30', label: '30 jours' }, { value: '90', label: '90 jours' }, { value: '180', label: '6 mois' }, { value: '365', label: '12 mois' },
         ], onChange: setPeriode }]}
       />

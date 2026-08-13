@@ -39,7 +39,7 @@ export default function IncidentKpisPage() {
 
       <FilterBar
         filters={[
-          { key: 'periode', label: 'Période', value: periode, options: [
+          { key: 'periode', label: 'Période', sansVide: true, value: periode, options: [
             { value: '7', label: '7 jours' }, { value: '30', label: '30 jours' }, { value: '90', label: '90 jours' },
           ], onChange: setPeriode },
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: setRegion },
