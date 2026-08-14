@@ -13,6 +13,8 @@ export default auth((req) => {
     pathname.startsWith('/login') ||
     pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/reset-password') ||
+    // Politique de confidentialité : URL publique exigée par Google Play.
+    pathname.startsWith('/confidentialite') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/health');
 
