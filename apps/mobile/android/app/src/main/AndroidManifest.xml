@@ -12,9 +12,10 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
 
-    <!-- Photos d'intervention -->
+    <!-- Photos d'intervention : caméra uniquement — l'app ne lit JAMAIS la
+         galerie (tous les pickImage sont en ImageSource.camera), donc pas de
+         READ_MEDIA_IMAGES : Google Play rejette cette permission sans usage. -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
 
     <!-- Notifications push (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
