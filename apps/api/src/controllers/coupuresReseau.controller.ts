@@ -1053,6 +1053,94 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
 }
 
 /**
+ * PRISE EN CHARGE d'une coupure (typiquement une détection AUTO OSS) : le NOC
+ * adopte l'événement, et le système raisonne sur la TOPOLOGIE :
+ *   1. il remonte la chaîne de transmission — le site le plus HAUT ayant une
+ *      coupure SITE ouverte est la racine réelle (une rafale de détections
+ *      AUTO sur un axe est presque toujours UNE panne amont) ;
+ *   2. toutes les coupures SITE ouvertes de l'aval de cette racine (y compris
+ *      celle cliquée si elle n'est pas la racine) sont reclassées HÉRITÉES —
+ *      la liste retombe à un événement racine, l'imputation SLA est juste ;
+ *   3. la racine est marquée prise en charge (qui / quand).
+ * Les coupures déjà liées à un incident ne sont pas touchées.
+ */
+export async function prendreEnChargeCoupure(req: Request, res: Response, next: NextFunction) {
+  try {
+    const coupure = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, siteId: true, dateFin: true, technologie: true },
+    });
+    if (!coupure) throw new AppError('Coupure introuvable', 404);
+    if (coupure.dateFin) throw new AppError('Coupure déjà rétablie — rien à prendre en charge', 422);
+
+    const sites = await prisma.site.findMany({
+      where: { isActive: true },
+      select: { id: true, nom: true, parentTransmissionId: true },
+    });
+    const parId = new Map(sites.map((s) => [s.id, s]));
+
+    // 1. Racine = le plus haut ancêtre (chaîne amont, ≤30 sauts) qui a une
+    //    coupure SITE ouverte. Par défaut : la coupure cliquée elle-même.
+    let racine = coupure;
+    let cursor = parId.get(coupure.siteId)?.parentTransmissionId ?? null;
+    for (let saut = 0; cursor && saut < 30; saut++) {
+      const coupAmont = await prisma.coupureReseau.findFirst({
+        where: { siteId: cursor, technologie: 'SITE', dateFin: null },
+        orderBy: { dateDebut: 'asc' },
+        select: { id: true, siteId: true, dateFin: true, technologie: true },
+      });
+      if (coupAmont) racine = coupAmont;
+      cursor = parId.get(cursor)?.parentTransmissionId ?? null;
+    }
+
+    // 2. Aval de la racine (BFS sur parentTransmissionId).
+    const enfants = new Map<string, string[]>();
+    for (const s of sites) {
+      if (!s.parentTransmissionId) continue;
+      const l = enfants.get(s.parentTransmissionId); if (l) l.push(s.id); else enfants.set(s.parentTransmissionId, [s.id]);
+    }
+    const avalIds: string[] = [];
+    const file = [racine.siteId];
+    while (file.length) {
+      const id = file.shift()!;
+      for (const e of enfants.get(id) ?? []) { avalIds.push(e); file.push(e); }
+    }
+
+    const reclassees = avalIds.length
+      ? await prisma.coupureReseau.updateMany({
+          where: {
+            siteId: { in: avalIds }, technologie: 'SITE', dateFin: null,
+            origine: 'LOCALE', incidentId: null, id: { not: racine.id },
+          },
+          data: { origine: 'HERITEE', coupureOrigineId: racine.id },
+        })
+      : { count: 0 };
+
+    // 3. Trace : qui a pris en charge, quand — le nom remplace AUTO-OSS.
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+    const nom = [moi?.prenom, moi?.nom].filter(Boolean).join(' ') || 'NOC';
+    await prisma.coupureReseau.update({
+      where: { id: racine.id },
+      data: { priseEnChargePar: nom, priseEnChargeLe: new Date(), nocEngineer: nom },
+    });
+
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
+      priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count,
+    }, req);
+    res.json({
+      success: true,
+      data: {
+        racineId: racine.id,
+        racineSiteNom: parId.get(racine.siteId)?.nom ?? '—',
+        estRacine: racine.id === coupure.id,
+        heriteesReclassees: reclassees.count,
+        priseEnChargePar: nom,
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+/**
  * Situation en direct pour la page Coupures : compteurs des onglets, bandeau
  * de synthèse et file « à qualifier » — périmètre prestataire appliqué.
  */
@@ -1061,7 +1149,7 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
     const perimetre = await sitePerimetre(req.user!.id);
     const surSite = isRestreint(perimetre) ? { site: perimetre } : {};
     const ilYaUneHeure = new Date(Date.now() - 3600_000);
-    const [enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne] =
+    const [enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne, enCoursAuto] =
       await Promise.all([
         prisma.coupureReseau.count({ where: { dateFin: null, ...surSite } }),
         prisma.coupureReseau.count({ where: { dateFin: null, technologie: 'SITE', ...surSite } }),
@@ -1076,10 +1164,14 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
           orderBy: { dateDebut: 'asc' },
           select: { dateDebut: true, technologie: true, site: { select: { nom: true } } },
         }),
+        prisma.coupureReseau.count({ where: { dateFin: null, source: 'OSS', ...surSite } }),
       ]);
     res.json({
       success: true,
-      data: { enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne },
+      data: {
+        enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne,
+        enCoursAuto, enCoursManuel: enCours - enCoursAuto,
+      },
     });
   } catch (err) { next(err); }
 }

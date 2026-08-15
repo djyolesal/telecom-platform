@@ -1009,6 +1009,9 @@ model CoupureReseau {
   // Coupure PARTIELLE déjà notifiée aux équipes actives (pas d'incident terrain :
   // le site est alimenté, le défaut se traite côté radio/transmission).
   notifieeActif       Boolean   @default(false) @map("notifiee_actif")
+  // Prise en charge NOC d'une détection AUTO : qui a adopté l'événement, quand.
+  priseEnChargePar    String?   @map("prise_en_charge_par") @db.VarChar(100)
+  priseEnChargeLe     DateTime? @map("prise_en_charge_le")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 

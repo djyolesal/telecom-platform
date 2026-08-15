@@ -220,6 +220,7 @@ router.get('/coupures-reseau/stats', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN'
 router.get('/coupures-reseau/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.exportCoupures);
 router.post('/coupures-reseau', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.createCoupure);
 router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
+router.post('/coupures-reseau/:id/prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.prendreEnChargeCoupure);
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
 router.delete('/coupures-reseau/:id', rbac(['ADMIN']), coupuresCtrl.deleteCoupure);
 router.get('/rapports/disponibilite-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);

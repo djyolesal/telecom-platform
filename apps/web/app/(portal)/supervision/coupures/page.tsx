@@ -22,6 +22,7 @@ interface Coupure {
   technologie: string;
   frequence?: string | null;
   source?: string; // MANUEL | OSS (détection automatique)
+  priseEnChargePar?: string | null; // détection AUTO adoptée par le NOC
   secteur?: string | null;
   dateDebut: string;
   dateFin?: string | null;
@@ -93,7 +94,7 @@ export default function CoupuresReseauPage() {
 
   interface CoupuresStats {
     enCours: number; enCoursSiteEntier: number; enCoursHeritees: number; terminees: number;
-    nouvellesDerniereHeure: number; aQualifier: number;
+    nouvellesDerniereHeure: number; aQualifier: number; enCoursAuto: number; enCoursManuel: number;
     plusAncienne?: { dateDebut: string; technologie: string; site?: { nom: string } } | null;
   }
   const { data: stats } = useQuery({
@@ -134,6 +135,10 @@ export default function CoupuresReseauPage() {
   ].filter(Boolean).join('&');
   const rows: Coupure[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
+  const rafraichir = () => {
+    queryClient.invalidateQueries({ queryKey: ['coupures'] });
+    queryClient.invalidateQueries({ queryKey: ['coupures-stats'] });
+  };
 
   const columns: Column<Coupure>[] = [
     {
@@ -163,9 +168,11 @@ export default function CoupuresReseauPage() {
         <div>
           <TechnoBadge t={c.technologie} />
           {c.source === 'OSS' && (
-            <span className="ml-1.5 rounded bg-indigo-50 px-1 py-px text-[10px] font-bold text-indigo-600"
-              title="Détectée automatiquement par la synchronisation OSS (état eNodeB)">
-              AUTO
+            <span className={`ml-1.5 rounded px-1 py-px text-[10px] font-bold ${c.priseEnChargePar ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-600'}`}
+              title={c.priseEnChargePar
+                ? `Détection automatique prise en charge par ${c.priseEnChargePar}`
+                : 'Détectée automatiquement par la synchronisation OSS (état eNodeB) — à prendre en charge'}>
+              {c.priseEnChargePar ? '✓ AUTO' : 'AUTO'}
             </span>
           )}
           {(c.frequence || c.secteur) && (
@@ -212,7 +219,9 @@ export default function CoupuresReseauPage() {
     },
     {
       key: 'source', header: 'Source', defaultHidden: true,
-      render: (c) => c.source === 'OSS' ? 'AUTO (OSS)' : 'Manuelle',
+      render: (c) => c.source === 'OSS'
+        ? (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (OSS)')
+        : 'Manuelle',
     },
   ];
 
@@ -287,6 +296,20 @@ export default function CoupuresReseauPage() {
             </button>
           ))}
         </div>
+        {/* Séparation AUTO / manuelles : la détection OSS et la saisie NOC sont
+            deux flux différents — compteurs sur les coupures en cours. */}
+        <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
+          {[
+            { v: '', l: 'Toutes sources' },
+            { v: 'OSS', l: `AUTO${stats ? ` (${stats.enCoursAuto})` : ''}` },
+            { v: 'MANUEL', l: `Manuelles${stats ? ` (${stats.enCoursManuel})` : ''}` },
+          ].map((o) => (
+            <button key={o.v} type="button" onClick={() => { setSource(o.v); setPage(1); }}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${source === o.v ? 'bg-white text-[#1B3F6B] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {o.l}
+            </button>
+          ))}
+        </div>
         <label className="flex cursor-pointer items-center gap-1.5 text-sm text-gray-600">
           <input type="checkbox" checked={avecHeritees} onChange={(e) => { setAvecHeritees(e.target.checked); setPage(1); }}
             className="h-4 w-4 rounded border-gray-300" />
@@ -301,9 +324,6 @@ export default function CoupuresReseauPage() {
         filters={[
           { key: 'techno', label: 'Toutes technologies', value: technologie, options: TECHNOS, onChange: (v) => { setTechnologie(v); setPage(1); } },
           { key: 'alarme', label: 'Toutes alarmes', value: typeAlarme, options: TYPES_ALARME, onChange: (v) => { setTypeAlarme(v); setPage(1); } },
-          { key: 'source', label: 'Toutes sources', value: source, options: [
-            { value: 'OSS', label: 'AUTO (OSS)' }, { value: 'MANUEL', label: 'Manuelles' },
-          ], onChange: (v) => { setSource(v); setPage(1); } },
         ]}
       />
 
@@ -331,9 +351,9 @@ export default function CoupuresReseauPage() {
           </>
         )}
 
-      {showCreate && <CoupureFormModal onClose={() => setShowCreate(false)} onDone={() => queryClient.invalidateQueries({ queryKey: ['coupures'] })} />}
-      {edition && <CoupureEditModal coupure={edition} onClose={() => setEdition(null)} onDone={() => queryClient.invalidateQueries({ queryKey: ['coupures'] })} />}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} onDone={() => queryClient.invalidateQueries({ queryKey: ['coupures'] })} />}
+      {showCreate && <CoupureFormModal onClose={() => setShowCreate(false)} onDone={rafraichir} />}
+      {edition && <CoupureEditModal coupure={edition} onClose={() => setEdition(null)} onDone={rafraichir} />}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} onDone={rafraichir} />}
     </div>
   );
 }
@@ -484,6 +504,14 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   return (
     <Modal titre={`${coupure.site?.nom ?? 'Coupure'} · ${coupure.technologie === 'SITE' ? 'Site entier' : coupure.technologie}`} onClose={onClose}>
       <p className="mb-3 text-sm text-gray-500">Début : <b>{fmtDateTime(coupure.dateDebut)}</b></p>
+      {coupure.source === 'OSS' && !coupure.priseEnChargePar && !coupure.dateFin && (
+        <PriseEnChargeBloc coupureId={coupure.id} onDone={onDone} />
+      )}
+      {coupure.source === 'OSS' && coupure.priseEnChargePar && (
+        <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          Détection AUTO prise en charge par <b>{coupure.priseEnChargePar}</b>.
+        </p>
+      )}
       <Field label="Rétablissement (laisser vide si toujours en cours)">
         <Input type="datetime-local" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
       </Field>
@@ -528,6 +556,47 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         </Button>
       </div>
     </Modal>
+  );
+}
+
+// ── Prise en charge d'une détection AUTO ────────────────────────────────────
+// Le NOC adopte l'événement ; le serveur remonte la chaîne de transmission :
+// si un site AMONT est aussi coupé, c'est lui la racine — les coupures aval
+// (dont celle-ci) sont reclassées héritées et la liste retombe à un événement.
+
+function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: () => void }) {
+  const [resultat, setResultat] = useState<{
+    racineSiteNom: string; estRacine: boolean; heriteesReclassees: number; priseEnChargePar: string;
+  } | null>(null);
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`).then((r) => r.data.data),
+    onSuccess: (d) => { setResultat(d); onDone(); },
+  });
+  const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+
+  return (
+    <div className="mb-3 rounded-lg bg-indigo-50 p-3 text-sm text-indigo-900">
+      {resultat ? (
+        <p>
+          <CheckCircle2 size={14} className="mr-1 inline text-emerald-600" />
+          Pris en charge par <b>{resultat.priseEnChargePar}</b> — racine : <b>{resultat.racineSiteNom}</b>
+          {!resultat.estRacine && <span className="text-amber-700"> (panne amont détectée : cette coupure devient héritée)</span>}
+          {resultat.heriteesReclassees > 0 && <> · <b>{resultat.heriteesReclassees}</b> coupure(s) aval reclassée(s) héritée(s)</>}
+        </p>
+      ) : (
+        <>
+          <p className="mb-2">
+            Détection automatique OSS <b>non prise en charge</b>. La prise en charge analyse la
+            topologie : si un site <b>amont</b> est aussi coupé, il devient la racine de l&apos;événement
+            et les coupures de l&apos;aval passent en héritées (une seule panne, une seule ligne).
+          </p>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Analyse de la topologie…' : 'Prendre en charge (analyse amont/aval)'}
+          </Button>
+          {errMsg && <p className="mt-2 text-xs text-red-600">{errMsg}</p>}
+        </>
+      )}
+    </div>
   );
 }
 
