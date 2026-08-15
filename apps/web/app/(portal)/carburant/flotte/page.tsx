@@ -112,11 +112,13 @@ export default function FlottePage() {
         title="Flotte de transport"
         subtitle="Camions et chauffeurs — le référentiel se remplit à l'usage, complétez-le pour activer les contrôles"
         backHref="/carburant/commandes"
-        actions={
-          <Button icon={Plus} onClick={() => (onglet === 'vehicules' ? setEditV('nouveau') : setEditC('nouveau'))}>
-            {onglet === 'vehicules' ? 'Nouveau camion' : 'Nouveau chauffeur'}
-          </Button>
-        }
+        actions={isInterne
+          ? (
+            <Button icon={Plus} onClick={() => (onglet === 'vehicules' ? setEditV('nouveau') : setEditC('nouveau'))}>
+              {onglet === 'vehicules' ? 'Nouveau camion' : 'Nouveau chauffeur'}
+            </Button>
+          )
+          : undefined}
       />
 
       {onglet === 'vehicules' && jaugeageKo > 0 && (

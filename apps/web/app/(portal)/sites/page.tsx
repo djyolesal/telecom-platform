@@ -34,6 +34,9 @@ export default function SitesPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
+  // Création réservée MANAGER/ADMIN (rbac serveur) : le bouton suit le droit —
+  // un superviseur (interne ou prestataire) ne doit pas voir un bouton en 403.
+  const peutCreer = ['MANAGER', 'ADMIN'].includes((session?.user as { role?: string })?.role ?? '');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState('');
@@ -84,7 +87,7 @@ export default function SitesPage() {
               </button>
             )}
             <ExportButtons base="/sites/export" name="sites" query={region ? `region=${region}` : undefined} />
-            <ButtonLink href="/sites/nouveau" icon={Plus}>Nouveau site</ButtonLink>
+            {peutCreer && <ButtonLink href="/sites/nouveau" icon={Plus}>Nouveau site</ButtonLink>}
           </>
         }
       />

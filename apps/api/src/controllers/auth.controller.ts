@@ -78,6 +78,12 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     // du compte — les jetons de l'ancienne session seront rejetés.
     const plt = plateformeDe(req.body);
 
+    // Le NOC est un poste de supervision : portail web uniquement — l'app
+    // mobile est l'outil terrain, aucun de ses écrans ne le concerne.
+    if (plt === 'MOBILE' && user.role === 'NOC') {
+      throw new AppError('Un compte NOC se connecte sur le portail web uniquement.', 403);
+    }
+
     // Verrou d'appareil des comptes terrain : le compte se lie au PREMIER mobile
     // qui se connecte ; tout autre appareil est refusé jusqu'à déliaison admin.
     if (plt === 'MOBILE' && (user.role === 'TECHNICIEN' || user.role === 'TRANSPORTEUR')) {

@@ -16,6 +16,7 @@ interface ColonneDispo { key: string; header: string }
 export function ExportButtons({ base, name, query }: { base: string; name: string; query?: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [colonnes, setColonnes] = useState<ColonneDispo[] | null>(null);
+  const [feuilles, setFeuilles] = useState<{ feuille: string; colonnes: ColonneDispo[] }[]>([]);
   const [exclues, setExclues] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -41,11 +42,17 @@ export function ExportButtons({ base, name, query }: { base: string; name: strin
       setLoading(true);
       try {
         const r = await api.get(`${base}/xlsx${q}${q ? '&' : '?'}colonnes=%3F`);
-        // Fusionne les feuilles (exports multi-feuilles) en dédupliquant par clé.
+        // Toutes les colonnes de toutes les feuilles, groupées par feuille pour
+        // l'affichage (dédoublonnage par clé : une clé partagée entre feuilles
+        // — exports historiques — n'apparaît qu'une fois et pilote les deux).
         const vues = new Map<string, ColonneDispo>();
-        for (const feuille of r.data.data as { colonnes: ColonneDispo[] }[]) {
-          for (const c of feuille.colonnes) if (!vues.has(c.key)) vues.set(c.key, c);
+        const parFeuille: { feuille: string; colonnes: ColonneDispo[] }[] = [];
+        for (const f of r.data.data as { feuille?: string; colonnes: ColonneDispo[] }[]) {
+          const propres = f.colonnes.filter((c) => !vues.has(c.key));
+          for (const c of propres) vues.set(c.key, c);
+          if (propres.length) parFeuille.push({ feuille: f.feuille ?? '', colonnes: propres });
         }
+        setFeuilles(parFeuille);
         setColonnes([...vues.values()]);
       } catch { setColonnes([]); }
       finally { setLoading(false); }
@@ -93,16 +100,23 @@ export function ExportButtons({ base, name, query }: { base: string; name: strin
             <p className="py-4 text-center text-xs text-gray-400">Colonnes indisponibles pour cet export.</p>
           ) : (
             <div className="max-h-64 space-y-0.5 overflow-y-auto">
-              {colonnes.map((c) => (
-                <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-gray-700 hover:bg-gray-50">
-                  <input type="checkbox" checked={!exclues.has(c.key)}
-                    onChange={(e) => setExclues((prev) => {
-                      const next = new Set(prev);
-                      if (e.target.checked) next.delete(c.key); else next.add(c.key);
-                      return next;
-                    })} />
-                  {c.header}
-                </label>
+              {feuilles.map((f) => (
+                <div key={f.feuille}>
+                  {feuilles.length > 1 && (
+                    <p className="mt-1.5 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{f.feuille}</p>
+                  )}
+                  {f.colonnes.map((c) => (
+                    <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-gray-700 hover:bg-gray-50">
+                      <input type="checkbox" checked={!exclues.has(c.key)}
+                        onChange={(e) => setExclues((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.delete(c.key); else next.add(c.key);
+                          return next;
+                        })} />
+                      {c.header}
+                    </label>
+                  ))}
+                </div>
               ))}
             </div>
           )}

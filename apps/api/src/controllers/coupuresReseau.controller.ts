@@ -346,18 +346,26 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   // LOCALE = racines seulement (les héritées de l'aval noient la liste) ;
   // HERITEE = l'inverse. Absent = tout.
   if (origine) where.origine = origine;
+  // Conditions à OR internes cumulables : chacune pousse dans AND pour ne pas
+  // s'écraser mutuellement (a_qualifier + période utilisent tous deux un OR).
+  const et: Record<string, unknown>[] = [];
   // « À qualifier » : type d'alarme ou classement actif/passif manquant —
   // typiquement les détections AUTO OSS, dont les rapports ont besoin.
-  if (a_qualifier === '1') where.OR = [{ typeAlarme: null }, { causeCategorie: null }];
+  if (a_qualifier === '1') et.push({ OR: [{ typeAlarme: null }, { causeCategorie: null }] });
   if (statut === 'EN_COURS') where.dateFin = null;
   if (statut === 'TERMINEE') where.dateFin = { not: null };
   if (date_debut || date_fin) {
-    where.dateDebut = {
-      ...(date_debut ? { gte: new Date(date_debut) } : {}),
-      // Une date « au » sans heure (YYYY-MM-DD) couvre la journée ENTIÈRE.
-      ...(date_fin ? { lte: new Date(date_fin.length === 10 ? `${date_fin}T23:59:59` : date_fin) } : {}),
-    };
+    // Période = CHEVAUCHEMENT, pas « commencée dans la période » : une coupure
+    // ancienne encore EN COURS (ou rétablie pendant la période) doit sortir
+    // dans la vue et les exports. Filtrer sur le seul début les faisait
+    // disparaître dès que la période ne contenait plus leur premier jour.
+    // Une date « au » sans heure (YYYY-MM-DD) couvre la journée ENTIÈRE.
+    const du = date_debut ? new Date(date_debut) : null;
+    const au = date_fin ? new Date(date_fin.length === 10 ? `${date_fin}T23:59:59` : date_fin) : null;
+    if (au) where.dateDebut = { lte: au };
+    if (du) et.push({ OR: [{ dateFin: null }, { dateFin: { gte: du } }] });
   }
+  if (et.length) where.AND = et;
   const perimetre = await sitePerimetre(req.user!.id);
   if (search || isRestreint(perimetre)) {
     where.site = {
@@ -1110,43 +1118,56 @@ export async function exportDisponibiliteReseau(req: Request, res: Response, nex
           { indicateur: 'Downtime non classé (h)', valeur: k.downtimeNonClasseHeures },
         ],
       },
+      // Clés UNIQUES d'une feuille à l'autre : le sélecteur de colonnes dédoublonne
+      // par clé — avec « coupures » partagé entre 3 feuilles, il n'affichait
+      // qu'une entrée et la sélection écrasait les colonnes homonymes.
       {
         name: 'Sites',
         columns: [
-          { header: 'Site', key: 'nom', width: 26 },
-          { header: 'Région', key: 'region', width: 16 },
-          { header: 'Coupures', key: 'coupures', width: 10 },
-          { header: 'En cours', key: 'enCours', width: 10 },
-          { header: 'Downtime (h)', key: 'downtimeHeures', width: 13 },
-          { header: 'Dispo (%)', key: 'dispoPct', width: 10 },
+          { header: 'Site', key: 'siteNom', width: 26 },
+          { header: 'Région', key: 'siteRegion', width: 16 },
+          { header: 'Coupures', key: 'siteCoupures', width: 10 },
+          { header: 'En cours', key: 'siteEnCours', width: 10 },
+          { header: 'Downtime (h)', key: 'siteDowntimeHeures', width: 13 },
+          { header: 'Dispo (%)', key: 'siteDispoPct', width: 10 },
         ],
-        rows: sitesTous,
+        rows: sitesTous.map((s) => ({
+          siteNom: s.nom, siteRegion: s.region, siteCoupures: s.coupures,
+          siteEnCours: s.enCours, siteDowntimeHeures: s.downtimeHeures, siteDispoPct: s.dispoPct,
+        })),
       },
       {
         name: 'Par alarme',
         columns: [
-          { header: "Type d'alarme", key: 'type', width: 14 },
-          { header: 'Coupures', key: 'coupures', width: 10 },
-          { header: 'Downtime (h)', key: 'downtimeHeures', width: 13 },
+          { header: "Type d'alarme", key: 'alarmeType', width: 14 },
+          { header: 'Coupures', key: 'alarmeCoupures', width: 10 },
+          { header: 'Downtime (h)', key: 'alarmeDowntimeHeures', width: 13 },
         ],
-        rows: donnees.parTypeAlarme,
+        rows: donnees.parTypeAlarme.map((a) => ({
+          alarmeType: a.type, alarmeCoupures: a.coupures, alarmeDowntimeHeures: a.downtimeHeures,
+        })),
       },
     ];
     if (donnees.parPrestataire?.length) {
       feuilles.push({
         name: 'Prestataires',
         columns: [
-          { header: 'Prestataire', key: 'nom', width: 24 },
-          { header: 'Sites', key: 'nbSites', width: 8 },
-          { header: 'Coupures', key: 'coupures', width: 10 },
-          { header: 'Sites touchés', key: 'sitesTouches', width: 12 },
-          { header: 'Downtime (h)', key: 'downtimeHeures', width: 13 },
-          { header: 'Passif (h)', key: 'downtimePassifHeures', width: 11 },
-          { header: 'Actif (h)', key: 'downtimeActifHeures', width: 11 },
-          { header: 'Non classé (h)', key: 'downtimeNonClasseHeures', width: 13 },
-          { header: 'Dispo moyenne (%)', key: 'dispoPct', width: 16 },
+          { header: 'Prestataire', key: 'prestaNom', width: 24 },
+          { header: 'Sites', key: 'prestaNbSites', width: 8 },
+          { header: 'Coupures', key: 'prestaCoupures', width: 10 },
+          { header: 'Sites touchés', key: 'prestaSitesTouches', width: 12 },
+          { header: 'Downtime (h)', key: 'prestaDowntimeHeures', width: 13 },
+          { header: 'Passif (h)', key: 'prestaPassifHeures', width: 11 },
+          { header: 'Actif (h)', key: 'prestaActifHeures', width: 11 },
+          { header: 'Non classé (h)', key: 'prestaNonClasseHeures', width: 13 },
+          { header: 'Dispo moyenne (%)', key: 'prestaDispoPct', width: 16 },
         ],
-        rows: donnees.parPrestataire,
+        rows: donnees.parPrestataire.map((p) => ({
+          prestaNom: p.nom, prestaNbSites: p.nbSites, prestaCoupures: p.coupures,
+          prestaSitesTouches: p.sitesTouches, prestaDowntimeHeures: p.downtimeHeures,
+          prestaPassifHeures: p.downtimePassifHeures, prestaActifHeures: p.downtimeActifHeures,
+          prestaNonClasseHeures: p.downtimeNonClasseHeures, prestaDispoPct: p.dispoPct,
+        })),
       });
     }
     if (req.query.colonnes !== '?') {
