@@ -884,6 +884,11 @@ async function calculerDisponibiliteReseau(req: Request) {
         where: {
           OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
           dateDebut: { lte: finFenetre },
+          // Règle validée avec l'exploitant : une détection AUTO (OSS) ne compte
+          // dans le rapport OFFICIEL qu'une fois PRISE EN CHARGE par le NOC.
+          // Les brutes restent un sas d'attente — visibles sur la liste et la
+          // carte, sans peser sur la dispo publiée ni sur les prestataires.
+          AND: [{ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] }],
           ...(technosSel.length ? { technologie: { in: [...new Set([...technosSel, 'SITE'])] } } : {}),
           ...(alarmesSel.length ? { typeAlarme: { in: alarmesSel } } : {}),
           ...(restreint ? { site: perimetre } : {}),

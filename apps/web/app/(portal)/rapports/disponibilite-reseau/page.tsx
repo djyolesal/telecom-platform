@@ -114,6 +114,9 @@ export default function DisponibiliteReseauPage() {
             </span>
           )}
         </div>
+        <span className="text-xs text-gray-400" title="Le sas des détections brutes reste visible sur la liste des coupures et la carte NOC, sans peser sur la disponibilité publiée.">
+          Les détections AUTO (OSS) ne comptent qu&apos;une fois prises en charge par le NOC.
+        </span>
       </div>
 
       {!pret ? <EmptyState title="Période libre" hint="Choisissez les deux dates pour calculer le rapport." />
