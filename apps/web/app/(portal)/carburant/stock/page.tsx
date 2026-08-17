@@ -31,6 +31,13 @@ const ORDRE: Record<string, number> = { VIDE: 0, CRITIQUE: 1, FAIBLE: 2, OK: 3, 
 export default function StockCarburantPage() {
   const [region, setRegion] = useState('');
   const [niveau, setNiveau] = useState('');
+  // Compte prestataire (ma-societe non nul) : la chaîne d'approvisionnement
+  // (bons de commande) est interne — le bouton ne doit pas apparaître.
+  const { data: maSociete } = useQuery({
+    queryKey: ['ma-societe'],
+    queryFn: () => api.get('/ma-societe').then((r) => r.data.data as { nom: string } | null),
+    staleTime: 10 * 60_000,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock', region],
@@ -62,7 +69,7 @@ export default function StockCarburantPage() {
         subtitle="Vue globale du parc et alertes d'autonomie"
         actions={
           <div className="flex gap-2">
-            <ButtonLink href="/carburant/commandes" variant="secondary" icon={Truck}>Approvisionnement</ButtonLink>
+            {!maSociete && <ButtonLink href="/carburant/commandes" variant="secondary" icon={Truck}>Approvisionnement</ButtonLink>}
             <ButtonLink href="/carburant/depotages" variant="secondary" icon={History}>Dépotages</ButtonLink>
           </div>
         }
