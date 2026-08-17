@@ -65,7 +65,9 @@ export default function DisponibiliteReseauPage() {
           : "Coupures radio (supervision NOC) : downtime, sites touchés, répartition actif/passif et évaluation par prestataire"}
         backHref="/rapports"
         actions={pret
-          ? <ExportButtons base="/rapports/disponibilite-reseau/export" name="disponibilite-reseau" query={exportQuery || undefined} />
+          ? <ExportButtons base="/rapports/disponibilite-reseau/export"
+              name={libre ? `disponibilite-reseau_du-${du}_au-${au}` : `disponibilite-reseau_${mois}-mois`}
+              query={exportQuery || undefined} />
           : undefined}
       />
 
