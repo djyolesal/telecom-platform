@@ -29,6 +29,8 @@ export interface LigneCoupureExport {
   causeCategorie: string | null;
   origine: string;
   origineSiteNom: string | null; // site racine si héritée
+  source: string; // MANUEL | OSS
+  priseEnChargePar: string | null; // détection AUTO adoptée par le NOC
   incidentRef: string | null;
   cause: string | null;
   actions: string | null;
@@ -45,6 +47,7 @@ export const COLONNES_DETAIL = [
   { key: 'alarme', header: 'Alarme', width: 8 },
   { key: 'categorie', header: 'Catégorie', width: 10 },
   { key: 'origine', header: 'Origine', width: 16 },
+  { key: 'source', header: 'Source', width: 24 },
   { key: 'incident', header: 'Incident', width: 15 },
   { key: 'cause', header: 'Cause', width: 36 },
   { key: 'actions', header: 'Actions', width: 32 },
@@ -199,6 +202,9 @@ export function construireClasseurCoupures(opts: {
       alarme: l.typeAlarme ?? '',
       categorie: l.causeCategorie ?? '',
       origine: heritee ? `← ${l.origineSiteNom ?? 'amont'}` : 'Locale',
+      source: l.source === 'OSS'
+        ? (l.priseEnChargePar ? `AUTO · ${l.priseEnChargePar}` : 'AUTO (non prise en charge)')
+        : 'Manuelle',
       incident: l.incidentRef ?? '',
       cause: l.cause ?? '',
       actions: l.actions ?? '',
@@ -228,6 +234,11 @@ export function construireClasseurCoupures(opts: {
     }
     const ori = cellule('origine');
     if (ori && heritee) ori.font = { size: 10, bold: true, color: { argb: PURPLE } };
+    const src = cellule('source');
+    if (src && l.source === 'OSS') {
+      // AUTO adoptée = teal ; AUTO brute (hors rapport officiel) = ambre.
+      src.font = { size: 10, bold: true, color: { argb: l.priseEnChargePar ? TEAL : AMBER } };
+    }
     const inc = cellule('incident');
     if (inc && inc.value) inc.font = { size: 10, bold: true, color: { argb: NAVY } };
   });

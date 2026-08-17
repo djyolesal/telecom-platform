@@ -1324,6 +1324,8 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
           causeCategorie: c.causeCategorie,
           origine: c.origine,
           origineSiteNom: c.coupureOrigine?.site?.nom ?? null,
+          source: c.source,
+          priseEnChargePar: c.priseEnChargePar ?? null,
           incidentRef: c.incident?.reference ?? null,
           cause: c.cause,
           actions: c.actions,
@@ -1355,6 +1357,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         { header: 'Alarme', key: 'alarme', width: 9 },
         { header: 'Catégorie', key: 'categorie', width: 10 },
         { header: 'Origine', key: 'origine', width: 10 },
+        { header: 'Source', key: 'source', width: 22 },
         { header: 'Incident', key: 'incident', width: 16 },
         { header: 'Cause', key: 'cause', width: 34 },
         { header: 'Actions', key: 'actions', width: 34 },
@@ -1370,6 +1373,9 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         alarme: c.typeAlarme ?? '',
         categorie: c.causeCategorie ?? '',
         origine: c.origine === 'HERITEE' ? 'Héritée' : 'Locale',
+        source: c.source === 'OSS'
+          ? (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (non prise en charge)')
+          : 'Manuelle',
         incident: c.incident?.reference ?? '',
         cause: c.cause ?? '',
         actions: c.actions ?? '',
