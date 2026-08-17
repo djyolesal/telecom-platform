@@ -86,6 +86,7 @@ export default function EcheancierPreventifPage() {
       <PageHeader
         title="Échéancier préventif contractuel"
         subtitle="Conformité des tâches préventives par site / prestataire"
+        backHref="/rapports"
         actions={
           canGenerate && (
             <Button icon={PlayCircle} loading={generer.isPending} onClick={() => generer.mutate()}>
