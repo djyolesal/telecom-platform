@@ -161,15 +161,19 @@ export default function CartePage() {
           </div>
         )}
         {!vueLivraison && (<>
-        {/* Bascule de lecture : Stock (logistique) / Réseau (coupures — vue NOC). */}
-        <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white text-sm font-medium">
-          {(['stock', 'reseau'] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setModeChoisi(m)}
-              className={`px-3 py-2 ${mode === m ? 'bg-[#1B3F6B] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-              {m === 'stock' ? 'Stock' : 'Réseau'}
-            </button>
-          ))}
-        </div>
+        {/* Bascule de lecture : Stock (logistique) / Réseau (coupures). Le NOC
+            n'a PAS le mode Stock — la logistique carburant est hors de son
+            périmètre, sa carte est toujours en lecture réseau. */}
+        {role !== 'NOC' && (
+          <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white text-sm font-medium">
+            {(['stock', 'reseau'] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setModeChoisi(m)}
+                className={`px-3 py-2 ${mode === m ? 'bg-[#1B3F6B] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                {m === 'stock' ? 'Stock' : 'Réseau'}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="w-44"><Select value={region} onChange={(e) => setRegion(e.target.value)} options={regionOptions} placeholder="Toutes régions" /></div>
         <div className="w-40"><Select value={statut} onChange={(e) => setStatut(e.target.value)} options={STATUT_OPTIONS} placeholder="Tous statuts GE" /></div>
         {!modeReseau && (
@@ -226,6 +230,7 @@ export default function CartePage() {
             features={features}
             couleurParCamion={vueLivraison ? couleurParCamion : undefined}
             etatReseauParSite={etatReseauParSite}
+            masquerStock={role === 'NOC'}
           />
         )}
       </div>

@@ -140,11 +140,13 @@ const COULEUR_RESEAU: Record<EtatReseau['etat'], string> = {
   IMPACTE: '#8E44AD', // violet : menace héritée de l'amont
 };
 
-export function SitesMap({ features, couleurParCamion, etatReseauParSite }: {
+export function SitesMap({ features, couleurParCamion, etatReseauParSite, masquerStock }: {
   features: SiteFeature[];
   couleurParCamion?: Record<string, string>;
   /** Présent = mode réseau : rouge (en coupure) / ambre (aval) / vert (en service). */
   etatReseauParSite?: Record<string, EtatReseau>;
+  /** true (vue NOC) = aucune information de stock dans les popups. */
+  masquerStock?: boolean;
 }) {
   const markers = useRef<MarkerMap>({});
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -229,7 +231,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite }: {
                       : 'En service'}
                   </p>
                 )}
-                {f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (() => {
+                {!masquerStock && f.properties.niveauStock && f.properties.niveauStock !== 'NA' && (() => {
                   const badge = (
                     <span style={{ color: NIVEAU_STOCK[f.properties.niveauStock!]?.color ?? '#6B7280', fontWeight: 600 }}>
                       {NIVEAU_STOCK[f.properties.niveauStock!]?.label ?? f.properties.niveauStock}

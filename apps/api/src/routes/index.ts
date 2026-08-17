@@ -108,7 +108,8 @@ const NOC_ALLOW: RegExp[] = [
   /^\/sites(\/|$)/,                    // consultation du parc + import/export topologie
   /^\/coupures-reseau(\/|$)/,
   /^\/incidents(\/|$)/,                // suivi et déclaration ; la clôture reste terrain
-  /^\/rapports\/(dashboard|disponibilite-reseau|stock-carburant|incidents)$/,
+  // Le stock carburant est HORS périmètre NOC (logistique, pas supervision).
+  /^\/rapports\/(dashboard|disponibilite-reseau|incidents)$/,
   /^\/rapports\/disponibilite-reseau\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
 ];
@@ -377,7 +378,7 @@ router.post('/incidents/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','
 
 // ── Rapports ──────────────────────────────────────────────────
 router.get('/rapports/dashboard', rapportsCtrl.getDashboard);
-router.get('/rapports/stock-carburant', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
+router.get('/rapports/stock-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
 // Bilan carburant sur période : stock aux bornes + conso par conservation + courbe 12 mois.
 router.get('/rapports/bilan-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getBilanCarburant);
 router.get('/rapports/bilan-carburant/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanCarburant);
