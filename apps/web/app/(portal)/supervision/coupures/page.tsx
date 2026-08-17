@@ -51,7 +51,9 @@ const TECHNOS = [
   { value: '4G', label: '4G' }, { value: '5G', label: '5G' },
 ];
 // Référentiel NOC (INNER du rapport de supervision).
-const TYPES_ALARME = ['AE', 'GE', 'EN', 'FO', 'TX', 'RA', 'MI', 'MD', 'NA'].map((v) => ({ value: v, label: v }));
+// « NA » (non attribué) est unifié avec « aucune » sous l'étiquette N/A :
+// plus de doublon « — » / « NA » dans les menus, l'existant s'affiche N/A.
+const TYPES_ALARME = ['AE', 'GE', 'EN', 'FO', 'TX', 'RA', 'MI', 'MD'].map((v) => ({ value: v, label: v }));
 
 const dureeDepuis = (debut: string) =>
   fmtDowntime(Math.max(0, Math.round((Date.now() - new Date(debut).getTime()) / 60000)));
@@ -221,7 +223,7 @@ export default function CoupuresReseauPage() {
       },
     },
     { key: 'downtimeMinutes', header: 'Downtime', align: 'right', render: (c) => fmtDowntime(c.downtimeMinutes) },
-    { key: 'typeAlarme', header: 'Alarme', align: 'center', render: (c) => c.typeAlarme ?? '—' },
+    { key: 'typeAlarme', header: 'Alarme', align: 'center', render: (c) => (!c.typeAlarme || c.typeAlarme === 'NA') ? 'N/A' : c.typeAlarme },
     { key: 'cause', header: 'Cause', render: (c) => <span className="text-gray-600">{c.cause ?? '—'}</span> },
     // Colonnes complémentaires : masquées par défaut pour garder le tableau
     // lisible, mais proposées dans le sélecteur « Colonnes » (choix mémorisé).
@@ -464,7 +466,7 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
           <Input type="datetime-local" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} required />
         </Field>
         <Field label="Type d'alarme">
-          <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="—" />
+          <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="N/A" />
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -502,7 +504,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const [dateFin, setDateFin] = useState(toLocal(coupure.dateFin));
   const [cause, setCause] = useState(coupure.cause ?? '');
   const [actions, setActions] = useState(coupure.actions ?? '');
-  const [typeAlarme, setTypeAlarme] = useState(coupure.typeAlarme ?? '');
+  const [typeAlarme, setTypeAlarme] = useState(coupure.typeAlarme === 'NA' ? '' : coupure.typeAlarme ?? '');
   const [intervenants, setIntervenants] = useState(coupure.intervenants ?? '');
   const [causeCategorie, setCauseCategorie] = useState(coupure.causeCategorie ?? '');
   const [cloturerHeritees, setCloturerHeritees] = useState(true);
@@ -541,7 +543,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Type d'alarme">
-          <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="—" />
+          <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="N/A" />
         </Field>
         <Field label="Intervenant(s)"><Input value={intervenants} onChange={(e) => setIntervenants(e.target.value)} /></Field>
       </div>

@@ -105,7 +105,7 @@ export default function DisponibiliteReseauPage() {
           <span className="text-gray-500">Alarmes :</span>
           {ALARMES.map((a) => (
             <button key={a} type="button" onClick={() => basculer(setAlarmes, a)} className={puce(alarmes.has(a))}>
-              {a}
+              {a === 'NA' ? 'N/A' : a}
             </button>
           ))}
           {alarmes.size > 0 && (

@@ -982,7 +982,8 @@ async function calculerDisponibiliteReseau(req: Request) {
       ps.coupures += 1; if (!c.dateFin) ps.enCours += 1;
       parSite.set(c.siteId, ps);
 
-      const ta = c.typeAlarme ?? '—';
+      // Sans type et « NA » (non attribué) fusionnent sous N/A — même sens.
+      const ta = (!c.typeAlarme || c.typeAlarme === 'NA') ? 'N/A' : c.typeAlarme;
       const pa = parAlarme.get(ta) ?? { type: ta, coupures: 0, downtime: 0 };
       pa.coupures += 1; parAlarme.set(ta, pa);
       pousser(ivAlarme, `${ta}|${c.siteId}`, iv);
