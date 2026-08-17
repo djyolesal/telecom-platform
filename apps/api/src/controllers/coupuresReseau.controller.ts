@@ -341,8 +341,11 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   if (site_id) where.siteId = site_id;
   if (technologie) where.technologie = technologie;
   if (type_alarme) where.typeAlarme = type_alarme;
-  // MANUEL | OSS — distingue les saisies NOC des détections automatiques.
-  if (source) where.source = source;
+  // Source LOGIQUE (pas la colonne brute) : le rapport NOC (MANUEL) inclut
+  // les AUTO ADOPTÉES — c'est lui qui est envoyé et qui fonde la dispo ;
+  // l'onglet AUTO ne montre que le sas des détections non prises en charge.
+  // (La colonne source en base reste OSS : la clôture auto continue d'agir.)
+  if (source === 'OSS') { where.source = 'OSS'; where.priseEnChargePar = null; }
   // LOCALE = racines seulement (les héritées de l'aval noient la liste) ;
   // HERITEE = l'inverse. Absent = tout.
   if (origine) where.origine = origine;
@@ -352,6 +355,7 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   // « À qualifier » : type d'alarme ou classement actif/passif manquant —
   // typiquement les détections AUTO OSS, dont les rapports ont besoin.
   if (a_qualifier === '1') et.push({ OR: [{ typeAlarme: null }, { causeCategorie: null }] });
+  if (source === 'MANUEL') et.push({ OR: [{ source: 'MANUEL' }, { priseEnChargePar: { not: null } }] });
   if (statut === 'EN_COURS') where.dateFin = null;
   if (statut === 'TERMINEE') where.dateFin = { not: null };
   if (date_debut || date_fin) {
@@ -1169,7 +1173,9 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
           orderBy: { dateDebut: 'asc' },
           select: { dateDebut: true, technologie: true, site: { select: { nom: true } } },
         }),
-        prisma.coupureReseau.count({ where: { dateFin: null, source: 'OSS', ...surSite } }),
+        // Sas AUTO = détections OSS non encore prises en charge ; le reste
+        // (manuelles + AUTO adoptées) forme le rapport NOC.
+        prisma.coupureReseau.count({ where: { dateFin: null, source: 'OSS', priseEnChargePar: null, ...surSite } }),
       ]);
     res.json({
       success: true,

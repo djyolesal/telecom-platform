@@ -296,13 +296,14 @@ export default function CoupuresReseauPage() {
             </button>
           ))}
         </div>
-        {/* Séparation AUTO / manuelles : la détection OSS et la saisie NOC sont
-            deux flux différents — compteurs sur les coupures en cours. */}
+        {/* Sas AUTO (détections non traitées) vs rapport NOC : une AUTO prise
+            en charge REJOINT le rapport NOC — c'est lui qui est envoyé et qui
+            fonde la disponibilité. Compteurs sur les coupures en cours. */}
         <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
           {[
-            { v: '', l: 'Toutes sources' },
-            { v: 'OSS', l: `AUTO${stats ? ` (${stats.enCoursAuto})` : ''}` },
-            { v: 'MANUEL', l: `Manuelles${stats ? ` (${stats.enCoursManuel})` : ''}` },
+            { v: '', l: 'Toutes' },
+            { v: 'OSS', l: `AUTO à traiter${stats ? ` (${stats.enCoursAuto})` : ''}` },
+            { v: 'MANUEL', l: `Rapport NOC${stats ? ` (${stats.enCoursManuel})` : ''}` },
           ].map((o) => (
             <button key={o.v} type="button" onClick={() => { setSource(o.v); setPage(1); }}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${source === o.v ? 'bg-white text-[#1B3F6B] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
