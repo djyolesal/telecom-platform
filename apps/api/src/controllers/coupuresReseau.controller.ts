@@ -388,9 +388,13 @@ export async function getCoupures(req: Request, res: Response, next: NextFunctio
       prisma.coupureReseau,
       {
         where,
-        // En cours : les plus ANCIENNES d'abord (les plus graves en tête) ;
-        // sinon chronologie inverse classique.
-        orderBy: { dateDebut: (req.query.statut === 'EN_COURS' ? 'asc' : 'desc') as 'asc' | 'desc' },
+        // En cours : tri COMPOSITE — les sites entiers d'abord (l'ordre
+        // alphabétique inverse donne SITE > 5G > … > 2G, du plus large au
+        // plus étroit), puis les plus ANCIENNES en tête dans chaque groupe.
+        // Sinon : chronologie inverse classique.
+        orderBy: req.query.statut === 'EN_COURS'
+          ? [{ technologie: 'desc' as const }, { dateDebut: 'asc' as const }]
+          : { dateDebut: 'desc' as const },
         include: {
           site: { select: { nom: true, region: true } },
           coupureOrigine: { select: { id: true, site: { select: { nom: true } } } },
