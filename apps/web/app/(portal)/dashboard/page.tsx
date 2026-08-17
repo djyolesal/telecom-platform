@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth';
 import { TransporteurDashboard } from '@/components/dashboard/TransporteurDashboard';
 import { DashboardInterne } from './DashboardInterne';
+import { DashboardNoc } from './DashboardNoc';
 
 /**
  * Aiguillage par rôle, CÔTÉ SERVEUR.
@@ -22,5 +23,8 @@ export default async function DashboardPage() {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role ?? '';
   if (role === 'TRANSPORTEUR') return <TransporteurDashboard />;
+  // Le NOC supervise le réseau, pas la logistique : son tableau de bord est
+  // l'état des coupures (le dashboard interne est centré stock carburant).
+  if (role === 'NOC') return <DashboardNoc />;
   return <DashboardInterne />;
 }
