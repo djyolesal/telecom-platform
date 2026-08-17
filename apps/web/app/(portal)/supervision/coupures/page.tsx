@@ -566,11 +566,12 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 // (dont celle-ci) sont reclassées héritées et la liste retombe à un événement.
 
 function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: () => void }) {
+  const [creerAval, setCreerAval] = useState(true);
   const [resultat, setResultat] = useState<{
-    racineSiteNom: string; estRacine: boolean; heriteesReclassees: number; priseEnChargePar: string;
+    racineSiteNom: string; estRacine: boolean; heriteesReclassees: number; heriteesCreees: number; priseEnChargePar: string;
   } | null>(null);
   const mutation = useMutation({
-    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`).then((r) => r.data.data),
+    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`, { creerAvalManquant: creerAval }).then((r) => r.data.data),
     onSuccess: (d) => { setResultat(d); onDone(); },
   });
   const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
@@ -583,6 +584,7 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
           Pris en charge par <b>{resultat.priseEnChargePar}</b> — racine : <b>{resultat.racineSiteNom}</b>
           {!resultat.estRacine && <span className="text-amber-700"> (panne amont détectée : cette coupure devient héritée)</span>}
           {resultat.heriteesReclassees > 0 && <> · <b>{resultat.heriteesReclassees}</b> coupure(s) aval reclassée(s) héritée(s)</>}
+          {resultat.heriteesCreees > 0 && <> · <b>{resultat.heriteesCreees}</b> héritée(s) créée(s) pour l&apos;aval sans détection</>}
         </p>
       ) : (
         <>
@@ -591,6 +593,10 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
             topologie : si un site <b>amont</b> est aussi coupé, il devient la racine de l&apos;événement
             et les coupures de l&apos;aval passent en héritées (une seule panne, une seule ligne).
           </p>
+          <label className="mb-2 flex cursor-pointer items-start gap-2 text-xs">
+            <input type="checkbox" checked={creerAval} onChange={(e) => setCreerAval(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 rounded" />
+            <span>Créer les héritées pour les sites aval <b>sans détection OSS propre</b> (pas de NodeID) — leur indisponibilité comptera dans le rapport.</span>
+          </label>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             {mutation.isPending ? 'Analyse de la topologie…' : 'Prendre en charge (analyse amont/aval)'}
           </Button>

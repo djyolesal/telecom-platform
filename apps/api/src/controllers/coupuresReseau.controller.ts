@@ -1077,10 +1077,13 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
   try {
     const coupure = await prisma.coupureReseau.findUnique({
       where: { id: req.params.id },
-      select: { id: true, siteId: true, dateFin: true, technologie: true },
+      select: { id: true, siteId: true, dateFin: true, technologie: true, dateDebut: true },
     });
     if (!coupure) throw new AppError('Coupure introuvable', 404);
     if (coupure.dateFin) throw new AppError('Coupure déjà rétablie — rien à prendre en charge', 422);
+    // Créer les héritées pour l'aval SANS détection propre (sites non
+    // rapprochés OSS) : activé par défaut — c'est ce qui rend la dispo juste.
+    const creerAvalManquant = (req.body as { creerAvalManquant?: boolean })?.creerAvalManquant !== false;
 
     const sites = await prisma.site.findMany({
       where: { isActive: true },
@@ -1096,7 +1099,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       const coupAmont = await prisma.coupureReseau.findFirst({
         where: { siteId: cursor, technologie: 'SITE', dateFin: null },
         orderBy: { dateDebut: 'asc' },
-        select: { id: true, siteId: true, dateFin: true, technologie: true },
+        select: { id: true, siteId: true, dateFin: true, technologie: true, dateDebut: true },
       });
       if (coupAmont) racine = coupAmont;
       cursor = parId.get(cursor)?.parentTransmissionId ?? null;
@@ -1115,26 +1118,65 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       for (const e of enfants.get(id) ?? []) { avalIds.push(e); file.push(e); }
     }
 
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+    const nom = [moi?.prenom, moi?.nom].filter(Boolean).join(' ') || 'NOC';
+    const quand = new Date();
+
+    // L'adoption couvre TOUT l'événement : la racine, les locales reclassées
+    // et les héritées déjà rattachées — c'est elle qui les fait entrer au
+    // rapport officiel (règle « AUTO comptée seulement si prise en charge »).
     const reclassees = avalIds.length
       ? await prisma.coupureReseau.updateMany({
           where: {
             siteId: { in: avalIds }, technologie: 'SITE', dateFin: null,
             origine: 'LOCALE', incidentId: null, id: { not: racine.id },
           },
-          data: { origine: 'HERITEE', coupureOrigineId: racine.id },
+          data: { origine: 'HERITEE', coupureOrigineId: racine.id, priseEnChargePar: nom, priseEnChargeLe: quand },
         })
       : { count: 0 };
+    await prisma.coupureReseau.updateMany({
+      where: { coupureOrigineId: racine.id, dateFin: null, priseEnChargePar: null },
+      data: { priseEnChargePar: nom, priseEnChargeLe: quand },
+    });
 
-    // 3. Trace : qui a pris en charge, quand — le nom remplace AUTO-OSS.
-    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
-    const nom = [moi?.prenom, moi?.nom].filter(Boolean).join(' ') || 'NOC';
+    // Héritées MANQUANTES : sites aval sans coupure ouverte (pas de nodeId →
+    // l'OSS ne les voit pas) — leur indisponibilité doit exister et compter.
+    let heriteesCreees = 0;
+    if (creerAvalManquant && avalIds.length) {
+      const couverts = new Set(
+        (await prisma.coupureReseau.findMany({
+          where: { siteId: { in: avalIds }, technologie: 'SITE', dateFin: null },
+          select: { siteId: true },
+        })).map((c) => c.siteId)
+      );
+      const manquants = avalIds.filter((id) => !couverts.has(id));
+      if (manquants.length) {
+        const crees = await prisma.coupureReseau.createMany({
+          data: manquants.map((siteId) => ({
+            siteId,
+            technologie: 'SITE',
+            origine: 'HERITEE',
+            source: 'OSS',
+            coupureOrigineId: racine.id,
+            dateDebut: racine.dateDebut,
+            nocEngineer: nom,
+            priseEnChargePar: nom,
+            priseEnChargeLe: quand,
+            observations: 'Héritée créée à la prise en charge — site aval sans détection OSS propre.',
+          })),
+        });
+        heriteesCreees = crees.count;
+      }
+    }
+
+    // Trace : qui a pris en charge, quand — le nom remplace AUTO-OSS.
     await prisma.coupureReseau.update({
       where: { id: racine.id },
-      data: { priseEnChargePar: nom, priseEnChargeLe: new Date(), nocEngineer: nom },
+      data: { priseEnChargePar: nom, priseEnChargeLe: quand, nocEngineer: nom },
     });
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
-      priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count,
+      priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count, heriteesCreees,
     }, req);
     res.json({
       success: true,
@@ -1143,6 +1185,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
         racineSiteNom: parId.get(racine.siteId)?.nom ?? '—',
         estRacine: racine.id === coupure.id,
         heriteesReclassees: reclassees.count,
+        heriteesCreees,
         priseEnChargePar: nom,
       },
     });
