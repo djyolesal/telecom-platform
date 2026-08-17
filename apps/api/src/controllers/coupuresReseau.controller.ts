@@ -396,6 +396,20 @@ export async function getCoupures(req: Request, res: Response, next: NextFunctio
           coupureOrigine: { select: { id: true, site: { select: { nom: true } } } },
           incident: { select: { id: true, reference: true, statut: true } },
           _count: { select: { heritees: true } },
+          // Aval hérité embarqué : la page l'affiche en sous-lignes sous la
+          // racine (et en infobulle du badge « N impacté(s) »).
+          heritees: {
+            select: {
+              id: true, technologie: true, frequence: true, secteur: true,
+              dateDebut: true, dateFin: true, downtimeMinutes: true,
+              cause: true, actions: true, typeAlarme: true, technicienContacte: true,
+              intervenants: true, observations: true, origine: true, source: true,
+              causeCategorie: true, priseEnChargePar: true,
+              incident: { select: { id: true, reference: true, statut: true } },
+              site: { select: { nom: true, region: true } },
+            },
+            orderBy: { dateDebut: 'asc' },
+          },
         },
       },
       { page: parseInt(page), limit: parseInt(limit) }

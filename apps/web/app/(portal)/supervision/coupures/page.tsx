@@ -39,7 +39,11 @@ interface Coupure {
   causeCategorie?: string | null;
   _count?: { heritees: number };
   site?: { nom: string; region: string };
+  heritees?: Coupure[];
 }
+
+/** Ligne du tableau : une racine, ou une héritée dépliée sous sa racine. */
+type LigneCoupure = Coupure & { _sousLigne?: boolean };
 
 const TECHNOS = [
   { value: 'SITE', label: 'Site entier' },
@@ -114,7 +118,10 @@ export default function CoupuresReseauPage() {
         search: debounced || undefined, statut: statut || undefined,
         technologie: technologie || undefined, type_alarme: typeAlarme || undefined,
         source: source || undefined,
-        origine: avecHeritees ? undefined : 'LOCALE',
+        // Racines seulement : l'aval hérité arrive EMBARQUÉ sous chaque racine
+        // (sous-lignes dépliables). En recherche, on repasse à plat pour
+        // retrouver aussi un site uniquement hérité.
+        origine: debounced ? undefined : 'LOCALE',
         a_qualifier: aQualifier ? '1' : undefined,
         date_debut: du || undefined, date_fin: au || undefined,
       },
@@ -134,16 +141,31 @@ export default function CoupuresReseauPage() {
     au && `date_fin=${au}`,
   ].filter(Boolean).join('&');
   const rows: Coupure[] = data?.data ?? [];
+  // Aval déplié : chaque héritée devient une sous-ligne indentée sous sa
+  // racine (jamais en recherche : le serveur renvoie alors la vue à plat).
+  const lignes: LigneCoupure[] = !debounced && avecHeritees
+    ? rows.flatMap((r) => [
+        r,
+        ...(r.heritees ?? []).map((h) => ({ ...h, _sousLigne: true, coupureOrigine: { id: r.id, site: r.site } })),
+      ])
+    : rows;
   const meta: PaginationMeta | undefined = data?.meta;
   const rafraichir = () => {
     queryClient.invalidateQueries({ queryKey: ['coupures'] });
     queryClient.invalidateQueries({ queryKey: ['coupures-stats'] });
   };
 
-  const columns: Column<Coupure>[] = [
+  const columns: Column<LigneCoupure>[] = [
     {
       key: 'site', header: 'Site', sortValue: (c) => c.site?.nom,
-      render: (c) => (
+      render: (c) => c._sousLigne ? (
+        // Sous-ligne : héritée dépliée sous sa racine, indentée.
+        <span className="flex items-center pl-4 text-gray-500">
+          <span className="mr-1.5 text-purple-400">↳</span>
+          {c.site?.nom ?? '—'}
+          <span className="ml-1.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">héritée</span>
+        </span>
+      ) : (
         <span className="font-medium text-gray-800">
           {c.site?.nom ?? '—'}
           {c.origine === 'HERITEE' && (
@@ -152,7 +174,8 @@ export default function CoupuresReseauPage() {
             </span>
           )}
           {(c._count?.heritees ?? 0) > 0 && (
-            <span className="ml-1.5 rounded-full bg-[#EAF1F8] px-1.5 py-0.5 text-[10px] font-bold text-[#1B3F6B]" title="Coupure racine : sites impactés en aval">
+            <span className="ml-1.5 cursor-help rounded-full bg-[#EAF1F8] px-1.5 py-0.5 text-[10px] font-bold text-[#1B3F6B]"
+              title={`Sites impactés en aval :\n${(c.heritees ?? []).slice(0, 20).map((h) => `• ${h.site?.nom ?? '—'}${h.dateFin ? ' (rétabli)' : ''}`).join('\n')}${(c._count?.heritees ?? 0) > 20 ? '\n…' : ''}`}>
               {c._count!.heritees} impacté(s)
             </span>
           )}
@@ -286,7 +309,7 @@ export default function CoupuresReseauPage() {
       <div className="mb-3 flex flex-wrap items-center gap-4">
         <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
           {[
-            { v: 'EN_COURS', l: `En cours${stats ? ` (${Math.max(0, avecHeritees ? stats.enCours : stats.enCours - stats.enCoursHeritees)})` : ''}` },
+            { v: 'EN_COURS', l: `En cours${stats ? ` (${Math.max(0, stats.enCours - stats.enCoursHeritees)})` : ''}` },
             { v: 'TERMINEE', l: 'Rétablies' },
             { v: '', l: 'Toutes' },
           ].map((o) => (
@@ -314,7 +337,7 @@ export default function CoupuresReseauPage() {
         <label className="flex cursor-pointer items-center gap-1.5 text-sm text-gray-600">
           <input type="checkbox" checked={avecHeritees} onChange={(e) => { setAvecHeritees(e.target.checked); setPage(1); }}
             className="h-4 w-4 rounded border-gray-300" />
-          Afficher l&apos;aval hérité{stats && stats.enCoursHeritees > 0 ? ` (${stats.enCoursHeritees} en cours)` : ''}
+          Déplier l&apos;aval hérité sous chaque racine{stats && stats.enCoursHeritees > 0 ? ` (${stats.enCoursHeritees} en cours)` : ''}
         </label>
       </div>
 
@@ -347,7 +370,7 @@ export default function CoupuresReseauPage() {
         : rows.length === 0 ? <EmptyState title="Aucune coupure" hint="Saisissez une coupure ou importez le rapport de supervision." />
         : (
           <>
-            <DataTable columns={columns} data={rows} maxHeight="65vh" onRowClick={peutEcrire ? (c) => setEdition(c) : undefined} />
+            <DataTable columns={columns} data={lignes} maxHeight="65vh" onRowClick={peutEcrire ? (c) => setEdition(c) : undefined} />
             <Pagination meta={meta} onChange={setPage} />
           </>
         )}
