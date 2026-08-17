@@ -146,7 +146,8 @@ const INTERNE_ONLY: RegExp[] = [
   // même si son rôle (MANAGER/DIRECTION) figure dans le rbac de la route.
   /^\/rapports\/dashboard-direction$/,
   /^\/rapports\/fiabilite-ge$/,
-  /^\/rapports\/sla-prestataires$/,
+  // /rapports/sla-prestataires : OUVERT aux prestataires — le contrôleur ne
+  // leur renvoie que LEUR ligne (indicateurs et pénalités recalculés dessus).
   // /rapports/disponibilite-reseau : OUVERT aux prestataires depuis la phase D —
   // le contrôleur applique le périmètre (chacun ne voit que ses lots).
 ];
