@@ -9,7 +9,8 @@ import { AppError } from '../utils/AppError';
 import { sendEmail } from '../services/email.service';
 import { auditLog } from '../services/audit.service';
 import { logger } from '../utils/logger';
-import { loadSettings, effectiveSettings, settingsCatalog } from '../services/settings.service';
+import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
+import { SMS_TEMPLATES } from '../services/sms.service';
 import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride } from '../services/tachesPreventives.service';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
@@ -33,6 +34,19 @@ export async function getSettings(_req: Request, res: Response, next: NextFuncti
 /** Catalogue des seuils éditables avec leur valeur effective (défaut + surcharge BDD). */
 export function getEffectiveSettings(_req: Request, res: Response) {
   res.json({ success: true, data: effectiveSettings() });
+}
+
+/** Modèles de SMS : catalogue (défauts + variables) et personnalisation courante. */
+export async function getSmsTemplates(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({
+      success: true,
+      data: SMS_TEMPLATES.map((t) => {
+        const brut = getRaw(t.key);
+        return { ...t, valeur: typeof brut === 'string' && brut.trim() ? brut : null };
+      }),
+    });
+  } catch (err) { next(err); }
 }
 
 export async function updateSettings(req: Request, res: Response, next: NextFunction) {

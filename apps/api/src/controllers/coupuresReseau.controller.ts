@@ -9,7 +9,7 @@ import { auditLog } from '../services/audit.service';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission } from '../utils/transmission';
 import { genererReference } from '../services/reference.service';
-import { notifierIncidentCoupure } from '../services/sms.service';
+import { notifierIncidentCoupure, rendreTemplate } from '../services/sms.service';
 import { notificationService } from '../services/notifications.service';
 import { sendTabular, EXPORT_MAX, TabularSheet } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
@@ -87,7 +87,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       if (reserves > 0) {
         await notifierIncidentCoupure(
           siteId,
-          `[E&M OpS] NOC : coupure ${technos.join('/')} sur ${coupures[0].site.nom} (site alimenté) - à traiter côté actif (radio/transmission).`,
+          rendreTemplate('sms.tpl.coupurePartielle', { technos: technos.join('/'), site: coupures[0].site.nom }),
           'COUPURE_PARTIELLE_NOC',
           'ACTIVE',
           'coupures'
@@ -135,7 +135,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       io.of('/supervision').emit('incident:created', { id: incident.id, siteId });
       await notifierIncidentCoupure(
         siteId,
-        `[E&M OpS] NOC : site ${coupures[0].site.nom} entièrement hors service. Incident ${incident.reference ?? ''} - intervention terrain requise.`,
+        rendreTemplate('sms.tpl.siteHorsService', { site: coupures[0].site.nom, reference: incident.reference ?? '' }),
         'INCIDENT_COUPURE_NOC',
         'PASSIVE'
       );
@@ -596,7 +596,7 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
         await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'reouverture_noc', coupureId: existing.id }, req);
         await notifierIncidentCoupure(
           existing.siteId,
-          `[E&M OpS] NOC : coupure toujours constatée sur ${incident.site.nom} - incident ${incident.reference ?? ''} ROUVERT, merci de repasser.`,
+          rendreTemplate('sms.tpl.incidentRouvert', { site: incident.site.nom, reference: incident.reference ?? '' }),
           'INCIDENT_ROUVERT_NOC'
         );
       }

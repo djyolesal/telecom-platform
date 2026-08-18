@@ -1,7 +1,53 @@
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
-import { getNum } from './settings.service';
+import { getNum, getRaw } from './settings.service';
+
+// ── Modèles de SMS éditables ────────────────────────────────────────────────
+// Chaque message automatique part d'un gabarit à variables {xxx}. L'admin peut
+// le personnaliser (Administration → Paramètres → Modèles de SMS) : la valeur
+// est stockée dans system_settings sous la clé du gabarit — vide = défaut.
+export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; variables: string[] }> = [
+  {
+    key: 'sms.tpl.demarrage',
+    label: "Démarrage d'intervention",
+    defaut: '[E&M OpS] {technicien} ({societe}) a démarré {objet}{detail} sur {site} à {heure}.',
+    variables: ['technicien', 'societe', 'objet', 'detail', 'site', 'heure'],
+  },
+  {
+    key: 'sms.tpl.cloture',
+    label: "Clôture d'intervention",
+    defaut: '[E&M OpS] {technicien} ({societe}) a clôturé {objet}{detail} sur {site} à {heure}.',
+    variables: ['technicien', 'societe', 'objet', 'detail', 'site', 'heure'],
+  },
+  {
+    key: 'sms.tpl.siteHorsService',
+    label: 'Site entièrement hors service (incident créé par le NOC)',
+    defaut: '[E&M OpS] NOC : site {site} entièrement hors service. Incident {reference} - intervention terrain requise.',
+    variables: ['site', 'reference'],
+  },
+  {
+    key: 'sms.tpl.coupurePartielle',
+    label: 'Coupure partielle (équipes actives)',
+    defaut: '[E&M OpS] NOC : coupure {technos} sur {site} (site alimenté) - à traiter côté actif (radio/transmission).',
+    variables: ['site', 'technos'],
+  },
+  {
+    key: 'sms.tpl.incidentRouvert',
+    label: 'Incident rouvert par le NOC',
+    defaut: '[E&M OpS] NOC : coupure toujours constatée sur {site} - incident {reference} ROUVERT, merci de repasser.',
+    variables: ['site', 'reference'],
+  },
+];
+
+/** Rend un gabarit : personnalisation admin si présente, sinon le défaut ;
+ *  les {variables} inconnues sont effacées plutôt qu'affichées brutes. */
+export function rendreTemplate(key: string, vars: Record<string, string>): string {
+  const meta = SMS_TEMPLATES.find((t) => t.key === key);
+  const brut = getRaw(key);
+  const tpl = typeof brut === 'string' && brut.trim() ? brut : (meta?.defaut ?? '');
+  return tpl.replace(/\{(\w+)\}/g, (_, v: string) => vars[v] ?? '');
+}
 
 /**
  * Notifications SMS vers le carnet de contacts (personnel interne, prestataires,
@@ -184,13 +230,17 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
     );
     if (!cibles.length) return;
 
-    const verbe = evt.evenement === 'DEMARRAGE' ? 'a démarré' : 'a clôturé';
     const objet = evt.domaine === 'MAINTENANCE' ? 'une maintenance' : 'une intervention incident';
     const heure = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' });
     const societe = technicien.prestataire?.nom ?? 'interne';
-    const message =
-      `[E&M OpS] ${technicien.prenom} ${technicien.nom} (${societe}) ${verbe} ${objet}` +
-      `${evt.detail ? ` ${evt.detail}` : ''} sur ${evt.siteNom} à ${heure}.`;
+    const message = rendreTemplate(evt.evenement === 'DEMARRAGE' ? 'sms.tpl.demarrage' : 'sms.tpl.cloture', {
+      technicien: `${technicien.prenom} ${technicien.nom}`,
+      societe,
+      objet,
+      detail: evt.detail ? ` ${evt.detail}` : '',
+      site: evt.siteNom,
+      heure,
+    });
 
     await envoyerLotContacts(cibles, message, `${evt.domaine}_${evt.evenement}`);
   } catch (err) {
