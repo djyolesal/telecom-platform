@@ -280,7 +280,7 @@ export async function deleteActif(req: Request, res: Response, next: NextFunctio
       : await prisma.equipementActif.findUnique({ where: { id } });
     if (!actif) throw new AppError('Actif introuvable', 404);
     if (actif.siteId != null) {
-      throw new AppError('Cet actif est posé sur un site — désinstallez-le (travail de dépose) avant de le supprimer.', 409);
+      throw new AppError('Cet actif est posé sur un site - désinstallez-le (travail de dépose) avant de le supprimer.', 409);
     }
 
     const mouvements = await prisma.maintenance.count({ where: { actifId: id } });
@@ -288,7 +288,7 @@ export async function deleteActif(req: Request, res: Response, next: NextFunctio
     const heures = isGE ? await prisma.depotageHeureGE.count({ where: { groupeId: id } }) : 0;
     if (mouvements || releves || heures) {
       throw new AppError(
-        `Cet actif porte un historique (${mouvements} mouvement(s), ${releves} relevé(s)) — suppression refusée pour préserver la traçabilité.`,
+        `Cet actif porte un historique (${mouvements} mouvement(s), ${releves} relevé(s)) - suppression refusée pour préserver la traçabilité.`,
         409
       );
     }

@@ -162,8 +162,8 @@ async function bilanEnergieImpl(debut: Date, fin: Date, region?: string, portee?
       nbReleves: c.decl.nb,
       mesure: c.source === 'index',
       motif: c.source === 'index' ? null
-        : c.i0 != null && c.i1 != null && c.i1 < c.i0 ? 'Index en recul (compteur remplacé ?) — repli sur le déclaré'
-        : c.i0 == null && c.i1 == null ? (c.source === 'declare' ? 'Aucun index cumulatif — somme des consommations déclarées' : 'Aucun relevé CEET sur la période')
+        : c.i0 != null && c.i1 != null && c.i1 < c.i0 ? 'Index en recul (compteur remplacé ?) - repli sur le déclaré'
+        : c.i0 == null && c.i1 == null ? (c.source === 'declare' ? 'Aucun index cumulatif - somme des consommations déclarées' : 'Aucun relevé CEET sur la période')
         : c.i0 == null ? 'Pas d\'index avant le début de période'
         : 'Pas d\'index avant la fin de période',
     };

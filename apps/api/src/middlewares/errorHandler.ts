@@ -47,7 +47,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   // Erreur inattendue
   const message = err instanceof Error ? err.message : String(err);
-  logger.error(`[500] ${req.method} ${req.originalUrl} — ${message}`, err);
+  logger.error(`[500] ${req.method} ${req.originalUrl} - ${message}`, err);
 
   return res.status(500).json({
     success: false,

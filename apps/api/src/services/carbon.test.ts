@@ -13,7 +13,7 @@ function releve(p: Partial<ReleveCarbone>): ReleveCarbone {
   };
 }
 
-describe('empreinte carbone — cœur de calcul', () => {
+describe('empreinte carbone - cœur de calcul', () => {
   it('convertit les litres de gasoil GE en kgCO₂ (scope 1)', () => {
     expect(co2GasoilKg(100, F)).toBeCloseTo(266, 5);
   });

@@ -38,7 +38,7 @@ interface BL {
  * Il n'a accès qu'à l'appro carburant : les endpoints agrégés du parc
  * (/rapports/dashboard) lui sont fermés côté API. Ce tableau de bord se
  * construit donc uniquement à partir de SES chargements (/bons-livraison, déjà
- * filtré sur son prestataire par le serveur) — aucune donnée d'un confrère ni
+ * filtré sur son prestataire par le serveur) - aucune donnée d'un confrère ni
  * du parc n'y transite.
  */
 export function TransporteurDashboard() {
@@ -71,7 +71,7 @@ export function TransporteurDashboard() {
     <div>
       <PageHeader
         title="Mes chargements"
-        subtitle="Appro carburant — vos bons de livraison et leur avancement"
+        subtitle="Appro carburant - vos bons de livraison et leur avancement"
       />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">

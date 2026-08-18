@@ -24,7 +24,7 @@ const SOURCES_CONSO: Record<string, { label: string; classe: string; aide: strin
   horametre:  { label: 'Mesurée',    classe: 'bg-green-100 text-green-700', aide: 'Débit réel × heures de marche mesurées (compteur horaire)' },
   historique: { label: 'Historique', classe: 'bg-blue-100 text-blue-700',   aide: "Moyenne mobile des litres/jour d'après les relevés de cuve" },
   regional:   { label: 'Régionale',  classe: 'bg-amber-100 text-amber-700', aide: 'Heures de coupure médianes de la région × débit du GE' },
-  theorique:  { label: 'Théorique',  classe: 'bg-gray-200 text-gray-600',   aide: 'Formule kVA × facteur de charge — aucune mesure terrain disponible' },
+  theorique:  { label: 'Théorique',  classe: 'bg-gray-200 text-gray-600',   aide: 'Formule kVA × facteur de charge - aucune mesure terrain disponible' },
 };
 
 interface SiteForecast { siteId: string; code: string; nom: string; region: string; stockActuel: number; consoJour: number; source: string; tendance: string; autonomieJours: number | null; dateLivraisonCible: string | null; joursAvantLivraison: number | null; quantiteRecommandee: number; priorite: string }
@@ -57,7 +57,7 @@ export default function ReapprovisionnementPage() {
     queryFn: () => api.get('/rapports/anomalies-conso', { params: { region: region || undefined } }).then((r) => r.data.data as { anomalies: Anomalie[]; totaux: { nb: number; nbElevees: number; nbSurconso: number } }),
   });
 
-  // Synthèse Claude — générée à la demande.
+  // Synthèse Claude - générée à la demande.
   const synthese = useMutation({
     mutationFn: () => api.get('/rapports/synthese-appro', { params: { region: region || undefined } }).then((r) => r.data.data as { texte: string; source: string }),
   });
@@ -79,7 +79,7 @@ export default function ReapprovisionnementPage() {
     { key: 'consoJour', header: 'Conso/j (L)', align: 'right', render: (s) => fmtNumber(s.consoJour) },
     // La SOURCE du chiffre, en clair : un manager doit voir d'un coup d'œil si
     // la conso d'un site est MESURÉE (compteur horaire), déduite de l'historique,
-    // ou simplement supposée — l'infobulle au survol ne suffisait pas.
+    // ou simplement supposée - l'infobulle au survol ne suffisait pas.
     { key: 'source', header: 'Source', align: 'center', render: (s) => {
       const src = SOURCES_CONSO[s.source] ?? SOURCES_CONSO.theorique;
       return <Badge className={src.classe}><span title={src.aide}>{src.label}</span></Badge>;
@@ -181,7 +181,7 @@ export default function ReapprovisionnementPage() {
                     </ul>
                     {created ? (
                       <button onClick={() => router.push(`/carburant/livraisons/${created}`)} className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm font-medium text-green-700">
-                        <Check size={15} /> Brouillon créé — ouvrir
+                        <Check size={15} /> Brouillon créé - ouvrir
                       </button>
                     ) : (
                       <button
@@ -205,7 +205,7 @@ export default function ReapprovisionnementPage() {
 
       {tab === 'anomalies' && (
         <div>
-          <p className="text-xs text-gray-500 mb-3">Consommation réelle (relevés) comparée à la consommation théorique (puissance × heures GE). Un écart fort signale une fuite, un vol, ou des heures GE mal déclarées — d&apos;autant plus si le site a aussi un manquant de livraison.</p>
+          <p className="text-xs text-gray-500 mb-3">Consommation réelle (relevés) comparée à la consommation théorique (puissance × heures GE). Un écart fort signale une fuite, un vol, ou des heures GE mal déclarées - d&apos;autant plus si le site a aussi un manquant de livraison.</p>
           {!anomData?.anomalies.length ? (
             <EmptyState title="Aucune anomalie détectée" hint="La consommation réelle des sites suit l'attendu (dans la tolérance configurée)." />
           ) : (

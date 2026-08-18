@@ -115,7 +115,7 @@ export default function ActifDetailPage() {
                         : `Posé sur ${m.site?.nom ?? '—'}`}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {m.statut === 'TERMINEE' ? fmtDateTime(m.dateFin) : `Planifié — ${fmtDateTime(m.datePlanifiee)}`}
+                    {m.statut === 'TERMINEE' ? fmtDateTime(m.dateFin) : `Planifié - ${fmtDateTime(m.datePlanifiee)}`}
                     {m.technicien ? ` · ${m.technicien.prenom} ${m.technicien.nom}` : ''}
                   </p>
                 </div>

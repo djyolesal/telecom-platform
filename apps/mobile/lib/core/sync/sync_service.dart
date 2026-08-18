@@ -174,7 +174,7 @@ class SyncService {
           // mappé en NetworkException. Si l'appareil est réellement hors-ligne,
           // on s'arrête sans brûler d'essai (rien n'est perdu). S'il est en
           // ligne, l'entrée en tête a juste expiré : la laisser bloquerait TOUTE
-          // la file derrière — on compte un essai et on passe à la suivante.
+          // la file derrière - on compte un essai et on passe à la suivante.
           if (!await _network.isConnected) break;
           await _compterEchec(entry, 'Délai réseau dépassé sur cette opération');
           continue;
@@ -193,7 +193,7 @@ class SyncService {
             continue;
           }
           // Refus de VALIDATION (4xx) : rejouer le même corps ne donnera jamais
-          // un autre résultat — 5 rejeux silencieux masquaient le vrai message
+          // un autre résultat - 5 rejeux silencieux masquaient le vrai message
           // du serveur pendant des heures (« ça ne synchronise pas »). Échec
           // immédiat, visible dans le bandeau avec le motif exact.
           final code = e.statusCode ?? 0;
@@ -229,7 +229,7 @@ class SyncService {
     final retries = entry.retries + 1;
     await _db.markOutboxError(entry.localId, retries, erreur);
     if (retries >= AppDatabase.kMaxRetries) {
-      _logger.w('[sync] ${entry.entityType} en échec (${entry.endpoint}) — conservé pour revue manuelle');
+      _logger.w('[sync] ${entry.entityType} en échec (${entry.endpoint}) - conservé pour revue manuelle');
       if (entry.entityRef != null) await onOptimistiqueEchoue?.call(entry.entityRef!);
     }
   }
@@ -301,7 +301,7 @@ class SyncService {
       }
       if (photos.isNotEmpty) body['photos'] = photos;
       if (manquantes > 0) {
-        _logger.w('[sync] $manquantes pièce(s) jointe(s) introuvable(s) — opération envoyée sans elles');
+        _logger.w('[sync] $manquantes pièce(s) jointe(s) introuvable(s) - opération envoyée sans elles');
       }
     }
 

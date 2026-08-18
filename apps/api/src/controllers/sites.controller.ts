@@ -845,7 +845,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
 
     await auditLog(req.user!.id, 'EXPORT', 'sites', undefined, { count: sites.length }, req);
     const oui = (b: boolean) => (b ? 'oui' : 'non');
-    await sendTabular(res, req.params.format, 'sites', 'Parc de sites (modèle de mise à jour — ré-importable)', [{
+    await sendTabular(res, req.params.format, 'sites', 'Parc de sites (modèle de mise à jour - ré-importable)', [{
       name: 'Sites',
       columns: IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key, width: 16 })),
       rows: sites.map((s) => {

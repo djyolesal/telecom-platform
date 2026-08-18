@@ -30,7 +30,7 @@ export interface SiteFeature {
     sourceConso?: string | null;
     dernierDepotageVol?: number | null;
     dernierDepotageDate?: string | null;
-    // Vue TRANSPORTEUR : seuls champs servis (avec l'identité du site) — le
+    // Vue TRANSPORTEUR : seuls champs servis (avec l'identité du site) - le
     // volume restant à déposer selon SON plan, et les BL concernés.
     aLivrerLitres?: number;
     numerosBL?: string[];
@@ -129,7 +129,7 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
   );
 }
 
-/** Mode RÉSEAU (vue NOC) : état de coupure par site — prime sur la couleur stock.
+/** Mode RÉSEAU (vue NOC) : état de coupure par site - prime sur la couleur stock.
  *  DOWN = site entièrement coupé · PARTIEL = une partie des technologies ·
  *  IMPACTE = aval d'un site entièrement down. */
 export type EtatReseau = { etat: 'DOWN' | 'PARTIEL' | 'IMPACTE'; note?: string };
@@ -179,13 +179,13 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, masque
         const [lng, lat] = f.geometry.coordinates;
         const n = f.properties.niveauStock;
         // Vue transporteur : la pastille porte la couleur DU CAMION qui dessert
-        // le site — violet quand plusieurs camions se partagent le même site.
+        // le site - violet quand plusieurs camions se partagent le même site.
         const vueLivraison = f.properties.aLivrerLitres != null;
         const camions = f.properties.camions ?? [];
         const couleurLivraison = camions.length > 1
           ? COULEUR_MULTI_CAMIONS
           : (couleurParCamion?.[camions[0] ?? ''] ?? '#2471A3');
-        // Mode RÉSEAU (NOC) : l'état de coupure prime — rouge = en coupure,
+        // Mode RÉSEAU (NOC) : l'état de coupure prime - rouge = en coupure,
         // ambre = aval d'un site down, vert = en service (palette topologie).
         const reseau = etatReseauParSite?.[f.properties.id];
         const color = vueLivraison ? couleurLivraison
@@ -206,7 +206,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, masque
               <div className="text-xs">
                 <p className="font-bold text-gray-800">{f.properties.nom}</p>
                 <p className="text-gray-500">{f.properties.code} · {f.properties.region}</p>
-                {/* Vue transporteur : rien de l'exploitation ne sort — seulement
+                {/* Vue transporteur : rien de l'exploitation ne sort - seulement
                     ce que SON plan prévoit encore de déposer ici. */}
                 {vueLivraison && (
                   <div className="mt-1 rounded bg-blue-50 p-1.5 leading-snug">
@@ -225,8 +225,8 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, masque
                 )}
                 {etatReseauParSite && (
                   <p className="mt-1 font-semibold" style={{ color: reseau ? COULEUR_RESEAU[reseau.etat] : '#0E7C6B' }}>
-                    {reseau?.etat === 'DOWN' ? `SITE ENTIÈREMENT COUPÉ${reseau.note ? ` — ${reseau.note}` : ''}`
-                      : reseau?.etat === 'PARTIEL' ? `Coupure partielle — ${reseau.note ?? 'technologie(s) touchée(s)'}`
+                    {reseau?.etat === 'DOWN' ? `SITE ENTIÈREMENT COUPÉ${reseau.note ? ` - ${reseau.note}` : ''}`
+                      : reseau?.etat === 'PARTIEL' ? `Coupure partielle - ${reseau.note ?? 'technologie(s) touchée(s)'}`
                       : reseau?.etat === 'IMPACTE' ? 'Aval d\'un site entièrement coupé'
                       : 'En service'}
                   </p>

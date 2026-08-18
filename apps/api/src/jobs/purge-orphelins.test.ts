@@ -5,7 +5,7 @@ import { cleDe } from './purge-orphelins';
  * une autre écriture : certaines colonnes historiques stockent l'URL complète
  * (ancien /storage public, nouvelle passerelle signée) au lieu de la clé nue.
  */
-describe('cleDe — normalisation des références de stockage', () => {
+describe('cleDe - normalisation des références de stockage', () => {
   it('laisse une clé nue inchangée', () => {
     expect(cleDe('photos/2026-08-03/abc.jpg')).toBe('photos/2026-08-03/abc.jpg');
   });

@@ -13,7 +13,7 @@ class ServerFailure extends Failure {
 }
 
 class NetworkFailure extends Failure {
-  const NetworkFailure([super.message = 'Hors ligne — action mise en file d\'attente']);
+  const NetworkFailure([super.message = 'Hors ligne - action mise en file d\'attente']);
 }
 
 class AuthFailure extends Failure {

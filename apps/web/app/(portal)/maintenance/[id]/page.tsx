@@ -53,7 +53,7 @@ export default function MaintenanceDetailPage() {
   return (
     <div>
       <PageHeader
-        title={`${m.reference ?? 'Maintenance'} — ${m.site?.nom ?? ''}`}
+        title={`${m.reference ?? 'Maintenance'} - ${m.site?.nom ?? ''}`}
         subtitle={m.equipement}
         backHref="/maintenance"
         actions={
@@ -100,7 +100,7 @@ export default function MaintenanceDetailPage() {
           <Row label="Fin" value={fmtDateTime(m.dateFin)} />
           <Row label="Durée" value={m.dureeMinutes != null ? `${m.dureeMinutes} min` : '—'} />
           {(m.dureeSuspendueMinutes > 0 || m.statut === 'SUSPENDUE') && (
-            <Row label="Suspension" value={`${m.dureeSuspendueMinutes > 0 ? `${m.dureeSuspendueMinutes} min décomptées` : 'en cours'}${m.motifSuspension ? ` — ${m.motifSuspension}` : ''}`} />
+            <Row label="Suspension" value={`${m.dureeSuspendueMinutes > 0 ? `${m.dureeSuspendueMinutes} min décomptées` : 'en cours'}${m.motifSuspension ? ` - ${m.motifSuspension}` : ''}`} />
           )}
         </div>
 

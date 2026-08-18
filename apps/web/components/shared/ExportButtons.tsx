@@ -9,7 +9,7 @@ interface ColonneDispo { key: string; header: string }
 
 /**
  * Boutons d'export Excel + PDF pointant sur la même route (`{base}/xlsx` et
- * `{base}/pdf`) — mêmes colonnes, deux formats — avec un sélecteur de colonnes :
+ * `{base}/pdf`) - mêmes colonnes, deux formats - avec un sélecteur de colonnes :
  * la liste disponible est fournie par l'API (`?colonnes=?`), les colonnes
  * décochées sont exclues de l'export (`?colonnes=cle1,cle2`).
  */
@@ -44,7 +44,7 @@ export function ExportButtons({ base, name, query }: { base: string; name: strin
         const r = await api.get(`${base}/xlsx${q}${q ? '&' : '?'}colonnes=%3F`);
         // Toutes les colonnes de toutes les feuilles, groupées par feuille pour
         // l'affichage (dédoublonnage par clé : une clé partagée entre feuilles
-        // — exports historiques — n'apparaît qu'une fois et pilote les deux).
+        // - exports historiques - n'apparaît qu'une fois et pilote les deux).
         const vues = new Map<string, ColonneDispo>();
         const parFeuille: { feuille: string; colonnes: ColonneDispo[] }[] = [];
         for (const f of r.data.data as { feuille?: string; colonnes: ColonneDispo[] }[]) {

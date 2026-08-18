@@ -193,7 +193,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                                 color: Colors.grey.shade500, fontSize: 13))
                       else ...[
                         _row('Lot',
-                            '${s.lotCode}${s.lotNom != null ? ' — ${s.lotNom}' : ''}'),
+                            '${s.lotCode}${s.lotNom != null ? ' - ${s.lotNom}' : ''}'),
                         const SizedBox(height: 4),
                         if (s.attributions.isEmpty)
                           Text('Aucun prestataire attribué',

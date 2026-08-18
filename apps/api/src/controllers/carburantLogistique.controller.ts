@@ -484,7 +484,7 @@ export async function analyserBonLivraisonDocument(req: Request, res: Response, 
     const bcParNumero = Object.fromEntries(bcs.map((b) => [b.numero, { id: b.id, numero: b.numero, annee: b.annee, trimestre: b.trimestre, mois: b.volumesMensuels.map((v) => v.mois) }]));
     for (const d of documents) {
       if (d.bcNumero && !bcParNumero[d.bcNumero]) {
-        d.avertissements.push(`Le bon de commande ${d.bcNumero} n'existe pas encore dans la plateforme — créez-le d'abord.`);
+        d.avertissements.push(`Le bon de commande ${d.bcNumero} n'existe pas encore dans la plateforme - créez-le d'abord.`);
       }
     }
 
@@ -578,7 +578,7 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
       if (jaugeage === 'EXPIRE') {
         warnings.push(`Le certificat de jaugeage du camion ${String(immatriculation).trim()} est EXPIRÉ : le volume chargé n'est pas opposable en litige.`);
       } else if (jaugeage === 'ABSENT') {
-        warnings.push(`Aucun certificat de jaugeage enregistré pour le camion ${String(immatriculation).trim()} — à renseigner dans Flotte transport.`);
+        warnings.push(`Aucun certificat de jaugeage enregistré pour le camion ${String(immatriculation).trim()} - à renseigner dans Flotte transport.`);
       } else if (jaugeage === 'EXPIRE_BIENTOT') {
         warnings.push(`Le certificat de jaugeage du camion ${String(immatriculation).trim()} expire dans moins de 30 jours.`);
       }
@@ -726,7 +726,7 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
         if (depotagesLies > 0) {
           throw new AppError(
             `Annulation refusée : ${depotagesLies} dépotage(s) sont rattachés à ce bon de livraison. ` +
-            `Le carburant a été livré — corrigez les dépotages avant d'annuler.`,
+            `Le carburant a été livré - corrigez les dépotages avant d'annuler.`,
             409
           );
         }
@@ -1242,14 +1242,14 @@ export async function exportRapprochementBc(req: Request, res: Response, next: N
     ];
     await sendTabular(
       res, req.params.format, `rapprochement-${m.bc.numero}`,
-      `Rapprochement carburant — BC ${m.bc.numero}`, sheets,
+      `Rapprochement carburant - BC ${m.bc.numero}`, sheets,
       `T${m.bc.trimestre} ${m.bc.annee} · commandé ${m.totaux.commande.toLocaleString('fr-FR')} L · ` +
       `chargé ${m.totaux.charge.toLocaleString('fr-FR')} L · livré ${m.totaux.livreTotal.toLocaleString('fr-FR')} L · ` +
       `écart non expliqué ${m.totaux.ecartNonExplique.toLocaleString('fr-FR')} L` +
       // Un arrêté anticipé exporté doit se lire comme tel : la mention voyage
       // avec le document, pas seulement avec l'écran.
       (m.arrete.anticipe
-        ? ` · ARRÊTÉ ANTICIPÉ au ${new Date(m.arrete.dateArrete).toLocaleDateString('fr-FR')} — ` +
+        ? ` · ARRÊTÉ ANTICIPÉ au ${new Date(m.arrete.dateArrete).toLocaleDateString('fr-FR')} - ` +
           `${m.arrete.joursProjetes} j estimés (${m.totaux.projectionLitres.toLocaleString('fr-FR')} L projetés)`
         : '')
     );

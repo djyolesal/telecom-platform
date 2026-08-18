@@ -32,7 +32,7 @@ export default function DirectionPage() {
 
   return (
     <div>
-      <PageHeader title="Pilotage — Direction" subtitle="Coûts énergie, pertes et performance consolidés du parc" />
+      <PageHeader title="Pilotage - Direction" subtitle="Coûts énergie, pertes et performance consolidés du parc" />
 
       <FilterBar
         filters={[

@@ -21,7 +21,7 @@ interface MaSociete {
 /**
  * Fiche de la société du superviseur prestataire : à compléter à la première
  * connexion (navigation bloquée par le layout tant que les champs requis sont
- * vides) — ces coordonnées alimentent l'en-tête des fiches de validation PDF.
+ * vides) - ces coordonnées alimentent l'en-tête des fiches de validation PDF.
  */
 export default function MaSocietePage() {
   const queryClient = useQueryClient();
@@ -32,12 +32,12 @@ export default function MaSocietePage() {
 
   if (isLoading) return <Loading />;
   if (isError) return <ErrorState />;
-  if (!societe) return <EmptyState title="Compte interne" hint="Votre compte n'est rattaché à aucun prestataire — cette page ne vous concerne pas." />;
+  if (!societe) return <EmptyState title="Compte interne" hint="Votre compte n'est rattaché à aucun prestataire - cette page ne vous concerne pas." />;
 
   return (
     <div>
       <PageHeader
-        title={`Ma société — ${societe.nom}`}
+        title={`Ma société - ${societe.nom}`}
         subtitle="Coordonnées officielles utilisées sur les fiches de validation et documents PDF"
       />
       {!societe.ficheComplete && (
@@ -89,14 +89,14 @@ function SocieteForm({ societe, onSaved }: { societe: MaSociete; onSaved: () => 
       <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-700"><Building2 size={16} /> Coordonnées officielles</div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Email de la société *"><Input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} required /></Field>
-        <Field label="Adresse *"><Input value={f.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Rue, quartier — BP, ville" required /></Field>
+        <Field label="Adresse *"><Input value={f.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Rue, quartier - BP, ville" required /></Field>
         <Field label="RCCM *"><Input value={f.rccm} onChange={(e) => set('rccm', e.target.value)} placeholder="TG-LOM 2019 M 908" required /></Field>
         <Field label="NIF *"><Input value={f.nif} onChange={(e) => set('nif', e.target.value)} placeholder="1001134806" required /></Field>
         <Field label="Contact commercial *"><Input value={f.contactCommercial} onChange={(e) => set('contactCommercial', e.target.value)} placeholder="+228 …" required /></Field>
         <Field label="Contact technique *"><Input value={f.contactTechnique} onChange={(e) => set('contactTechnique', e.target.value)} placeholder="+228 …" required /></Field>
       </div>
       <div className="mt-3">
-        <Field label="Logo (optionnel — en-tête des fiches de validation)">
+        <Field label="Logo (optionnel - en-tête des fiches de validation)">
           <div className="flex items-center gap-3">
             {(logoPreview || f.logoPath) && (
               // eslint-disable-next-line @next/next/no-img-element

@@ -44,13 +44,13 @@ const NAV_ITEMS = [
   { groupe: 'carburant', href: '/carburant/bilan',      label: 'Bilan conso & stock', icon: BarChart3,   roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { groupe: 'carburant', href: '/carburant/commandes',  label: 'Appro. carburant', icon: Truck,          roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
   // Fiches de chargement : le transporteur n'ouvre que LES SIENNES (l'API
-  // filtre et revérifie son prestataire) — sans cette entrée, la section
+  // filtre et revérifie son prestataire) - sans cette entrée, la section
   // hors-menu /carburant lui refusait la fiche d'un BL.
   { groupe: 'carburant', href: '/carburant/livraisons', label: 'Mes chargements',  icon: Truck,          roles: ['TRANSPORTEUR','SUPERVISEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR'] },
   // Transferts, purges et avoirs : écritures hors chaîne BC → BL → dépotage.
   { groupe: 'carburant', href: '/carburant/mouvements', label: 'Mouvements gasoil', icon: ArrowLeftRight, roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   // Détection de vol : donnée sensible INTERNE (l'API la refuse aux comptes
-  // prestataires) — l'entrée disparaît pour eux via internesSeulement.
+  // prestataires) - l'entrée disparaît pour eux via internesSeulement.
   { groupe: 'carburant', href: '/carburant/pertes',     label: 'Pertes carburant', icon: ShieldAlert,    roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'], internesSeulement: true },
   // Référentiels camions/chauffeurs : le transporteur y gère SON parc (l'API le
   // filtre), le pilotage y renseigne capacités de citerne et jaugeages.
@@ -83,7 +83,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   // « Ma société » : un superviseur rattaché à un prestataire doit compléter la
   // fiche de sa société (coordonnées des fiches de validation PDF) avant de
-  // naviguer — première connexion bloquée sur /ma-societe tant que c'est vide.
+  // naviguer - première connexion bloquée sur /ma-societe tant que c'est vide.
   const { data: maSociete } = useQuery({
     queryKey: ['ma-societe'],
     queryFn: () => api.get('/ma-societe').then((r) => r.data.data as { nom: string; ficheComplete: boolean } | null),
@@ -121,7 +121,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   ];
   // Règles PROFONDES : une page enfouie sous une section dont elle ne partage
   // pas les rôles. Elles priment sur le menu et sur les sections hors-menu, qui
-  // ne raisonnent que par préfixe — le rapprochement héritait sinon des rôles de
+  // ne raisonnent que par préfixe - le rapprochement héritait sinon des rôles de
   // « Appro. carburant » (dont TRANSPORTEUR) et affichait une page en erreur au
   // lieu d'un « accès refusé » propre. L'API refuse déjà (rbac + INTERNE_ONLY).
   const REGLES_PROFONDES: Array<{ test: RegExp; roles: string[] }> = [

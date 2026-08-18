@@ -45,7 +45,7 @@ export function extraireChampsBL(texte: string, page: number): ExtractionBL {
   const mRef = t.match(/R[ée]f[ée]rence\s*\/?\s*Date\s*:?\s*(\d{8,12})\s*\/\s*(\d{2}[./]\d{2}[./]\d{4})/i);
   const numeroBL = mRef ? mRef[1] : null;
   const dateBL = mRef ? mRef[2].replace(/\./g, '/') : null;
-  if (!numeroBL) avertissements.push('N° de BL (ligne « Référence / Date ») non trouvé — à saisir manuellement.');
+  if (!numeroBL) avertissements.push('N° de BL (ligne « Référence / Date ») non trouvé - à saisir manuellement.');
 
   const mClient = t.match(/N[°ºo]\s*Client\s*:?\s*(\d{4,10})/i);
   const numeroClient = mClient ? mClient[1] : null;
@@ -55,12 +55,12 @@ export function extraireChampsBL(texte: string, page: number): ExtractionBL {
   const mBc = t.match(/BC\s*N[°ºo]?\s*(P[O0]\s?\d{6,12})\s*\/?\s*(\d{2}[./]\d{2}[./]\d{4})?/i);
   const bcNumero = mBc ? `PO${mBc[1].replace(/^P[O0]\s?/i, '')}` : null;
   const dateTraitement = mBc?.[2] ? mBc[2].replace(/\./g, '/') : null;
-  if (!bcNumero) avertissements.push('N° du bon de commande (BC N°POxxxxxxxxx) non trouvé — sélectionnez-le manuellement.');
+  if (!bcNumero) avertissements.push('N° du bon de commande (BC N°POxxxxxxxxx) non trouvé - sélectionnez-le manuellement.');
 
   // Plaque togolaise : TG + 4 chiffres + 2 lettres (dans la colonne Description).
   const mImmat = t.match(/\bTG\s*(\d{4})\s*([A-Z]{2})\b/);
   const immatriculation = mImmat ? `TG ${mImmat[1]} ${mImmat[2]}` : null;
-  if (!immatriculation) avertissements.push('Immatriculation du camion (TG xxxx XX) non trouvée — à saisir manuellement.');
+  if (!immatriculation) avertissements.push('Immatriculation du camion (TG xxxx XX) non trouvée - à saisir manuellement.');
 
   // Quantité « 15.000,000 » : milliers au point, trois décimales à la virgule.
   const mVol = t.match(/(\d{1,3}(?:[. ]\d{3})*),\d{3}\b/);
@@ -70,7 +70,7 @@ export function extraireChampsBL(texte: string, page: number): ExtractionBL {
     // Un camion-citerne livre entre quelques centaines et ~60 000 L.
     if (Number.isFinite(v) && v >= 500 && v <= 60_000) volumeChargeLitres = v;
   }
-  if (volumeChargeLitres == null) avertissements.push('Volume chargé (colonne Quantité) illisible — à saisir manuellement.');
+  if (volumeChargeLitres == null) avertissements.push('Volume chargé (colonne Quantité) illisible - à saisir manuellement.');
 
   return { page, numeroBL, numeroClient, bcNumero, dateBL, dateTraitement, immatriculation, volumeChargeLitres, avertissements };
 }

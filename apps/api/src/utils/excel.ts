@@ -69,7 +69,7 @@ function ajouterAPropos(wb: ExcelJS.Workbook, meta: XlsxMeta, feuilles: Array<{ 
 
   ws.mergeCells('B2:C2');
   const titre = ws.getCell('B2');
-  titre.value = `E&M OpS — ${meta.title}`;
+  titre.value = `E&M OpS - ${meta.title}`;
   titre.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
   titre.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
   titre.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };

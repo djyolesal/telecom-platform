@@ -50,7 +50,7 @@ export async function vidangeAlertJob(): Promise<void> {
     .map(({ g, heures }) => `${g.site?.code ?? '?'} GE n°${g.numero} (${Math.round(heures)} h)`)
     .join(', ');
   await notificationService.sendToRole('SUPERVISEUR', {
-    title: `🛢️ Vidange GE due — ${dus.length} groupe(s) ≥ ${seuil} h`,
+    title: `🛢️ Vidange GE due - ${dus.length} groupe(s) ≥ ${seuil} h`,
     body: liste + (dus.length > 10 ? '…' : ''),
     data: { type: 'vidange_due' },
   });

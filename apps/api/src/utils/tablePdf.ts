@@ -96,7 +96,7 @@ export async function buildTablePdf(title: string, sections: PdfSection[], subti
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
         doc.font('Helvetica').fontSize(7).fillColor('#999').text(
-          `Généré le ${genere} — E&M OpS · page ${i + 1}/${range.count}`,
+          `Généré le ${genere} - E&M OpS · page ${i + 1}/${range.count}`,
           36, doc.page.height - 28, { width: doc.page.width - 72, align: 'center', lineBreak: false }
         );
       }

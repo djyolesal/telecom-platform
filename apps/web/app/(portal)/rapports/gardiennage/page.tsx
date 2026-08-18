@@ -22,7 +22,7 @@ interface Report { periodeJours: number; societes: SocieteGardiennage[]; sitesNo
 
 /**
  * Contrôle du gardiennage : à chaque clôture d'intervention, le technicien
- * déclare si l'agent de sécurité était présent — taux d'absence par société.
+ * déclare si l'agent de sécurité était présent - taux d'absence par société.
  */
 export default function GardiennagePage() {
   const [jours, setJours] = useState('90');
@@ -85,7 +85,7 @@ export default function GardiennagePage() {
                   <td className="px-3 py-3 text-right tabular-nums text-green-700">{s.presents}</td>
                   <td className={`px-3 py-3 text-right tabular-nums ${s.absents > 0 ? 'font-semibold text-red-600' : 'text-gray-400'}`}>{s.absents}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-gray-400">{s.nonRenseigne}</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-indigo-400" title="Passages de jour sur des postes de nuit — absence normale, exclue du taux">{s.horsPlage ?? 0}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-indigo-400" title="Passages de jour sur des postes de nuit - absence normale, exclue du taux">{s.horsPlage ?? 0}</td>
                   <td className="px-3 py-3 pr-5 text-right tabular-nums">
                     {s.tauxAbsencePct == null ? <span className="text-gray-300">—</span> : (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.tauxAbsencePct === 0 ? 'bg-green-100 text-green-700' : s.tauxAbsencePct <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
@@ -101,7 +101,7 @@ export default function GardiennagePage() {
       )}
       <p className="mt-3 text-xs text-gray-400">
         La déclaration « Agent présent / absent » est faite par le technicien à la clôture de chaque maintenance et incident (application mobile). « Non renseigné » : interventions clôturées avant la mise en place ou depuis une ancienne version de l&apos;application.
-        « Hors plage » : passages de jour sur des sites marqués « poste de nuit uniquement » (fiche du site) — l&apos;absence y est normale et n&apos;entre pas dans le taux. La plage de nuit (défaut 18h→6h GMT) se règle dans Administration → Paramètres.
+        « Hors plage » : passages de jour sur des sites marqués « poste de nuit uniquement » (fiche du site) - l&apos;absence y est normale et n&apos;entre pas dans le taux. La plage de nuit (défaut 18h→6h GMT) se règle dans Administration → Paramètres.
       </p>
     </div>
   );

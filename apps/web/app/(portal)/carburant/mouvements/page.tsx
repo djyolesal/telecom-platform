@@ -99,7 +99,7 @@ export default function MouvementsCarburantPage() {
     <div>
       <PageHeader
         title="Mouvements de carburant"
-        subtitle="Transferts entre sites, purges de cuve et avoirs fournisseur — hors chaîne bon de commande → livraison"
+        subtitle="Transferts entre sites, purges de cuve et avoirs fournisseur - hors chaîne bon de commande → livraison"
         backHref="/carburant/stock"
         actions={peutEcrire ? (
           <div className="flex gap-2">
@@ -112,7 +112,7 @@ export default function MouvementsCarburantPage() {
 
       <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
         Ces écritures font sortir ou entrer du carburant sans pièce de livraison : elles sont toutes motivées et tracées.
-        Un transfert s’écrit en deux temps (départ et arrivée) — neutre au bilan du parc, mais visible des deux côtés.
+        Un transfert s’écrit en deux temps (départ et arrivée) - neutre au bilan du parc, mais visible des deux côtés.
         Une purge sort la consommation du calcul de surconsommation, au lieu de la faire passer pour un vol.
       </div>
 
@@ -181,11 +181,11 @@ function TransfertModal({ onClose }: { onClose: () => void }) {
       }} className="space-y-3">
         <Field label="Site de départ" required>
           <SearchSelect value={form.source} onChange={(v) => setForm((f) => ({ ...f, source: v }))} placeholder="Rechercher un site (nom ou code)…"
-            options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
+            options={sites.map((s) => ({ value: s.id, label: `${s.code} - ${s.nom}` }))} />
         </Field>
         <Field label="Site d’arrivée" required>
           <SearchSelect value={form.destination} onChange={(v) => setForm((f) => ({ ...f, destination: v }))} placeholder="Rechercher un site (nom ou code)…"
-            options={sites.filter((s) => s.id !== form.source).map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
+            options={sites.filter((s) => s.id !== form.source).map((s) => ({ value: s.id, label: `${s.code} - ${s.nom}` }))} />
         </Field>
         <Field label="Volume transféré (L)" required>
           <Input type="number" value={form.volume} onChange={(e) => setForm((f) => ({ ...f, volume: e.target.value }))} required />
@@ -215,7 +215,7 @@ function PurgeModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Cadre titre="Purge / vidange de cuve" onClose={onClose}
-      aide="Du carburant sort de la cuve sans être brûlé par le groupe. Sans cette écriture, la baisse ressortait en surconsommation — donc en soupçon de vol.">
+      aide="Du carburant sort de la cuve sans être brûlé par le groupe. Sans cette écriture, la baisse ressortait en surconsommation - donc en soupçon de vol.">
       {error && <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <form onSubmit={(e) => {
         e.preventDefault(); setError('');
@@ -223,7 +223,7 @@ function PurgeModal({ onClose }: { onClose: () => void }) {
       }} className="space-y-3">
         <Field label="Site" required>
           <SearchSelect value={form.site} onChange={(v) => setForm((f) => ({ ...f, site: v }))} placeholder="Rechercher un site (nom ou code)…"
-            options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
+            options={sites.map((s) => ({ value: s.id, label: `${s.code} - ${s.nom}` }))} />
         </Field>
         <Field label="Volume purgé (L)" required>
           <Input type="number" value={form.volume} onChange={(e) => setForm((f) => ({ ...f, volume: e.target.value }))} required />

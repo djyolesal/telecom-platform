@@ -71,7 +71,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-800">{editing ? `Modifier — ${prestataire!.nom}` : 'Nouveau prestataire'}</h2>
+          <h2 className="text-lg font-bold text-gray-800">{editing ? `Modifier - ${prestataire!.nom}` : 'Nouveau prestataire'}</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
         </div>
         {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -80,7 +80,7 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
           <Field label="Email" className="col-span-2"><Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} /></Field>
 
           <div className="col-span-2 mt-1 border-t border-gray-100 pt-2 text-xs font-semibold text-gray-500">Coordonnées (en-tête de la fiche de validation)</div>
-          <Field label="Adresse" className="col-span-2"><Input value={form.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Rue 30 HDN, Hedzranawoé — BP 4960 Lomé" /></Field>
+          <Field label="Adresse" className="col-span-2"><Input value={form.adresse} onChange={(e) => set('adresse', e.target.value)} placeholder="Rue 30 HDN, Hedzranawoé - BP 4960 Lomé" /></Field>
           <Field label="RCCM"><Input value={form.rccm} onChange={(e) => set('rccm', e.target.value)} placeholder="TG-LOM 2019 M 908" /></Field>
           <Field label="NIF"><Input value={form.nif} onChange={(e) => set('nif', e.target.value)} placeholder="1001134806" /></Field>
           <Field label="Contact commercial"><Input value={form.contactCommercial} onChange={(e) => set('contactCommercial', e.target.value)} placeholder="+228 …" /></Field>
@@ -99,11 +99,11 @@ function PrestataireModal({ prestataire, onClose }: { prestataire: Prestataire |
 
           <label className="col-span-2 flex items-center gap-2 mt-1 cursor-pointer text-sm text-gray-700">
             <input type="checkbox" checked={isTransporteur} onChange={(e) => setIsTransporteur(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
-            Prestataire transporteur (carburant) — peut saisir les bons de livraison
+            Prestataire transporteur (carburant) - peut saisir les bons de livraison
           </label>
           <label className="col-span-2 flex items-center gap-2 cursor-pointer text-sm text-gray-700">
             <input type="checkbox" checked={isGardiennage} onChange={(e) => setIsGardiennage(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
-            Société de gardiennage — les sites qu&apos;elle garde lui sont rattachés (pas d&apos;accès plateforme)
+            Société de gardiennage - les sites qu&apos;elle garde lui sont rattachés (pas d&apos;accès plateforme)
           </label>
 
           <div className="col-span-2 flex justify-end gap-2 pt-2">

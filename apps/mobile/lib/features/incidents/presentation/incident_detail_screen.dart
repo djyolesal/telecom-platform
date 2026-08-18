@@ -51,16 +51,16 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
       return e.message; // ex : « Vous n'êtes pas sur le site… », photos < 6
     }
     if (e is UnauthorizedException) {
-      return 'Session expirée — reconnectez-vous puis réessayez.';
+      return 'Session expirée - reconnectez-vous puis réessayez.';
     }
     if (e is NetworkException) {
-      return 'Connexion indisponible — réessayez une fois en ligne.';
+      return 'Connexion indisponible - réessayez une fois en ligne.';
     }
     return 'Erreur : $e';
   }
 
   /// Vérifie la présence physique sur le site (affinage GPS ~5 m, feuille avec
-  /// loader — comme le dépotage). Si le site n'a pas de coordonnées, simple
+  /// loader - comme le dépotage). Si le site n'a pas de coordonnées, simple
   /// capture silencieuse (le serveur laisse passer). Retourne (ok, lat, lng).
   Future<({bool ok, double? lat, double? lng})> _verifyOnSite(
       Incident inc, String action) async {
@@ -111,7 +111,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
           latitude: check.lat, longitude: check.lng);
       if (!mounted) return;
       _snack(res.isQueued
-          ? 'Démarrage mis en file — il partira à la reconnexion'
+          ? 'Démarrage mis en file - il partira à la reconnexion'
           : 'Intervention démarrée');
       _reload();
     } catch (e) {
@@ -164,7 +164,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
       );
       if (!mounted) return;
       _snack(res.isQueued
-          ? 'Clôture enregistrée hors-ligne — photos envoyées dès la reconnexion'
+          ? 'Clôture enregistrée hors-ligne - photos envoyées dès la reconnexion'
           : 'Incident clôturé');
       _reload();
     } catch (e) {
@@ -346,7 +346,7 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
     if (mounted) setState(() => _sigAgent = path);
   }
 
-  /// Prise de photo SUR SITE uniquement (caméra) — pas d'import galerie.
+  /// Prise de photo SUR SITE uniquement (caméra) - pas d'import galerie.
   Future<void> _takePhoto() async {
     try {
       // maxWidth/maxHeight bornent le redimensionnement natif : sans bornes,
@@ -418,9 +418,9 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
                 fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey)),
         const SizedBox(height: 6),
         Row(children: [
-          chip('ACTIF', 'Actif — radio/transmission'),
+          chip('ACTIF', 'Actif - radio/transmission'),
           const SizedBox(width: 8),
-          chip('PASSIF', 'Passif — énergie'),
+          chip('PASSIF', 'Passif - énergie'),
         ]),
       ],
     );
@@ -543,7 +543,7 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
                   children: [
                     Text(
                         'Photos $total/$kMinPhotosIncident (panne constatée, réparation, état final)'
-                        '${widget.dejaPresentes > 0 ? ' — dont ${widget.dejaPresentes} déjà envoyée(s)' : ''}',
+                        '${widget.dejaPresentes > 0 ? ' - dont ${widget.dejaPresentes} déjà envoyée(s)' : ''}',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -551,7 +551,7 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
                                 ? Colors.green.shade800
                                 : Colors.orange.shade900)),
                     Text(
-                        'À prendre sur site avec la caméra — pas d\'import galerie',
+                        'À prendre sur site avec la caméra - pas d\'import galerie',
                         style: TextStyle(
                             fontSize: 11, color: Colors.grey.shade600)),
                     const SizedBox(height: 8),

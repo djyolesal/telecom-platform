@@ -81,7 +81,7 @@ describe('envoyerSmsManuel', () => {
     });
     expect(JSON.parse(String(init.body))).toEqual({
       sender: 'EMOPS',
-      recipients: ['97589258', '90000000'], // locaux, sans +228 — la clé n'est PAS dans le corps
+      recipients: ['97589258', '90000000'], // locaux, sans +228 - la clé n'est PAS dans le corps
       message: 'Test é',
     });
     fetchSpy.mockRestore();

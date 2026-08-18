@@ -50,7 +50,7 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
     if (!mounted) return;
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Localisation indisponible — activez le GPS (précision élevée).')),
+        const SnackBar(content: Text('Localisation indisponible - activez le GPS (précision élevée).')),
       );
       Navigator.pop(context, null);
       return;
@@ -79,7 +79,7 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
       Navigator.pop(context, (lat: pos.lat, lng: pos.lng, accuracyM: -1.0)); // précision inconnue
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Position GPS indisponible — réessayez à découvert.')),
+        const SnackBar(content: Text('Position GPS indisponible - réessayez à découvert.')),
       );
       Navigator.pop(context, null);
     }
@@ -131,7 +131,7 @@ class _GpsRefineSheetState extends State<GpsRefineSheet> {
             ),
             const SizedBox(height: 4),
             Center(
-              child: Text('Objectif ~${_targetM.toStringAsFixed(0)} m — restez immobile, à découvert',
+              child: Text('Objectif ~${_targetM.toStringAsFixed(0)} m - restez immobile, à découvert',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
             ),
             const SizedBox(height: 12),

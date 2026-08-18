@@ -11,7 +11,7 @@ import 'auth_interceptor.dart';
 /// Active l'acceptation des certificats TLS auto-signés.
 /// À passer au build pour un serveur en HTTPS auto-signé (IP sans domaine) :
 ///   flutter build apk --dart-define=ALLOW_SELF_SIGNED=true --dart-define=API_URL=https://<IP>/api/v1
-/// Acceptation des certificats TLS auto-signés — **jamais en build de release**.
+/// Acceptation des certificats TLS auto-signés - **jamais en build de release**.
 /// Le `--dart-define` seul suffisait à désactiver la validation TLS dans un APK
 /// distribué : un APK de recette signé par erreur, ou un simple oubli du flag
 /// dans le script de build, exposait tout le trafic terrain à l'interception.
@@ -66,7 +66,7 @@ class DioClient {
       // selon la version d'Android et le moment de la coupure, un mode avion se
       // manifeste aussi en `unknown` (SocketException enveloppée) ou en
       // `sendTimeout` (coupure pendant l'envoi). Les traiter en « erreur
-      // serveur » brûlait les essais de la file de sync — l'opération hors-ligne
+      // serveur » brûlait les essais de la file de sync - l'opération hors-ligne
       // finissait en échec définitif au lieu d'attendre le réseau.
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||

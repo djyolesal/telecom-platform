@@ -8,7 +8,7 @@ import { ArrowLeft } from 'lucide-react';
 /**
  * En-tête de page. Le bouton « Retour » est UNIVERSEL : backHref explicite
  * quand la page a un parent naturel (fiche → liste), sinon retour navigateur
- * (page précédente) — beaucoup de pages sont atteignables depuis plusieurs
+ * (page précédente) - beaucoup de pages sont atteignables depuis plusieurs
  * endroits (menu, hub Rapports, liens croisés), le retour doit suivre le
  * chemin réellement emprunté. Masqué seulement s'il n'y a aucun historique
  * (onglet ouvert directement sur la page).

@@ -51,7 +51,7 @@ export function extraireChampsBC(texte: string, ocr: boolean): ExtractionBC {
   // N° de commande : PO + 9 chiffres sur le modèle Moov (tolère un espace OCR).
   const mNum = t.match(/\bP[O0]\s?(\d{6,12})\b/i);
   const numero = mNum ? `PO${mNum[1]}` : null;
-  if (!numero) avertissements.push('Numéro de commande (POxxxxxxxxx) non trouvé — à saisir manuellement.');
+  if (!numero) avertissements.push('Numéro de commande (POxxxxxxxxx) non trouvé - à saisir manuellement.');
 
   const mDate = t.match(/\bdu\s+(\d{2}\/\d{2}\/\d{4})\b/i) ?? t.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
   const dateEmission = mDate ? mDate[1] : null;
@@ -71,17 +71,17 @@ export function extraireChampsBC(texte: string, ocr: boolean): ExtractionBC {
     const qte = m[3].match(/(\d{1,3}(?:[ .]\d{3})+|\d{4,7})(?![,\d])/);
     const valeur = qte ? litres(qte[1]) : NaN;
     if (!qte || !Number.isFinite(valeur) || valeur < 100 || valeur > 5_000_000) {
-      avertissements.push(`Quantité illisible pour le mois ${m[1]} — à saisir manuellement.`);
+      avertissements.push(`Quantité illisible pour le mois ${m[1]} - à saisir manuellement.`);
       continue;
     }
-    if (volumesParMois.has(mois)) avertissements.push(`Le mois ${m[1]} apparaît deux fois — dernière valeur retenue.`);
+    if (volumesParMois.has(mois)) avertissements.push(`Le mois ${m[1]} apparaît deux fois - dernière valeur retenue.`);
     volumesParMois.set(mois, valeur);
   }
   const volumesMensuels = [...volumesParMois.entries()]
     .map(([mois, volumePrevuLitres]) => ({ mois, volumePrevuLitres }))
     .sort((a, b) => a.mois - b.mois);
   if (!volumesMensuels.length) {
-    avertissements.push('Aucune ligne mensuelle reconnue dans le tableau — volumes à saisir manuellement.');
+    avertissements.push('Aucune ligne mensuelle reconnue dans le tableau - volumes à saisir manuellement.');
   }
 
   // Année : celle des lignes mensuelles (majoritaire), sinon la date, sinon le PO.
@@ -89,14 +89,14 @@ export function extraireChampsBC(texte: string, ocr: boolean): ExtractionBC {
   if (annees.size) annee = [...annees.entries()].sort((a, b) => b[1] - a[1])[0][0];
   else if (dateEmission) annee = parseInt(dateEmission.slice(6), 10);
   else if (numero) annee = 2000 + parseInt(numero.slice(2, 4), 10);
-  if (annees.size > 1) avertissements.push('Plusieurs années différentes dans le tableau — vérifiez l\'année.');
+  if (annees.size > 1) avertissements.push('Plusieurs années différentes dans le tableau - vérifiez l\'année.');
 
   // Trimestre : déduit des MOIS du tableau (pas de la date d'émission — un BC
   // du T2 peut être émis en mars). Tous les mois doivent tomber dans le même.
   let trimestre: number | null = null;
   const trimestres = new Set(volumesMensuels.map((v) => Math.ceil(v.mois / 3)));
   if (trimestres.size === 1) trimestre = [...trimestres][0];
-  else if (trimestres.size > 1) avertissements.push('Les mois du tableau chevauchent deux trimestres — vérifiez.');
+  else if (trimestres.size > 1) avertissements.push('Les mois du tableau chevauchent deux trimestres - vérifiez.');
 
   // Cohérence : « Achat de N litres » de l'en-tête vs somme des lignes.
   const totalLitres = volumesMensuels.reduce((s, v) => s + v.volumePrevuLitres, 0);
@@ -104,12 +104,12 @@ export function extraireChampsBC(texte: string, ocr: boolean): ExtractionBC {
   const totalAnnonceLitres = mTotal ? litres(mTotal[1]) : null;
   if (totalAnnonceLitres != null && volumesMensuels.length && totalAnnonceLitres !== totalLitres) {
     avertissements.push(
-      `Incohérence : l'en-tête annonce ${totalAnnonceLitres.toLocaleString('fr-FR')} L mais la somme des mois fait ${totalLitres.toLocaleString('fr-FR')} L — vérifiez chaque volume.`
+      `Incohérence : l'en-tête annonce ${totalAnnonceLitres.toLocaleString('fr-FR')} L mais la somme des mois fait ${totalLitres.toLocaleString('fr-FR')} L - vérifiez chaque volume.`
     );
   } else if (totalAnnonceLitres == null && volumesMensuels.length) {
     // Sans total d'en-tête lisible, aucun recoupement possible : une valeur
     // mensuelle mal lue (« 164 000 » → « 64 000 ») passerait inaperçue.
-    avertissements.push('Total « Achat de N litres » non lu : les volumes mensuels ne sont pas recoupables — vérifiez-les un à un.');
+    avertissements.push('Total « Achat de N litres » non lu : les volumes mensuels ne sont pas recoupables - vérifiez-les un à un.');
   }
 
   return { numero, dateEmission, annee, trimestre, volumesMensuels, totalLitres, totalAnnonceLitres, avertissements, ocr };

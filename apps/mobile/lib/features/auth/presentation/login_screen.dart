@@ -18,7 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   bool _obscure = true;
   // Version de l'application, affichée sous le formulaire : c'est LA question
-  // du support (« quelle version vois-tu sur l'écran de connexion ? ») — en
+  // du support (« quelle version vois-tu sur l'écran de connexion ? ») - en
   // particulier pendant une mise à jour obligatoire.
   String _version = '';
 

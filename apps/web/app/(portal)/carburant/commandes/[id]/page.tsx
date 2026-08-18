@@ -47,7 +47,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
   const [form, setForm] = useState({
     numeroBL: '', immatriculation: '', mois: String(bc.volumesMensuels[0]?.mois ?? new Date().getMonth() + 1),
     // Date de chargement SANS valeur par défaut : elle ne figure pas sur le BL
-    // (la date du document est celle du traitement) — saisie manuelle obligatoire.
+    // (la date du document est celle du traitement) - saisie manuelle obligatoire.
     volumeChargeLitres: '', dateChargement: '', transporteurId: '', observations: '',
     // Chauffeur DÉCLARÉ avant le départ du dépôt : c'est lui qui sera confronté
     // au chauffeur qui signe réellement sur site.
@@ -84,14 +84,14 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
       immatriculation: d.immatriculation ?? f.immatriculation,
       volumeChargeLitres: d.volumeChargeLitres != null ? String(d.volumeChargeLitres) : f.volumeChargeLitres,
       // La date de traitement est celle qui SUIT le n° de bon de commande sur le
-      // document (« BC N°PO… / 04.08.2025 ») — jamais la date de chargement, qui
+      // document (« BC N°PO… / 04.08.2025 ») - jamais la date de chargement, qui
       // ne figure pas sur le papier et reste à saisir à la main.
     }));
     setDateTraitement(isoDe(d.dateTraitement) ?? '');
     const av = [...d.avertissements];
     // Le BL référence son BC : alerter si ce n'est pas celui de la page courante.
     if (d.bcNumero && d.bcNumero !== bc.numero) {
-      av.unshift(`⚠ Ce BL référence le bon de commande ${d.bcNumero}, mais vous êtes sur ${bc.numero} — vérifiez.`);
+      av.unshift(`⚠ Ce BL référence le bon de commande ${d.bcNumero}, mais vous êtes sur ${bc.numero} - vérifiez.`);
     }
     setAvertissements(av);
   };
@@ -114,7 +114,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
         const key = await uploadPdf(file);
         setBlPdfPath(key);
         const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
-        setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) — PDF joint, saisie manuelle.`]);
+        setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) - PDF joint, saisie manuelle.`]);
       } catch { setError('Échec de l’upload du PDF.'); }
     } finally { setAnalysing(false); }
   };
@@ -188,7 +188,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
           <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
             <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">
               PDF du bon de livraison <span className="text-red-500">*</span>
-              <span className="font-normal text-gray-500"> — pré-remplit le formulaire (un lot de plusieurs BL est accepté)</span>
+              <span className="font-normal text-gray-500"> - pré-remplit le formulaire (un lot de plusieurs BL est accepté)</span>
             </p>
             <p className="mb-1.5 text-[11px] text-gray-500">
               Ce PDF est la pièce du chargement : il est obligatoire et reste joint au bon de livraison.
@@ -196,7 +196,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             <div className="flex items-center gap-3">
               <input type="file" accept="application/pdf,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserBl(f); }} className="text-xs" />
               {analysing && <span className="text-xs text-gray-500">Analyse en cours…</span>}
-              {!analysing && extraits.length > 0 && <span className="text-xs font-medium text-emerald-700">{extraits.length} BL reconnu(s) ✓ — vérifiez, et saisissez la date de chargement</span>}
+              {!analysing && extraits.length > 0 && <span className="text-xs font-medium text-emerald-700">{extraits.length} BL reconnu(s) ✓ - vérifiez, et saisissez la date de chargement</span>}
               {!analysing && !blPdfPath && <span className="text-xs text-amber-600">requis</span>}
             </div>
             {extraits.length > 1 && (

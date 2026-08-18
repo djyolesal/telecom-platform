@@ -21,7 +21,7 @@ export function SearchSelect({
   onChange: (value: string) => void;
   options: SearchSelectOption[];
   placeholder?: string;
-  /** Libellé de l'option « vide » (ex. « Aucun (raccordement direct) ») — absente si non fourni. */
+  /** Libellé de l'option « vide » (ex. « Aucun (raccordement direct) ») - absente si non fourni. */
   emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -102,7 +102,7 @@ export function SearchSelect({
             ))}
             {resultats.length === 0 && <li className="px-3 py-2 text-sm text-gray-400">Aucun résultat</li>}
             {!terme && options.length > 50 && (
-              <li className="px-3 py-1.5 text-xs text-gray-400">{options.length - 50} de plus — affinez la recherche…</li>
+              <li className="px-3 py-1.5 text-xs text-gray-400">{options.length - 50} de plus - affinez la recherche…</li>
             )}
           </ul>
         </div>

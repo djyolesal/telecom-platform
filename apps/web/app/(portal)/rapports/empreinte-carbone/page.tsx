@@ -44,7 +44,7 @@ export default function EmpreinteCarbonePage() {
     <div>
       <PageHeader
         title="Empreinte carbone"
-        subtitle="Émissions de CO₂ du parc, dérivées des relevés d’énergie — gasoil (GE), réseau CEET, et solaire"
+        subtitle="Émissions de CO₂ du parc, dérivées des relevés d’énergie - gasoil (GE), réseau CEET, et solaire"
         backHref="/rapports"
       />
 

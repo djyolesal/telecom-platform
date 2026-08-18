@@ -111,7 +111,7 @@ export default function EnergiePage() {
           <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* ── Tendance mensuelle ── */}
             <div className="rounded-xl border border-gray-100 bg-white p-5">
-              <h3 className="mb-4 text-sm font-semibold text-gray-700">Tendance mensuelle — kWh & gasoil consommé</h3>
+              <h3 className="mb-4 text-sm font-semibold text-gray-700">Tendance mensuelle - kWh & gasoil consommé</h3>
               {parMois.length === 0 ? (
                 <p className="py-16 text-center text-sm text-gray-400">Aucun relevé sur la période.</p>
               ) : (
@@ -173,7 +173,7 @@ interface ImportRapport {
 
 /**
  * Import de l'historique (export Excel du système de tickets) : analyse d'abord
- * (aperçu sans écriture), puis import — avec remplacement optionnel de
+ * (aperçu sans écriture), puis import - avec remplacement optionnel de
  * l'existant (tous les relevés + dépotages actuels sont alors supprimés).
  */
 function ImportRelevesModal({ onClose }: { onClose: () => void }) {
@@ -225,7 +225,7 @@ function ImportRelevesModal({ onClose }: { onClose: () => void }) {
         <label className="mb-4 flex items-start gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={purge} onChange={(e) => { setPurge(e.target.checked); setApercu(null); }} className="mt-0.5" />
           <span>
-            <b className="text-red-600">Remplacer l&apos;existant</b> — supprime d&apos;abord <b>tous</b> les relevés énergie et dépotages actuels, le fichier devient l&apos;unique historique.
+            <b className="text-red-600">Remplacer l&apos;existant</b> - supprime d&apos;abord <b>tous</b> les relevés énergie et dépotages actuels, le fichier devient l&apos;unique historique.
           </span>
         </label>
 

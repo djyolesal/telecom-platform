@@ -37,7 +37,7 @@ export default function CartePage() {
   const [statut, setStatut] = useState('');
   const [stock, setStock] = useState('');
   // Deux lectures de la même carte : STOCK (logistique carburant) et RÉSEAU
-  // (coupures + aval menacé — la question du NOC). Défaut selon le rôle.
+  // (coupures + aval menacé - la question du NOC). Défaut selon le rôle.
   const [modeChoisi, setModeChoisi] = useState<'stock' | 'reseau' | null>(null);
   const mode = modeChoisi ?? (role === 'NOC' ? 'reseau' : 'stock');
   // Filtre d'état en mode réseau : isoler les coupés, partiels ou menacés.
@@ -50,7 +50,7 @@ export default function CartePage() {
 
   const all: SiteFeature[] = useMemo(() => data?.features ?? [], [data]);
   // Vue transporteur : l'API ne sert que SES sites à livrer, sans stock ni
-  // statut GE — les filtres et la légende d'exploitation n'ont pas de sens.
+  // statut GE - les filtres et la légende d'exploitation n'ont pas de sens.
   const vueLivraison = data?.vue === 'transporteur';
   const [camion, setCamion] = useState('');
 
@@ -83,7 +83,7 @@ export default function CartePage() {
       technos.set(c.siteId, t);
     }
     // Coupure TOTALE (SITE ou toutes les technos) vs PARTIELLE (une partie) :
-    // un site qui a perdu sa 3G n'est pas un site mort — même règle de
+    // un site qui a perdu sa 3G n'est pas un site mort - même règle de
     // propagation que la topologie : seul un site ENTIÈREMENT down menace l'aval.
     const entierementDown = (id: string) => {
       const t = technos.get(id);
@@ -104,7 +104,7 @@ export default function CartePage() {
 
   // Une couleur STABLE par camion (ordre alphabétique des plaques) : la même
   // plaque garde sa couleur d'un chargement à l'autre tant que la flotte en
-  // tournée ne change pas — le chauffeur mémorise « mon camion = vert ».
+  // tournée ne change pas - le chauffeur mémorise « mon camion = vert ».
   const camionsEnTournee = useMemo(
     () => [...new Set(all.flatMap((f) => f.properties.camions ?? []))].sort(),
     [all]
@@ -162,7 +162,7 @@ export default function CartePage() {
         )}
         {!vueLivraison && (<>
         {/* Bascule de lecture : Stock (logistique) / Réseau (coupures). Le NOC
-            n'a PAS le mode Stock — la logistique carburant est hors de son
+            n'a PAS le mode Stock - la logistique carburant est hors de son
             périmètre, sa carte est toujours en lecture réseau. */}
         {role !== 'NOC' && (
           <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white text-sm font-medium">

@@ -233,7 +233,7 @@ export async function deleteTypePylone(req: Request, res: Response, next: NextFu
     const code = req.params.code;
     const used = await prisma.site.count({ where: { typePylone: code } });
     if (used > 0) {
-      throw new AppError(`Type utilisé par ${used} site(s) — réaffectez-les avant suppression.`, 409);
+      throw new AppError(`Type utilisé par ${used} site(s) - réaffectez-les avant suppression.`, 409);
     }
     await prisma.typePyloneRef.delete({ where: { code } });
     await auditLog(req.user!.id, 'DELETE', 'types_pylone', code, {}, req);
@@ -255,11 +255,11 @@ export async function testEmail(req: Request, res: Response, next: NextFunction)
     if (!to) throw new AppError('Adresse destinataire requise.', 400);
     const ok = await sendEmail({
       to,
-      subject: 'E&M OpS — test de configuration email',
+      subject: 'E&M OpS - test de configuration email',
       html: '<p>Ceci est un email de test envoyé depuis <b>E&amp;M OpS</b>. Si vous le recevez (hors spam), SMTP et DKIM sont bien configurés.</p>',
-      text: 'Email de test E&M OpS — SMTP et DKIM bien configurés si reçu hors spam.',
+      text: 'Email de test E&M OpS - SMTP et DKIM bien configurés si reçu hors spam.',
     });
-    if (!ok) throw new AppError('SMTP non configuré ou envoi refusé — vérifiez les variables SMTP_* et le domaine vérifié chez le fournisseur.', 502);
+    if (!ok) throw new AppError('SMTP non configuré ou envoi refusé - vérifiez les variables SMTP_* et le domaine vérifié chez le fournisseur.', 502);
     await auditLog(req.user!.id, 'CREATE', 'email_test', to, {}, req);
     res.json({ success: true, message: `Email de test envoyé à ${to}` });
   } catch (err) { next(err); }

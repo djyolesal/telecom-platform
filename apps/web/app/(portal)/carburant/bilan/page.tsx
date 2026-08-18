@@ -54,7 +54,7 @@ function presets(): Record<string, { debut: string; fin: string }> {
 /**
  * Bilan conso & stock sur période libre. La consommation vient de l'équation de
  * conservation (stock début + livré + mouvements − stock fin) : elle n'est
- * affichée que pour les sites dont les DEUX bornes de jauge sont connues — le
+ * affichée que pour les sites dont les DEUX bornes de jauge sont connues - le
  * taux de sites mesurés est donc lui-même un indicateur de qualité de saisie.
  */
 export default function BilanCarburantPage() {
@@ -112,7 +112,7 @@ export default function BilanCarburantPage() {
     <div>
       <PageHeader
         title="Bilan conso & stock"
-        subtitle="Période libre — stock aux deux bornes, consommation par conservation, courbe 12 mois"
+        subtitle="Période libre - stock aux deux bornes, consommation par conservation, courbe 12 mois"
         backHref="/carburant/stock"
         actions={<ExportButtons base="/rapports/bilan-carburant/export" name="bilan-carburant" query={query} />}
       />
@@ -156,12 +156,12 @@ export default function BilanCarburantPage() {
 
         <p className="mb-4 text-xs text-gray-500">
           Stocks et consommation totalisés sur les <b>{t!.nbSitesMesures} sites mesurés</b> (jauge relevée avant chaque borne).
-          Le « livré » couvre tous les sites — la logistique est toujours connue. Théorique total : {fmtNumber(t!.consoTheoriqueLitres)} L.
+          Le « livré » couvre tous les sites - la logistique est toujours connue. Théorique total : {fmtNumber(t!.consoTheoriqueLitres)} L.
         </p>
 
         {/* ── Courbe 12 mois ── */}
         <div className="mb-4 rounded-xl border border-gray-100 bg-white p-5">
-          <h3 className="mb-1 text-sm font-semibold text-gray-700">Livré et consommé — 12 derniers mois</h3>
+          <h3 className="mb-1 text-sm font-semibold text-gray-700">Livré et consommé - 12 derniers mois</h3>
           <p className="mb-3 text-xs text-gray-500">
             La consommation mensuelle n&apos;est mesurable que sur les sites jaugés aux deux bornes du mois
             (l&apos;infobulle indique combien) : les premiers mois peuvent être partiels.

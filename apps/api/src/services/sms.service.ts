@@ -70,7 +70,7 @@ async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Pro
     const cause = (e as { cause?: { code?: string; message?: string } }).cause;
     const detail = cause?.code ?? cause?.message ?? (e instanceof Error && e.name === 'TimeoutError' ? 'délai dépassé (15 s)' : null);
     throw new Error(
-      `Passerelle SMS injoignable${detail ? ` (${detail})` : ''} — vérifier SMS_API_URL et l'accès réseau depuis le conteneur API`
+      `Passerelle SMS injoignable${detail ? ` (${detail})` : ''} - vérifier SMS_API_URL et l'accès réseau depuis le conteneur API`
     );
   }
   const body = await res.text();
@@ -215,7 +215,7 @@ async function verifierPlafond(nbAEnvoyer: number): Promise<string | null> {
   if (plafond <= 0) return null;
   const envoyes = await smsEnvoyesAujourdhui();
   if (envoyes + nbAEnvoyer > plafond) {
-    return `Plafond journalier SMS atteint (${envoyes}/${plafond}) — envoi de ${nbAEnvoyer} SMS bloqué.`;
+    return `Plafond journalier SMS atteint (${envoyes}/${plafond}) - envoi de ${nbAEnvoyer} SMS bloqué.`;
   }
   return null;
 }

@@ -241,7 +241,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     }
   }
 
-  /// Volume prévu au plan pour la ligne rattachée — affiché en repère, jamais
+  /// Volume prévu au plan pour la ligne rattachée - affiché en repère, jamais
   /// recopié dans le champ « annoncé ».
   double? get _lignePrevue {
     if (_ligneLivraisonId == null) return null;
@@ -454,7 +454,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       } on ServerException catch (e) {
         // Vraisemblance : le serveur a détecté des niveaux inhabituels (stock >
         // capacité de cuve, stock avant > dernier niveau connu…). Le technicien
-        // vérifie, puis confirme explicitement — la confirmation est tracée.
+        // vérifie, puis confirme explicitement - la confirmation est tracée.
         if (!e.confirmationRequise || !mounted) rethrow;
         final ok = await confirmerAvertissements(context, e.avertissements);
         if (!ok) {
@@ -513,13 +513,13 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                   // repasser sur le site dans la même tournée. Elle est
                   // étiquetée « 2e passage » pour qu'on la choisisse en
                   // connaissance de cause, au lieu de retomber sur « hors
-                  // plan » — qui laissait le BL non soldé et le site en
+                  // plan » - qui laissait le BL non soldé et le site en
                   // manquant chaque nuit.
                   ..._lignes.map((l) => DropdownMenuItem<String>(
                         value: l.id,
                         child: Text(
                           l.statut == 'LIVRE'
-                              ? '${l.numeroBL ?? 'BL'} · soldée — 2e passage'
+                              ? '${l.numeroBL ?? 'BL'} · soldée - 2e passage'
                               : '${l.numeroBL ?? 'BL'} · ${l.restant.toStringAsFixed(0)} L restants',
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -572,7 +572,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                 // pré-rempli. C'est cette saisie qui fait foi contre la jauge.
                 helperText: _lignePrevue == null
                     ? 'À lire sur le bordereau remis par le chauffeur.'
-                    : 'Plan pour ce site : ${_lignePrevue!.toStringAsFixed(0)} L — saisissez ce que le chauffeur annonce.',
+                    : 'Plan pour ce site : ${_lignePrevue!.toStringAsFixed(0)} L - saisissez ce que le chauffeur annonce.',
                 helperMaxLines: 2,
               ),
               validator: (v) {
@@ -615,7 +615,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
-                        labelText: 'GE n°${g.numero} — index heures',
+                        labelText: 'GE n°${g.numero} - index heures',
                         helperText:
                             '${g.puissanceKva.toStringAsFixed(0)} kVA · ${g.statut == 'GE_PERMANENT' ? 'permanent' : 'secours'}',
                         prefixIcon: const Icon(Icons.timer_outlined),
@@ -814,7 +814,7 @@ class _SignatureTile extends StatelessWidget {
           color: captured ? Colors.green : null),
       label: Align(
         alignment: Alignment.centerLeft,
-        child: Text(captured ? '$label — signé' : label),
+        child: Text(captured ? '$label - signé' : label),
       ),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),

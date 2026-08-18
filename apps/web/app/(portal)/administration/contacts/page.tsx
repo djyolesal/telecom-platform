@@ -127,7 +127,7 @@ export default function ContactsPage() {
               )}
               {journal && !journal.smsActive && (
                 <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                  Mode simulation — passerelle SMS non configurée, rien n&apos;est réellement envoyé
+                  Mode simulation - passerelle SMS non configurée, rien n&apos;est réellement envoyé
                 </span>
               )}
             </div>
@@ -140,7 +140,7 @@ export default function ContactsPage() {
                 <div key={l.id} className="flex items-start gap-3 border-b border-gray-50 py-2 text-xs last:border-0">
                   <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-medium ${l.statut === 'ENVOYE' ? 'bg-green-100 text-green-700' : l.statut === 'SIMULE' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-700'}`}>{l.statut}</span>
                   <span className="w-28 shrink-0 tabular-nums text-gray-500">{l.telephone}</span>
-                  <span className="flex-1 text-gray-700">{l.message}{l.erreur ? <span className="text-red-600"> — {l.erreur}</span> : null}</span>
+                  <span className="flex-1 text-gray-700">{l.message}{l.erreur ? <span className="text-red-600"> - {l.erreur}</span> : null}</span>
                   <span className="shrink-0 text-gray-400">{fmtDateTime(l.createdAt)}</span>
                 </div>
               ))}
@@ -292,13 +292,13 @@ function SmsForm({ selection, contacts, onClose, onSent }: {
         <div>
           <div className={`mb-3 rounded-lg px-4 py-3 text-sm ${resultat.echecs ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>
             {resultat.simule
-              ? <>✓ {resultat.total} SMS <b>simulé(s)</b> (passerelle non configurée — visible dans le Journal SMS, rien n&apos;est parti).</>
+              ? <>✓ {resultat.total} SMS <b>simulé(s)</b> (passerelle non configurée - visible dans le Journal SMS, rien n&apos;est parti).</>
               : <>✓ {resultat.envoyes}/{resultat.total} SMS envoyé(s){resultat.echecs > 0 && <> · <b>{resultat.echecs} échec(s)</b></>}.</>}
           </div>
           {resultat.echecs > 0 && (
             <div className="mb-3 max-h-40 overflow-y-auto text-xs">
               {resultat.resultats.filter((r) => r.statut === 'ECHEC').map((r) => (
-                <p key={r.telephone} className="py-0.5 text-red-600">{r.telephone} — {r.erreur}</p>
+                <p key={r.telephone} className="py-0.5 text-red-600">{r.telephone} - {r.erreur}</p>
               ))}
             </div>
           )}
@@ -318,7 +318,7 @@ function SmsForm({ selection, contacts, onClose, onSent }: {
             <Field label="Numéros libres (optionnel, séparés par virgule ou espace)">
               <Input value={telsLibres} onChange={(e) => setTelsLibres(e.target.value)} placeholder="97 00 00 00, +228 99 00 00 00" />
             </Field>
-            <Field label={`Message (${message.length}/320${message.length > 160 ? ' — sera facturé en plusieurs SMS' : ''})`}>
+            <Field label={`Message (${message.length}/320${message.length > 160 ? ' - sera facturé en plusieurs SMS' : ''})`}>
               <Textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, 320))} rows={3}
                 placeholder="[E&M OpS] Votre message…" required />
             </Field>

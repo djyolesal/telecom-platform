@@ -121,7 +121,7 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
 
     doc.moveDown(2);
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — E&M OpS`,
+      `Généré le ${fmtDate(new Date())} - E&M OpS`,
       50,
       doc.page.height - 60,
       { align: 'center', width: doc.page.width - 100 }
@@ -150,7 +150,7 @@ export async function generateMonthlyReportPdf(r: MonthlyReportData): Promise<Bu
   return render((doc) => {
     header(
       doc,
-      `Rapport mensuel — ${MOIS[r.mois - 1]} ${r.annee}`,
+      `Rapport mensuel - ${MOIS[r.mois - 1]} ${r.annee}`,
       r.region ? `Région : ${r.region}` : 'Toutes régions'
     );
 
@@ -178,7 +178,7 @@ export async function generateMonthlyReportPdf(r: MonthlyReportData): Promise<Bu
     row(doc, 'Coût estimé', `${r.energie.coutEstimeFCFA.toLocaleString('fr-FR')} FCFA`);
 
     if (r.manquants) {
-      sectionTitle(doc, r.region ? `Manquants de livraison — ${r.region}` : 'Manquants de livraison');
+      sectionTitle(doc, r.region ? `Manquants de livraison - ${r.region}` : 'Manquants de livraison');
       row(doc, 'Volume manquant total', `${r.manquants.totalLitres.toLocaleString('fr-FR')} L`);
       row(doc, 'Sites concernés', String(r.manquants.nbSites));
       // Compteur camions : national uniquement (un camion traverse plusieurs régions).
@@ -189,7 +189,7 @@ export async function generateMonthlyReportPdf(r: MonthlyReportData): Promise<Bu
     }
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré automatiquement le ${fmtDate(new Date())} — E&M OpS`,
+      `Généré automatiquement le ${fmtDate(new Date())} - E&M OpS`,
       50,
       doc.page.height - 60,
       { align: 'center', width: doc.page.width - 100 }
@@ -212,7 +212,7 @@ export interface PlanLivraisonPdfData {
 
 export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise<Buffer> {
   return render((doc) => {
-    header(doc, 'Plan de livraison carburant', `BL ${p.numeroBL} — ${p.moisLabel} ${p.annee}`);
+    header(doc, 'Plan de livraison carburant', `BL ${p.numeroBL} - ${p.moisLabel} ${p.annee}`);
 
     sectionTitle(doc, 'Chargement');
     row(doc, 'N° bon de livraison', p.numeroBL);
@@ -240,7 +240,7 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
       total += l.volumePrevuLitres;
       const y = doc.y;
       doc.fontSize(9).fillColor('#111');
-      doc.text(`${l.siteCode} — ${l.siteNom}`, cols.site, y, { width: 190 });
+      doc.text(`${l.siteCode} - ${l.siteNom}`, cols.site, y, { width: 190 });
       doc.text(l.region, cols.region, y, { width: 190 });
       doc.text(String(Math.round(l.volumePrevuLitres)), cols.vol, y, { width: 90, align: 'right' });
       doc.moveDown(0.5);
@@ -255,7 +255,7 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
     doc.text(`${Math.round(total)} L`, cols.vol, ty, { width: 90, align: 'right' });
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — E&M OpS`,
+      `Généré le ${fmtDate(new Date())} - E&M OpS`,
       50, doc.page.height - 60, { align: 'center', width: doc.page.width - 100 }
     );
   });
@@ -288,7 +288,7 @@ const SIGNED = (n?: number | null) => (n == null ? '—' : `${Number(n) > 0 ? '+
 
 export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
   return render((doc) => {
-    header(doc, 'Bordereau de dépotage', `Réf. ${d.reference ?? d.id.slice(0, 8).toUpperCase()} — ${fmtDate(d.dateDepotage)}`);
+    header(doc, 'Bordereau de dépotage', `Réf. ${d.reference ?? d.id.slice(0, 8).toUpperCase()} - ${fmtDate(d.dateDepotage)}`);
 
     sectionTitle(doc, 'Site');
     row(doc, 'Nom', d.site?.nom ?? '—');
@@ -344,7 +344,7 @@ export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
         } catch {
           /* signature illisible → on saute l'image */
         }
-        doc.fontSize(8).fillColor('#666').text(`${s.label}${s.nom ? ` — ${s.nom}` : ''}`, x, startY + 64, { width: colW - 10 });
+        doc.fontSize(8).fillColor('#666').text(`${s.label}${s.nom ? ` - ${s.nom}` : ''}`, x, startY + 64, { width: colW - 10 });
       });
       doc.y = startY + 90;
     }
@@ -371,7 +371,7 @@ export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
     }
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — E&M OpS`,
+      `Généré le ${fmtDate(new Date())} - E&M OpS`,
       50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 }
     );
   });
@@ -406,7 +406,7 @@ const NATURE_MOUVEMENT: Record<string, string> = {
  */
 export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<Buffer> {
   return render((doc) => {
-    header(doc, 'Bon de mouvement d’actif', `Réf. ${d.id.slice(0, 8).toUpperCase()} — ${fmtDate(d.dateMouvement)}`);
+    header(doc, 'Bon de mouvement d’actif', `Réf. ${d.id.slice(0, 8).toUpperCase()} - ${fmtDate(d.dateMouvement)}`);
 
     sectionTitle(doc, 'Mouvement');
     row(doc, 'Nature', NATURE_MOUVEMENT[d.nature] ?? d.nature);
@@ -420,8 +420,8 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
     if (d.actif.caracteristique) row(doc, 'Caractéristique', d.actif.caracteristique);
 
     sectionTitle(doc, 'Localisation');
-    const dep = d.siteOrigine ? `${d.siteOrigine.code} — ${d.siteOrigine.nom}` : 'Dépôt';
-    const arr = d.siteDestination ? `${d.siteDestination.code} — ${d.siteDestination.nom}` : 'Dépôt';
+    const dep = d.siteOrigine ? `${d.siteOrigine.code} - ${d.siteOrigine.nom}` : 'Dépôt';
+    const arr = d.siteDestination ? `${d.siteDestination.code} - ${d.siteDestination.nom}` : 'Dépôt';
     if (d.nature === 'INSTALLATION') {
       row(doc, 'Provenance', 'Dépôt');
       row(doc, 'Site d’installation', arr);
@@ -461,12 +461,12 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
       } else {
         doc.moveTo(x, startY + 55).lineTo(x + colW - 20, startY + 55).strokeColor('#bbb').stroke();
       }
-      doc.fontSize(8.5).fillColor('#666').text(`${e.label}${e.nom ? ` — ${e.nom}` : ''}`, x, startY + 62, { width: colW - 10 });
+      doc.fontSize(8.5).fillColor('#666').text(`${e.label}${e.nom ? ` - ${e.nom}` : ''}`, x, startY + 62, { width: colW - 10 });
     });
     doc.y = startY + 90;
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — E&M OpS`,
+      `Généré le ${fmtDate(new Date())} - E&M OpS`,
       50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 }
     );
   });
@@ -496,7 +496,7 @@ export async function generateEtiquettesQrPdf(d: EtiquettesQrData): Promise<Buff
     header(doc, 'Étiquettes QR', `${d.site.nom} (${d.site.code})`);
 
     // Étiquette SITE (grande, pour l'armoire).
-    sectionTitle(doc, 'Site — à coller sur l’armoire');
+    sectionTitle(doc, 'Site - à coller sur l’armoire');
     const y0 = doc.y;
     try { doc.image(siteQr, 50, y0, { width: 140 }); } catch { /* qr illisible */ }
     doc.fontSize(15).fillColor('#111').font('Helvetica-Bold').text(d.site.nom, 210, y0 + 20, { width: 300 });
@@ -525,7 +525,7 @@ export async function generateEtiquettesQrPdf(d: EtiquettesQrData): Promise<Buff
     }
 
     doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} — E&M OpS`,
+      `Généré le ${fmtDate(new Date())} - E&M OpS`,
       50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 }
     );
   });

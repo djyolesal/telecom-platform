@@ -29,7 +29,7 @@ export async function monthlyReportJob(): Promise<void> {
 
   const sent = await sendEmail({
     to: destinataires.map((d) => d.email),
-    subject: `Rapport mensuel automatique — ${String(mois).padStart(2, '0')}/${annee}`,
+    subject: `Rapport mensuel automatique - ${String(mois).padStart(2, '0')}/${annee}`,
     html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint le rapport mensuel d'exploitation de ${String(mois).padStart(2, '0')}/${annee}.</p><p>— E&M OpS</p>`,
     attachments: [{ filename: `rapport-${annee}-${String(mois).padStart(2, '0')}.pdf`, content: pdf, contentType: 'application/pdf' }],
   });

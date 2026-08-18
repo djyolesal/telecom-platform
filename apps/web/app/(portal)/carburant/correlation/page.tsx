@@ -75,7 +75,7 @@ export default function CorrelationCarburantPage() {
       />
 
       <div className="mb-3 text-xs text-gray-500">
-        Une <span className="font-medium text-red-600">anomalie</span> signale une consommation GE nettement supérieure au carburant livré (ratio &lt; 0,85) — à vérifier : pertes, vol, dépotage non enregistré ou heures GE surévaluées.
+        Une <span className="font-medium text-red-600">anomalie</span> signale une consommation GE nettement supérieure au carburant livré (ratio &lt; 0,85) - à vérifier : pertes, vol, dépotage non enregistré ou heures GE surévaluées.
       </div>
 
       {lignes.length === 0 ? (

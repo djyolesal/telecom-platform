@@ -6,7 +6,7 @@ let transporter: Transporter | null = null;
 
 function getTransporter(): Transporter | null {
   if (!env.SMTP_HOST) {
-    logger.warn('SMTP non configuré — les emails ne seront pas envoyés');
+    logger.warn('SMTP non configuré - les emails ne seront pas envoyés');
     return null;
   }
   if (!transporter) {

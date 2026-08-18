@@ -11,7 +11,7 @@ import 'core/services/fcm_service.dart';
 import 'injection.dart';
 
 /// Serveur en HTTPS auto-signé (IP sans domaine) : faire confiance au certificat
-/// pour TOUT le HttpClient par défaut — indispensable au chargement d'images
+/// pour TOUT le HttpClient par défaut - indispensable au chargement d'images
 /// (cached_network_image / Image.network n'utilisent pas Dio).
 const bool _allowSelfSigned = kDebugMode && bool.fromEnvironment('ALLOW_SELF_SIGNED');
 
@@ -37,7 +37,7 @@ Future<void> main() async {
   await Hive.initFlutter();
   await Hive.openBox(AppConstants.kSettingsBox);
 
-  // Firebase / FCM — tolérant si la config plateforme est absente.
+  // Firebase / FCM - tolérant si la config plateforme est absente.
   try {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);

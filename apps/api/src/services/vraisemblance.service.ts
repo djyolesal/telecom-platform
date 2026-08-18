@@ -78,7 +78,7 @@ export async function verifierClotureEnergie(
       if (c.saisi < dernier) {
         avertissements.push({
           champ: 'indexHeuresGE',
-          message: `Index horaire ${libGE} saisi (${fmtNum(c.saisi)} h) inférieur au dernier index connu (${fmtNum(dernier)} h le ${fmtDate(prev.dateReleve)}) — un compteur horaire ne recule pas.`,
+          message: `Index horaire ${libGE} saisi (${fmtNum(c.saisi)} h) inférieur au dernier index connu (${fmtNum(dernier)} h le ${fmtDate(prev.dateReleve)}) - un compteur horaire ne recule pas.`,
         });
       } else {
         const deltaMax = joursEntre(prev.dateReleve, maintenant) * maxHeuresJour + 1;
@@ -106,14 +106,14 @@ export async function verifierClotureEnergie(
         if (saisi < dernier) {
           avertissements.push({
             champ: 'indexCompteur',
-            message: `Index compteur CEET saisi (${fmtNum(saisi)} kWh) inférieur au dernier index connu (${fmtNum(dernier)} kWh le ${fmtDate(prev.dateReleve)}) — un index cumulé ne recule pas (sauf remplacement du compteur).`,
+            message: `Index compteur CEET saisi (${fmtNum(saisi)} kWh) inférieur au dernier index connu (${fmtNum(dernier)} kWh le ${fmtDate(prev.dateReleve)}) - un index cumulé ne recule pas (sauf remplacement du compteur).`,
           });
         } else {
           const deltaMax = (joursEntre(prev.dateReleve, maintenant) + 1) * maxKwhJour;
           if (saisi - dernier > deltaMax) {
             avertissements.push({
               champ: 'indexCompteur',
-              message: `Consommation CEET de ${fmtNum(saisi - dernier)} kWh depuis le dernier relevé (${fmtDate(prev.dateReleve)}) — très au-dessus du plausible (~${fmtNum(maxKwhJour)} kWh/jour max).`,
+              message: `Consommation CEET de ${fmtNum(saisi - dernier)} kWh depuis le dernier relevé (${fmtDate(prev.dateReleve)}) - très au-dessus du plausible (~${fmtNum(maxKwhJour)} kWh/jour max).`,
             });
           }
         }
@@ -175,7 +175,7 @@ export async function verifierDepotage(
     if (dernier && valeurs.stockAvant > dernier.valeur + margeStockL) {
       avertissements.push({
         champ: 'stockAvantLitres',
-        message: `Stock avant dépotage (${fmtNum(valeurs.stockAvant)} L) supérieur au dernier niveau connu (${fmtNum(dernier.valeur)} L le ${fmtDate(dernier.date)}) — sans dépotage entre-temps, le niveau ne peut qu'avoir baissé.`,
+        message: `Stock avant dépotage (${fmtNum(valeurs.stockAvant)} L) supérieur au dernier niveau connu (${fmtNum(dernier.valeur)} L le ${fmtDate(dernier.date)}) - sans dépotage entre-temps, le niveau ne peut qu'avoir baissé.`,
       });
     }
   }

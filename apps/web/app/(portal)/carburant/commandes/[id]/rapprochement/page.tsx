@@ -43,7 +43,7 @@ interface Rapprochement {
 }
 
 const L = (v: number | null) => (v == null ? <span className="text-gray-300">—</span> : fmtNumber(v));
-// Écart non expliqué : rouge dès qu'il est positif — c'est du carburant chargé
+// Écart non expliqué : rouge dès qu'il est positif - c'est du carburant chargé
 // dont personne ne sait dire où il est passé.
 const ecartCell = (v: number) => (
   <span className={Math.abs(v) < 1 ? 'text-gray-400' : v > 0 ? 'font-semibold text-red-600' : 'font-semibold text-blue-600'}>
@@ -66,7 +66,7 @@ export default function RapprochementPage() {
   return (
     <div>
       <PageHeader
-        title={`Rapprochement carburant — BC ${data.bc.numero}`}
+        title={`Rapprochement carburant - BC ${data.bc.numero}`}
         subtitle={`T${data.bc.trimestre} ${data.bc.annee} · ${MOIS[data.periode.moisMin]} → ${MOIS[data.periode.moisMax]} · ${t.nbBl} chargement(s)`}
         backHref={`/carburant/commandes/${id}`}
         actions={<ExportButtons base={`/rapports/rapprochement/${id}/export`} name={`rapprochement-${data.bc.numero}`} />}
@@ -87,7 +87,7 @@ export default function RapprochementPage() {
 
       {data.arrete.anticipe && (
         <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-          <b>Arrêté anticipé au {new Date(data.arrete.dateArrete).toLocaleDateString('fr-FR')}</b> — les{' '}
+          <b>Arrêté anticipé au {new Date(data.arrete.dateArrete).toLocaleDateString('fr-FR')}</b> - les{' '}
           {data.arrete.joursProjetes} jour(s) restants jusqu'à la fin de la période sont <b>estimés</b> sur la
           consommation journalière mesurée de chaque site ({fmtNumber(t.projectionLitres)} L projetés au total).
           Relancez le rapport après la fin du mois pour l'arrêté définitif.
@@ -103,7 +103,7 @@ export default function RapprochementPage() {
 
       {/* ── Volet logistique : où sont partis les litres commandés ── */}
       <div className="mb-4 overflow-x-auto rounded-xl border border-gray-100 bg-white p-5">
-        <h3 className="mb-1 text-sm font-semibold text-gray-700">Volet logistique — du bon de commande au site</h3>
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">Volet logistique - du bon de commande au site</h3>
         <p className="mb-3 text-xs text-gray-500">
           Écart non expliqué = chargé − livré − retour dépôt − perte − report. C’est la colonne à lire.
         </p>
@@ -157,7 +157,7 @@ export default function RapprochementPage() {
 
       {/* ── Volet physique : équation de conservation par site ── */}
       <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-5">
-        <h3 className="mb-1 text-sm font-semibold text-gray-700">Volet physique — équation de conservation par site</h3>
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">Volet physique - équation de conservation par site</h3>
         <p className="mb-3 text-xs text-gray-500">
           stock début + livré + transferts/purges − consommé = stock fin. La consommation théorique vient des heures compteur × débit des GE actifs ;
           l’écart positif est une surconsommation (fuite, vol, ou heures mal déclarées).
@@ -220,7 +220,7 @@ export default function RapprochementPage() {
         {nonMesures.length > 0 && (
           <p className="mt-3 text-xs text-gray-500">
             {nonMesures.length} site(s) sans deux relevés de cuve sur la période : leur consommation n’est pas calculable et
-            n’est comptée nulle part — elle n’est pas supposée nulle.
+            n’est comptée nulle part - elle n’est pas supposée nulle.
           </p>
         )}
       </div>

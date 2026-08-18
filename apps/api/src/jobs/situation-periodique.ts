@@ -76,7 +76,7 @@ export async function situationPeriodiqueJob(): Promise<void> {
     const parties: string[] = [];
     if (incs.length) parties.push(`${incs.length} incident(s) >${seuilH}h : ${enListe(incs)}`);
     if (coups.length) parties.push(`${coups.length} coupure(s) partielle(s) : ${enListe(coups)}`);
-    return parties.length ? `[E&M OpS] Situation ${heure} — ${parties.join(' · ')}` : null;
+    return parties.length ? `[E&M OpS] Situation ${heure} - ${parties.join(' · ')}` : null;
   };
 
   const contacts = await prisma.contact.findMany({ where: { actif: true, notifSituations: true } });

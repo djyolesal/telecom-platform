@@ -9,8 +9,8 @@ import { DashboardNoc } from './DashboardNoc';
  * L'aiguillage vivait dans un composant client, décidé d'après `useSession()`.
  * Or la session client n'est pas propagée instantanément après une connexion
  * sans rechargement (signIn `redirect: false` puis `router.push`) : pendant
- * cette fenêtre le rôle était vide, la branche PAR DÉFAUT — le tableau de bord
- * général — se montait pour un transporteur, tirait des endpoints qui lui sont
+ * cette fenêtre le rôle était vide, la branche PAR DÉFAUT - le tableau de bord
+ * général - se montait pour un transporteur, tirait des endpoints qui lui sont
  * refusés (403) et pouvait rester affichée. Ici `auth()` lit le cookie de
  * session sur le serveur : le rôle est connu AVANT le premier rendu, il n'y a
  * plus de fenêtre où il serait inconnu.

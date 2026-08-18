@@ -104,7 +104,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           latitude: check.lat, longitude: check.lng);
       if (!mounted) return;
       _snack(res.isQueued
-          ? 'Démarrage mis en file — il partira à la reconnexion'
+          ? 'Démarrage mis en file - il partira à la reconnexion'
           : 'Maintenance démarrée');
       _reload();
     } catch (e) {
@@ -190,7 +190,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           await repo.addPhotos(widget.id, photoPaths: paths, phase: 'AVANT');
       if (!mounted) return;
       _snack(res.isQueued
-          ? '${paths.length} photo(s) en file — elles partiront à la reconnexion'
+          ? '${paths.length} photo(s) en file - elles partiront à la reconnexion'
           : '${paths.length} photo(s) envoyée(s)');
       setState(() => _photosAvant.clear());
       _reload();
@@ -217,7 +217,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       final res = await repo.suspend(widget.id, motif: motif);
       if (!mounted) return;
       _snack(res.isQueued
-          ? 'Suspension mise en file — elle partira à la reconnexion'
+          ? 'Suspension mise en file - elle partira à la reconnexion'
           : 'Maintenance suspendue');
       _reload();
     } catch (e) {
@@ -238,7 +238,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
           latitude: check.lat, longitude: check.lng);
       if (!mounted) return;
       _snack(res.isQueued
-          ? 'Reprise mise en file — elle partira à la reconnexion'
+          ? 'Reprise mise en file - elle partira à la reconnexion'
           : 'Maintenance reprise');
       _reload();
     } catch (e) {
@@ -341,7 +341,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       }
       if (!mounted) return;
       _snack(res.isQueued
-          ? 'Clôture enregistrée hors-ligne — photos envoyées dès la reconnexion'
+          ? 'Clôture enregistrée hors-ligne - photos envoyées dès la reconnexion'
           : 'Maintenance clôturée');
       _reload();
     } catch (e) {
@@ -360,10 +360,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       return e.message; // ex: « Vous n'êtes pas sur le site… », photos < 6
     }
     if (e is UnauthorizedException) {
-      return 'Session expirée — reconnectez-vous puis réessayez.';
+      return 'Session expirée - reconnectez-vous puis réessayez.';
     }
     if (e is NetworkException) {
-      return 'Connexion indisponible — réessayez une fois en ligne.';
+      return 'Connexion indisponible - réessayez une fois en ligne.';
     }
     return 'Erreur : $e';
   }
@@ -464,7 +464,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                                 fontSize: 13)),
                         const SizedBox(height: 4),
                         Text(
-                            'Prenez l’état initial dès le démarrage — les photos de fin se prennent à la clôture.',
+                            'Prenez l’état initial dès le démarrage - les photos de fin se prennent à la clôture.',
                             style: TextStyle(
                                 fontSize: 12, color: Colors.grey.shade600)),
                         const SizedBox(height: 8),
@@ -542,7 +542,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                           child: Text(
-                              'Suspendue${m.motifSuspension != null ? ' — ${m.motifSuspension}' : ''}',
+                              'Suspendue${m.motifSuspension != null ? ' - ${m.motifSuspension}' : ''}',
                               style: const TextStyle(fontSize: 13))),
                     ]),
                   ),
@@ -770,7 +770,7 @@ class _CloseSheetState extends State<_CloseSheet> {
       if (saisi == null || dernier == null) return;
       if (saisi < dernier.valeur) {
         avert.add(
-            'Index horaire $libelle saisi (${_fmtV(saisi)} h) inférieur au dernier index connu (${_fmtV(dernier.valeur)} h${_fmtDate(dernier.date)}) — un compteur horaire ne recule pas.');
+            'Index horaire $libelle saisi (${_fmtV(saisi)} h) inférieur au dernier index connu (${_fmtV(dernier.valeur)} h${_fmtDate(dernier.date)}) - un compteur horaire ne recule pas.');
       } else if (dernier.date != null) {
         final jours =
             DateTime.now().difference(dernier.date!).inMinutes / 1440.0;
@@ -798,7 +798,7 @@ class _CloseSheetState extends State<_CloseSheet> {
     final dernierCeet = c.dernierIndexCeet;
     if (ceet != null && dernierCeet != null && ceet < dernierCeet.valeur) {
       avert.add(
-          'Index compteur CEET saisi (${_fmtV(ceet)} kWh) inférieur au dernier index connu (${_fmtV(dernierCeet.valeur)} kWh${_fmtDate(dernierCeet.date)}) — un index cumulé ne recule pas.');
+          'Index compteur CEET saisi (${_fmtV(ceet)} kWh) inférieur au dernier index connu (${_fmtV(dernierCeet.valeur)} kWh${_fmtDate(dernierCeet.date)}) - un index cumulé ne recule pas.');
     }
     return avert;
   }
@@ -825,7 +825,7 @@ class _CloseSheetState extends State<_CloseSheet> {
     final due = h != null && h >= seuil;
     final String hint;
     if (g.indexDerniereVidange == null) {
-      hint = 'Première vidange non encore enregistrée — cochez si effectuée.';
+      hint = 'Première vidange non encore enregistrée - cochez si effectuée.';
     } else if (h == null) {
       hint = 'Saisissez l\'index pour évaluer (seuil $seuil h).';
     } else if (h < 0) {
@@ -1066,7 +1066,7 @@ class _CloseSheetState extends State<_CloseSheet> {
 
     // Le bouton de validation est ÉPINGLÉ sous la zone défilante (et sous une
     // SafeArea) : en fin de formulaire il finissait sous la barre système ou
-    // sous le clavier — les techniciens ne le trouvaient pas.
+    // sous le clavier - les techniciens ne le trouvaient pas.
     return Padding(
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -1223,7 +1223,7 @@ class _CloseSheetState extends State<_CloseSheet> {
                                           ? Colors.green.shade800
                                           : Colors.orange.shade900)),
                               Text(
-                                  'À prendre sur site avec la caméra — pas d\'import galerie',
+                                  'À prendre sur site avec la caméra - pas d\'import galerie',
                                   style: TextStyle(
                                       fontSize: 11,
                                       color: Colors.grey.shade600)),
@@ -1317,7 +1317,7 @@ class _CloseSheetState extends State<_CloseSheet> {
 }
 
 /// Dialogue de motif de suspension : possède SON contrôleur de texte (détruit
-/// par le framework après démontage — jamais pendant l'animation de fermeture).
+/// par le framework après démontage - jamais pendant l'animation de fermeture).
 class _MotifSuspensionDialog extends StatefulWidget {
   const _MotifSuspensionDialog();
   @override

@@ -775,7 +775,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     if (avertissements.length && !confirmeVraisemblance) {
       return res.status(422).json({
         success: false,
-        error: 'Certaines valeurs saisies semblent inhabituelles — vérifiez puis confirmez.',
+        error: 'Certaines valeurs saisies semblent inhabituelles - vérifiez puis confirmez.',
         confirmationRequise: true,
         avertissements,
       });

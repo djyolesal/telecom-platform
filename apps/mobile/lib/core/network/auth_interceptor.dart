@@ -52,7 +52,7 @@ class AuthInterceptor extends Interceptor {
         refreshed = await _tryRefresh();
       } on NetworkException {
         // Le refresh a échoué pour cause RÉSEAU (timeout/coupure), pas un refus
-        // serveur : surtout ne pas déconnecter — on laisse l'erreur d'origine
+        // serveur : surtout ne pas déconnecter - on laisse l'erreur d'origine
         // remonter (la couche appelante la traite comme hors-ligne / mise en file).
         return handler.next(err);
       }
@@ -67,7 +67,7 @@ class AuthInterceptor extends Interceptor {
           // Le rejeu a bien atteint le serveur, qui a répondu autre chose (422
           // vraisemblance, 409, 500…) : propager CETTE erreur. Renvoyer le 401
           // d'origine faisait passer une saisie valide pour une session expirée
-          // — l'opération partait en file au lieu d'ouvrir la confirmation.
+          // - l'opération partait en file au lieu d'ouvrir la confirmation.
           if (e2.response != null && e2.response!.statusCode != 401) return handler.next(e2);
         } catch (_) {
           // rejeu impossible (FormData déjà consommée…) → rejet ci-dessous

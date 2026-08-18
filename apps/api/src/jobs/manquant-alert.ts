@@ -48,37 +48,37 @@ export async function manquantAlertJob(): Promise<void> {
 
   const sections: string[] = [];
   if (critsLignes.length) {
-    sections.push('🔴 Critiques :\n' + critsLignes.slice(0, 5).map((l) => `${l.siteCode} — ${L(l.manquant)} (BL ${l.numeroBL})`).join('\n'));
+    sections.push('🔴 Critiques :\n' + critsLignes.slice(0, 5).map((l) => `${l.siteCode} - ${L(l.manquant)} (BL ${l.numeroBL})`).join('\n'));
   }
   if (camionsTri.length) {
-    sections.push('🚛 Camions (chargé non distribué) :\n' + camionsTri.slice(0, 5).map((c) => `${c.numeroBL} ${c.immatriculation} — ${L(c.manquant)}`).join('\n'));
+    sections.push('🚛 Camions (chargé non distribué) :\n' + camionsTri.slice(0, 5).map((c) => `${c.numeroBL} ${c.immatriculation} - ${L(c.manquant)}`).join('\n'));
   }
   if (retardLignes.length) {
-    sections.push('🟠 En retard :\n' + retardLignes.slice(0, 5).map((l) => `${l.siteCode} — ${L(l.manquant)} (${l.jours} j)`).join('\n'));
+    sections.push('🟠 En retard :\n' + retardLignes.slice(0, 5).map((l) => `${l.siteCode} - ${L(l.manquant)} (${l.jours} j)`).join('\n'));
   }
   // Chargements en attente d'un geste du manager : sans ces deux lignes, un BL
   // parti du dépôt sans plan n'apparaissait dans aucune alerte.
   if (pilotage.sansPlan.length) {
     sections.push(`📋 Chargés sans plan (> ${pilotage.seuilJours} j) :\n` +
-      pilotage.sansPlan.slice(0, 5).map((b) => `${b.numeroBL} ${b.immatriculation} — ${L(b.volumeChargeLitres)} (${b.jours} j)`).join('\n'));
+      pilotage.sansPlan.slice(0, 5).map((b) => `${b.numeroBL} ${b.immatriculation} - ${L(b.volumeChargeLitres)} (${b.jours} j)`).join('\n'));
   }
   // Un volume chargé sur un barème périmé n'est pas opposable : la relance
   // part AVANT l'échéance (fenêtre de 30 j), pas après le litige.
   if (jaugeages.length) {
     sections.push(`📏 Certificats de jaugeage (préavis ${JAUGEAGE_PREAVIS_JOURS} j) :\n` +
       jaugeages.slice(0, 5).map((v) =>
-        `${v.libelle}${v.prestataire ? ` (${v.prestataire.nom})` : ''} — ${v.statut === 'EXPIRE' ? 'EXPIRÉ' : 'expire bientôt'}`
+        `${v.libelle}${v.prestataire ? ` (${v.prestataire.nom})` : ''} - ${v.statut === 'EXPIRE' ? 'EXPIRÉ' : 'expire bientôt'}`
       ).join('\n'));
   }
   if (pilotage.brouillonsOublies.length) {
-    sections.push(`📝 Brouillons oubliés : ${pilotage.brouillonsOublies.length} — ` +
+    sections.push(`📝 Brouillons oubliés : ${pilotage.brouillonsOublies.length} - ` +
       pilotage.brouillonsOublies.slice(0, 3).map((b) => `${b.immatriculation} (${b.jours} j)`).join(', '));
   }
   const body = sections.join('\n\n').slice(0, 1500);
 
   const nbCrit = critsLignes.length + camionsTri.length;
   const title = lignes.length
-    ? `🚚 ${lignes.length} manquant(s)${nbCrit ? ` · ${nbCrit} critique(s)` : ''} — ${L(totalLitres)}`
+    ? `🚚 ${lignes.length} manquant(s)${nbCrit ? ` · ${nbCrit} critique(s)` : ''} - ${L(totalLitres)}`
     : nbAttente
       ? `📋 ${nbAttente} chargement(s) en attente de plan`
       : `📏 ${jaugeages.length} certificat(s) de jaugeage à renouveler`;
@@ -97,7 +97,7 @@ export async function manquantAlertJob(): Promise<void> {
   if (nbCrit > 0) {
     await notificationService.sendToRole('ADMIN', {
       ...payload,
-      title: `🔴 ${nbCrit} manquant(s) critique(s) carburant — ${L(totalLitres)}`,
+      title: `🔴 ${nbCrit} manquant(s) critique(s) carburant - ${L(totalLitres)}`,
     });
   }
 

@@ -13,9 +13,9 @@ const NAVY = 'FF1B3F6B', TEAL = 'FF0E7C6B', AMBER = 'FFE67E22', RED = 'FFC0392B'
       ROUGE_PALE = 'FFFDECEA', VIOLET_PALE = 'FFF4ECF7', VERT_PALE = 'FFE8F6F3';
 
 const LIBELLES_ALARME: Record<string, string> = {
-  AE: 'AE — énergie', GE: 'GE — groupe électrogène', EN: 'EN — énergie',
-  TX: 'TX — transmission', FO: 'FO — fibre optique', RA: 'RA — radio',
-  MI: 'MI — micro-ondes', MD: 'MD — divers', NA: 'NA — non attribué',
+  AE: 'AE - énergie', GE: 'GE - groupe électrogène', EN: 'EN - énergie',
+  TX: 'TX - transmission', FO: 'FO - fibre optique', RA: 'RA - radio',
+  MI: 'MI - micro-ondes', MD: 'MD - divers', NA: 'NA - non attribué',
 };
 
 export interface LigneCoupureExport {
@@ -86,7 +86,7 @@ export function construireClasseurCoupures(opts: {
 
   sy.mergeCells('B2:G2');
   const titre = sy.getCell('B2');
-  titre.value = 'E&M OpS — Rapport des coupures réseau';
+  titre.value = 'E&M OpS - Rapport des coupures réseau';
   titre.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
   titre.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
   titre.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };

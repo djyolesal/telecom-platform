@@ -52,7 +52,7 @@ const TECHNOS = [
 ];
 // Référentiel NOC (INNER du rapport de supervision).
 // « NA » (non attribué) est unifié avec « aucune » sous l'étiquette N/A :
-// plus de doublon « — » / « NA » dans les menus, l'existant s'affiche N/A.
+// plus de doublon « - » / « NA » dans les menus, l'existant s'affiche N/A.
 const TYPES_ALARME = ['AE', 'GE', 'EN', 'FO', 'TX', 'RA', 'MI', 'MD'].map((v) => ({ value: v, label: v }));
 
 const dureeDepuis = (debut: string) =>
@@ -74,7 +74,7 @@ const TechnoBadge = ({ t }: { t: string }) => (
 export default function CoupuresReseauPage() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role;
-  // Écriture réservée au NOC/manager/admin — les techniciens passent par les
+  // Écriture réservée au NOC/manager/admin - les techniciens passent par les
   // incidents, les superviseurs et prestataires consultent.
   const peutEcrire = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
   const peutImporter = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
@@ -112,7 +112,7 @@ export default function CoupuresReseauPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au, avecHeritees, aQualifier }],
     // Poll 60 s (comme la carte NOC) : les coupures OSS arrivent toutes les
-    // 5 min sans action humaine — la liste doit se rafraîchir toute seule.
+    // 5 min sans action humaine - la liste doit se rafraîchir toute seule.
     refetchInterval: 60_000,
     queryFn: () => api.get('/coupures-reseau', {
       params: {
@@ -187,7 +187,7 @@ export default function CoupuresReseauPage() {
     {
       key: 'technologie', header: 'Technologie',
       // Fréquence et secteur (fichier NOC) : stockés depuis toujours mais
-      // jamais affichés — c'est pourtant ce qui distingue deux coupures 4G
+      // jamais affichés - c'est pourtant ce qui distingue deux coupures 4G
       // du même site (L800 secteur 2 ≠ L1800 secteur 1).
       render: (c) => (
         <div>
@@ -196,7 +196,7 @@ export default function CoupuresReseauPage() {
             <span className={`ml-1.5 rounded px-1 py-px text-[10px] font-bold ${c.priseEnChargePar ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-600'}`}
               title={c.priseEnChargePar
                 ? `Détection automatique prise en charge par ${c.priseEnChargePar}`
-                : 'Détectée automatiquement par la synchronisation OSS (état eNodeB) — à prendre en charge'}>
+                : 'Détectée automatiquement par la synchronisation OSS (état eNodeB) - à prendre en charge'}>
               {c.priseEnChargePar ? '✓ AUTO' : 'AUTO'}
             </span>
           )}
@@ -301,7 +301,7 @@ export default function CoupuresReseauPage() {
             </p>
           </div>
           <button type="button" onClick={() => { setAQualifier(!aQualifier); setPage(1); }}
-            title="Coupures en cours sans type d'alarme ou sans classement actif/passif — à compléter pour les rapports. Cliquer pour filtrer."
+            title="Coupures en cours sans type d'alarme ou sans classement actif/passif - à compléter pour les rapports. Cliquer pour filtrer."
             className={`rounded-xl border px-4 py-3 text-left transition-colors ${aQualifier ? 'border-[#1B3F6B] bg-[#EAF1F8]' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
             <p className="text-xs text-gray-500">À qualifier {aQualifier && '· filtre actif'}</p>
             <p className={`mt-0.5 text-lg font-bold ${stats.aQualifier > 0 ? 'text-[#1B3F6B]' : 'text-gray-800'}`}>{stats.aQualifier}</p>
@@ -324,7 +324,7 @@ export default function CoupuresReseauPage() {
           ))}
         </div>
         {/* Sas AUTO (détections non traitées) vs rapport NOC : une AUTO prise
-            en charge REJOINT le rapport NOC — c'est lui qui est envoyé et qui
+            en charge REJOINT le rapport NOC - c'est lui qui est envoyé et qui
             fonde la disponibilité. Compteurs sur les coupures en cours. */}
         <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
           {[
@@ -485,7 +485,7 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
       {siteEntier && nbAval > 0 && (
         <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
           <input type="checkbox" checked={propagerAval} onChange={(e) => setPropagerAval(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-amber-300" />
-          <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) — <b>propager la coupure</b> à tout l'aval (coupures « héritées », clôturées en cascade avec celle-ci).</span>
+          <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) - <b>propager la coupure</b> à tout l'aval (coupures « héritées », clôturées en cascade avec celle-ci).</span>
         </label>
       )}
       {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
@@ -541,7 +541,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <AnnulationPriseEnChargeBloc coupureId={coupure.id} priseEnChargePar={coupure.priseEnChargePar} onDone={onDone} />
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Début (corrigeable — l'audit garde l'ancien)">
+        <Field label="Début (corrigeable - l'audit garde l'ancien)">
           <Input type="datetime-local" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
         </Field>
         <Field label="Rétablissement (vide = en cours)">
@@ -561,8 +561,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
             value={causeCategorie}
             onChange={(e) => setCauseCategorie(e.target.value)}
             options={[
-              { value: 'ACTIF', label: 'Actif — radio/transmission' },
-              { value: 'PASSIF', label: 'Passif — énergie/environnement' },
+              { value: 'ACTIF', label: 'Actif - radio/transmission' },
+              { value: 'PASSIF', label: 'Passif - énergie/environnement' },
             ]}
             placeholder="(non classé)"
           />
@@ -572,7 +572,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       {coupure.incident && (
         <p className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
           Incident lié : <b>{coupure.incident.reference ?? coupure.incident.id.slice(0, 8)}</b> ({coupure.incident.statut})
-          {reouverture && <span className="text-amber-700"> — la réouverture rouvrira cet incident et notifiera le prestataire.</span>}
+          {reouverture && <span className="text-amber-700"> - la réouverture rouvrira cet incident et notifiera le prestataire.</span>}
         </p>
       )}
       {nbHeritees > 0 && dateFin && (
@@ -594,7 +594,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 
 // ── Prise en charge d'une détection AUTO ────────────────────────────────────
 // Le NOC adopte l'événement ; le serveur remonte la chaîne de transmission :
-// si un site AMONT est aussi coupé, c'est lui la racine — les coupures aval
+// si un site AMONT est aussi coupé, c'est lui la racine - les coupures aval
 // (dont celle-ci) sont reclassées héritées et la liste retombe à un événement.
 
 function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: () => void }) {
@@ -613,7 +613,7 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
       {resultat ? (
         <p>
           <CheckCircle2 size={14} className="mr-1 inline text-emerald-600" />
-          Pris en charge par <b>{resultat.priseEnChargePar}</b> — racine : <b>{resultat.racineSiteNom}</b>
+          Pris en charge par <b>{resultat.priseEnChargePar}</b> - racine : <b>{resultat.racineSiteNom}</b>
           {!resultat.estRacine && <span className="text-amber-700"> (panne amont détectée : cette coupure devient héritée)</span>}
           {resultat.heriteesReclassees > 0 && <> · <b>{resultat.heriteesReclassees}</b> coupure(s) aval reclassée(s) héritée(s)</>}
           {resultat.heriteesCreees > 0 && <> · <b>{resultat.heriteesCreees}</b> héritée(s) créée(s) pour l&apos;aval sans détection</>}
@@ -627,7 +627,7 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
           </p>
           <label className="mb-2 flex cursor-pointer items-start gap-2 text-xs">
             <input type="checkbox" checked={creerAval} onChange={(e) => setCreerAval(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 rounded" />
-            <span>Créer les héritées pour les sites aval <b>sans détection OSS propre</b> (pas de NodeID) — leur indisponibilité comptera dans le rapport.</span>
+            <span>Créer les héritées pour les sites aval <b>sans détection OSS propre</b> (pas de NodeID) - leur indisponibilité comptera dans le rapport.</span>
           </label>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             {mutation.isPending ? 'Analyse de la topologie…' : 'Prendre en charge (analyse amont/aval)'}
@@ -641,7 +641,7 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
 
 // ── Annulation d'une prise en charge erronée ────────────────────────────────
 // Défait proprement l'adoption : héritées fabriquées supprimées, héritées
-// reclassées redevenues locales, estampille retirée — le NOC peut refaire
+// reclassées redevenues locales, estampille retirée - le NOC peut refaire
 // l'analyse depuis la bonne coupure.
 
 function AnnulationPriseEnChargeBloc({ coupureId, priseEnChargePar, onDone }: {
@@ -658,7 +658,7 @@ function AnnulationPriseEnChargeBloc({ coupureId, priseEnChargePar, onDone }: {
     <div className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
       {resultat ? (
         <p className="text-amber-800">
-          Prise en charge <b>annulée</b> — {resultat.heriteesSupprimees > 0 && <>{resultat.heriteesSupprimees} héritée(s) fabriquée(s) supprimée(s) · </>}
+          Prise en charge <b>annulée</b> - {resultat.heriteesSupprimees > 0 && <>{resultat.heriteesSupprimees} héritée(s) fabriquée(s) supprimée(s) · </>}
           {resultat.heriteesRedeclassees} coupure(s) redevenue(s) locale(s). Refaites l&apos;analyse depuis la bonne coupure.
         </p>
       ) : (
@@ -705,7 +705,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   return (
     <Modal titre="Importer le rapport de supervision" onClose={onClose}>
       <p className="mb-3 text-sm text-gray-600">
-        Fichier <b>.xlsx</b> du NOC — seule la feuille <code className="text-xs">Events</code> est importée.
+        Fichier <b>.xlsx</b> du NOC - seule la feuille <code className="text-xs">Events</code> est importée.
         Ré-importer le même rapport ne crée pas de doublons.
       </p>
       <input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -719,11 +719,11 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           )}
           {(result.incidentsResolus ?? 0) > 0 && (
             <p className="mt-1 text-emerald-700">
-              {result.incidentsResolus} incident(s) résolu(s) automatiquement — sites rétablis sans intervention terrain.
+              {result.incidentsResolus} incident(s) résolu(s) automatiquement - sites rétablis sans intervention terrain.
             </p>
           )}
           {(result.heriteesDetectees ?? 0) > 0 && (
-            <p className="mt-1 text-purple-700">{result.heriteesDetectees} coupure(s) reclassée(s) « héritée(s) » via la topologie (impact d&apos;une panne amont — pas d&apos;incident ni d&apos;imputation aval).</p>
+            <p className="mt-1 text-purple-700">{result.heriteesDetectees} coupure(s) reclassée(s) « héritée(s) » via la topologie (impact d&apos;une panne amont - pas d&apos;incident ni d&apos;imputation aval).</p>
           )}
           {(result.incidentsCrees ?? 0) > 0 && (
             <p className="mt-1 text-[#1B3F6B]">{result.incidentsCrees} incident(s) terrain créé(s) et dispatché(s) pour les sites entiers encore hors service.</p>
@@ -735,7 +735,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             </div>
           )}
           {result.erreurs.length > 0 && (
-            <p className="mt-2 text-xs text-red-600">{result.erreurs.length} ligne(s) illisible(s) — ex. {result.erreurs[0].feuille} l.{result.erreurs[0].ligne} : {result.erreurs[0].message}</p>
+            <p className="mt-2 text-xs text-red-600">{result.erreurs.length} ligne(s) illisible(s) - ex. {result.erreurs[0].feuille} l.{result.erreurs[0].ligne} : {result.erreurs[0].message}</p>
           )}
         </div>
       )}

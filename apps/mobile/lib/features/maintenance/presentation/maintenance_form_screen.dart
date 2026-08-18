@@ -222,7 +222,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       payloadSiteId = _siteId;
       type = 'CURATIVE';
       categorie = 'GE';
-      equipement = 'Dépannage — ${ge.libelle ?? 'GE'}';
+      equipement = 'Dépannage - ${ge.libelle ?? 'GE'}';
       actifType = 'GE';
       actifId = ge.id; // rattachement pour la fiabilité par marque
     } else {
@@ -246,7 +246,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       type = 'CURATIVE';
       categorie = actif.categorie;
       equipement =
-          '${kNatureTravaux[_nature]} — ${actif.libelle ?? actif.categorie}';
+          '${kNatureTravaux[_nature]} - ${actif.libelle ?? actif.categorie}';
       actifType = actif.actifType;
       actifId = actif.id;
       siteSourceId = _nature == 'DEPLACEMENT' ? actif.siteId : null;

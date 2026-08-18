@@ -22,7 +22,7 @@ export default function NouvelIncidentPage() {
     queryKey: ['sites-select'],
     queryFn: () => api.get('/sites', { params: { all: true } }).then((r) => r.data.data),
   });
-  const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} — ${s.nom}` }));
+  const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} - ${s.nom}` }));
 
   const mutation = useMutation({
     mutationFn: () => {

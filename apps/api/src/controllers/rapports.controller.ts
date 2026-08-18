@@ -334,13 +334,13 @@ export async function sendRapportMensuel(req: Request, res: Response, next: Next
 
     const sent = await sendEmail({
       to: destinataires,
-      subject: `Rapport mensuel E&M OpS — ${String(mo).padStart(2, '0')}/${an}`,
+      subject: `Rapport mensuel E&M OpS - ${String(mo).padStart(2, '0')}/${an}`,
       html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint le rapport mensuel d'exploitation (${String(mo).padStart(2, '0')}/${an}).</p>`,
       attachments: [{ filename: `rapport-${an}-${String(mo).padStart(2, '0')}.pdf`, content: pdf, contentType: 'application/pdf' }],
     });
 
     await auditLog(req.user!.id, 'EXPORT', 'rapport_mensuel', undefined, { annee: an, mois: mo, destinataires, sent }, req);
-    res.json({ success: true, message: sent ? 'Rapport envoyé' : 'SMTP non configuré — rapport non envoyé', data: { sent } });
+    res.json({ success: true, message: sent ? 'Rapport envoyé' : 'SMTP non configuré - rapport non envoyé', data: { sent } });
   } catch (err) { next(err); }
 }
 

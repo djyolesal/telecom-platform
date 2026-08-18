@@ -91,7 +91,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
       const link = `${env.APP_URL}/reset-password?token=${token}`;
       await sendEmail({
         to: user.email,
-        subject: 'Votre compte E&M OpS — définir votre mot de passe',
+        subject: 'Votre compte E&M OpS - définir votre mot de passe',
         html: `<p>Bonjour ${user.prenom},</p><p>Votre compte a été créé. Cliquez sur ce lien (valable 1 h) pour définir votre mot de passe :</p><p><a href="${link}">${link}</a></p>`,
       });
     }

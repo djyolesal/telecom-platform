@@ -167,8 +167,8 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
             priseEnChargePar: entrainee ? racineAmont!.priseEnChargePar : undefined,
             priseEnChargeLe: entrainee && racineAmont!.priseEnChargePar ? new Date() : undefined,
             observations: entrainee
-              ? `Détection automatique OSS — héritée de la panne amont (${siteParId.get(racineAmont!.siteId)?.nom ?? 'site amont'}).`
-              : 'Détection automatique OSS (mode observation — pas de notification).',
+              ? `Détection automatique OSS - héritée de la panne amont (${siteParId.get(racineAmont!.siteId)?.nom ?? 'site amont'}).`
+              : 'Détection automatique OSS (mode observation - pas de notification).',
           },
           select: {
             id: true, siteId: true, dateDebut: true, origine: true,

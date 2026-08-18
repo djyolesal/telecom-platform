@@ -51,7 +51,7 @@ export function DataTable<T>({
   emptyMessage?: string;
   /** ex. '70vh' : active le défilement interne (l'en-tête épinglé prend alors tout son sens). */
   maxHeight?: string;
-  /** false = masque la barre d'outils (compteur, densité, colonnes) — petits tableaux. */
+  /** false = masque la barre d'outils (compteur, densité, colonnes) - petits tableaux. */
   toolbar?: boolean;
 }) {
   // Préférences par page (les clés de colonnes distinguent plusieurs tableaux d'une même page).

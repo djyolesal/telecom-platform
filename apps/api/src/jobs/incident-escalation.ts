@@ -30,7 +30,7 @@ export async function incidentEscalationJob(): Promise<void> {
 
     await notificationService.sendToRoleInRegion('MANAGER', inc.site.region, {
       type: 'INCIDENT_ESCALATION',
-      title: `⚠️ Escalade incident ${inc.severite} — ${inc.site.code}`,
+      title: `⚠️ Escalade incident ${inc.severite} - ${inc.site.code}`,
       body: `Incident ouvert depuis ${Math.round(age / 60)}h sans prise en charge : ${inc.description.slice(0, 120)}`,
       data: { kind: 'incident_escalation', incidentId: inc.id },
     });

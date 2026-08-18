@@ -59,7 +59,7 @@ export default function TachesPreventivesPage() {
     <div>
       <PageHeader
         title="Tâches préventives contractuelles"
-        subtitle="Libellé et fréquence modifiables sans redéploiement — la clé et l'éligibilité restent fixes"
+        subtitle="Libellé et fréquence modifiables sans redéploiement - la clé et l'éligibilité restent fixes"
         backHref="/administration"
       />
 

@@ -49,7 +49,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
 
   /**
    * Le PDF du BC est ANALYSÉ côté serveur (texte natif ou OCR d'un scan) et le
-   * formulaire est pré-rempli — l'utilisateur relit et corrige avant de créer :
+   * formulaire est pré-rempli - l'utilisateur relit et corrige avant de créer :
    * le but est d'éviter les fautes de recopie, pas de créer sans contrôle.
    */
   const analyserPdf = async (file: File) => {
@@ -74,7 +74,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
       setAnalyse(d.ocr ? 'ocr' : 'texte');
     } catch (e) {
       // Analyse indisponible (outils absents) ou PDF illisible : on retombe sur
-      // un simple archivage du PDF — le formulaire reste à saisir à la main.
+      // un simple archivage du PDF - le formulaire reste à saisir à la main.
       try {
         const fd = new FormData();
         fd.append('folder', 'documents');
@@ -82,7 +82,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
         const r = await api.post('/upload/document', fd);
         if (r.data?.data) setBcPdfPath(r.data.data.key);
         const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
-        setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) — PDF joint, saisie manuelle.`]);
+        setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) - PDF joint, saisie manuelle.`]);
         setAnalyse('sans');
       } catch { setError('Échec de l’upload du PDF.'); }
     } finally { setUploading(false); }
@@ -116,7 +116,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
           <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
             <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">
               PDF du bon de commande <span className="text-red-500">*</span>
-              <span className="font-normal text-gray-500"> — pré-remplit le formulaire</span>
+              <span className="font-normal text-gray-500"> - pré-remplit le formulaire</span>
             </p>
             <p className="mb-1.5 text-[11px] text-gray-500">
               C'est la pièce signée qui engage les volumes du trimestre : elle est obligatoire et reste jointe au bon de commande.
@@ -124,8 +124,8 @@ function CreateModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center gap-3">
               <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserPdf(f); }} className="text-xs" />
               {uploading && <span className="text-xs text-gray-500">Analyse en cours…</span>}
-              {!uploading && analyse === 'ocr' && <span className="text-xs font-medium text-emerald-700">Scan lu par OCR ✓ — vérifiez les valeurs</span>}
-              {!uploading && analyse === 'texte' && <span className="text-xs font-medium text-emerald-700">PDF lu ✓ — vérifiez les valeurs</span>}
+              {!uploading && analyse === 'ocr' && <span className="text-xs font-medium text-emerald-700">Scan lu par OCR ✓ - vérifiez les valeurs</span>}
+              {!uploading && analyse === 'texte' && <span className="text-xs font-medium text-emerald-700">PDF lu ✓ - vérifiez les valeurs</span>}
               {!uploading && analyse === 'sans' && bcPdfPath && <span className="text-xs text-amber-700">PDF joint (sans analyse)</span>}
               {!uploading && !bcPdfPath && <span className="text-xs text-amber-600">requis</span>}
             </div>
@@ -203,7 +203,7 @@ export default function BonsCommandePage() {
         title="Bons de commande carburant"
         subtitle={peutGerer
           ? 'Commandes trimestrielles et volumes mensuels'
-          : 'Commandes en cours — ouvrez-en une pour y déclarer un chargement'}
+          : 'Commandes en cours - ouvrez-en une pour y déclarer un chargement'}
         backHref={peutGerer ? '/carburant/stock' : '/dashboard'}
         actions={peutGerer ? (
           <div className="flex gap-2">

@@ -216,7 +216,7 @@ class MaintenanceRepository {
   /// Clôture offline-first.
   /// [photoPaths] et [signatureLocalPath] sont des chemins de fichiers LOCAUX
   /// (photos prises à la caméra, signature). Ils sont uploadés vers MinIO par le
-  /// moteur de sync — immédiatement si en ligne, sinon à la reconnexion.
+  /// moteur de sync - immédiatement si en ligne, sinon à la reconnexion.
   Future<SubmitResult> close(
     String id, {
     required bool agentPresent,
@@ -272,7 +272,7 @@ class MaintenanceRepository {
   }
 
   /// Photos d'intervention hors clôture (état des lieux AVANT travaux) :
-  /// mêmes garanties que la clôture — upload différé, file d'attente hors-ligne.
+  /// mêmes garanties que la clôture - upload différé, file d'attente hors-ligne.
   Future<SubmitResult> addPhotos(String id,
           {required List<String> photoPaths, String phase = 'AVANT'}) =>
       _sync.submit(

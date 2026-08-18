@@ -135,7 +135,7 @@ async function bootstrap() {
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  logger.info('SIGTERM reçu — arrêt gracieux...');
+  logger.info('SIGTERM reçu - arrêt gracieux...');
   await prisma.$disconnect();
   await redisClient.quit();
   httpServer.close(() => process.exit(0));

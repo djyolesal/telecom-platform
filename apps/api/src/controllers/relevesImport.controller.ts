@@ -113,7 +113,7 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
       if (!date) { ignorees.push({ ligne: r, code, raison: 'date invalide' }); continue; }
 
       const type = text(row, 'type').toUpperCase();
-      const marque = `Import historique — ${type || 'TICKET'}`;
+      const marque = `Import historique - ${type || 'TICKET'}`;
       // Saisies aberrantes du système historique (ex. index CEET à 665 M,
       // volume cuve à 54 M de litres) : au-delà de la capacité des colonnes
       // Decimal, la valeur est écartée (signalée) sans perdre le reste de la ligne.
@@ -121,7 +121,7 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
         const v = numOrNull(row, field);
         if (v == null) return null;
         if (v < 0 || v >= max) {
-          ignorees.push({ ligne: r, code, raison: `${field} aberrant (${v}) — valeur écartée` });
+          ignorees.push({ ligne: r, code, raison: `${field} aberrant (${v}) - valeur écartée` });
           return null;
         }
         return v;

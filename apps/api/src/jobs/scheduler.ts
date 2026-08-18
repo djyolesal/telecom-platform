@@ -31,7 +31,7 @@ async function avecVerrou(nom: string, fn: () => Promise<void>): Promise<void> {
     await prisma.$transaction(async (tx) => {
       const [{ pris }] = await tx.$queryRaw<{ pris: boolean }[]>`
         SELECT pg_try_advisory_xact_lock(hashtext(${cle})::bigint) AS pris`;
-      if (!pris) { logger.warn(`[CRON] ${nom} déjà en cours (verrou) — exécution ignorée`); return; }
+      if (!pris) { logger.warn(`[CRON] ${nom} déjà en cours (verrou) - exécution ignorée`); return; }
       await fn();
       logger.info(`[CRON] ${nom} terminé en ${Math.round((Date.now() - t0) / 1000)}s`);
     }, {

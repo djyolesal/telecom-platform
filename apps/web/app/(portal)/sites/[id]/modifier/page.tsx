@@ -62,10 +62,10 @@ export default function ModifierSitePage() {
   const typeLiaisonOptions = [
     ...(form.typeLiaison && !typesLiaisonRef.some((t) => t.code === form.typeLiaison)
       ? [{ value: form.typeLiaison, label: form.typeLiaison }] : []),
-    ...typesLiaisonRef.map((t) => ({ value: t.code, label: `${t.code} — ${t.libelle} (${t.constructeur})` })),
+    ...typesLiaisonRef.map((t) => ({ value: t.code, label: `${t.code} - ${t.libelle} (${t.constructeur})` })),
   ];
 
-  const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} — ${l.nom}` }));
+  const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} - ${l.nom}` }));
 
   useEffect(() => {
     if (!site) return;
@@ -151,7 +151,7 @@ export default function ModifierSitePage() {
 
   return (
     <div>
-      <PageHeader title={`Modifier — ${site.nom}`} backHref={`/sites/${id}`} />
+      <PageHeader title={`Modifier - ${site.nom}`} backHref={`/sites/${id}`} />
       <FormCard>
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{error}</div>}
         <form
@@ -230,19 +230,19 @@ export default function ModifierSitePage() {
           {form.hasGardien === 'true' && (
             <Field label="Poste de nuit uniquement (dès 18h GMT)">
               <Select value={form.gardiennageNuitSeulement} onChange={(e) => set('gardiennageNuitSeulement', e.target.value)} options={OUI_NON} />
-              <p className="mt-1 text-xs text-gray-400">Une absence constatée en journée sur ce site sera classée « hors plage » — elle ne comptera pas dans le taux d&apos;absence de la société.</p>
+              <p className="mt-1 text-xs text-gray-400">Une absence constatée en journée sur ce site sera classée « hors plage » - elle ne comptera pas dans le taux d&apos;absence de la société.</p>
             </Field>
           )}
           <Field label="Société de gardiennage">
             <Select value={form.gardiennagePrestataireId} onChange={(e) => set('gardiennagePrestataireId', e.target.value)} options={gardiennageOptions} placeholder="(aucune)" />
             {form.societeGardiennage && !form.gardiennagePrestataireId && (
-              <p className="mt-1 text-xs text-amber-600">Saisie libre héritée : « {form.societeGardiennage} » — créez la société dans Administration → Prestataires (case gardiennage) pour la rapprocher.</p>
+              <p className="mt-1 text-xs text-amber-600">Saisie libre héritée : « {form.societeGardiennage} » - créez la société dans Administration → Prestataires (case gardiennage) pour la rapprocher.</p>
             )}
           </Field>
           <Field label="Téléphone du site (gardien / contact local)">
             <Input value={form.telephoneSite} onChange={(e) => set('telephoneSite', e.target.value)} placeholder="+228 90 00 00 00" />
           </Field>
-          <Field label="Site parent (transmission) — une coupure amont impacte ce site">
+          <Field label="Site parent (transmission) - une coupure amont impacte ce site">
             <SearchSelect
               value={form.parentTransmissionId}
               onChange={(v) => set('parentTransmissionId', v)}
@@ -261,7 +261,7 @@ export default function ModifierSitePage() {
           </Field>
           <Field label="NodeID OSS (615-03-Macro-…)">
             <Input value={form.nodeId} onChange={(e) => set('nodeId', e.target.value)} placeholder="ex. 2848" />
-            <p className="mt-1 text-xs text-gray-400">Identifiant eNodeB — clé de la détection automatique des coupures depuis l&apos;OSS.</p>
+            <p className="mt-1 text-xs text-gray-400">Identifiant eNodeB - clé de la détection automatique des coupures depuis l&apos;OSS.</p>
           </Field>
 
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">

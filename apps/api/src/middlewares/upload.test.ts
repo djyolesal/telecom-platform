@@ -11,7 +11,7 @@ function avec(prefixe: number[], taille = 32): Buffer {
   return b;
 }
 
-describe('typeReel — signatures de fichiers', () => {
+describe('typeReel - signatures de fichiers', () => {
   it('reconnaît un JPEG', () => {
     expect(typeReel(avec([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
   });

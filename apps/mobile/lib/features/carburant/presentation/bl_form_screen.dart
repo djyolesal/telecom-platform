@@ -44,7 +44,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
   BonCommandeLite? _bc;
   int? _mois;
   // Pas de valeur par défaut : la date de chargement ne figure pas sur le BL
-  // (la date du document est celle du traitement) — saisie manuelle obligatoire.
+  // (la date du document est celle du traitement) - saisie manuelle obligatoire.
   DateTime? _dateChargement;
   DateTime? _dateTraitement;
   String? _blDoc;
@@ -99,7 +99,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
   }
 
   /// Photographie le BL, l'envoie à l'analyse serveur (OCR) et PRÉ-REMPLIT le
-  /// formulaire — le transporteur relit et corrige avant d'enregistrer. La photo
+  /// formulaire - le transporteur relit et corrige avant d'enregistrer. La photo
   /// sert aussi de pièce jointe « Photo du bon de livraison ».
   Future<void> _scannerBl() async {
     final messenger = ScaffoldMessenger.of(context);
@@ -123,13 +123,13 @@ class _BlFormScreenState extends State<BlFormScreen> {
       if (res == null) {
         messenger.showSnackBar(const SnackBar(
             content: Text(
-                'Hors ligne : analyse indisponible — photo conservée, saisie manuelle.')));
+                'Hors ligne : analyse indisponible - photo conservée, saisie manuelle.')));
         return;
       }
       final d = res.documents.isNotEmpty ? res.documents.first : null;
       if (d == null) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('Aucun BL reconnu sur la photo — saisie manuelle.'),
+            content: Text('Aucun BL reconnu sur la photo - saisie manuelle.'),
             backgroundColor: Colors.orange));
         return;
       }
@@ -141,7 +141,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
           _volume.text = d.volumeChargeLitres!.toString();
         }
         // Date de traitement = celle qui SUIT le n° de bon de commande sur le
-        // document — la date de chargement, elle, reste à saisir à la main.
+        // document - la date de chargement, elle, reste à saisir à la main.
         _dateTraitement = d.traitement;
         // Présélection du BC référencé sur le document (« BC N°POxxxxxxxxx »).
         final bcNumero = d.bcNumero;
@@ -153,14 +153,14 @@ class _BlFormScreenState extends State<BlFormScreen> {
             if (_mois == null && _bc!.mois.isNotEmpty) _mois = _bc!.mois.first;
           } else {
             avert.insert(0,
-                'Le bon de commande $bcNumero du document est introuvable — sélectionnez-le manuellement.');
+                'Le bon de commande $bcNumero du document est introuvable - sélectionnez-le manuellement.');
           }
         }
         _avertissements = avert;
       });
       messenger.showSnackBar(const SnackBar(
           content: Text(
-              'BL lu — vérifiez les valeurs et saisissez la date de chargement.')));
+              'BL lu - vérifiez les valeurs et saisissez la date de chargement.')));
     } on ServerException catch (e) {
       if (mounted) {
         messenger.showSnackBar(
@@ -170,7 +170,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
       if (mounted) {
         messenger.showSnackBar(const SnackBar(
             content:
-                Text('Analyse impossible — photo conservée, saisie manuelle.'),
+                Text('Analyse impossible - photo conservée, saisie manuelle.'),
             backgroundColor: Colors.orange));
       }
     } finally {
@@ -196,7 +196,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
     }
     // Les DEUX pièces sont OBLIGATOIRES, et on bloque ICI, avant la mise en
     // file. Sans ce contrôle, une saisie hors-ligne partait en attente pour
-    // n'être refusée qu'au rejeu, loin du dépôt — les documents n'étant alors
+    // n'être refusée qu'au rejeu, loin du dépôt - les documents n'étant alors
     // plus photographiables.
     if (_blDoc == null) {
       messenger.showSnackBar(const SnackBar(
@@ -283,7 +283,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
                   label: Text(_analysing
                       ? 'Analyse du BL en cours…'
                       : _blDoc != null
-                          ? 'BL scanné — appuyez pour reprendre'
+                          ? 'BL scanné - appuyez pour reprendre'
                           : 'Scanner le BL (obligatoire, pré-remplit)'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -444,7 +444,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
                         child: Text(
                       _blDoc != null
                           ? 'Photo du bon de livraison jointe (via le scan)'
-                          : 'Photo du bon de livraison * — utilisez « Scanner le BL » en haut',
+                          : 'Photo du bon de livraison * - utilisez « Scanner le BL » en haut',
                       style: TextStyle(
                           fontSize: 12.5,
                           color: _blDoc != null
@@ -464,7 +464,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
                   label: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(_bordereauDoc != null
-                        ? 'Bordereau de chargement scanné — appuyez pour reprendre'
+                        ? 'Bordereau de chargement scanné - appuyez pour reprendre'
                         : 'Scanner le bordereau de chargement *'),
                   ),
                   style: OutlinedButton.styleFrom(

@@ -60,7 +60,7 @@ class IncidentRepository {
     );
   }
 
-  /// Démarrage de l'intervention (offline-first) — vérifié SUR SITE côté serveur.
+  /// Démarrage de l'intervention (offline-first) - vérifié SUR SITE côté serveur.
   Future<SubmitResult> start(String id,
           {double? latitude, double? longitude}) =>
       _sync.submit(
@@ -73,7 +73,7 @@ class IncidentRepository {
       );
 
   /// Clôture offline-first. [photoPaths] : chemins LOCAUX des photos prises sur
-  /// place (≥ 6 exigées côté serveur) — uploadées par le moteur de sync,
+  /// place (≥ 6 exigées côté serveur) - uploadées par le moteur de sync,
   /// immédiatement si en ligne, sinon à la reconnexion.
   Future<SubmitResult> close({
     required String id,

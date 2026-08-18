@@ -43,7 +43,7 @@ export default function SeuilsPage() {
 
   return (
     <div>
-      <PageHeader title="Seuils & paramètres" subtitle="Carburant, maintenance et alertes — modifiables sans redéploiement" backHref="/administration" />
+      <PageHeader title="Seuils & paramètres" subtitle="Carburant, maintenance et alertes - modifiables sans redéploiement" backHref="/administration" />
 
       <div className="space-y-5 max-w-3xl">
         {groupes.map((g) => (
@@ -65,7 +65,7 @@ export default function SeuilsPage() {
 
         <div className="flex items-center gap-3">
           <Button icon={Save} loading={save.isPending} onClick={() => { setSavedOk(false); save.mutate(); }}>Enregistrer</Button>
-          {savedOk && <span className="flex items-center gap-1 text-sm text-green-600"><CheckCircle2 size={15} /> Enregistré — effet immédiat</span>}
+          {savedOk && <span className="flex items-center gap-1 text-sm text-green-600"><CheckCircle2 size={15} /> Enregistré - effet immédiat</span>}
         </div>
       </div>
     </div>

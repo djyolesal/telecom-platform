@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 ///
 /// Affiché quand une valeur saisie contredit les données connues du site
 /// (jauge > capacité de cuve, index qui recule, bond impossible…). Le technicien
-/// peut retourner corriger, ou confirmer explicitement — la confirmation est
+/// peut retourner corriger, ou confirmer explicitement - la confirmation est
 /// alors tracée côté serveur (observations + journal d'audit).
 ///
 /// Retourne `true` si le technicien confirme sa saisie.

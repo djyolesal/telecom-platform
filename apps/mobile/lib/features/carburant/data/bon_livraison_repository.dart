@@ -7,7 +7,7 @@ import '../../../core/network/network_info.dart';
 import '../../../core/sync/sync_service.dart';
 import 'depotage_model.dart';
 
-/// Champs extraits d'un BL par l'analyse serveur (OCR) — tous optionnels :
+/// Champs extraits d'un BL par l'analyse serveur (OCR) - tous optionnels :
 /// l'OCR propose, le transporteur relit et corrige avant d'enregistrer.
 class BlExtrait {
   final String? numeroBL;
@@ -52,7 +52,7 @@ class BlExtrait {
 class AnalyseBlResult {
   final List<BlExtrait> documents;
 
-  /// BC reconnus en base, indexés par numéro (PO…) — pour présélectionner.
+  /// BC reconnus en base, indexés par numéro (PO…) - pour présélectionner.
   final Map<String, BonCommandeLite> bcs;
   const AnalyseBlResult({required this.documents, required this.bcs});
 }

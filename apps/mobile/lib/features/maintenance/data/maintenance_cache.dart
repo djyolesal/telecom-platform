@@ -7,11 +7,11 @@ import 'package:path_provider/path_provider.dart';
 /// terrain reste utilisable hors réseau : la liste et le détail se servent du
 /// dernier instantané connu. Les transitions mises en file (démarrage, pause,
 /// reprise, clôture) sont appliquées OPTIMISTEMENT ici pour que l'écran reflète
-/// l'état réel du travail — le serveur reste la vérité à la resynchronisation.
+/// l'état réel du travail - le serveur reste la vérité à la resynchronisation.
 class MaintenanceCache {
   /// Toutes les écritures passent par cette file : `saveList` (rafraîchissement
   /// de liste) et `patch` (transition optimiste) sont des read-modify-write sur
-  /// le MÊME fichier — concurrents, l'un écrasait l'autre.
+  /// le MÊME fichier - concurrents, l'un écrasait l'autre.
   static Future<void> _chaine = Future.value();
   static Future<T> _serialise<T>(Future<T> Function() action) {
     final resultat = _chaine.then((_) => action());
@@ -20,7 +20,7 @@ class MaintenanceCache {
   }
 
   /// Écriture ATOMIQUE (fichier temporaire puis rename) : une app tuée en plein
-  /// writeAsString laissait un JSON tronqué — au prochain démarrage le cache
+  /// writeAsString laissait un JSON tronqué - au prochain démarrage le cache
   /// était illisible et le technicien partait en tournée sans aucune donnée.
   static Future<void> _ecrire(Map<String, dynamic> contenu) async {
     final f = await _fichier();

@@ -48,7 +48,7 @@ const TABS = [
 ] as const;
 
 const mq = (v: number) => <span className={v > 0 ? 'font-semibold text-red-600' : 'text-gray-400'}>{v > 0 ? fmtNumber(v) : '—'}</span>;
-// Sur-livré : anomalie de sens inverse (bleu, jamais rouge) — le volume n'est pas
+// Sur-livré : anomalie de sens inverse (bleu, jamais rouge) - le volume n'est pas
 // perdu, il manque forcément ailleurs.
 const sl = (v: number) => <span className={v > 0 ? 'font-semibold text-blue-600' : 'text-gray-300'}>{v > 0 ? `+${fmtNumber(v)}` : '—'}</span>;
 const LIGNE_COLORS: Record<string, string> = { PREVU: 'bg-gray-100 text-gray-600', PARTIEL: 'bg-amber-100 text-amber-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
@@ -229,7 +229,7 @@ export default function ManquantsPage() {
 
       {regionNationaleNote && (
         <div className="mb-3 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
-          Vue nationale — le filtre région ne s’applique qu’à l’onglet « Par site » (un camion ou une commande traverse plusieurs régions).
+          Vue nationale - le filtre région ne s’applique qu’à l’onglet « Par site » (un camion ou une commande traverse plusieurs régions).
         </div>
       )}
 
@@ -264,7 +264,7 @@ export default function ManquantsPage() {
                 c'est le seul écran où il est visible. */}
             <ListeAttente
               titre="Chargés sans plan de livraison"
-              aide="Le camion est parti mais aucun site ne lui est affecté — ces volumes n'apparaissent dans aucun manquant."
+              aide="Le camion est parti mais aucun site ne lui est affecté - ces volumes n'apparaissent dans aucun manquant."
               lignes={pil?.sansPlan ?? []}
               onOuvrir={(id) => router.push(`/carburant/livraisons/${id}`)}
             />

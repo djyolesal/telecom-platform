@@ -87,7 +87,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       if (reserves > 0) {
         await notifierIncidentCoupure(
           siteId,
-          `[E&M OpS] NOC : coupure ${technos.join('/')} sur ${coupures[0].site.nom} (site alimenté) — à traiter côté actif (radio/transmission).`,
+          `[E&M OpS] NOC : coupure ${technos.join('/')} sur ${coupures[0].site.nom} (site alimenté) - à traiter côté actif (radio/transmission).`,
           'COUPURE_PARTIELLE_NOC',
           'ACTIVE',
           'coupures'
@@ -121,7 +121,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           siteId,
           type: 'COUPURE_TOTALE',
           severite: 'CRITIQUE',
-          description: `Site entier hors service (coupure ${technos.join('/')}) signalé par le NOC${coupures[0].typeAlarme ? ` — alarme ${coupures[0].typeAlarme}` : ''}.`,
+          description: `Site entier hors service (coupure ${technos.join('/')}) signalé par le NOC${coupures[0].typeAlarme ? ` - alarme ${coupures[0].typeAlarme}` : ''}.`,
           declarePar: userId,
         },
         select: { id: true, reference: true },
@@ -135,7 +135,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       io.of('/supervision').emit('incident:created', { id: incident.id, siteId });
       await notifierIncidentCoupure(
         siteId,
-        `[E&M OpS] NOC : site ${coupures[0].site.nom} entièrement hors service. Incident ${incident.reference ?? ''} — intervention terrain requise.`,
+        `[E&M OpS] NOC : site ${coupures[0].site.nom} entièrement hors service. Incident ${incident.reference ?? ''} - intervention terrain requise.`,
         'INCIDENT_COUPURE_NOC',
         'PASSIVE'
       );
@@ -156,7 +156,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           });
           await Promise.all(techs.map((t) => notificationService.sendToUser(t.id, {
             title: `🔴 ${coupures[0].site.nom} hors service`,
-            body: `Incident ${incident!.reference ?? ''} créé par le NOC — intervention terrain requise.`,
+            body: `Incident ${incident!.reference ?? ''} créé par le NOC - intervention terrain requise.`,
             data: { incidentId: incident!.id, type: 'incident' },
           })));
         }
@@ -326,7 +326,7 @@ async function resoudreIncidentSiPlusDeCoupure(
       dateResolution: quand,
       dureeCoupureMinutes: minutesEntre(inc.dateOuverture, quand),
       ...(sansIntervention && !inc.actionCorrective
-        ? { actionCorrective: 'Rétablissement constaté par le NOC — aucune intervention terrain.' }
+        ? { actionCorrective: 'Rétablissement constaté par le NOC - aucune intervention terrain.' }
         : {}),
     },
   });
@@ -472,7 +472,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
             siteId: s.id,
             technologie: 'SITE',
             dateDebut,
-            cause: champs.cause ?? `Coupure amont — propagation transmission`,
+            cause: champs.cause ?? `Coupure amont - propagation transmission`,
             typeAlarme: champs.typeAlarme,
             origine: 'HERITEE',
             coupureOrigineId: racineId,
@@ -596,7 +596,7 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
         await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'reouverture_noc', coupureId: existing.id }, req);
         await notifierIncidentCoupure(
           existing.siteId,
-          `[E&M OpS] NOC : coupure toujours constatée sur ${incident.site.nom} — incident ${incident.reference ?? ''} ROUVERT, merci de repasser.`,
+          `[E&M OpS] NOC : coupure toujours constatée sur ${incident.site.nom} - incident ${incident.reference ?? ''} ROUVERT, merci de repasser.`,
           'INCIDENT_ROUVERT_NOC'
         );
       }
@@ -723,7 +723,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
           if (debut.getTime() - fin.getTime() < 86_400_000) {
             fin = new Date(fin.getTime() + 86_400_000);
           } else {
-            erreurs.push({ feuille: nomFeuille, ligne: n, message: `rétablissement (${fin.toISOString().slice(0, 16)}) antérieur au début (${debut.toISOString().slice(0, 16)}) — ligne écartée` });
+            erreurs.push({ feuille: nomFeuille, ligne: n, message: `rétablissement (${fin.toISOString().slice(0, 16)}) antérieur au début (${debut.toISOString().slice(0, 16)}) - ligne écartée` });
             return;
           }
         }
@@ -1133,7 +1133,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       select: { id: true, siteId: true, dateFin: true, technologie: true, dateDebut: true },
     });
     if (!coupure) throw new AppError('Coupure introuvable', 404);
-    if (coupure.dateFin) throw new AppError('Coupure déjà rétablie — rien à prendre en charge', 422);
+    if (coupure.dateFin) throw new AppError('Coupure déjà rétablie - rien à prendre en charge', 422);
     // Créer les héritées pour l'aval SANS détection propre (sites non
     // rapprochés OSS) : activé par défaut — c'est ce qui rend la dispo juste.
     const creerAvalManquant = (req.body as { creerAvalManquant?: boolean })?.creerAvalManquant !== false;
@@ -1215,7 +1215,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
             nocEngineer: nom,
             priseEnChargePar: nom,
             priseEnChargeLe: quand,
-            observations: 'Héritée créée à la prise en charge — site aval sans détection OSS propre.',
+            observations: 'Héritée créée à la prise en charge - site aval sans détection OSS propre.',
           })),
         });
         heriteesCreees = crees.count;

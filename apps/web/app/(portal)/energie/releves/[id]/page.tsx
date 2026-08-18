@@ -41,7 +41,7 @@ export default function ReleveDetailPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={`Relevé énergie — ${r.site?.nom ?? ''}`}
+        title={`Relevé énergie - ${r.site?.nom ?? ''}`}
         subtitle={fmtDateTime(r.dateReleve)}
         backHref="/energie/releves"
         actions={m ? <Button variant="secondary" icon={Wrench} onClick={() => router.push(`/maintenance/${m.id}`)}>Voir la maintenance</Button> : undefined}

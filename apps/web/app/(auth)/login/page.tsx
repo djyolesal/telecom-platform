@@ -24,14 +24,14 @@ function LoginForm() {
   // Une lecture partie AVANT la déconnexion peut donc RESSUSCITER le cookie
   // après son expiration (course perdue d'avance côté client). Ici, la boucle
   // se referme sans course : si la session a survécu à une déconnexion
-  // (`?deconnexion=1`), on re-tue et on recharge — événementiel, pas de délai
+  // (`?deconnexion=1`), on re-tue et on recharge - événementiel, pas de délai
   // arbitraire. Au rechargement, la session est réellement morte.
   const deconnexionEnCours = params.has('deconnexion');
   useEffect(() => {
     if (!deconnexionEnCours) return;
     let annule = false;
     (async () => {
-      // On ne quitte cette page qu'avec une session VÉRIFIÉE morte — sans
+      // On ne quitte cette page qu'avec une session VÉRIFIÉE morte - sans
       // condition de statut : gater sur useSession ratait la résurrection
       // tardive (lecture initiale « morte », cookie ressuscité juste après).
       // Boucle tuer → laisser retomber les lectures en vol → sonder, sortie
@@ -65,7 +65,7 @@ function LoginForm() {
     } else {
       // Navigation COMPLÈTE (pas router.push) : après un signIn sans
       // rechargement, la session du SessionProvider n'est pas propagée
-      // immédiatement — le menu et les pages qui lisent le rôle côté client
+      // immédiatement - le menu et les pages qui lisent le rôle côté client
       // partaient avec un rôle vide (un transporteur voyait le tableau de bord
       // général). Un vrai chargement repart du cookie, session à jour partout.
       window.location.assign(callbackUrl);

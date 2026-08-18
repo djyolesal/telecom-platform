@@ -378,7 +378,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     if (avertissements.length && !confirmeVraisemblance) {
       return res.status(422).json({
         success: false,
-        error: 'Certaines valeurs saisies semblent inhabituelles — vérifiez puis confirmez.',
+        error: 'Certaines valeurs saisies semblent inhabituelles - vérifiez puis confirmez.',
         confirmationRequise: true,
         avertissements,
       });
@@ -462,7 +462,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           ecartConsoLitres: recon.ecartConsoLitres,
           ecartLivraisonLitres: recon.ecartLivraisonLitres,
           analyseDepotage: [
-            rattachementAuto ? 'Rattaché automatiquement à la seule ligne de plan ouverte du site (dépotage saisi sans ligne — probablement hors-ligne).' : null,
+            rattachementAuto ? 'Rattaché automatiquement à la seule ligne de plan ouverte du site (dépotage saisi sans ligne - probablement hors-ligne).' : null,
             anomalieChauffeur,
             recon.analyseDepotage,
           ].filter(Boolean).join('\n') || null,

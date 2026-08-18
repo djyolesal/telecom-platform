@@ -100,11 +100,11 @@ class AuthCubit extends Cubit<AuthState> {
     } on NetworkException {
       // Une PREMIÈRE connexion exige le serveur (vérification du mot de passe).
       // Le dire explicitement : le réflexe « je me déconnecte en partant » prive
-      // du mode hors-ligne — la session locale doit rester ouverte.
+      // du mode hors-ligne - la session locale doit rester ouverte.
       emit(state.copyWith(
         status: AuthStatus.failure,
         message:
-            'Pas de connexion internet. La connexion par mot de passe exige le réseau — '
+            'Pas de connexion internet. La connexion par mot de passe exige le réseau - '
             'restez connecté avant de partir en zone sans couverture : l\'application fonctionne alors hors-ligne.',
       ));
     } on ServerException catch (e) {

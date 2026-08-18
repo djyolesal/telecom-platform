@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Politique de confidentialité — E&M OpS',
+  title: 'Politique de confidentialité - E&M OpS',
   description:
     "Politique de confidentialité de l'application mobile E&M OpS : données collectées, finalités, partage, sécurité et droits des utilisateurs.",
 };
@@ -33,7 +33,7 @@ export default function ConfidentialitePage() {
           <p className="text-sm font-semibold uppercase tracking-widest text-white/70">E&M OpS</p>
           <h1 className="mt-1 text-3xl font-bold">Politique de confidentialité</h1>
           <p className="mt-2 text-white/80">
-            Application mobile E&M OpS — Dernière mise à jour : {MAJ}
+            Application mobile E&M OpS - Dernière mise à jour : {MAJ}
           </p>
         </div>
       </header>
@@ -171,7 +171,7 @@ export default function ConfidentialitePage() {
         </P>
 
         <footer className="mt-10 border-t border-gray-200 pt-4 text-sm text-gray-500">
-          E&M OpS — Plateforme de gestion de maintenance télécoms · Contact :{' '}
+          E&M OpS - Plateforme de gestion de maintenance télécoms · Contact :{' '}
           <a className="underline" href={`mailto:${CONTACT}`}>
             {CONTACT}
           </a>

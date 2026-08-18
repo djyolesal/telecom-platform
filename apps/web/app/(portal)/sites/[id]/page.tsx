@@ -58,7 +58,7 @@ export default function SiteDetailPage() {
   });
   const { parCode: typesLiaisonParCode } = useTypesLiaison();
   // Chaîne de transmission AMONT (racine → … → ce site) avec l'état de chaque
-  // maillon : au clic sur un site, on voit PAR OÙ il passe — et où ça casse.
+  // maillon : au clic sur un site, on voit PAR OÙ il passe - et où ça casse.
   const { data: transmission } = useQuery({
     queryKey: ['site-transmission-fiche', id],
     queryFn: () => api.get(`/sites/${id}/transmission`).then((r) => r.data.data as {
@@ -148,7 +148,7 @@ export default function SiteDetailPage() {
             <span className="text-gray-500">Transmission : </span>
             {/* Fil d'Ariane AMONT : racine → … → ce site. Chaque maillon est
                 cliquable, chaque flèche porte le type de liaison, un maillon
-                en coupure est marqué en rouge — le chemin ET la casse. */}
+                en coupure est marqué en rouge - le chemin ET la casse. */}
             {(transmission?.amont?.length ?? 0) > 0 ? (
               <span className="inline-flex flex-wrap items-center gap-1.5 align-middle">
                 {[...(transmission!.amont)].reverse().map((m, i, arr) => {
@@ -222,10 +222,10 @@ export default function SiteDetailPage() {
           </div>
         )}
         {!site.lot ? (
-          <p className="text-sm text-gray-500">Aucun lot rattaché — utilisez « Modifier » pour l&apos;affecter à un lot.</p>
+          <p className="text-sm text-gray-500">Aucun lot rattaché - utilisez « Modifier » pour l&apos;affecter à un lot.</p>
         ) : (
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
-            <div><span className="text-gray-500">Lot : </span><b className="text-gray-800">{site.lot.code}</b> — {site.lot.nom}</div>
+            <div><span className="text-gray-500">Lot : </span><b className="text-gray-800">{site.lot.code}</b> - {site.lot.nom}</div>
             {site.lot.assignments?.length ? (
               site.lot.assignments.map((a: { id: string; scope: string; prestataire?: { nom: string } }) => (
                 <div key={a.id} className="flex items-center gap-1.5">
@@ -403,7 +403,7 @@ function TransmissionModal({ siteId, parentActuel, liaisonActuelle, onClose, onS
             <SearchSelect
               value={parentId}
               onChange={setParentId}
-              options={sites.filter((s) => s.id !== siteId).map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))}
+              options={sites.filter((s) => s.id !== siteId).map((s) => ({ value: s.id, label: `${s.code} - ${s.nom}` }))}
               placeholder="Rechercher un site (nom ou code)…"
               emptyLabel="Aucun (raccordement direct)"
             />
@@ -412,7 +412,7 @@ function TransmissionModal({ siteId, parentActuel, liaisonActuelle, onClose, onS
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Type de liaison vers l&apos;amont</label>
               <Select value={liaison} onChange={(e) => setLiaison(e.target.value)}
-                options={typesLiaison.map((t) => ({ value: t.code, label: `${t.code} — ${t.libelle}` }))}
+                options={typesLiaison.map((t) => ({ value: t.code, label: `${t.code} - ${t.libelle}` }))}
                 placeholder="(non renseigné)" />
             </div>
           )}

@@ -106,7 +106,7 @@ export default function DepotageDetailPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={`${d.reference ?? 'Dépotage'} — ${d.site?.nom ?? ''}`}
+        title={`${d.reference ?? 'Dépotage'} - ${d.site?.nom ?? ''}`}
         subtitle={fmtDateTime(d.dateDepotage)}
         backHref="/carburant/depotages"
         actions={

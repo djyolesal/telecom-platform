@@ -121,7 +121,7 @@ class _BlDetailScreenState extends State<BlDetailScreen> {
                   label: Text(_export
                       ? 'Préparation du PDF…'
                       : bl.lignes.isEmpty
-                          ? 'Plan à définir — export indisponible'
+                          ? 'Plan à définir - export indisponible'
                           : 'Exporter le plan en PDF'),
                   style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(48)),
@@ -201,7 +201,7 @@ class _Entete extends StatelessWidget {
                       color: const Color(0xFF15803D).withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(8)),
                   child: Text(
-                    'Chargement clôturé le ${fmtDate(bl.dateCloture)} — reste ventilé, plus rien à livrer.',
+                    'Chargement clôturé le ${fmtDate(bl.dateCloture)} - reste ventilé, plus rien à livrer.',
                     style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF15803D),
@@ -278,7 +278,7 @@ class _CarteLigneState extends State<_CarteLigne> {
             Row(
               children: [
                 Expanded(
-                  child: Text('${ligne.siteCode} — ${ligne.siteNom}',
+                  child: Text('${ligne.siteCode} - ${ligne.siteNom}',
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
                 Container(

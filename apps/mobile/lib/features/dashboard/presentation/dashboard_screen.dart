@@ -28,7 +28,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _load();
     // Ré-évalue la disponibilité du verrou APRÈS l'attachement de l'activité
-    // (au boot release, la première interrogation peut échouer — cf. AuthCubit).
+    // (au boot release, la première interrogation peut échouer - cf. AuthCubit).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<AuthCubit>().rafraichirVerrou();
     });
@@ -36,7 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _load() {
     // Transporteur : l'API lui refuse (403) tout ce qui n'est pas appro
-    // carburant — on ne charge ni le pouls du parc ni les maintenances.
+    // carburant - on ne charge ni le pouls du parc ni les maintenances.
     if (context.read<AuthCubit>().state.user?.role == 'TRANSPORTEUR') {
       _future = Future.value(null);
       _nbPlanifiees = Future.value(null);
@@ -121,7 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               await sync.confirmer(e);
                               messenger.showSnackBar(const SnackBar(
                                   content: Text(
-                                      'Saisie confirmée — envoi en cours.')));
+                                      'Saisie confirmée - envoi en cours.')));
                             },
                             child: const Text('Confirmer'),
                           ),
@@ -203,7 +203,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             // Construit à l'OUVERTURE du menu : la coche reflète
                             // l'état réel (« activer/désactiver » ne disait pas
                             // où on en était). Masquée si l'appareil n'a pas de
-                            // biométrie — le geste n'aurait aucun effet.
+                            // biométrie - le geste n'aurait aucun effet.
                             itemBuilder: (_) {
                               final auth = context.read<AuthCubit>().state;
                               return [
@@ -279,7 +279,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                              '$n opération(s) non envoyée(s) — vos saisies sont conservées. Touchez pour réessayer.',
+                              '$n opération(s) non envoyée(s) - vos saisies sont conservées. Touchez pour réessayer.',
                               style: TextStyle(
                                   color: Colors.red.shade800,
                                   fontSize: 13,
@@ -314,7 +314,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                              '$n saisie(s) à confirmer — valeurs inhabituelles signalées. Touchez pour vérifier.',
+                              '$n saisie(s) à confirmer - valeurs inhabituelles signalées. Touchez pour vérifier.',
                               style: TextStyle(
                                   color: Colors.orange.shade900,
                                   fontSize: 13,
@@ -334,7 +334,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    // Transporteur : périmètre limité à l'appro carburant — pas de
+                    // Transporteur : périmètre limité à l'appro carburant - pas de
                     // pouls du parc ni d'actions terrain, uniquement ses bons.
                     if ((user?.role ?? '') == 'TRANSPORTEUR') ...[
                       const Text('APPRO CARBURANT',
@@ -556,7 +556,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _syncEnCours = false;
 
-  /// Synchronisation MANUELLE : le geste doit répondre quelque chose — un
+  /// Synchronisation MANUELLE : le geste doit répondre quelque chose - un
   /// bouton muet laissait croire qu'il ne faisait rien (ou que tout avait
   /// échoué). Bilan chiffré : envoyées / restantes / rien à faire.
   Future<void> _syncManuel() async {
@@ -571,12 +571,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final envoyees = avant - apres;
     final s = envoyees > 1 ? 's' : '';
     final texte = avant == 0
-        ? 'Rien à synchroniser — tout est à jour'
+        ? 'Rien à synchroniser - tout est à jour'
         : apres == 0
             ? '$envoyees opération$s synchronisée$s'
             : envoyees > 0
                 ? '$envoyees opération$s envoyée$s · $apres toujours en attente'
-                : '$apres opération${apres > 1 ? 's' : ''} en attente — envoi impossible (hors-ligne ou erreur, voir le bandeau)';
+                : '$apres opération${apres > 1 ? 's' : ''} en attente - envoi impossible (hors-ligne ou erreur, voir le bandeau)';
     messenger.showSnackBar(SnackBar(content: Text(texte)));
   }
 

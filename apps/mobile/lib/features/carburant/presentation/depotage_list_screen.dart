@@ -32,7 +32,7 @@ class _DepotageView extends StatefulWidget {
 
 class _DepotageViewState extends State<_DepotageView> {
   // Filtre LOCAL (l'API des dépotages n'a pas de paramètre de recherche) :
-  // suffisant sur la page chargée — l'historique lointain se consulte au web.
+  // suffisant sur la page chargée - l'historique lointain se consulte au web.
   String _query = '';
   // Les dépotages n'ont pas de statut : le filtre utile est la PÉRIODE.
   String? _periode;
@@ -119,7 +119,7 @@ class _DepotageViewState extends State<_DepotageView> {
                       : const EmptyView(
                           title: 'Aucun résultat',
                           hint:
-                              'La recherche porte sur la page chargée — l\'historique complet est sur le portail web.'))
+                              'La recherche porte sur la page chargée - l\'historique complet est sur le portail web.'))
                   : RefreshIndicator(
                       onRefresh: () async => _reload(context),
                       child: ListView.separated(

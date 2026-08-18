@@ -32,7 +32,7 @@ export default function StockCarburantPage() {
   const [region, setRegion] = useState('');
   const [niveau, setNiveau] = useState('');
   // Compte prestataire (ma-societe non nul) : la chaîne d'approvisionnement
-  // (bons de commande) est interne — le bouton ne doit pas apparaître.
+  // (bons de commande) est interne - le bouton ne doit pas apparaître.
   const { data: maSociete } = useQuery({
     queryKey: ['ma-societe'],
     queryFn: () => api.get('/ma-societe').then((r) => r.data.data as { nom: string } | null),
@@ -78,7 +78,7 @@ export default function StockCarburantPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard title="Stock total" value={`${fmtNumber(Math.round((resume.totalLitres ?? 0) / 1000))}k L`} icon={Fuel} color="bg-[#0E7C6B]" />
         <StatCard title="Conso parc" value={`${fmtNumber(Math.round((resume.totalLitresMois ?? 0) / 1000))}k L/mois`} icon={Droplet} color="bg-[#2471A3]" />
-        {/* Coût masqué côté serveur pour les comptes prestataires : « — », pas « 0 M ». */}
+        {/* Coût masqué côté serveur pour les comptes prestataires : « - », pas « 0 M ». */}
         <StatCard title="Coût mensuel" value={resume.totalCoutMoisFCFA == null ? '—' : `${fmtNumber(Math.round(resume.totalCoutMoisFCFA / 1_000_000))} M`} subtitle="FCFA/mois" icon={Banknote} color="bg-[#1B3F6B]" />
         <StatCard title="Sites en alerte" value={(resume.nbSitesVides ?? 0) + (resume.nbSitesCritiques ?? 0)} subtitle={`${resume.nbSitesFaibles ?? 0} faibles`} icon={AlertTriangle} color="bg-red-500" />
       </div>

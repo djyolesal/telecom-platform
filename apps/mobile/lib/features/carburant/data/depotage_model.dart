@@ -242,7 +242,7 @@ class PlanLigne {
   }
 }
 
-/// Bon de livraison du transporteur — vue liste (« mes chargements »).
+/// Bon de livraison du transporteur - vue liste (« mes chargements »).
 class BonLivraisonLite {
   final String id;
   final String numeroBL;

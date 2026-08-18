@@ -48,7 +48,7 @@ class _EcrouSignalPainter extends CustomPainter {
     // Cœur (point ambre).
     canvas.drawCircle(Offset(60 * k, 64 * k), 7 * k, Paint()..color = dot);
 
-    // Ondes du signal (arcs teal) — mêmes cordes que le SVG :
+    // Ondes du signal (arcs teal) - mêmes cordes que le SVG :
     // corde (46,52)-(74,52) r18 → centre (60, 63.31) ; corde (40,45)-(80,45) r25 → centre (60, 60).
     final arc = Paint()
       ..style = PaintingStyle.stroke
@@ -64,7 +64,7 @@ class _EcrouSignalPainter extends CustomPainter {
 }
 
 /// « Ligne de vie » : battement de supervision terminé par un point de
-/// géolocalisation — même tracé que les en-têtes PDF et le motif du logo.
+/// géolocalisation - même tracé que les en-têtes PDF et le motif du logo.
 class LigneDeVie extends StatelessWidget {
   final double height;
   final Color pulse;

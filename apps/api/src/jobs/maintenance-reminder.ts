@@ -34,7 +34,7 @@ export async function maintenanceReminderJob(): Promise<void> {
     await notificationService.sendToUser(technicienId, {
       type: 'MAINTENANCE_REMINDER',
       title: `🔧 ${list.length} maintenance(s) planifiée(s)`,
-      body: list.map((m) => `${m.site?.code} — ${m.equipement}`).join(', ').slice(0, 250),
+      body: list.map((m) => `${m.site?.code} - ${m.equipement}`).join(', ').slice(0, 250),
       data: { kind: 'maintenance_reminder' },
     });
   }

@@ -2,7 +2,7 @@ import { Inbox, AlertCircle } from 'lucide-react';
 
 /**
  * ── RÈGLE D'ATTENTE DU PORTAIL ──────────────────────────────────────────────
- * Deux traitements, chacun là où il est le meilleur — ne pas les mélanger :
+ * Deux traitements, chacun là où il est le meilleur - ne pas les mélanger :
  *
  *  • `<TableSkeleton />` → pages de LISTE / TABLEAU (sites, incidents, relevés,
  *    dépotages, utilisateurs…). Le squelette préfigure les lignes : la page ne
@@ -18,7 +18,7 @@ import { Inbox, AlertCircle } from 'lucide-react';
  *    formulaire entier serait plus lent à l'usage. L'état d'envoi est porté par
  *    le bouton (`loading={isPending}`).
  *    Convention : quand une liste déroulante attend sa source, son `placeholder`
- *    l'annonce (« Chargement des prestataires… ») — un menu vide qui invite à
+ *    l'annonce (« Chargement des prestataires… ») - un menu vide qui invite à
  *    choisir laisse croire qu'il n'y a rien à sélectionner.
  *
  * Toute nouvelle page doit se ranger dans l'un de ces trois cas.

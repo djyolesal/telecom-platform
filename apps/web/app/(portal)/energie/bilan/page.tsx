@@ -50,7 +50,7 @@ function presets(): Record<string, { debut: string; fin: string }> {
 }
 
 /**
- * Bilan énergie CEET sur période libre — le pendant du bilan carburant.
+ * Bilan énergie CEET sur période libre - le pendant du bilan carburant.
  * L'INDEX COMPTEUR joue le rôle de la jauge : conso = index fin − index début,
  * mesurable seulement si les deux bornes ont un index ; à défaut, repli sur la
  * somme des consommations DÉCLARÉES, badgée comme telle.
@@ -106,7 +106,7 @@ export default function BilanEnergiePage() {
     <div>
       <PageHeader
         title="Bilan énergie CEET"
-        subtitle="Période libre — index aux deux bornes, consommation et coût, courbe 12 mois"
+        subtitle="Période libre - index aux deux bornes, consommation et coût, courbe 12 mois"
         backHref="/energie"
         actions={<ExportButtons base="/rapports/bilan-energie/export" name="bilan-energie" query={query} />}
       />
@@ -149,17 +149,17 @@ export default function BilanEnergiePage() {
         </div>
 
         <p className="mb-4 text-xs text-gray-500">
-          La consommation « Index » est la différence des index compteur aux deux bornes — la mesure de référence.
+          La consommation « Index » est la différence des index compteur aux deux bornes - la mesure de référence.
           « Déclarée » est la somme des consommations saisies sur les relevés : un repli, pas une mesure.
           Un index en recul (compteur remplacé) bascule automatiquement le site en déclaré.
         </p>
 
         {/* ── Courbe 12 mois ── */}
         <div className="mb-4 rounded-xl border border-gray-100 bg-white p-5">
-          <h3 className="mb-1 text-sm font-semibold text-gray-700">Consommation CEET — 12 derniers mois</h3>
+          <h3 className="mb-1 text-sm font-semibold text-gray-700">Consommation CEET - 12 derniers mois</h3>
           <p className="mb-3 text-xs text-gray-500">
             Barres : consommation déclarée (toujours connue). Ligne : delta d&apos;index des sites mesurables
-            (l&apos;infobulle indique combien) — les premiers mois peuvent être partiels.
+            (l&apos;infobulle indique combien) - les premiers mois peuvent être partiels.
           </p>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={chartData}>

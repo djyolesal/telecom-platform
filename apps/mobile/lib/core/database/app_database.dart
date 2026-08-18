@@ -34,7 +34,7 @@ class OutboxEntries extends Table {
   IntColumn get retries => integer().withDefault(const Constant(0))();
   TextColumn get lastError => text().nullable()();
   // Auteur de l'opération : sur un téléphone de service partagé, la file de A
-  // était rejouée avec le jeton de B — saisies enregistrées au mauvais nom.
+  // était rejouée avec le jeton de B - saisies enregistrées au mauvais nom.
   TextColumn get userId => text().nullable()();
   // Entité visée (ex: « maintenance:<id> ») : permet de révoquer le patch
   // optimiste du cache quand l'opération finit en échec définitif.

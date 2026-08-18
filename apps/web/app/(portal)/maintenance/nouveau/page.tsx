@@ -64,17 +64,17 @@ export default function NouvelleMaintenancePage() {
   });
   const geOptions = (gesDuSite ?? []).map((g) => ({ value: g.id, label: g.libelle ?? 'GE' }));
 
-  const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} — ${s.nom}` }));
+  const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} - ${s.nom}` }));
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
   const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: t.libelle }));
-  const actifOptions = (actifs ?? []).map((a) => ({ value: `${a.actifType}:${a.id}`, label: `${a.libelle ?? a.categorie}${a.site ? ` — ${a.site.nom}` : ' — Dépôt'}` }));
+  const actifOptions = (actifs ?? []).map((a) => ({ value: `${a.actifType}:${a.id}`, label: `${a.libelle ?? a.categorie}${a.site ? ` - ${a.site.nom}` : ' - Dépôt'}` }));
   const selectedActif = (actifs ?? []).find((a) => `${a.actifType}:${a.id}` === form.actifKey);
 
   const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
   const mutation = useMutation({
     // Type de retour explicite : les trois branches postent des corps différents,
-    // et axios ≥1.19 fait porter le type du corps à AxiosResponse — sans cette
+    // et axios ≥1.19 fait porter le type du corps à AxiosResponse - sans cette
     // annotation, TypeScript tente d'unifier les trois et échoue.
     mutationFn: (): Promise<{ data: { data: { id: string } } }> => {
       if (new Date(form.datePlanifiee).getTime() < Date.now() - 60000) {
@@ -99,7 +99,7 @@ export default function NouvelleMaintenancePage() {
         const ge = (gesDuSite ?? []).find((g) => g.id === form.actifKey);
         return api.post('/maintenances', {
           siteId: form.siteId, type: 'CURATIVE', categorie: 'GE',
-          equipement: `Dépannage — ${ge?.libelle ?? 'GE'}`,
+          equipement: `Dépannage - ${ge?.libelle ?? 'GE'}`,
           actifType: 'GE', actifId: form.actifKey,
           description: form.description || undefined,
           datePlanifiee: new Date(form.datePlanifiee).toISOString(),
@@ -114,7 +114,7 @@ export default function NouvelleMaintenancePage() {
       return api.post('/maintenances', {
         siteId, type: 'CURATIVE',
         categorie: selectedActif.categorie,
-        equipement: `${NATURE_LABEL[form.nature]} — ${selectedActif.libelle ?? selectedActif.categorie}`,
+        equipement: `${NATURE_LABEL[form.nature]} - ${selectedActif.libelle ?? selectedActif.categorie}`,
         natureTravaux: form.nature,
         actifType: selectedActif.actifType,
         actifId: selectedActif.id,

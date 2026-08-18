@@ -244,5 +244,5 @@ class ActifLite {
   }
 
   String get display =>
-      '${libelle ?? categorie}${siteId != null ? '' : ' — Dépôt'}';
+      '${libelle ?? categorie}${siteId != null ? '' : ' - Dépôt'}';
 }

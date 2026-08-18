@@ -106,7 +106,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-800">Plan de livraison — {bl.numeroBL}</h2>
+          <h2 className="text-lg font-bold text-gray-800">Plan de livraison - {bl.numeroBL}</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
         </div>
         {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -129,7 +129,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
                   <div className="flex-1">
                     <SearchSelect value={l.siteId} onChange={(v) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, siteId: v } : x))}
                       placeholder="Rechercher un site (nom ou code)…"
-                      options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.nom}` }))} />
+                      options={sites.map((s) => ({ value: s.id, label: `${s.code} - ${s.nom}` }))} />
                   </div>
                   <div className="w-28"><Input type="number" value={l.volume} placeholder="L" onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, volume: e.target.value } : x))} /></div>
                   <button type="button" onClick={() => setLignes((arr) => arr.filter((_, j) => j !== i))} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
@@ -154,7 +154,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
 interface Transporteur { id: string; nom: string }
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-// Édition de l'entête du BL (manager) — sert à finaliser un brouillon.
+// Édition de l'entête du BL (manager) - sert à finaliser un brouillon.
 function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
@@ -226,8 +226,8 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
 
 /**
  * Une ligne du plan. Deux apports pour le transporteur :
- *  — « Itinéraire » : le chauffeur doit trouver le site (coordonnées du site).
- *  — le détail des dépotages RÉELS (date + volume) : l'API les envoyait déjà
+ *  - « Itinéraire » : le chauffeur doit trouver le site (coordonnées du site).
+ *  - le détail des dépotages RÉELS (date + volume) : l'API les envoyait déjà
  *    mais l'écran n'affichait qu'un total ; c'est pourtant la preuve de ce qui
  *    a été réceptionné, et ce sur quoi porte tout litige.
  */
@@ -292,7 +292,7 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
 /**
  * Clôture d'un chargement : le geste qui SOLDE un camion. Tant que le reste en
  * citerne n'est pas ventilé (retour dépôt / perte / report), il reste un
- * manquant camion perpétuel — et rien ne distingue un retour honnête d'un
+ * manquant camion perpétuel - et rien ne distingue un retour honnête d'un
  * siphonnage. La somme des trois destinations doit égaler le reste.
  */
 function ClotureModal({ bl, reste, onClose }: { bl: BL; reste: number; onClose: () => void }) {
@@ -385,7 +385,7 @@ function ClotureModal({ bl, reste, onClose }: { bl: BL; reste: number; onClose: 
 
           <div className={`rounded-lg px-3 py-2 text-sm ${equilibre ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'}`}>
             Ventilé : {fmtNumber(somme)} L / {fmtNumber(reste)} L
-            {!equilibre && ` — écart de ${fmtNumber(Math.abs(somme - reste))} L`}
+            {!equilibre && ` - écart de ${fmtNumber(Math.abs(somme - reste))} L`}
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -416,7 +416,7 @@ export default function BonLivraisonDetailPage() {
   });
 
   // Annulation d'un BROUILLON : il n'existait aucune action pour écarter une
-  // proposition du réappro prédictif. Réservée aux brouillons — l'API refuse la
+  // proposition du réappro prédictif. Réservée aux brouillons - l'API refuse la
   // suppression d'un BL réel (hors admin) et de tout BL portant des dépotages.
   const supprimerBrouillon = useMutation({
     mutationFn: () => api.delete(`/bons-livraison/${id}`),
@@ -476,14 +476,14 @@ export default function BonLivraisonDetailPage() {
 
       {clos && (
         <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-          Chargement clôturé le {fmtDate(data.dateCloture!)} — le reste en citerne a été ventilé, ce camion ne compte plus dans les écarts.
+          Chargement clôturé le {fmtDate(data.dateCloture!)} - le reste en citerne a été ventilé, ce camion ne compte plus dans les écarts.
           {data.motifCloture ? ` Motif : ${data.motifCloture}` : ''}
         </div>
       )}
 
       {data.numeroBL.startsWith('BR-') && (
         <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
-          Brouillon généré par le réapprovisionnement prédictif — finalisez l’entête (N° BL réel, camion, transporteur) puis ajustez le plan si besoin.
+          Brouillon généré par le réapprovisionnement prédictif - finalisez l’entête (N° BL réel, camion, transporteur) puis ajustez le plan si besoin.
         </div>
       )}
 
@@ -529,7 +529,7 @@ export default function BonLivraisonDetailPage() {
           )}
           <Row label="Total livré (réel)" value={`${fmtNumber(totalLivreReel)} L`} />
           {/* Ce qui reste dans la citerne : c'est l'écart camion sur lequel le
-              pilotage interpelle le transporteur — il doit le voir en premier. */}
+              pilotage interpelle le transporteur - il doit le voir en premier. */}
           <Row label="Reste à livrer (citerne)"
             value={<span className={resteCiterne > 0.5 ? 'text-amber-700 font-semibold' : 'text-green-700 font-semibold'}>
               {fmtNumber(resteCiterne)} L

@@ -40,7 +40,7 @@ Future<void> smartDepoter(BuildContext context) async {
   } else {
     messenger.showSnackBar(const SnackBar(
         content: Text(
-            'Vous n\'êtes à proximité d\'aucun site — sélectionnez-le manuellement.')));
+            'Vous n\'êtes à proximité d\'aucun site - sélectionnez-le manuellement.')));
     await router.push('/carburant/nouveau');
   }
 }

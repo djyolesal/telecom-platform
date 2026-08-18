@@ -126,7 +126,7 @@ export async function purgeOrphelinsJob(): Promise<void> {
     await minioClient.removeObjects(MINIO_BUCKET, orphelins.slice(i, i + 200).map((o) => o.name));
   }
   logger.info(
-    `[purge-orphelins] ${orphelins.length} objet(s) orphelin(s) supprimé(s) (${totalMo.toFixed(1)} Mo) — ` +
+    `[purge-orphelins] ${orphelins.length} objet(s) orphelin(s) supprimé(s) (${totalMo.toFixed(1)} Mo) - ` +
     `${total - orphelins.length} objets conservés.`
   );
 }

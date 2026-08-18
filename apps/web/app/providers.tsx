@@ -18,7 +18,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         },
         // Filet de sécurité : toute mutation qui échoue sans onError dédié affiche
-        // un toast (plus d'échec 100 % silencieux — le spinner s'arrêtait sans rien).
+        // un toast (plus d'échec 100 % silencieux - le spinner s'arrêtait sans rien).
         // Le 401 est déjà géré par l'intercepteur axios (déconnexion).
         mutationCache: new MutationCache({
           onError: (err, _vars, _ctx, mutation) => {

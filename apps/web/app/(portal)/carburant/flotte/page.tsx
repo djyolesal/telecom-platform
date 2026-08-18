@@ -40,7 +40,7 @@ interface Transporteur { id: string; nom: string }
 
 /**
  * Les référentiels se peuplent tout seuls : une plaque nomme un camion, un nom
- * nomme un chauffeur. Cette page sert à les ENRICHIR — et la capacité de
+ * nomme un chauffeur. Cette page sert à les ENRICHIR - et la capacité de
  * citerne est le champ qui compte : sans elle, aucun contrôle ne peut dire
  * qu'un chargement de 35 000 L dans un camion de 30 000 est impossible.
  */
@@ -110,7 +110,7 @@ export default function FlottePage() {
     <div>
       <PageHeader
         title="Flotte de transport"
-        subtitle="Camions et chauffeurs — le référentiel se remplit à l'usage, complétez-le pour activer les contrôles"
+        subtitle="Camions et chauffeurs - le référentiel se remplit à l'usage, complétez-le pour activer les contrôles"
         backHref="/carburant/commandes"
         actions={isInterne
           ? (
@@ -224,7 +224,7 @@ function VehiculeModal({ vehicule, isInterne, onClose }: { vehicule: Vehicule | 
           <Input type="number" value={form.capaciteCiterneLitres} onChange={(e) => setForm((f) => ({ ...f, capaciteCiterneLitres: e.target.value }))} placeholder="30000" />
         </Field>
         <p className="-mt-1 text-xs text-gray-500">
-          Renseignée, elle bloque tout bon de livraison dont le volume chargé la dépasse — une saisie physiquement impossible.
+          Renseignée, elle bloque tout bon de livraison dont le volume chargé la dépasse - une saisie physiquement impossible.
         </p>
         <Field label="Marque"><Input value={form.marque} onChange={(e) => setForm((f) => ({ ...f, marque: e.target.value }))} /></Field>
 

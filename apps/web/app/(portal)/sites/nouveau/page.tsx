@@ -40,7 +40,7 @@ export default function NouveauSitePage() {
     queryKey: ['lots-select'],
     queryFn: () => api.get('/lots', { params: { limit: 500 } }).then((r) => r.data.data),
   });
-  const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} — ${l.nom}` }));
+  const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} - ${l.nom}` }));
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -143,7 +143,7 @@ export default function NouveauSitePage() {
           <Field label="Société de gardiennage">
             <Select value={form.gardiennagePrestataireId} onChange={(e) => set('gardiennagePrestataireId', e.target.value)} options={gardiennageOptions} placeholder="(aucune)" />
             {form.societeGardiennage && !form.gardiennagePrestataireId && (
-              <p className="mt-1 text-xs text-amber-600">Saisie libre héritée : « {form.societeGardiennage} » — créez la société dans Administration → Prestataires (case gardiennage) pour la rapprocher.</p>
+              <p className="mt-1 text-xs text-amber-600">Saisie libre héritée : « {form.societeGardiennage} » - créez la société dans Administration → Prestataires (case gardiennage) pour la rapprocher.</p>
             )}
           </Field>
           <Field label="Téléphone du site (gardien / contact local)">

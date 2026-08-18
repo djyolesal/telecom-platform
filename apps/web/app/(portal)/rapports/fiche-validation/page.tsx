@@ -41,7 +41,7 @@ export default function FicheValidationPage() {
     ...new Map(
       (prestaDetail?.assignments ?? [])
         .filter((a: { scope: string; lot?: { id: string } }) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
-        .map((a: { lot: { id: string; code: string; nom: string } }) => [a.lot.id, { value: a.lot.id, label: `${a.lot.code} — ${a.lot.nom}` }]),
+        .map((a: { lot: { id: string; code: string; nom: string } }) => [a.lot.id, { value: a.lot.id, label: `${a.lot.code} - ${a.lot.nom}` }]),
     ).values(),
   ] as { value: string; label: string }[];
 

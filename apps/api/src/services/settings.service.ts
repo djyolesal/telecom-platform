@@ -84,24 +84,24 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'gardiennage.nuitDebutHeure', label: 'Début du poste de nuit (GMT)', groupe: 'Gardiennage', unite: 'h', defaut: 18 },
     { key: 'gardiennage.nuitFinHeure', label: 'Fin du poste de nuit (GMT)', groupe: 'Gardiennage', unite: 'h', defaut: 6 },
     // Carburant — stock
-    { key: 'ge.seuilCritiqueLitres', label: 'Stock critique', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilCritiqueLitres },
-    { key: 'ge.seuilFaibleLitres', label: 'Stock faible', groupe: 'Carburant — stock', unite: 'L', defaut: GE_PARAMS.seuilFaibleLitres },
-    { key: 'ge.prixLitreFCFA', label: 'Prix du litre gasoil', groupe: 'Carburant — stock', unite: 'FCFA', defaut: GE_PARAMS.prixLitreFCFA },
-    { key: 'carburant.seuilEcartLivraisonPct', label: 'Tolérance écart livraison', groupe: 'Carburant — stock', unite: '%', defaut: 5 },
-    { key: 'carburant.seuilLivraisonMinPct', label: 'Livraison minimale (→ LIVRE)', groupe: 'Carburant — stock', unite: '%', defaut: 5 },
-    { key: 'carburant.seuilAnomalieLitres', label: 'Plancher anti-bruit anomalie carburant', groupe: 'Carburant — stock', unite: 'L', defaut: 20 },
-    { key: 'ge.heuresMoisSecours', label: 'Marche GE secours par défaut (repli sans données)', groupe: 'Carburant — stock', unite: 'h/mois', defaut: GE_PARAMS.heuresMoisSecours },
-    { key: 'ge.facteurChargeSecours', label: 'Facteur de charge GE secours (repli)', groupe: 'Carburant — stock', unite: '', defaut: GE_PARAMS.facteurChargeSecours },
+    { key: 'ge.seuilCritiqueLitres', label: 'Stock critique', groupe: 'Carburant - stock', unite: 'L', defaut: GE_PARAMS.seuilCritiqueLitres },
+    { key: 'ge.seuilFaibleLitres', label: 'Stock faible', groupe: 'Carburant - stock', unite: 'L', defaut: GE_PARAMS.seuilFaibleLitres },
+    { key: 'ge.prixLitreFCFA', label: 'Prix du litre gasoil', groupe: 'Carburant - stock', unite: 'FCFA', defaut: GE_PARAMS.prixLitreFCFA },
+    { key: 'carburant.seuilEcartLivraisonPct', label: 'Tolérance écart livraison', groupe: 'Carburant - stock', unite: '%', defaut: 5 },
+    { key: 'carburant.seuilLivraisonMinPct', label: 'Livraison minimale (→ LIVRE)', groupe: 'Carburant - stock', unite: '%', defaut: 5 },
+    { key: 'carburant.seuilAnomalieLitres', label: 'Plancher anti-bruit anomalie carburant', groupe: 'Carburant - stock', unite: 'L', defaut: 20 },
+    { key: 'ge.heuresMoisSecours', label: 'Marche GE secours par défaut (repli sans données)', groupe: 'Carburant - stock', unite: 'h/mois', defaut: GE_PARAMS.heuresMoisSecours },
+    { key: 'ge.facteurChargeSecours', label: 'Facteur de charge GE secours (repli)', groupe: 'Carburant - stock', unite: '', defaut: GE_PARAMS.facteurChargeSecours },
     // Carburant — manquants
-    { key: 'manquant.delaiJours', label: 'Délai avant « en retard »', groupe: 'Carburant — manquants', unite: 'j', defaut: env.DELAI_MANQUANT_JOURS },
-    { key: 'manquant.minLitres', label: 'Plancher anti-bruit', groupe: 'Carburant — manquants', unite: 'L', defaut: env.MANQUANT_MIN_LITRES },
-    { key: 'manquant.critiqueLitres', label: 'Manquant site critique', groupe: 'Carburant — manquants', unite: 'L', defaut: env.MANQUANT_CRITIQUE_LITRES },
-    { key: 'manquant.camionCritiqueLitres', label: 'Écart camion critique', groupe: 'Carburant — manquants', unite: 'L', defaut: env.MANQUANT_CAMION_CRITIQUE_LITRES },
+    { key: 'manquant.delaiJours', label: 'Délai avant « en retard »', groupe: 'Carburant - manquants', unite: 'j', defaut: env.DELAI_MANQUANT_JOURS },
+    { key: 'manquant.minLitres', label: 'Plancher anti-bruit', groupe: 'Carburant - manquants', unite: 'L', defaut: env.MANQUANT_MIN_LITRES },
+    { key: 'manquant.critiqueLitres', label: 'Manquant site critique', groupe: 'Carburant - manquants', unite: 'L', defaut: env.MANQUANT_CRITIQUE_LITRES },
+    { key: 'manquant.camionCritiqueLitres', label: 'Écart camion critique', groupe: 'Carburant - manquants', unite: 'L', defaut: env.MANQUANT_CAMION_CRITIQUE_LITRES },
     // Carburant — réapprovisionnement
-    { key: 'appro.leadTimeJours', label: 'Délai d’approvisionnement', groupe: 'Carburant — réappro', unite: 'j', defaut: env.APPRO_LEAD_TIME_JOURS },
-    { key: 'appro.securiteJours', label: 'Stock de sécurité', groupe: 'Carburant — réappro', unite: 'j', defaut: env.APPRO_STOCK_SECURITE_JOURS },
-    { key: 'appro.horizonJours', label: 'Horizon de planification', groupe: 'Carburant — réappro', unite: 'j', defaut: env.APPRO_HORIZON_JOURS },
-    { key: 'appro.camionCapaciteLitres', label: 'Capacité camion', groupe: 'Carburant — réappro', unite: 'L', defaut: env.CAMION_CAPACITE_LITRES },
+    { key: 'appro.leadTimeJours', label: 'Délai d’approvisionnement', groupe: 'Carburant - réappro', unite: 'j', defaut: env.APPRO_LEAD_TIME_JOURS },
+    { key: 'appro.securiteJours', label: 'Stock de sécurité', groupe: 'Carburant - réappro', unite: 'j', defaut: env.APPRO_STOCK_SECURITE_JOURS },
+    { key: 'appro.horizonJours', label: 'Horizon de planification', groupe: 'Carburant - réappro', unite: 'j', defaut: env.APPRO_HORIZON_JOURS },
+    { key: 'appro.camionCapaciteLitres', label: 'Capacité camion', groupe: 'Carburant - réappro', unite: 'L', defaut: env.CAMION_CAPACITE_LITRES },
     // SLA prestataires (engagements contractuels + pénalités)
     { key: 'sla.delaiResolutionMaxH', label: 'Délai max de résolution incident', groupe: 'SLA prestataires', unite: 'h', defaut: 24 },
     { key: 'sla.tauxPreventifMinPct', label: 'Taux de préventif minimal', groupe: 'SLA prestataires', unite: '%', defaut: 95 },
@@ -131,9 +131,9 @@ export function settingsCatalog(): SettingMeta[] {
  */
 export const TYPES_LIAISON_DEFAULTS = [
   { code: 'FIBER', libelle: 'Fibre optique', famille: 'FIBRE', constructeur: 'HUAWEI' },
-  { code: 'TN', libelle: 'Fibre — OptiX TN', famille: 'FIBRE', constructeur: 'HUAWEI' },
-  { code: 'ML', libelle: 'FH — Microwave Link', famille: 'FH', constructeur: 'ERICSSON' },
-  { code: 'RTN', libelle: 'FH — RTN', famille: 'FH', constructeur: 'HUAWEI' },
+  { code: 'TN', libelle: 'Fibre - OptiX TN', famille: 'FIBRE', constructeur: 'HUAWEI' },
+  { code: 'ML', libelle: 'FH - Microwave Link', famille: 'FH', constructeur: 'ERICSSON' },
+  { code: 'RTN', libelle: 'FH - RTN', famille: 'FH', constructeur: 'HUAWEI' },
 ];
 
 export function typesLiaison(): typeof TYPES_LIAISON_DEFAULTS {

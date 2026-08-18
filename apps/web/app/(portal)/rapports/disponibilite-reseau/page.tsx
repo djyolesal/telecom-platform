@@ -92,7 +92,7 @@ export default function DisponibiliteReseauPage() {
         </div>
       )}
 
-      {/* Filtres multi-choix — vide = tout. Une coupure « Site entier » coupe
+      {/* Filtres multi-choix - vide = tout. Une coupure « Site entier » coupe
           toutes les technos : elle est incluse dès qu'une techno est cochée. */}
       <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -111,7 +111,7 @@ export default function DisponibiliteReseauPage() {
             </button>
           ))}
           {alarmes.size > 0 && (
-            <span className="text-xs text-amber-600" title="Les coupures sans type d'alarme renseigné — dont les détections AUTO OSS — sont exclues par ce filtre.">
+            <span className="text-xs text-amber-600" title="Les coupures sans type d'alarme renseigné - dont les détections AUTO OSS - sont exclues par ce filtre.">
               (sans type exclues)
             </span>
           )}
@@ -192,7 +192,7 @@ export default function DisponibiliteReseauPage() {
         <div className="mt-6 rounded-xl border border-gray-100 bg-white p-5">
           <h3 className="mb-1 text-sm font-semibold text-gray-700">Évaluation par prestataire</h3>
           <p className="mb-3 text-xs text-gray-400">
-            Downtime des sites de leurs lots sur la période — le <b>passif</b> (énergie/environnement) relève de leur responsabilité O&M,
+            Downtime des sites de leurs lots sur la période - le <b>passif</b> (énergie/environnement) relève de leur responsabilité O&M,
             l'<b>actif</b> (radio/transmission) des équipes réseau.
           </p>
           <div className="overflow-x-auto">

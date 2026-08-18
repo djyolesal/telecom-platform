@@ -19,7 +19,7 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   // detectionSpeed normal (pas noDuplicates) : le ré-scan du MÊME QR après une
-  // erreur (« GE hors-ligne », zone blanche) doit re-déclencher — le doublon est
+  // erreur (« GE hors-ligne », zone blanche) doit re-déclencher - le doublon est
   // déjà bloqué par le drapeau _handling. Sinon « Réessayer » restait inopérant.
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,

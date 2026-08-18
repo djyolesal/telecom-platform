@@ -8,7 +8,7 @@ import { fmtDateTime } from '@/lib/utils';
 
 /**
  * Tableau de bord du NOC : l'état des coupures, rien d'autre.
- * Le tableau de bord interne est centré logistique (stock carburant) — hors
+ * Le tableau de bord interne est centré logistique (stock carburant) - hors
  * périmètre NOC. Ici : situation en direct (mêmes stats que la page Coupures,
  * poll 60 s), la file des coupures actives les plus graves, et les accès
  * rapides de la vacation.
@@ -68,7 +68,7 @@ export function DashboardNoc() {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">Supervision réseau</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Situation en direct — actualisée toutes les 60 s</p>
+        <p className="mt-0.5 text-sm text-gray-500">Situation en direct - actualisée toutes les 60 s</p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -95,7 +95,7 @@ export function DashboardNoc() {
       <div className="mb-6 rounded-xl border border-gray-100 bg-white">
         <div className="flex items-center justify-between border-b border-gray-50 px-5 py-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <ClipboardList size={15} className="text-[#1B3F6B]" /> Coupures actives — les plus graves d&apos;abord
+            <ClipboardList size={15} className="text-[#1B3F6B]" /> Coupures actives - les plus graves d&apos;abord
           </h3>
           <Link href="/supervision/coupures" className="flex items-center gap-1 text-xs font-medium text-[#2471A3] hover:underline">
             Tout voir <ArrowRight size={13} />
@@ -104,7 +104,7 @@ export function DashboardNoc() {
         {!coupures ? (
           <p className="px-5 py-6 text-center text-sm text-gray-400">Chargement…</p>
         ) : coupures.length === 0 ? (
-          <p className="px-5 py-6 text-center text-sm font-medium text-emerald-600">Aucune coupure en cours — réseau en service.</p>
+          <p className="px-5 py-6 text-center text-sm font-medium text-emerald-600">Aucune coupure en cours - réseau en service.</p>
         ) : (
           <ul className="divide-y divide-gray-50">
             {coupures.map((c) => (

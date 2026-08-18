@@ -33,7 +33,7 @@ const _statutCouleurs = <String, Color>{
   'ANNULE': Color(0xFFB91C1C),
 };
 
-/// « Mes chargements » — les bons de livraison du transporteur connecté.
+/// « Mes chargements » - les bons de livraison du transporteur connecté.
 /// L'API filtre déjà sur son prestataire : il ne voit jamais ceux d'un confrère.
 class BlListScreen extends StatelessWidget {
   const BlListScreen({super.key});

@@ -47,7 +47,7 @@ export default function ColonnesTableauxPage() {
       api.put('/admin/settings', TABLES.map((t) => ({
         key: `web.colonnesOptionnelles.${t}`,
         value: COLONNES_OPTIONNELLES[t].colonnes.filter((c) => actives[t].has(c.key)).map((c) => c.key),
-        description: `Colonnes optionnelles proposées — ${COLONNES_OPTIONNELLES[t].titre}`,
+        description: `Colonnes optionnelles proposées - ${COLONNES_OPTIONNELLES[t].titre}`,
       }))),
     onSuccess: () => {
       setSavedOk(true);
@@ -112,7 +112,7 @@ export default function ColonnesTableauxPage() {
         </Button>
         {savedOk && (
           <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600">
-            <CheckCircle2 size={16} /> Enregistré — effet immédiat pour tous les utilisateurs
+            <CheckCircle2 size={16} /> Enregistré - effet immédiat pour tous les utilisateurs
           </span>
         )}
         {save.isError && <span className="text-sm text-red-600">Échec de l’enregistrement</span>}

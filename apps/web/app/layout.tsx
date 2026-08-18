@@ -6,8 +6,8 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'E&M OpS — Supervision',
-  description: 'Exploitation & Maintenance Operations Services — supervision des sites BTS, carburant et énergie',
+  title: 'E&M OpS - Supervision',
+  description: 'Exploitation & Maintenance Operations Services - supervision des sites BTS, carburant et énergie',
 };
 
 export const viewport: Viewport = {

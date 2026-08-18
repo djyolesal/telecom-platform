@@ -186,7 +186,7 @@ export default function ActifsPage() {
               {STATUT_LABEL[a.statutActif] ?? a.statutActif}
             </Badge>
             {j != null && j > 0 && (
-              <span className={`text-xs ${bloque ? 'font-semibold text-red-600' : 'text-gray-400'}`} title={bloque ? 'Mouvement probablement bloqué — vérifier' : undefined}>
+              <span className={`text-xs ${bloque ? 'font-semibold text-red-600' : 'text-gray-400'}`} title={bloque ? 'Mouvement probablement bloqué - vérifier' : undefined}>
                 depuis {j} j{bloque ? ' ⚠' : ''}
               </span>
             )}

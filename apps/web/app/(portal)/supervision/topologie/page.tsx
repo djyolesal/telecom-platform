@@ -31,7 +31,7 @@ interface Arbre { racine: SiteNode; taille: number }
 
 /**
  * Volet Topologie : forêt des chaînes de transmission (site amont → sites aval),
- * avec l'état temps réel superposé — un site en coupure est marqué en rouge,
+ * avec l'état temps réel superposé - un site en coupure est marqué en rouge,
  * et sa chaîne aval en ambre (impact potentiel/hérité).
  */
 export default function TopologiePage() {
@@ -95,7 +95,7 @@ export default function TopologiePage() {
     // Sites en coupure (rouge) et leur aval (ambre). L'aval n'est menacé que si
     // le site amont est ENTIÈREMENT tombé (ligne SITE ou les 4 technos down) :
     // une coupure partielle laisse le site alimenté et sa transmission en
-    // service — colorer l'aval reviendrait à peindre toute une chaîne en ambre
+    // service - colorer l'aval reviendrait à peindre toute une chaîne en ambre
     // pour une simple panne 3G.
     const sitesDown = new Set((coupures ?? []).map((c) => c.siteId).filter((x): x is string => !!x));
     const technosParSite = new Map<string, Set<string>>();
@@ -118,7 +118,7 @@ export default function TopologiePage() {
     for (const id of sitesDown) if (entierementDown(id)) marquerAval(id);
 
     // Liaisons critiques (SPOF) : poids = le site + tout ce qui est suspendu à
-    // sa liaison amont — les plus lourdes, surtout en FH, sont candidates à
+    // sa liaison amont - les plus lourdes, surtout en FH, sont candidates à
     // une sécurisation (bouclage fibre, lien de secours).
     const liaisonsCritiques = tous
       .filter((s) => s.parentTransmissionId && parId.has(s.parentTransmissionId))
@@ -157,7 +157,7 @@ export default function TopologiePage() {
   // coûtait ~630 000 comparaisons PAR FRAPPE sur 786 nœuds (saisie saccadée),
   // et le calcul se refaisait à chaque rendu (donc à chaque tick de 60 s).
   // IMPÉRATIVEMENT AVANT les `return` anticipés : un hook après un retour
-  // conditionnel change le nombre de hooks entre deux rendus — React lève
+  // conditionnel change le nombre de hooks entre deux rendus - React lève
   // « Rendered more hooks than during the previous render » dès que le
   // chargement se termine (page entière en erreur côté client).
   const terme = termeDebounce.trim().toLowerCase();
@@ -172,7 +172,7 @@ export default function TopologiePage() {
   }, [terme, arbres, enfants, parId]);
 
   // AMENER au site trouvé : les chaînes s'ouvrent (cf. ArbreCard) puis on
-  // défile jusqu'au premier nœud en surbrillance — sans ça, la recherche
+  // défile jusqu'au premier nœud en surbrillance - sans ça, la recherche
   // filtrait les chaînes mais laissait l'utilisateur chercher à l'œil.
   useEffect(() => {
     if (!terme) return;
@@ -252,7 +252,7 @@ export default function TopologiePage() {
         <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4">
           <h3 className="mb-1 text-sm font-semibold text-gray-700">Liaisons critiques (points de défaillance uniques)</h3>
           <p className="mb-3 text-xs text-gray-400">
-            Nombre de sites suspendus à chaque liaison amont — les plus lourdes en <b>FH</b> sont candidates à une sécurisation (bouclage fibre, lien de secours).
+            Nombre de sites suspendus à chaque liaison amont - les plus lourdes en <b>FH</b> sont candidates à une sécurisation (bouclage fibre, lien de secours).
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -278,7 +278,7 @@ export default function TopologiePage() {
                       <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{poids}</td>
                       <td className="px-3 py-1.5">
                         {familleFH && poids >= 5 && (
-                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">FH — à sécuriser</span>
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">FH - à sécuriser</span>
                         )}
                       </td>
                     </tr>
@@ -334,7 +334,7 @@ export default function TopologiePage() {
             <div className="rounded-xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500">
               {siteIsole ? (
                 <>
-                  <p><b>{siteIsole.nom}</b> ({siteIsole.code}) existe mais n&apos;appartient à aucune chaîne — aucune liaison de transmission déclarée.</p>
+                  <p><b>{siteIsole.nom}</b> ({siteIsole.code}) existe mais n&apos;appartient à aucune chaîne - aucune liaison de transmission déclarée.</p>
                   <button
                     type="button"
                     onClick={() => router.push(`/sites/${siteIsole.id}`)}
@@ -691,7 +691,7 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
                 fill={down ? '#922B21' : impacte ? '#9C640C' : '#2C3E50'}>
                 {s.nom.length > 18 ? `${s.nom.slice(0, 17)}…` : s.nom}
               </text>
-              <title>{`${s.nom} · ${s.region}${s.typeLiaison ? ` · liaison ${s.typeLiaison}` : ''}${down ? ' — EN COUPURE' : impacte ? " — aval d'un site en coupure" : ''}`}</title>
+              <title>{`${s.nom} · ${s.region}${s.typeLiaison ? ` · liaison ${s.typeLiaison}` : ''}${down ? ' - EN COUPURE' : impacte ? " - aval d'un site en coupure" : ''}`}</title>
             </g>
           );
         })}
@@ -726,7 +726,7 @@ function Noeud({ site, enfants, sitesDown, sitesImpactes, terme, profondeur }: {
           : impacte ? 'border-amber-200 bg-amber-50 text-amber-800'
           : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-[#EAF1F8]'
         } ${surligne ? 'ring-2 ring-[#2471A3]' : ''}`}
-        title={`${site.nom} · ${site.region}${down ? ' — EN COUPURE' : impacte ? ' — aval d’un site en coupure' : ''}`}
+        title={`${site.nom} · ${site.region}${down ? ' - EN COUPURE' : impacte ? ' - aval d’un site en coupure' : ''}`}
       >
         <span className={`h-2 w-2 rounded-full ${down ? 'bg-[#C0392B]' : impacte ? 'bg-[#E67E22]' : 'bg-[#0E7C6B]'}`} />
         <span className="font-medium">{site.nom}</span>

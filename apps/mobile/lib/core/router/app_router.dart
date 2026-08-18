@@ -53,7 +53,7 @@ GoRouter createRouter(AuthCubit authCubit) {
       GoRoute(path: '/carburant', builder: (_, __) => const DepotageListScreen()),
       GoRoute(path: '/carburant/nouveau', builder: (_, s) => DepotageFormScreen(initialSiteId: s.uri.queryParameters['siteId'], initialLigneId: s.uri.queryParameters['ligneId'])),
       GoRoute(path: '/carburant/detail/:id', builder: (_, s) => DepotageDetailScreen(id: s.pathParameters['id']!)),
-      // Liste AVANT le paramètre :id — sinon « nouveau » serait pris pour un id.
+      // Liste AVANT le paramètre :id - sinon « nouveau » serait pris pour un id.
       GoRoute(path: '/carburant/bons-livraison', builder: (_, __) => const BlListScreen()),
       GoRoute(path: '/carburant/bon-livraison/nouveau', builder: (_, __) => const BlFormScreen()),
       GoRoute(path: '/carburant/bon-livraison/:id', builder: (_, st) => BlDetailScreen(id: st.pathParameters['id']!)),

@@ -97,7 +97,7 @@ class AuthRepository {
   /// Un appareil SÉCURISÉ suffit (empreinte, visage OU code/schéma) : le
   /// déverrouillage accepte le code en repli (biometricOnly=false). Exiger
   /// `canCheckBiometrics` masquait l'option sur les téléphones sans empreinte
-  /// ENREGISTRÉE — dont des Samsung déverrouillés par code ou visage.
+  /// ENREGISTRÉE - dont des Samsung déverrouillés par code ou visage.
   Future<bool> get biometricAvailable async {
     try {
       final supporte = await _localAuth.isDeviceSupported();
