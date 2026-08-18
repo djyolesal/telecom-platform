@@ -503,6 +503,7 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
 
 function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onClose: () => void; onDone: () => void }) {
   const toLocal = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
+  const [dateDebut, setDateDebut] = useState(toLocal(coupure.dateDebut));
   const [dateFin, setDateFin] = useState(toLocal(coupure.dateFin));
   const [cause, setCause] = useState(coupure.cause ?? '');
   const [actions, setActions] = useState(coupure.actions ?? '');
@@ -517,6 +518,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 
   const mutation = useMutation({
     mutationFn: () => api.put(`/coupures-reseau/${coupure.id}`, {
+      // Début envoyé seulement s'il a été corrigé (l'audit trace l'ancien).
+      ...(dateDebut && dateDebut !== toLocal(coupure.dateDebut) ? { dateDebut } : {}),
       dateFin: dateFin || null,
       cloturerHeritees,
       cause: cause || null,
@@ -531,18 +534,20 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 
   return (
     <Modal titre={`${coupure.site?.nom ?? 'Coupure'} · ${coupure.technologie === 'SITE' ? 'Site entier' : coupure.technologie}`} onClose={onClose}>
-      <p className="mb-3 text-sm text-gray-500">Début : <b>{fmtDateTime(coupure.dateDebut)}</b></p>
       {coupure.source === 'OSS' && !coupure.priseEnChargePar && !coupure.dateFin && (
         <PriseEnChargeBloc coupureId={coupure.id} onDone={onDone} />
       )}
-      {coupure.source === 'OSS' && coupure.priseEnChargePar && (
-        <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-          Détection AUTO prise en charge par <b>{coupure.priseEnChargePar}</b>.
-        </p>
+      {coupure.priseEnChargePar && (
+        <AnnulationPriseEnChargeBloc coupureId={coupure.id} priseEnChargePar={coupure.priseEnChargePar} onDone={onDone} />
       )}
-      <Field label="Rétablissement (laisser vide si toujours en cours)">
-        <Input type="datetime-local" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Début (corrigeable — l'audit garde l'ancien)">
+          <Input type="datetime-local" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
+        </Field>
+        <Field label="Rétablissement (vide = en cours)">
+          <Input type="datetime-local" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
+        </Field>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Type d'alarme">
           <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="N/A" />
@@ -629,6 +634,43 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
           </Button>
           {errMsg && <p className="mt-2 text-xs text-red-600">{errMsg}</p>}
         </>
+      )}
+    </div>
+  );
+}
+
+// ── Annulation d'une prise en charge erronée ────────────────────────────────
+// Défait proprement l'adoption : héritées fabriquées supprimées, héritées
+// reclassées redevenues locales, estampille retirée — le NOC peut refaire
+// l'analyse depuis la bonne coupure.
+
+function AnnulationPriseEnChargeBloc({ coupureId, priseEnChargePar, onDone }: {
+  coupureId: string; priseEnChargePar: string; onDone: () => void;
+}) {
+  const [resultat, setResultat] = useState<{ heriteesSupprimees: number; heriteesRedeclassees: number } | null>(null);
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/annuler-prise-en-charge`).then((r) => r.data.data),
+    onSuccess: (d) => { setResultat(d); onDone(); },
+  });
+  const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+
+  return (
+    <div className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+      {resultat ? (
+        <p className="text-amber-800">
+          Prise en charge <b>annulée</b> — {resultat.heriteesSupprimees > 0 && <>{resultat.heriteesSupprimees} héritée(s) fabriquée(s) supprimée(s) · </>}
+          {resultat.heriteesRedeclassees} coupure(s) redevenue(s) locale(s). Refaites l&apos;analyse depuis la bonne coupure.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p>Prise en charge par <b>{priseEnChargePar}</b>.</p>
+          <button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending}
+            title="Erreur d'adoption : supprime les héritées fabriquées, re-déclasse les autres en locales, retire l'estampille."
+            className="font-medium text-red-600 hover:underline disabled:opacity-50">
+            {mutation.isPending ? 'Annulation…' : 'Annuler la prise en charge'}
+          </button>
+          {errMsg && <p className="w-full text-red-600">{errMsg}</p>}
+        </div>
       )}
     </div>
   );

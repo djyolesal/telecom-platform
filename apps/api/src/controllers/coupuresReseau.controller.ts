@@ -518,11 +518,39 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
         data[k] = d;
       }
     }
+    // Correction du DÉBUT (saisie erronée) : autorisée aux mêmes rôles que
+    // l'édition — l'ancienne valeur part dans le journal d'audit. Obligatoire,
+    // pas de mise à null : une coupure a toujours un début.
+    if ('dateDebut' in b && b.dateDebut) {
+      const debut = new Date(String(b.dateDebut));
+      if (Number.isNaN(debut.getTime())) throw new AppError('dateDebut invalide', 400);
+      if (debut > new Date()) throw new AppError('Le début ne peut pas être dans le futur', 400);
+      data.dateDebut = debut;
+    }
+    // Site et technologie : corrigeables par l'ADMIN uniquement (une erreur de
+    // cible change l'imputation — la correction reste possible sans supprimer).
+    if (req.user!.role === 'ADMIN') {
+      if ('siteId' in b && b.siteId) {
+        const cible = await prisma.site.findUnique({ where: { id: String(b.siteId) }, select: { id: true } });
+        if (!cible) throw new AppError('Site cible introuvable', 404);
+        data.siteId = cible.id;
+      }
+      if ('technologie' in b && b.technologie) {
+        const t = String(b.technologie).toUpperCase();
+        if (!['SITE', '2G', '3G', '4G', '5G'].includes(t)) throw new AppError('technologie invalide', 400);
+        data.technologie = t;
+      }
+    }
     // Clôture (ou ré-ouverture) → downtime recalculé, jamais saisi à la main.
+    const debutEffectif = (data.dateDebut as Date | undefined) ?? existing.dateDebut;
     if ('dateFin' in data) {
       const fin = data.dateFin as Date | null;
-      if (fin && fin < existing.dateDebut) throw new AppError('La fin ne peut pas précéder le début', 400);
-      data.downtimeMinutes = fin ? minutesEntre(existing.dateDebut, fin) : null;
+      if (fin && fin < debutEffectif) throw new AppError('La fin ne peut pas précéder le début', 400);
+      data.downtimeMinutes = fin ? minutesEntre(debutEffectif, fin) : null;
+    } else if (data.dateDebut instanceof Date && existing.dateFin) {
+      // Début corrigé sur une coupure déjà rétablie : le downtime suit.
+      if (existing.dateFin < data.dateDebut) throw new AppError('Le début ne peut pas dépasser la fin existante', 400);
+      data.downtimeMinutes = minutesEntre(data.dateDebut, existing.dateFin);
     }
     const updated = await prisma.coupureReseau.update({ where: { id: existing.id }, data });
 
@@ -574,7 +602,13 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       }
     }
 
-    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, { cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu }, req);
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, {
+      cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu,
+      // Corrections sensibles : l'ancienne valeur est consignée.
+      ...(data.dateDebut instanceof Date ? { ancienDebut: existing.dateDebut, nouveauDebut: data.dateDebut } : {}),
+      ...(data.siteId ? { ancienSiteId: existing.siteId, nouveauSiteId: data.siteId } : {}),
+      ...(data.technologie ? { ancienneTechnologie: existing.technologie, nouvelleTechnologie: data.technologie } : {}),
+    }, req);
     res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu } });
   } catch (err) { next(err); }
 }
@@ -1207,6 +1241,64 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
         heriteesCreees,
         priseEnChargePar: nom,
       },
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * ANNULATION d'une prise en charge erronée : défait proprement ce que la
+ * prise en charge a fait, pour revenir à l'état « sas brut » et permettre
+ * une nouvelle analyse depuis la bonne coupure :
+ *   - les héritées FABRIQUÉES pour l'aval aveugle (créées par la prise en
+ *     charge, reconnaissables à leur observation) sont SUPPRIMÉES ;
+ *   - les autres héritées ouvertes de la racine redeviennent LOCALES
+ *     (une prise en charge correcte les re-classera) ;
+ *   - l'estampille d'adoption est retirée partout (la racine ressort du
+ *     rapport officiel si elle est d'origine OSS).
+ * Les héritées déjà rétablies ne sont pas touchées (historique).
+ */
+const MARQUE_HERITEE_FABRIQUEE = 'Héritée créée à la prise en charge';
+export async function annulerPriseEnCharge(req: Request, res: Response, next: NextFunction) {
+  try {
+    const cliquee = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, origine: true, coupureOrigineId: true, priseEnChargePar: true, source: true },
+    });
+    if (!cliquee) throw new AppError('Coupure introuvable', 404);
+    // Depuis une héritée, on remonte à la racine porteuse de l'adoption.
+    const racineId = cliquee.origine === 'HERITEE' && cliquee.coupureOrigineId ? cliquee.coupureOrigineId : cliquee.id;
+    const racine = await prisma.coupureReseau.findUnique({
+      where: { id: racineId },
+      select: { id: true, priseEnChargePar: true, source: true },
+    });
+    if (!racine?.priseEnChargePar) throw new AppError("Cette coupure n'est pas prise en charge", 422);
+
+    const [supprimees, redeclassees] = await prisma.$transaction([
+      prisma.coupureReseau.deleteMany({
+        where: {
+          coupureOrigineId: racine.id, dateFin: null, source: 'OSS', incidentId: null,
+          observations: { startsWith: MARQUE_HERITEE_FABRIQUEE },
+        },
+      }),
+      prisma.coupureReseau.updateMany({
+        where: { coupureOrigineId: racine.id, dateFin: null },
+        data: { origine: 'LOCALE', coupureOrigineId: null, priseEnChargePar: null, priseEnChargeLe: null },
+      }),
+      prisma.coupureReseau.update({
+        where: { id: racine.id },
+        data: {
+          priseEnChargePar: null, priseEnChargeLe: null,
+          ...(racine.source === 'OSS' ? { nocEngineer: 'AUTO-OSS' } : {}),
+        },
+      }),
+    ]);
+
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
+      annulationPriseEnCharge: true, heriteesSupprimees: supprimees.count, heriteesRedeclassees: redeclassees.count,
+    }, req);
+    res.json({
+      success: true,
+      data: { racineId: racine.id, heriteesSupprimees: supprimees.count, heriteesRedeclassees: redeclassees.count },
     });
   } catch (err) { next(err); }
 }
