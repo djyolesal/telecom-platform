@@ -49,7 +49,9 @@ const NAV_ITEMS = [
   { groupe: 'carburant', href: '/carburant/livraisons', label: 'Mes chargements',  icon: Truck,          roles: ['TRANSPORTEUR','SUPERVISEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR'] },
   // Transferts, purges et avoirs : écritures hors chaîne BC → BL → dépotage.
   { groupe: 'carburant', href: '/carburant/mouvements', label: 'Mouvements gasoil', icon: ArrowLeftRight, roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
-  { groupe: 'carburant', href: '/carburant/pertes',     label: 'Pertes carburant', icon: ShieldAlert,    roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
+  // Détection de vol : donnée sensible INTERNE (l'API la refuse aux comptes
+  // prestataires) — l'entrée disparaît pour eux via internesSeulement.
+  { groupe: 'carburant', href: '/carburant/pertes',     label: 'Pertes carburant', icon: ShieldAlert,    roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'], internesSeulement: true },
   // Référentiels camions/chauffeurs : le transporteur y gère SON parc (l'API le
   // filtre), le pilotage y renseigne capacités de citerne et jaugeages.
   { groupe: 'carburant', href: '/carburant/flotte',     label: 'Flotte transport', icon: Truck,          roles: ['TRANSPORTEUR','MANAGER','ADMIN'], menu: ['TRANSPORTEUR','MANAGER','ADMIN'] },
@@ -95,7 +97,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }, [userRole, maSociete, pathname, router]);
 
   const visibleItems = [
-    ...NAV_ITEMS.filter(item => ((item as { menu?: string[] }).menu ?? item.roles).includes(userRole)),
+    ...NAV_ITEMS.filter(item => ((item as { menu?: string[] }).menu ?? item.roles).includes(userRole)
+      && !((item as { internesSeulement?: boolean }).internesSeulement && maSociete)),
     ...(userRole === 'SUPERVISEUR' && maSociete ? [{ groupe: 'pilotage', href: '/ma-societe', label: 'Ma société', icon: Building2, roles: ['SUPERVISEUR'] }] : []),
   ];
   // Groupes affichés : ceux où le rôle a au moins une entrée. Le titre n'apparaît
