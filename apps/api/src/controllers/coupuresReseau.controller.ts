@@ -1516,7 +1516,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         { header: 'Downtime (min)', key: 'downtimeMin', width: 14 },
         { header: 'Alarme', key: 'alarme', width: 9 },
         { header: 'Catégorie', key: 'categorie', width: 10 },
-        { header: 'Origine', key: 'origine', width: 10 },
+        { header: 'Origine', key: 'origine', width: 20 },
         { header: 'Source', key: 'source', width: 22 },
         { header: 'Incident', key: 'incident', width: 16 },
         { header: 'Cause', key: 'cause', width: 34 },
@@ -1532,7 +1532,8 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         downtimeMin: c.downtimeMinutes ?? '',
         alarme: c.typeAlarme ?? '',
         categorie: c.causeCategorie ?? '',
-        origine: c.origine === 'HERITEE' ? 'Héritée' : 'Locale',
+        // Héritée : le site AMONT responsable est nommé, comme dans le xlsx.
+        origine: c.origine === 'HERITEE' ? `← ${c.coupureOrigine?.site?.nom ?? 'amont'}` : 'Locale',
         source: c.source === 'OSS'
           ? (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (non prise en charge)')
           : 'Manuelle',
