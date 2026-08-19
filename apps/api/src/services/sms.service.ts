@@ -23,8 +23,10 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
   {
     key: 'sms.tpl.siteHorsService',
     label: 'Site entièrement hors service (incident créé par le NOC)',
-    defaut: '[E&M OpS] NOC : site {site} entièrement hors service. Incident {reference} - intervention terrain requise.',
-    variables: ['site', 'reference'],
+    // {impactes} arrive PRÉ-FORMATÉ (« (+3 sites aval impactés) ») ou vide :
+    // le gabarit n'a pas à gérer le singulier/pluriel ni le cas zéro.
+    defaut: '[E&M OpS] NOC : site {site} entièrement hors service{impactes}. Incident {reference} - intervention terrain requise.',
+    variables: ['site', 'reference', 'impactes'],
   },
   {
     key: 'sms.tpl.coupurePartielle',

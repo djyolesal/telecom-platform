@@ -133,9 +133,24 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
     if (cree) {
       crees++;
       io.of('/supervision').emit('incident:created', { id: incident.id, siteId });
+      // Ampleur de la chaîne dans le SMS ({impactes}) : sites aval distincts
+      // dont l'héritée ouverte pointe sur une des coupures racines notifiées.
+      // Les héritées sont créées/marquées AVANT cet aiguillage (saisie comme
+      // import), le compte est donc déjà juste au moment de l'envoi.
+      const aval = await prisma.coupureReseau.findMany({
+        where: { coupureOrigineId: { in: coupures.map((c) => c.id) }, dateFin: null },
+        select: { siteId: true },
+        distinct: ['siteId'],
+      });
+      const s = aval.length > 1 ? 's' : '';
+      const impactes = aval.length ? ` (+${aval.length} site${s} aval impacté${s})` : '';
       await notifierIncidentCoupure(
         siteId,
-        rendreTemplate('sms.tpl.siteHorsService', { site: coupures[0].site.nom, reference: incident.reference ?? '' }),
+        rendreTemplate('sms.tpl.siteHorsService', {
+          site: coupures[0].site.nom,
+          reference: incident.reference ?? '',
+          impactes,
+        }),
         'INCIDENT_COUPURE_NOC',
         'PASSIVE'
       );
