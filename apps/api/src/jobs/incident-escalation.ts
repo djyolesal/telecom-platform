@@ -17,7 +17,7 @@ const SLA_MINUTES: Record<string, number> = {
 export async function incidentEscalationJob(): Promise<void> {
   const ouverts = await prisma.incident.findMany({
     where: { statut: 'OUVERT' },
-    include: { site: { select: { code: true, region: true } } },
+    include: { site: { select: { nom: true, code: true, region: true } } },
   });
 
   const now = new Date();
@@ -30,7 +30,7 @@ export async function incidentEscalationJob(): Promise<void> {
 
     await notificationService.sendToRoleInRegion('MANAGER', inc.site.region, {
       type: 'INCIDENT_ESCALATION',
-      title: `⚠️ Escalade incident ${inc.severite} - ${inc.site.code}`,
+      title: `⚠️ Escalade incident ${inc.severite} - ${inc.site.nom}`,
       body: `Incident ouvert depuis ${Math.round(age / 60)}h sans prise en charge : ${inc.description.slice(0, 120)}`,
       data: { kind: 'incident_escalation', incidentId: inc.id },
     });

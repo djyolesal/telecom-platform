@@ -134,7 +134,7 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
     // Push notifications si critique
     if (incident.severite === 'CRITIQUE' || incident.severite === 'MAJEUR') {
       await notificationService.sendToRole('SUPERVISEUR', {
-        title: `🔴 Incident ${incident.severite} - ${incident.site.code}`,
+        title: `🔴 Incident ${incident.severite} - ${incident.site.nom}`,
         body: incident.description.substring(0, 100),
         data: { incidentId: incident.id, type: 'incident' },
       });
@@ -210,7 +210,7 @@ export async function assignIncident(req: Request, res: Response, next: NextFunc
 
     // Notifier le technicien
     await notificationService.sendToUser(technicienId, {
-      title: `📋 Incident assigné - ${incident.site.code}`,
+      title: `📋 Incident assigné - ${incident.site.nom}`,
       body: `Vous êtes assigné à l'incident : ${incident.description.substring(0, 80)}`,
       data: { incidentId: incident.id, type: 'incident_assigned' },
     });

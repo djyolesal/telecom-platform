@@ -72,7 +72,7 @@ export async function stockAlertJob(): Promise<void> {
     await notificationService.sendToRoleInRegion('SUPERVISEUR', region, {
       type: 'STOCK_ALERT',
       title: `⛽ ${list.length} site(s) en alerte carburant - ${region}`,
-      body: list.map((a) => `${a.site.code} (${a.stock.niveauAlerte})`).join(', ').slice(0, 250),
+      body: list.map((a) => `${a.site.nom} (${a.stock.niveauAlerte})`).join(', ').slice(0, 250),
       data: { kind: 'stock_alert', region },
     });
   }

@@ -47,7 +47,7 @@ export async function vidangeAlertJob(): Promise<void> {
 
   const liste = dus
     .slice(0, 10)
-    .map(({ g, heures }) => `${g.site?.code ?? '?'} GE n°${g.numero} (${Math.round(heures)} h)`)
+    .map(({ g, heures }) => `${g.site?.nom ?? '?'} GE n°${g.numero} (${Math.round(heures)} h)`)
     .join(', ');
   await notificationService.sendToRole('SUPERVISEUR', {
     title: `🛢️ Vidange GE due - ${dus.length} groupe(s) ≥ ${seuil} h`,
