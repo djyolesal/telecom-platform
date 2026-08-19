@@ -242,6 +242,8 @@ export function DashboardInterne() {
         </div>
       </div>
 
+      <ParcParPrestataire />
+
       {/* ── Stock par région ── */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
         <h3 className="font-semibold text-gray-700 mb-4 text-sm">Stock carburant par région (L)</h3>
@@ -261,4 +263,52 @@ export function DashboardInterne() {
 
 function critiquesInc(d: Record<string, unknown>): number {
   return Number((d as { incidentsCritiques?: number }).incidentsCritiques || 0);
+}
+
+// ── Parc par prestataire ────────────────────────────────────────────────────
+// Nombre de sites couverts par chaque société, avec l'état du moment : combien
+// sont actuellement en coupure site entier. Réservé aux internes - pour un
+// compte prestataire l'API répond 403 et le bloc ne s'affiche pas.
+
+function ParcParPrestataire() {
+  const { data, isError } = useQuery({
+    queryKey: ['parc-prestataires'],
+    queryFn: () => api.get('/rapports/parc-prestataires').then((r) => r.data.data as {
+      prestataires: { nom: string; nbSites: number; sitesCoupes: number }[];
+      sitesNonAffectes: number;
+    }),
+    refetchInterval: 120_000,
+    retry: false,
+  });
+  if (isError || !data || data.prestataires.length === 0) return null;
+  const max = Math.max(...data.prestataires.map((p) => p.nbSites), 1);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+      <h3 className="font-semibold text-gray-700 mb-1 text-sm">Parc par prestataire</h3>
+      <p className="mb-4 text-xs text-gray-400">Sites couverts par société - en rouge, ceux actuellement en coupure site entier.</p>
+      <div className="space-y-2.5">
+        {data.prestataires.map((p) => (
+          <div key={p.nom} className="flex items-center gap-3">
+            <span className="w-40 truncate text-sm font-medium text-gray-700" title={p.nom}>{p.nom}</span>
+            <div className="h-4 flex-1 overflow-hidden rounded bg-gray-100">
+              <div className="flex h-full" style={{ width: `${(p.nbSites / max) * 100}%` }}>
+                <div className="h-full bg-[#C0392B]" style={{ width: `${p.nbSites ? (p.sitesCoupes / p.nbSites) * 100 : 0}%` }} />
+                <div className="h-full flex-1 bg-[#2471A3]" />
+              </div>
+            </div>
+            <span className="w-32 text-right text-sm tabular-nums text-gray-700">
+              <b>{p.nbSites}</b> sites
+              {p.sitesCoupes > 0 && <span className="ml-1.5 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{p.sitesCoupes} coupé(s)</span>}
+            </span>
+          </div>
+        ))}
+        {data.sitesNonAffectes > 0 && (
+          <p className="pt-1 text-xs font-medium text-amber-600">
+            {data.sitesNonAffectes} site(s) actif(s) sans lot - à affecter (Administration → Lots).
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }

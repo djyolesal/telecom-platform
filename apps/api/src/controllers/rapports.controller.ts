@@ -124,6 +124,52 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
 }
 
 // ── Stock carburant détaillé ─────────────────────────────────
+/**
+ * Parc par prestataire (bloc du tableau de bord interne) : nombre de sites
+ * de ses lots + combien sont ACTUELLEMENT en coupure site entier. Un site
+ * dont le lot a deux titulaires (actif + passif) compte chez les deux -
+ * chacun le couvre. `sitesNonAffectes` repère les trous d'affectation.
+ * Réservé aux internes (comparatif inter-prestataires).
+ */
+export async function getParcPrestataires(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const [lots, sitesNonAffectes, coupes] = await Promise.all([
+      prisma.lot.findMany({
+        select: {
+          id: true,
+          sites: { where: { isActive: true }, select: { id: true } },
+          assignments: { select: { prestataireId: true, prestataire: { select: { nom: true } } } },
+        },
+      }),
+      prisma.site.count({ where: { isActive: true, lotId: null } }),
+      prisma.coupureReseau.findMany({
+        where: { dateFin: null, technologie: 'SITE' },
+        select: { siteId: true },
+        distinct: ['siteId'],
+      }),
+    ]);
+    const sitesCoupes = new Set(coupes.map((c) => c.siteId));
+    const parPresta = new Map<string, { nom: string; nbSites: number; sitesCoupes: number }>();
+    for (const lot of lots) {
+      const uniques = new Map(lot.assignments.map((a) => [a.prestataireId, a.prestataire.nom]));
+      const coupesLot = lot.sites.filter((s) => sitesCoupes.has(s.id)).length;
+      for (const [pid, nom] of uniques) {
+        const e = parPresta.get(pid) ?? { nom, nbSites: 0, sitesCoupes: 0 };
+        e.nbSites += lot.sites.length;
+        e.sitesCoupes += coupesLot;
+        parPresta.set(pid, e);
+      }
+    }
+    res.json({
+      success: true,
+      data: {
+        prestataires: [...parPresta.values()].sort((a, b) => b.nbSites - a.nbSites),
+        sitesNonAffectes,
+      },
+    });
+  } catch (err) { next(err); }
+}
+
 export async function getStockCarburant(req: Request, res: Response, next: NextFunction) {
   try {
     const { region } = req.query as Record<string, string>;

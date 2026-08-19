@@ -130,6 +130,7 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/anomalies-conso$/,
   /^\/rapports\/anomalies-carburant$/,
   /^\/rapports\/synthese-appro$/,
+  /^\/rapports\/parc-prestataires$/,
   /^\/rapports\/manquants-livraison(\/|$)/,
   /^\/rapports\/rapprochement(\/|$)/,
   // /rapports/bilan-carburant et /rapports/bilan-energie : OUVERTS aux
@@ -383,6 +384,7 @@ router.post('/incidents/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','
 // ── Rapports ──────────────────────────────────────────────────
 router.get('/rapports/dashboard', rapportsCtrl.getDashboard);
 router.get('/rapports/stock-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
+router.get('/rapports/parc-prestataires', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getParcPrestataires);
 // Bilan carburant sur période : stock aux bornes + conso par conservation + courbe 12 mois.
 router.get('/rapports/bilan-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getBilanCarburant);
 router.get('/rapports/bilan-carburant/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanCarburant);
