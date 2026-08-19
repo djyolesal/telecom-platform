@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre, techniciensAssignables } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
@@ -178,42 +178,7 @@ export async function getTechniciensAssignables(req: Request, res: Response, nex
     if (!incident) throw new AppError('Incident introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, incident.siteId);
 
-    const [site, moi] = await Promise.all([
-      prisma.site.findUnique({
-        where: { id: incident.siteId },
-        select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
-      }),
-      prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } }),
-    ]);
-    const assignments = site?.lot?.assignments ?? [];
-    const scopesDe = new Map<string, string[]>();
-    for (const a of assignments) {
-      const l = scopesDe.get(a.prestataireId) ?? []; l.push(a.scope); scopesDe.set(a.prestataireId, l);
-    }
-    const prestataireIds = [...scopesDe.keys()];
-
-    const techs = await prisma.user.findMany({
-      where: {
-        role: 'TECHNICIEN', isActive: true,
-        // Superviseur prestataire : uniquement SES techniciens ; interne :
-        // les internes + les prestataires du lot.
-        ...(moi?.prestataireId
-          ? { prestataireId: moi.prestataireId }
-          : { OR: [{ prestataireId: null }, { prestataireId: { in: prestataireIds } }] }),
-      },
-      select: { id: true, nom: true, prenom: true, prestataireId: true, prestataire: { select: { nom: true } } },
-      orderBy: [{ prestataireId: 'asc' }, { nom: 'asc' }],
-    });
-    res.json({
-      success: true,
-      data: techs.map((t) => ({
-        id: t.id,
-        nom: t.nom,
-        prenom: t.prenom,
-        societe: t.prestataire?.nom ?? 'Interne',
-        scopes: t.prestataireId ? (scopesDe.get(t.prestataireId) ?? []) : [],
-      })),
-    });
+    res.json({ success: true, data: await techniciensAssignables(req.user!.id, incident.siteId) });
   } catch (err) { next(err); }
 }
 

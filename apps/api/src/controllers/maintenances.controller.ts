@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables } from '../utils/perimetre';
 import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
@@ -305,6 +305,9 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
     // intervention était imputable au prestataire d'un lot concurrent.
     await assertSiteInPerimetre(req.user!.id, String(data.siteId));
     if (data.siteSourceId) await assertSiteInPerimetre(req.user!.id, String(data.siteSourceId));
+    // Le technicien affecté doit couvrir le site (interne ou prestataire du
+    // lot) - jusqu'ici seul le créateur était vérifié, pas l'affecté.
+    if (data.technicienId) await assertTechnicienAssignable(req.user!.id, String(data.technicienId), String(data.siteId));
     // Idempotence (rejeu de la file offline mobile) : la clé stable devient l'id.
     const clientUuid = idempotencyKey(req);
     if (clientUuid) {
@@ -379,6 +382,17 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 }
 
+/** Techniciens affectables pour un site donné (planification) - même liste
+ *  que l'assignation d'incident : ce qui est proposé est ce qui est permis. */
+export async function getTechniciensAssignablesSite(req: Request, res: Response, next: NextFunction) {
+  try {
+    const siteId = String(req.query.site_id ?? '');
+    if (!siteId) throw new AppError('site_id requis', 400);
+    await assertSiteInPerimetre(req.user!.id, siteId);
+    res.json({ success: true, data: await techniciensAssignables(req.user!.id, siteId) });
+  } catch (err) { next(err); }
+}
+
 export async function updateMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
     const existing = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
@@ -398,6 +412,8 @@ export async function updateMaintenance(req: Request, res: Response, next: NextF
       (data as Record<string, unknown>).prestataireId = req.body.prestataireId || null;
     }
     if (data.datePlanifiee) data.datePlanifiee = new Date(data.datePlanifiee as string);
+    // Réaffectation : mêmes règles qu'à la création (couverture du site).
+    if (data.technicienId) await assertTechnicienAssignable(req.user!.id, String(data.technicienId), existing.siteId);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
 
     const updated = await prisma.maintenance.update({ where: { id: req.params.id }, data });

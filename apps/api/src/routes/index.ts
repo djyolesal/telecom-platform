@@ -265,6 +265,7 @@ router.delete('/lots/:id/sites/:siteId', rbac(['MANAGER', 'ADMIN']), lotsCtrl.re
 // ── Maintenances ──────────────────────────────────────────────
 router.get('/maintenances', maintenanceCtrl.getMaintenances);
 router.get('/maintenances/planning', maintenanceCtrl.getPlanning);
+router.get('/maintenances/techniciens-assignables', maintenanceCtrl.getTechniciensAssignablesSite);
 router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
 router.post('/maintenances', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);

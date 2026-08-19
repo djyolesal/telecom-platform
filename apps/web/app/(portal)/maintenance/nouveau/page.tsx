@@ -41,9 +41,12 @@ export default function NouvelleMaintenancePage() {
     queryKey: ['sites-select'],
     queryFn: () => api.get('/sites', { params: { all: true } }).then((r) => r.data.data),
   });
+  // Seuls les techniciens AFFECTABLES au site choisi (internes + prestataires
+  // du lot, société et scope affichés) - la liste suit le site.
   const { data: techs } = useQuery({
-    queryKey: ['techs-select'],
-    queryFn: () => api.get('/users', { params: { role: 'TECHNICIEN', limit: 200 } }).then((r) => r.data.data),
+    queryKey: ['techs-assignables-site', form.siteId],
+    queryFn: () => api.get('/maintenances/techniciens-assignables', { params: { site_id: form.siteId } }).then((r) => r.data.data),
+    enabled: !!form.siteId,
   });
   const { data: taches } = useQuery<TacheContractuelle[]>({
     queryKey: ['site-taches-select', form.siteId],
@@ -65,7 +68,10 @@ export default function NouvelleMaintenancePage() {
   const geOptions = (gesDuSite ?? []).map((g) => ({ value: g.id, label: g.libelle ?? 'GE' }));
 
   const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} - ${s.nom}` }));
-  const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
+  const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string; societe: string; scopes: string[] }) => ({
+    value: t.id,
+    label: `${t.prenom} ${t.nom} - ${t.societe}${t.scopes.length ? ` (${t.scopes.join('/')})` : ''}`,
+  }));
   const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: t.libelle }));
   const actifOptions = (actifs ?? []).map((a) => ({ value: `${a.actifType}:${a.id}`, label: `${a.libelle ?? a.categorie}${a.site ? ` - ${a.site.nom}` : ' - Dépôt'}` }));
   const selectedActif = (actifs ?? []).find((a) => `${a.actifType}:${a.id}` === form.actifKey);
