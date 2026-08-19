@@ -165,6 +165,58 @@ export async function updateIncident(req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 }
 
+/**
+ * Techniciens ASSIGNABLES à un incident : ceux dont le périmètre couvre le
+ * site — les internes, plus les techniciens des prestataires titulaires du
+ * lot (annotés société + scope contractuel pour guider le choix). Un
+ * superviseur prestataire ne voit que les siens. La liste évite au web de
+ * proposer des comptes que le serveur refuserait de toute façon.
+ */
+export async function getTechniciensAssignables(req: Request, res: Response, next: NextFunction) {
+  try {
+    const incident = await prisma.incident.findUnique({ where: { id: req.params.id }, select: { siteId: true } });
+    if (!incident) throw new AppError('Incident introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, incident.siteId);
+
+    const [site, moi] = await Promise.all([
+      prisma.site.findUnique({
+        where: { id: incident.siteId },
+        select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
+      }),
+      prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } }),
+    ]);
+    const assignments = site?.lot?.assignments ?? [];
+    const scopesDe = new Map<string, string[]>();
+    for (const a of assignments) {
+      const l = scopesDe.get(a.prestataireId) ?? []; l.push(a.scope); scopesDe.set(a.prestataireId, l);
+    }
+    const prestataireIds = [...scopesDe.keys()];
+
+    const techs = await prisma.user.findMany({
+      where: {
+        role: 'TECHNICIEN', isActive: true,
+        // Superviseur prestataire : uniquement SES techniciens ; interne :
+        // les internes + les prestataires du lot.
+        ...(moi?.prestataireId
+          ? { prestataireId: moi.prestataireId }
+          : { OR: [{ prestataireId: null }, { prestataireId: { in: prestataireIds } }] }),
+      },
+      select: { id: true, nom: true, prenom: true, prestataireId: true, prestataire: { select: { nom: true } } },
+      orderBy: [{ prestataireId: 'asc' }, { nom: 'asc' }],
+    });
+    res.json({
+      success: true,
+      data: techs.map((t) => ({
+        id: t.id,
+        nom: t.nom,
+        prenom: t.prenom,
+        societe: t.prestataire?.nom ?? 'Interne',
+        scopes: t.prestataireId ? (scopesDe.get(t.prestataireId) ?? []) : [],
+      })),
+    });
+  } catch (err) { next(err); }
+}
+
 export async function assignIncident(req: Request, res: Response, next: NextFunction) {
   try {
     const { technicienId } = req.body;

@@ -374,6 +374,7 @@ router.post('/incidents', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NO
 router.get('/incidents/:id', incidentsCtrl.getIncidentById);
 router.put('/incidents/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.updateIncident);
 router.delete('/incidents/:id', rbac(['ADMIN']), incidentsCtrl.deleteIncident);
+router.get('/incidents/:id/techniciens-assignables', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.getTechniciensAssignables);
 router.post('/incidents/:id/assign', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.assignIncident);
 router.post('/incidents/:id/demarrer', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.startIncident);
 router.post('/incidents/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.closeIncident);

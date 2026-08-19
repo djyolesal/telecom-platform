@@ -46,10 +46,12 @@ export default function IncidentDetailPage() {
     queryKey: ['incident', id],
     queryFn: () => api.get(`/incidents/${id}`).then((r) => r.data.data),
   });
+  // Seuls les techniciens que le serveur ACCEPTERAIT : internes + prestataires
+  // du lot du site (société et scope affichés pour guider le choix).
   const { data: techs } = useQuery({
-    queryKey: ['techs-select'],
-    queryFn: () => api.get('/users', { params: { role: 'TECHNICIEN', limit: 200 } }).then((r) => r.data.data),
-    enabled: !!inc,
+    queryKey: ['techs-assignables', id],
+    queryFn: () => api.get(`/incidents/${id}/techniciens-assignables`).then((r) => r.data.data),
+    enabled: !!inc && inc.statut === 'OUVERT',
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['incident', id] });
@@ -58,7 +60,10 @@ export default function IncidentDetailPage() {
   if (isLoading) return <Loading />;
   if (isError || !inc) return <ErrorState message="Incident introuvable" />;
 
-  const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string }) => ({ value: t.id, label: `${t.prenom} ${t.nom}` }));
+  const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string; societe: string; scopes: string[] }) => ({
+    value: t.id,
+    label: `${t.prenom} ${t.nom} - ${t.societe}${t.scopes.length ? ` (${t.scopes.join('/')})` : ''}`,
+  }));
   const resolu = inc.statut === 'RESOLU' || inc.statut === 'CLOS';
 
   return (
