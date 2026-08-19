@@ -40,6 +40,12 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     defaut: '[E&M OpS] NOC : coupure toujours constatée sur {site} - incident {reference} ROUVERT, merci de repasser.',
     variables: ['site', 'reference'],
   },
+  {
+    key: 'notif.tpl.incidentResoluAuto',
+    label: 'Notification - incident résolu sans intervention (techniciens)',
+    defaut: 'Incident {reference} - {site} rétabli, résolution constatée par le NOC. Intervention terrain inutile.',
+    variables: ['site', 'reference'],
+  },
 ];
 
 /** Rend un gabarit : personnalisation admin si présente, sinon le défaut ;

@@ -74,7 +74,7 @@ export default function ParametresPage() {
 
   if (isLoading) return <Loading />;
   // Les modèles SMS ont leur section dédiée : on les retire de la liste brute.
-  const settings = (data ?? []).filter((s) => !s.key.startsWith('sms.tpl.'));
+  const settings = (data ?? []).filter((s) => !/^(sms|notif)\.tpl\./.test(s.key));
 
   return (
     <div>
@@ -114,7 +114,7 @@ export default function ParametresPage() {
         <div className="mt-8">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="text-sm font-semibold text-gray-700">Modèles de SMS</h2>
+              <h2 className="text-sm font-semibold text-gray-700">Modèles de SMS et notifications</h2>
               <p className="text-xs text-gray-400">
                 Les {'{variables}'} sont remplacées à l&apos;envoi. Revenir au texte du défaut (bouton « défaut ») puis enregistrer = retour au modèle standard.
               </p>

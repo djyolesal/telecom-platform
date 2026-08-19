@@ -317,6 +317,43 @@ export async function cloturerHeriteesRecursif(
  * incident est rétablie, l'incident ne doit plus rester OUVERT (sinon escalade
  * horaire et SMS de situation à perpétuité, et recyclage par une panne ultérieure).
  */
+/**
+ * Push in-app/FCM aux techniciens PASSIFS du lot quand un incident se résout
+ * SANS intervention (rétablissement constaté par le NOC) : un technicien en
+ * route sait que le déplacement est inutile. Contenu éditable (modèle
+ * notif.tpl.incidentResoluAuto). Best-effort - jamais bloquant.
+ */
+async function notifierResolutionAutomatique(incidentId: string | null): Promise<void> {
+  if (!incidentId) return;
+  try {
+    const inc = await prisma.incident.findUnique({
+      where: { id: incidentId },
+      select: {
+        id: true, reference: true, dateIntervention: true,
+        site: { select: { nom: true, lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } } },
+      },
+    });
+    // Une vraie intervention a eu lieu : la clôture terrain suit son cours.
+    if (!inc || inc.dateIntervention) return;
+    const prestas = (inc.site.lot?.assignments ?? [])
+      .filter((a) => a.scope !== 'ACTIVE')
+      .map((a) => a.prestataireId);
+    if (!prestas.length) return;
+    const techs = await prisma.user.findMany({
+      where: { role: 'TECHNICIEN', isActive: true, prestataireId: { in: prestas } },
+      select: { id: true },
+    });
+    const corps = rendreTemplate('notif.tpl.incidentResoluAuto', { site: inc.site.nom, reference: inc.reference ?? '' });
+    await Promise.all(techs.map((t) => notificationService.sendToUser(t.id, {
+      title: `✅ ${inc.site.nom} rétabli`,
+      body: corps,
+      data: { incidentId: inc.id, type: 'incident_resolu_auto' },
+    })));
+  } catch (e) {
+    logger.warn('[coupures] push résolution automatique échoué:', e);
+  }
+}
+
 async function resoudreIncidentSiPlusDeCoupure(
   tx: Prisma.TransactionClient,
   incidentId: string | null,
@@ -586,6 +623,7 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       incidentResolu = await prisma.$transaction((tx) =>
         resoudreIncidentSiPlusDeCoupure(tx, existing.incidentId, data.dateFin as Date)
       );
+      if (incidentResolu) void notifierResolutionAutomatique(existing.incidentId);
     }
 
     // Réouverture par le NOC (dateFin retirée) : si l'incident lié a été résolu
@@ -871,7 +909,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
 
       for (const [incId, fin] of finParIncident) {
         const resolu = await prisma.$transaction((tx) => resoudreIncidentSiPlusDeCoupure(tx, incId, fin));
-        if (resolu) incidentsResolus++;
+        if (resolu) { incidentsResolus++; void notifierResolutionAutomatique(incId); }
       }
     }
 
