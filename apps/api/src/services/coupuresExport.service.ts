@@ -193,7 +193,8 @@ export function construireClasseurCoupures(opts: {
   lignes.forEach((l, i) => {
     const heritee = l.origine === 'HERITEE';
     const valeurs: Record<string, string> = {
-      site: l.siteNom,
+      // Héritée : indentée sous sa racine (l'export regroupe déjà les lignes).
+      site: heritee ? `    ↳ ${l.siteNom}` : l.siteNom,
       region: l.region,
       technologie: l.technologie === 'SITE' ? 'Site entier' : l.technologie,
       debut: fmtDh(l.dateDebut),

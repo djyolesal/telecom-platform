@@ -1450,7 +1450,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
     }
 
     const where = await whereCoupures(req);
-    const rows = await prisma.coupureReseau.findMany({
+    const brutes = await prisma.coupureReseau.findMany({
       where,
       orderBy: { dateDebut: 'desc' },
       take: EXPORT_MAX,
@@ -1460,6 +1460,19 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         coupureOrigine: { select: { site: { select: { nom: true } } } },
       },
     });
+    // Comme à l'écran : chaque héritée est regroupée DIRECTEMENT sous sa
+    // racine (si elle est dans l'export) - la hiérarchie de la panne se lit
+    // de haut en bas. Une héritée dont la racine est hors filtre reste à sa
+    // place chronologique.
+    const heriteesParRacine = new Map<string, typeof brutes>();
+    const tetes: typeof brutes = [];
+    for (const c of brutes) {
+      if (c.origine === 'HERITEE' && c.coupureOrigineId && brutes.some((r) => r.id === c.coupureOrigineId)) {
+        const l = heriteesParRacine.get(c.coupureOrigineId) ?? [];
+        l.push(c); heriteesParRacine.set(c.coupureOrigineId, l);
+      } else tetes.push(c);
+    }
+    const rows = tetes.flatMap((c) => [c, ...(heriteesParRacine.get(c.id) ?? [])]);
 
     const { date_debut, date_fin } = req.query as Record<string, string>;
     const periodeTexte = date_debut || date_fin
@@ -1524,7 +1537,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         { header: 'Intervenant(s)', key: 'intervenants', width: 22 },
       ],
       rows: rows.map((c) => ({
-        site: c.site.nom,
+        site: c.origine === 'HERITEE' ? `  ↳ ${c.site.nom}` : c.site.nom,
         region: c.site.region,
         technologie: c.technologie === 'SITE' ? 'Site entier' : c.technologie,
         debut: fmtDh(c.dateDebut),
