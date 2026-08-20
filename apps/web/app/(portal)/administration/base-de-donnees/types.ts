@@ -44,6 +44,8 @@ export interface TableResume {
   groupe: string;
   lectureSeule: boolean;
   lignes: number;
+  /** false = estimation Postgres (grosse table non comptée exactement). */
+  lignesExactes: boolean;
   octets: number | null;
   colonnes: number;
 }

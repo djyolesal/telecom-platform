@@ -33,18 +33,30 @@ import {
 
 const LIMITE_OPTIONS = 50;
 
+/**
+ * Au-delà de ce volume, le catalogue affiche l'estimation de Postgres au lieu
+ * d'un COUNT(*) : sur une grosse table (relevés d'énergie), un comptage exact
+ * lit toute la table — vingt-neuf en parallèle satureraient le pool de
+ * connexions juste pour afficher une page d'accueil.
+ */
+const SEUIL_COMPTAGE_EXACT = 100_000;
+
 // ── Catalogue ────────────────────────────────────────────────
 
-/** Tailles disque par table (approximation Postgres, index compris). */
-async function taillesTables(): Promise<Map<string, number>> {
+interface StatTable { octets: number; estimation: number }
+
+/** Taille disque (index compris) et estimation de lignes, par table. */
+async function statsTables(): Promise<Map<string, StatTable>> {
   try {
-    const lignes = await prisma.$queryRaw<Array<{ table: string; taille: bigint }>>`
-      SELECT c.relname AS "table", pg_total_relation_size(c.oid) AS taille
+    const lignes = await prisma.$queryRaw<Array<{ table: string; taille: bigint; estimation: bigint }>>`
+      SELECT c.relname AS "table",
+             pg_total_relation_size(c.oid) AS taille,
+             c.reltuples::bigint AS estimation
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind = 'r'
     `;
-    return new Map(lignes.map((l) => [l.table, Number(l.taille)]));
+    return new Map(lignes.map((l) => [l.table, { octets: Number(l.taille), estimation: Number(l.estimation) }]));
   } catch {
     // Une base sans droit sur les catalogues ne doit pas casser la page.
     return new Map();
@@ -54,10 +66,18 @@ async function taillesTables(): Promise<Map<string, number>> {
 export async function listerTables(_req: Request, res: Response, next: NextFunction) {
   try {
     const modeles = [...catalogue().modeles.values()];
-    const [tailles, comptes] = await Promise.all([
-      taillesTables(),
-      Promise.all(modeles.map((m) => delegate(m).count().catch(() => -1))),
-    ]);
+    const stats = await statsTables();
+
+    // `reltuples` vaut -1 tant que la table n'a jamais été analysée : dans le
+    // doute on compte exactement, l'estimation ne sert que sur les gros volumes.
+    const comptes = await Promise.all(
+      modeles.map(async (m) => {
+        const estimation = stats.get(m.table)?.estimation ?? -1;
+        if (estimation > SEUIL_COMPTAGE_EXACT) return { lignes: Math.round(estimation), exact: false };
+        const lignes = await delegate(m).count().catch(() => -1);
+        return { lignes, exact: true };
+      })
+    );
 
     res.json({
       success: true,
@@ -69,8 +89,9 @@ export async function listerTables(_req: Request, res: Response, next: NextFunct
           libelle: m.libelle,
           groupe: m.groupe,
           lectureSeule: m.lectureSeule,
-          lignes: comptes[i],
-          octets: tailles.get(m.table) ?? null,
+          lignes: comptes[i].lignes,
+          lignesExactes: comptes[i].exact,
+          octets: stats.get(m.table)?.octets ?? null,
           colonnes: m.champs.filter((c) => c.kind !== 'relation' && !c.liste).length,
         })),
       },
@@ -419,7 +440,11 @@ export async function exporterTable(req: Request, res: Response, next: NextFunct
     });
 
     const colonnes: ChampDb[] = champsLisibles(modele);
-    await auditLog(req.user!.id, 'EXPORT', `db:${modele.nom}`, undefined, { table: modele.table, lignes: lignes.length }, req);
+    // `?colonnes=?` n'exporte rien : c'est le sélecteur de colonnes qui
+    // interroge la liste disponible — inutile d'en encombrer l'audit.
+    if (req.query.colonnes !== '?') {
+      await auditLog(req.user!.id, 'EXPORT', `db:${modele.nom}`, undefined, { table: modele.table, lignes: lignes.length }, req);
+    }
 
     await sendTabular(
       res,
