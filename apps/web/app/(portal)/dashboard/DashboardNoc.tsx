@@ -22,7 +22,12 @@ interface Stats {
 interface CoupureRow {
   id: string; technologie: string; source?: string; priseEnChargePar?: string | null;
   dateDebut: string; site?: { nom: string; region: string }; _count?: { heritees: number };
+  heritees?: { dateFin?: string | null; site?: { nom: string } }[];
 }
+
+/** Sites impactés DISTINCTS (un site peut porter plusieurs lignes héritées). */
+const nbImpactes = (c: CoupureRow) =>
+  new Set((c.heritees ?? []).map((h) => h.site?.nom).filter(Boolean)).size || (c._count?.heritees ?? 0);
 
 const duree = (debut: string) => {
   const min = Math.max(0, Math.round((Date.now() - new Date(debut).getTime()) / 60000));
@@ -121,7 +126,7 @@ export function DashboardNoc() {
                     </span>
                   )}
                   {(c._count?.heritees ?? 0) > 0 && (
-                    <span className="rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">{c._count!.heritees} impacté(s)</span>
+                    <span className="rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">{nbImpactes(c)} impacté(s)</span>
                   )}
                   <span className="text-xs text-gray-400">{c.site?.region}</span>
                   <span className="ml-auto text-xs text-gray-500">{fmtDateTime(c.dateDebut)}</span>

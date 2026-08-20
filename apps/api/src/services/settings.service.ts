@@ -74,6 +74,9 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'maintenance.seuilEcartGasoilPct', label: 'Tolérance écart gasoil', groupe: 'Maintenance', unite: '%', defaut: env.SEUIL_ECART_GASOIL_PCT },
     { key: 'maintenance.minPhotosMouvement', label: 'Photos min. mouvement d’actif', groupe: 'Maintenance', unite: 'photos', defaut: 2 },
     { key: 'ge.intervalleVidangeHeures', label: 'Intervalle vidange GE', groupe: 'Maintenance', unite: 'h', defaut: 250 },
+    // Fenêtre d'entraînement amont/aval de la détection OSS : un aval tombé
+    // jusqu'à N minutes AVANT sa racine est classé hérité (batteries inégales).
+    { key: 'oss.fenetreEntrainementMin', label: 'Fenêtre entraînement amont/aval (OSS)', groupe: 'Supervision', unite: 'min', defaut: 60 },
     // Interrupteur du planning automatique : 1 = les préventives contractuelles
     // sont générées le 1er du mois ; 0 = planification manuelle uniquement
     // (utile pendant une renégociation de contrats ou une reprise de données).

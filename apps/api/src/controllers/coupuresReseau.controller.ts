@@ -518,6 +518,22 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     const dateDebut = b.dateDebut ? new Date(String(b.dateDebut)) : null;
     if (!dateDebut || Number.isNaN(dateDebut.getTime())) throw new AppError('Date de début invalide', 400);
 
+    // UN site = UNE coupure SITE ouverte, quelle que soit la source. Deux
+    // lignes ouvertes pour la même panne (OSS + saisie NOC à des heures
+    // différentes) faisaient compter le site deux fois dans les héritées.
+    if (technologies.includes('SITE')) {
+      const deja = await prisma.coupureReseau.findFirst({
+        where: { siteId, technologie: 'SITE', dateFin: null },
+        select: { source: true, dateDebut: true },
+      });
+      if (deja) {
+        throw new AppError(
+          `Une coupure site entier est déjà EN COURS sur ce site (${deja.source === 'OSS' ? 'détection AUTO' : 'saisie manuelle'} du ${deja.dateDebut.toLocaleString('fr-FR', { timeZone: 'Africa/Lome' })}) - complétez ou clôturez-la plutôt que d'en créer une seconde.`,
+          422
+        );
+      }
+    }
+
     const champs = {
       siteId,
       frequence: b.frequence ? String(b.frequence).slice(0, 30) : null,
@@ -860,6 +876,33 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
       }
     }
 
+    // UN site = UNE coupure SITE ouverte, quelle que soit la source : une ligne
+    // SITE encore EN COURS dont le site a déjà une coupure SITE ouverte (le plus
+    // souvent la détection AUTO, horodatée par l'OSS à une heure différente du
+    // rapport) créait une SECONDE ligne - et le site comptait double dans les
+    // héritées du regroupement. Ces lignes sont sautées : la panne est déjà
+    // suivie, l'OSS la clôturera à la reconnexion.
+    let dejaCouvertes = 0;
+    {
+      const lignesSiteOuvertes = lots.filter((l) => l.technologie === 'SITE' && !(l.dateFin instanceof Date));
+      if (lignesSiteOuvertes.length) {
+        const sitesDejaOuverts = new Set((await prisma.coupureReseau.findMany({
+          where: {
+            technologie: 'SITE', dateFin: null,
+            siteId: { in: [...new Set(lignesSiteOuvertes.map((l) => String(l.siteId)))] },
+          },
+          select: { siteId: true },
+        })).map((c) => c.siteId));
+        if (sitesDejaOuverts.size) {
+          const avant = lots.length;
+          const gardees = lots.filter((l) =>
+            !(l.technologie === 'SITE' && !(l.dateFin instanceof Date) && sitesDejaOuverts.has(String(l.siteId))));
+          lots.length = 0; lots.push(...gardees);
+          dejaCouvertes = avant - lots.length;
+        }
+      }
+    }
+
     // createMany + skipDuplicates : l'index d'unicité absorbe le ré-import.
     for (let i = 0; i < lots.length; i += 500) {
       try {
@@ -964,7 +1007,8 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
       data: {
         lignes: lots.length,
         crees,
-        doublonsIgnores: doublons,
+        doublonsIgnores: doublons + dejaCouvertes,
+        dejaCouvertesParDetection: dejaCouvertes,
         clotureesParImport,
         incidentsResolus,
         heriteesDetectees,
@@ -1354,7 +1398,12 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
         incidentInfo = { ...incident, reutilise: !cree };
         if (cree) {
           io.of('/supervision').emit('incident:created', { id: incident.id, siteId: racineFull.siteId });
-          const nbAval = await prisma.coupureReseau.count({ where: { coupureOrigineId: racine.id, dateFin: null } });
+          // SITES distincts, pas lignes : un site à deux coupures ouvertes
+          // (OSS + rapport) comptait double dans le SMS.
+          const nbAval = (await prisma.coupureReseau.findMany({
+            where: { coupureOrigineId: racine.id, dateFin: null },
+            select: { siteId: true }, distinct: ['siteId'],
+          })).length;
           const s = nbAval > 1 ? 's' : '';
           await notifierIncidentCoupure(
             racineFull.siteId,

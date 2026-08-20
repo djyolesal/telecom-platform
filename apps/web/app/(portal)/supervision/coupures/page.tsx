@@ -175,12 +175,23 @@ export default function CoupuresReseauPage() {
               ← {c.coupureOrigine?.site?.nom ?? 'amont'}
             </span>
           )}
-          {(c._count?.heritees ?? 0) > 0 && (
-            <span className="ml-1.5 cursor-help rounded-full bg-[#EAF1F8] px-1.5 py-0.5 text-[10px] font-bold text-[#1B3F6B]"
-              title={`Sites impactés en aval :\n${(c.heritees ?? []).slice(0, 20).map((h) => `• ${h.site?.nom ?? '—'}${h.dateFin ? ' (rétabli)' : ''}`).join('\n')}${(c._count?.heritees ?? 0) > 20 ? '\n…' : ''}`}>
-              {c._count!.heritees} impacté(s)
-            </span>
-          )}
+          {(c._count?.heritees ?? 0) > 0 && (() => {
+            // SITES distincts : un site portant deux coupures héritées (OSS +
+            // rapport) comptait double. « rétabli » seulement si TOUTES ses
+            // lignes sont refermées.
+            const parSite = new Map<string, boolean>();
+            for (const h of c.heritees ?? []) {
+              const nomS = h.site?.nom ?? '—';
+              parSite.set(nomS, (parSite.get(nomS) ?? false) || !h.dateFin);
+            }
+            const n = parSite.size || c._count!.heritees;
+            return (
+              <span className="ml-1.5 cursor-help rounded-full bg-[#EAF1F8] px-1.5 py-0.5 text-[10px] font-bold text-[#1B3F6B]"
+                title={`Sites impactés en aval :\n${[...parSite.entries()].slice(0, 20).map(([nomS, ouverte]) => `• ${nomS}${ouverte ? '' : ' (rétabli)'}`).join('\n')}${parSite.size > 20 ? '\n…' : ''}`}>
+                {n} impacté(s)
+              </span>
+            );
+          })()}
         </span>
       ),
     },

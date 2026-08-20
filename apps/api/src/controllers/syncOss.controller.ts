@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
+import { getNum } from '../services/settings.service';
 // coupuresReseau.controller importe `io` depuis ../server : un import direct
 // ici démarrerait le serveur dans les tests du parseur (Jest ne rend jamais la
 // main). Import PARESSEUX au moment de la clôture, comme notifications.service.
@@ -97,7 +98,12 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     const ouverteParId = new Map<string, CoupureOuverte>(ouvertesInit.map((c) => [c.id, c]));
     // Entraînement plausible : l'aval tombe APRÈS (ou quasi en même temps que)
     // l'amont — un site tombé bien avant son amont est une panne locale.
-    const TOLERANCE_MS = 15 * 60_000;
+    // Retour terrain : en coupure d'énergie régionale, chaque site tombe quand
+    // SA batterie meurt - l'amont peut tenir bien plus longtemps que ses aval.
+    // 15 min laissaient 19 sites sur 20 « locaux ». Fenêtre paramétrable
+    // (Administration → Paramètres), 60 min par défaut ; un aval tombé APRÈS la
+    // racine reste entraîné sans limite tant qu'elle est ouverte.
+    const TOLERANCE_MS = getNum('oss.fenetreEntrainementMin', 60) * 60_000;
     const resoudreRacine = (c: CoupureOuverte): CoupureOuverte =>
       (c.origine === 'HERITEE' && c.coupureOrigineId && ouverteParId.get(c.coupureOrigineId)) || c;
     // Adoption automatique STRICTE : nom OSS (préfixe GL/L retiré) exactement
