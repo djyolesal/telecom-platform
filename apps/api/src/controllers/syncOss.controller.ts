@@ -2,6 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
+// coupuresReseau.controller importe `io` depuis ../server : un import direct
+// ici démarrerait le serveur dans les tests du parseur (Jest ne rend jamais la
+// main). Import PARESSEUX au moment de la clôture, comme notifications.service.
+const chargerRebouclage = () =>
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('./coupuresReseau.controller') as typeof import('./coupuresReseau.controller');
 
 /**
  * SYNCHRONISATION OSS — détection automatique des coupures « site entier ».
@@ -129,6 +135,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     let reclasseesAval = 0;
     let cloturees = 0;
     let clotureesHeritees = 0;
+    let incidentsResolus = 0;
     let dejaOuvertes = 0;
 
     for (const l of lignes) {
@@ -219,6 +226,18 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         ouverteParSite.delete(site.id); ouverteParId.delete(ouverte.id);
         cloturees++;
 
+        // Coupure armée (incident créé à la prise en charge) : le rétablissement
+        // OSS doit REBOUCLER l'incident - sinon il resterait ouvert à vie
+        // (escalade horaire sans fin). Résolution automatique + notification
+        // « déplacement inutile » aux techniciens si aucune intervention.
+        if (ouverte.incidentId) {
+          const { resoudreIncidentSiPlusDeCoupure, notifierResolutionAutomatique } = chargerRebouclage();
+          const resolu = await prisma.$transaction((tx) =>
+            resoudreIncidentSiPlusDeCoupure(tx, ouverte.incidentId, fin)
+          );
+          if (resolu) { incidentsResolus++; void notifierResolutionAutomatique(ouverte.incidentId); }
+        }
+
         // Héritées « aveugles » de cette racine (sites aval SANS nodeId : l'OSS
         // ne les verra jamais se reconnecter) : clôture en cascade, même heure.
         const aveugles = await prisma.coupureReseau.findMany({
@@ -249,6 +268,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       reclasseesHeriteesAval: reclasseesAval,
       coupuresCloturees: cloturees,
       heriteesAveuglesCloturees: clotureesHeritees,
+      incidentsResolus,
       coupuresDejaOuvertes: dejaOuvertes,
       // Seuls les DISCONNECTED non rapprochés sont listés : ce sont eux qui
       // échappent à la détection — à mapper en priorité (fiche site → NodeID).

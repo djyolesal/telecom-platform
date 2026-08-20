@@ -323,7 +323,7 @@ export async function cloturerHeriteesRecursif(
  * route sait que le déplacement est inutile. Contenu éditable (modèle
  * notif.tpl.incidentResoluAuto). Best-effort - jamais bloquant.
  */
-async function notifierResolutionAutomatique(incidentId: string | null): Promise<void> {
+export async function notifierResolutionAutomatique(incidentId: string | null): Promise<void> {
   if (!incidentId) return;
   try {
     const inc = await prisma.incident.findUnique({
@@ -354,7 +354,7 @@ async function notifierResolutionAutomatique(incidentId: string | null): Promise
   }
 }
 
-async function resoudreIncidentSiPlusDeCoupure(
+export async function resoudreIncidentSiPlusDeCoupure(
   tx: Prisma.TransactionClient,
   incidentId: string | null,
   quand: Date
