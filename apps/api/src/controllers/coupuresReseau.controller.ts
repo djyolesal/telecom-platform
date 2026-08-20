@@ -8,7 +8,34 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission } from '../utils/transmission';
-import { genererReference } from '../services/reference.service';
+import { genererReference, alignerCompteur } from '../services/reference.service';
+
+/**
+ * Auto-réparation du compteur de références INC : après un import de données
+ * réelles, des incidents existent avec des références jamais passées par le
+ * compteur - la première création suivante part en conflit unique (P2002,
+ * « valeur déjà existante »). On rattrape alors le compteur sur le max
+ * existant et on rejoue UNE fois la transaction.
+ */
+async function avecRattrapageReferenceInc<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      const annee = new Date().getFullYear();
+      const derniere = await prisma.incident.findFirst({
+        where: { reference: { startsWith: `INC-${annee}-` } },
+        orderBy: { reference: 'desc' },
+        select: { reference: true },
+      });
+      const num = parseInt(derniere?.reference?.split('-')[2] ?? '0', 10) || 0;
+      logger.warn(`[coupures] compteur INC en retard (référence max existante n°${num}) - rattrapage puis nouvelle tentative`);
+      await alignerCompteur(prisma, 'INC', annee, num);
+      return fn();
+    }
+    throw e;
+  }
+}
 import { notifierIncidentCoupure, rendreTemplate } from '../services/sms.service';
 import { notificationService } from '../services/notifications.service';
 import { sendTabular, EXPORT_MAX, TabularSheet } from '../utils/exporter';
@@ -100,7 +127,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
     // une seule transaction : sinon deux imports concurrents créaient deux
     // incidents CRITIQUE pour la même panne, et le second updateMany laissait le
     // premier incident OUVERT sans aucune coupure — jamais clôturable.
-    const { incident, cree } = await prisma.$transaction(async (tx) => {
+    const { incident, cree } = await avecRattrapageReferenceInc(() => prisma.$transaction(async (tx) => {
       // $executeRaw (pas $queryRaw) : pg_advisory_xact_lock renvoie `void`, que
       // Prisma refuse de désérialiser — l'import entier tombait en 500.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + siteId})::bigint)`;
@@ -128,7 +155,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       });
       await tx.coupureReseau.updateMany({ where: { id: { in: coupures.map((c) => c.id) } }, data: { incidentId: nouveau.id } });
       return { incident: nouveau, cree: true };
-    });
+    }));
 
     if (cree) {
       crees++;
@@ -1295,7 +1322,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
         select: { siteId: true, dateFin: true, technologie: true, site: { select: { nom: true } } },
       });
       if (racineFull && !racineFull.dateFin && racineFull.technologie === 'SITE') {
-        const { incident, cree } = await prisma.$transaction(async (tx) => {
+        const { incident, cree } = await avecRattrapageReferenceInc(() => prisma.$transaction(async (tx) => {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + racineFull.siteId})::bigint)`;
           const existant = await tx.incident.findFirst({
             where: { siteId: racineFull.siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: { dateFin: null } } },
@@ -1318,7 +1345,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
           });
           await tx.coupureReseau.update({ where: { id: racine.id }, data: { incidentId: nouveau.id } });
           return { incident: nouveau, cree: true };
-        });
+        }));
         incidentInfo = { ...incident, reutilise: !cree };
         if (cree) {
           io.of('/supervision').emit('incident:created', { id: incident.id, siteId: racineFull.siteId });

@@ -33,6 +33,17 @@ export async function genererReference(db: Db, type: TypeReference, dateMetier: 
 }
 
 /**
+ * Aligne le compteur AU MOINS à `numero` - rattrapage quand des références
+ * existent sans avoir consommé le compteur (import de données réelles) : la
+ * première création suivante partait en conflit unique (P2002).
+ */
+export async function alignerCompteur(db: Db, type: TypeReference, annee: number, numero: number): Promise<void> {
+  await db.$executeRaw`
+    INSERT INTO "compteurs_reference" ("type", "annee", "dernier") VALUES (${type}, ${annee}, ${numero})
+    ON CONFLICT ("type", "annee") DO UPDATE SET "dernier" = GREATEST("compteurs_reference"."dernier", ${numero})`;
+}
+
+/**
  * Réserve un BLOC de n numéros consécutifs (imports en masse) → premier numéro.
  * Passer le client de transaction (`db`) pour que la réservation soit ATOMIQUE
  * avec l'insertion : sinon un échec d'insertion laissait le compteur avancé
