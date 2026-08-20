@@ -162,7 +162,13 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         }
         const entrainee = !!racineAmont && l.quand.getTime() >= racineAmont.dateDebut.getTime() - TOLERANCE_MS;
 
-        const creee = await prisma.coupureReseau.create({
+        // Index unique (site, technologie, fréquence, début) - migration 0029 :
+        // si le NOC a CLÔTURÉ la coupure alors que l'OSS liste encore le même
+        // début de panne, la re-création tomberait en conflit et ferait échouer
+        // TOUT le passage. Doublon exact = déjà connue, on passe.
+        let creee;
+        try {
+          creee = await prisma.coupureReseau.create({
           data: {
             siteId: site.id,
             technologie: 'SITE',
@@ -182,6 +188,10 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
             coupureOrigineId: true, source: true, incidentId: true, priseEnChargePar: true,
           },
         });
+        } catch (e) {
+          if ((e as { code?: string })?.code === 'P2002') { dejaOuvertes++; continue; }
+          throw e;
+        }
         ouverteParSite.set(site.id, creee); ouverteParId.set(creee.id, creee);
         creees++; if (entrainee) creeesHeritees++;
 

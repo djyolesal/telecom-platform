@@ -1301,6 +1301,11 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
             priseEnChargeLe: quand,
             observations: 'Héritée créée à la prise en charge - site aval sans détection OSS propre.',
           })),
+          // Index unique (site, technologie, fréquence, début) posé en SQL par
+          // la migration 0029 : une héritée DÉJÀ CLÔTURÉE au même instant
+          // (prise en charge annulée, cycle panne/rétablissement) faisait
+          // tomber tout l'appel en conflit - on saute simplement le doublon.
+          skipDuplicates: true,
         });
         heriteesCreees = crees.count;
       }
