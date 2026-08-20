@@ -141,6 +141,33 @@ flutter run --dart-define=API_URL=https://votre-domaine.tg/api/v1
 | `https://votre-domaine.tg/api/docs` | Documentation API Swagger |
 | `https://votre-domaine.tg/grafana` | Monitoring Grafana (admin) |
 | `https://votre-domaine.tg/minio` | MinIO console (admin) |
+| `https://votre-domaine.tg/administration/base-de-donnees` | Console base de données (admin) |
+
+---
+
+## 🗄️ Console base de données (ADMIN)
+
+`Administration → Base de données` : consultation et correction directes de
+toutes les tables, sans passer par pgAdmin ni un tunnel SSH.
+
+- Le catalogue est **dérivé de `prisma/schema.prisma`** au démarrage : une table
+  ou un champ ajouté au modèle apparaît sans code à écrire. Le fichier doit donc
+  rester dans l'image (`COPY prisma ./prisma/` du Dockerfile API).
+- Recherche, filtres, tri, pagination et export xlsx/pdf sont faits **par la
+  base**, pas sur la page affichée.
+- Formulaires générés depuis le schéma : listes pour les enums, sélecteur de
+  recherche pour les clés étrangères, contrôle des types et des longueurs.
+- Avant une suppression, la console **inventorie ce qu'elle emporte** (lignes en
+  cascade, lignes déliées, références bloquantes).
+
+Garde-fous : rôle `ADMIN` seul, liste blanche des tables, validation par type,
+journal d'audit sur chaque écriture (avec le diff avant/après). Le journal
+d'audit lui-même est en consultation seule et l'empreinte des mots de passe
+n'est jamais renvoyée — un mot de passe saisi ici est haché avant écriture.
+
+⚠️ Les écritures faites ici **contournent les règles métier** du portail
+(recalculs, notifications, cohérence des chaînes de sites) : à réserver aux
+corrections ponctuelles.
 
 ---
 
