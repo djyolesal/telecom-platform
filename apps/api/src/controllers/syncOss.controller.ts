@@ -202,8 +202,12 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         creees++; if (entrainee) creeesHeritees++;
 
         // Classement automatique AVAL (l'amont peut être parsé APRÈS ses aval) :
-        // les coupures OSS LOCALES déjà ouvertes dans la descendance, tombées
-        // dans la fenêtre d'entraînement, se rattachent à cette nouvelle racine.
+        // se rattachent à cette nouvelle racine (1) les coupures OSS LOCALES
+        // ouvertes de la descendance tombées dans la fenêtre d'entraînement, et
+        // (2) les héritées ORPHELINES - encore ouvertes mais accrochées à une
+        // racine déjà CLÔTURÉE. Cas du rebond de l'amont (plongeon bref, puis
+        // vraie panne) : sans ce re-rattachement, la nouvelle panne affichait
+        // « 1 impacté » alors que tout l'aval restait coupé sous l'ancienne.
         if (!entrainee) {
           const aReclasser: CoupureOuverte[] = [];
           const file = [site.id];
@@ -211,8 +215,11 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
             const idSite = file.shift()!;
             for (const enfant of enfantsDe.get(idSite) ?? []) {
               const c = ouverteParSite.get(enfant);
-              if (c && c.origine === 'LOCALE' && c.source === 'OSS' && !c.incidentId
-                && c.dateDebut.getTime() >= creee.dateDebut.getTime() - TOLERANCE_MS) aReclasser.push(c);
+              const locale = !!c && c.origine === 'LOCALE' && c.source === 'OSS' && !c.incidentId
+                && c.dateDebut.getTime() >= creee.dateDebut.getTime() - TOLERANCE_MS;
+              const orpheline = !!c && c.origine === 'HERITEE' && !!c.coupureOrigineId
+                && !ouverteParId.has(c.coupureOrigineId) && c.coupureOrigineId !== creee.id;
+              if (c && (locale || orpheline)) aReclasser.push(c);
               file.push(enfant);
             }
           }

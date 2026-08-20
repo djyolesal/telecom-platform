@@ -1315,6 +1315,19 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
           data: { origine: 'HERITEE', coupureOrigineId: racine.id, priseEnChargePar: nom, priseEnChargeLe: quand },
         })
       : { count: 0 };
+    // Héritées ORPHELINES : encore ouvertes mais accrochées à une racine déjà
+    // clôturée (rebond de l'amont) - ré-adoptées par la racine courante.
+    const orphelines = avalIds.length
+      ? await prisma.coupureReseau.updateMany({
+          where: {
+            siteId: { in: avalIds }, technologie: 'SITE', dateFin: null,
+            origine: 'HERITEE', incidentId: null,
+            id: { not: racine.id }, coupureOrigineId: { not: racine.id },
+            coupureOrigine: { dateFin: { not: null } },
+          },
+          data: { coupureOrigineId: racine.id, priseEnChargePar: nom, priseEnChargeLe: quand },
+        })
+      : { count: 0 };
     await prisma.coupureReseau.updateMany({
       where: { coupureOrigineId: racine.id, dateFin: null, priseEnChargePar: null },
       data: { priseEnChargePar: nom, priseEnChargeLe: quand },
@@ -1439,7 +1452,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
     }
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
-      priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count, heriteesCreees,
+      priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count + orphelines.count, heriteesCreees,
       incidentCree: incidentInfo && !incidentInfo.reutilise ? incidentInfo.id : undefined,
       incidentReutilise: incidentInfo?.reutilise ? incidentInfo.id : undefined,
     }, req);
@@ -1449,7 +1462,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
         racineId: racine.id,
         racineSiteNom: parId.get(racine.siteId)?.nom ?? '—',
         estRacine: racine.id === coupure.id,
-        heriteesReclassees: reclassees.count,
+        heriteesReclassees: reclassees.count + orphelines.count,
         heriteesCreees,
         priseEnChargePar: nom,
         incident: incidentInfo,
