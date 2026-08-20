@@ -42,8 +42,10 @@ interface Coupure {
   heritees?: Coupure[];
 }
 
-/** Ligne du tableau : une racine, ou une héritée dépliée sous sa racine. */
-type LigneCoupure = Coupure & { _sousLigne?: boolean };
+/** Ligne du tableau : une racine, ou une héritée dépliée sous sa racine.
+ *  `_episode` : n° d'épisode quand un site rebondit (retombe) pendant la même
+ *  panne amont - deux lignes réelles, pas un doublon. */
+type LigneCoupure = Coupure & { _sousLigne?: boolean; _episode?: number };
 
 const TECHNOS = [
   { value: 'SITE', label: 'Site entier' },
@@ -148,7 +150,13 @@ export default function CoupuresReseauPage() {
   const lignes: LigneCoupure[] = !debounced && avecHeritees
     ? rows.flatMap((r) => [
         r,
-        ...(r.heritees ?? []).map((h) => ({ ...h, _sousLigne: true, coupureOrigine: { id: r.id, site: r.site } })),
+        ...(r.heritees ?? []).map((h, idx, arr) => {
+          // Site retombé pendant la même panne (rebond) : numéroter les
+          // épisodes pour que deux lignes du même site ne lisent pas en doublon.
+          const memeSite = arr.filter((x) => x.site?.nom === h.site?.nom);
+          const episode = memeSite.length > 1 ? memeSite.indexOf(h) + 1 : 0;
+          return { ...h, _sousLigne: true, _episode: episode, coupureOrigine: { id: r.id, site: r.site } };
+        }),
       ])
     : rows;
   const meta: PaginationMeta | undefined = data?.meta;
@@ -166,6 +174,12 @@ export default function CoupuresReseauPage() {
           <span className="mr-1.5 text-purple-400">↳</span>
           {c.site?.nom ?? '—'}
           <span className="ml-1.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">héritée</span>
+          {(c._episode ?? 0) > 0 && (
+            <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"
+              title="Ce site est retombé pendant la même panne amont : chaque épisode a sa propre durée d'indisponibilité (le site ne compte qu'une fois dans « impactés »).">
+              épisode {c._episode}
+            </span>
+          )}
         </span>
       ) : (
         <span className="font-medium text-gray-800">
