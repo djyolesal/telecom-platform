@@ -166,7 +166,17 @@ const SECRETS = new Set(['User.passwordHash']);
 const NON_MODIFIABLES = new Set(['createdAt', 'updatedAt']);
 
 /** Candidats au libellé lisible d'une ligne, par ordre de préférence. */
-const CANDIDATS_LIBELLE = ['nom', 'libelle', 'reference', 'numero', 'code', 'titre', 'email', 'key', 'message'];
+const CANDIDATS_LIBELLE = ['nom', 'libelle', 'reference', 'numero', 'numeroBL', 'code', 'titre', 'title', 'email', 'key', 'message'];
+
+/**
+ * Libellé d'une table qui n'a aucun des champs candidats (tables de liaison,
+ * lignes de détail) : le premier texte propre à la ligne vaut mieux qu'un uuid
+ * tronqué dans un sélecteur de clé étrangère.
+ */
+function libelleDeRepli(champs: ChampDb[]): string[] {
+  const repli = champs.find((c) => c.kind === 'scalar' && c.type === 'String' && !c.estId && !c.fkVers && !c.secret);
+  return repli ? [repli.nom] : [];
+}
 
 // ── Lecture du schéma ────────────────────────────────────────
 
@@ -219,6 +229,7 @@ function parserSchema(): Catalogue {
           champs,
           idChamp,
           champsLibelle: CANDIDATS_LIBELLE.filter((c) => champs.some((f) => f.nom === c && f.kind !== 'relation')).slice(0, 2),
+          // (complété au 2ᵉ passage : le repli a besoin des clés étrangères résolues)
           lectureSeule: LECTURE_SEULE.has(bloc.nom),
         });
       }
@@ -294,6 +305,7 @@ function parserSchema(): Catalogue {
         }
       }
     }
+    if (!modele.champsLibelle.length) modele.champsLibelle = libelleDeRepli(modele.champs);
     for (const champ of modele.champs) {
       const editableParNature =
         champ.kind !== 'relation' &&
