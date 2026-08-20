@@ -1190,6 +1190,10 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
     // Créer les héritées pour l'aval SANS détection propre (sites non
     // rapprochés OSS) : activé par défaut — c'est ce qui rend la dispo juste.
     const creerAvalManquant = (req.body as { creerAvalManquant?: boolean })?.creerAvalManquant !== false;
+    // Armement PAR VALIDATION HUMAINE : la prise en charge peut déclencher le
+    // terrain (incident CRITIQUE + SMS passifs + push techniciens). Décoché par
+    // défaut : la passerelle SMS est réelle, le NOC choisit en connaissance.
+    const creerIncident = (req.body as { creerIncident?: boolean })?.creerIncident === true;
 
     const sites = await prisma.site.findMany({
       where: { isActive: true },
@@ -1281,8 +1285,82 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       data: { priseEnChargePar: nom, priseEnChargeLe: quand, nocEngineer: nom },
     });
 
+    // ── Déclenchement terrain (optionnel) : incident sur la RACINE ──────────
+    // Une panne = un incident, même logique que l'import NOC (verrou par site,
+    // réutilisation d'un incident encore ouvert). Site entier uniquement.
+    let incidentInfo: { id: string; reference: string | null; reutilise: boolean } | null = null;
+    if (creerIncident) {
+      const racineFull = await prisma.coupureReseau.findUnique({
+        where: { id: racine.id },
+        select: { siteId: true, dateFin: true, technologie: true, site: { select: { nom: true } } },
+      });
+      if (racineFull && !racineFull.dateFin && racineFull.technologie === 'SITE') {
+        const { incident, cree } = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + racineFull.siteId})::bigint)`;
+          const existant = await tx.incident.findFirst({
+            where: { siteId: racineFull.siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: { dateFin: null } } },
+            select: { id: true, reference: true },
+          });
+          if (existant) {
+            await tx.coupureReseau.update({ where: { id: racine.id }, data: { incidentId: existant.id } });
+            return { incident: existant, cree: false };
+          }
+          const nouveau = await tx.incident.create({
+            data: {
+              reference: await genererReference(tx, 'INC', new Date()),
+              siteId: racineFull.siteId,
+              type: 'COUPURE_TOTALE',
+              severite: 'CRITIQUE',
+              description: `Site entier hors service - détection OSS prise en charge par ${nom}.`,
+              declarePar: req.user!.id,
+            },
+            select: { id: true, reference: true },
+          });
+          await tx.coupureReseau.update({ where: { id: racine.id }, data: { incidentId: nouveau.id } });
+          return { incident: nouveau, cree: true };
+        });
+        incidentInfo = { ...incident, reutilise: !cree };
+        if (cree) {
+          io.of('/supervision').emit('incident:created', { id: incident.id, siteId: racineFull.siteId });
+          const nbAval = await prisma.coupureReseau.count({ where: { coupureOrigineId: racine.id, dateFin: null } });
+          const s = nbAval > 1 ? 's' : '';
+          await notifierIncidentCoupure(
+            racineFull.siteId,
+            rendreTemplate('sms.tpl.siteHorsService', {
+              site: racineFull.site.nom,
+              reference: incident.reference ?? '',
+              impactes: nbAval ? ` (+${nbAval} site${s} aval impacté${s})` : '',
+            }),
+            'INCIDENT_COUPURE_NOC',
+            'PASSIVE'
+          );
+          // Push gratuit aux techniciens passifs du lot, comme l'import NOC.
+          try {
+            const lot = await prisma.site.findUnique({
+              where: { id: racineFull.siteId },
+              select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
+            });
+            const prestas = (lot?.lot?.assignments ?? []).filter((a) => a.scope !== 'ACTIVE').map((a) => a.prestataireId);
+            if (prestas.length) {
+              const techs = await prisma.user.findMany({
+                where: { role: 'TECHNICIEN', isActive: true, prestataireId: { in: prestas } },
+                select: { id: true },
+              });
+              await Promise.all(techs.map((t) => notificationService.sendToUser(t.id, {
+                title: `🔴 ${racineFull.site.nom} hors service`,
+                body: `Incident ${incident.reference ?? ''} créé à la prise en charge NOC - intervention terrain requise.`,
+                data: { incidentId: incident.id, type: 'incident' },
+              })));
+            }
+          } catch (e) { logger.warn('[coupures] push technicien (prise en charge) échoué:', e); }
+        }
+      }
+    }
+
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
       priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count, heriteesCreees,
+      incidentCree: incidentInfo && !incidentInfo.reutilise ? incidentInfo.id : undefined,
+      incidentReutilise: incidentInfo?.reutilise ? incidentInfo.id : undefined,
     }, req);
     res.json({
       success: true,
@@ -1293,6 +1371,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
         heriteesReclassees: reclassees.count,
         heriteesCreees,
         priseEnChargePar: nom,
+        incident: incidentInfo,
       },
     });
   } catch (err) { next(err); }
