@@ -149,7 +149,7 @@ export default function CoupuresReseauPage() {
   // racine (jamais en recherche : le serveur renvoie alors la vue à plat).
   const lignes: LigneCoupure[] = !debounced && avecHeritees
     ? rows.flatMap((r) => [
-        r,
+        { ...r } as LigneCoupure,
         ...(r.heritees ?? []).map((h, idx, arr) => {
           // Site retombé pendant la même panne (rebond) : numéroter les
           // épisodes pour que deux lignes du même site ne lisent pas en doublon.
@@ -158,7 +158,25 @@ export default function CoupuresReseauPage() {
           return { ...h, _sousLigne: true, _episode: episode, coupureOrigine: { id: r.id, site: r.site } };
         }),
       ])
-    : rows;
+    : rows.map((r) => ({ ...r } as LigneCoupure));
+  // Rebond au niveau RACINE aussi (ex. plongeon de 2 min puis vraie panne) :
+  // un même site plusieurs fois parmi les racines de la page → épisodes
+  // numérotés chronologiquement.
+  {
+    const racinesParSite = new Map<string, LigneCoupure[]>();
+    for (const l of lignes) {
+      if (l._sousLigne) continue;
+      const cle = l.site?.nom ?? '—';
+      const liste = racinesParSite.get(cle) ?? [];
+      liste.push(l); racinesParSite.set(cle, liste);
+    }
+    for (const liste of racinesParSite.values()) {
+      if (liste.length < 2) continue;
+      [...liste]
+        .sort((a, b) => new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime())
+        .forEach((l, i) => { l._episode = i + 1; });
+    }
+  }
   const meta: PaginationMeta | undefined = data?.meta;
   const rafraichir = () => {
     queryClient.invalidateQueries({ queryKey: ['coupures'] });
@@ -184,6 +202,12 @@ export default function CoupuresReseauPage() {
       ) : (
         <span className="font-medium text-gray-800">
           {c.site?.nom ?? '—'}
+          {(c._episode ?? 0) > 0 && (
+            <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"
+              title="Ce site a connu plusieurs pannes successives (rebond) : chaque ligne est un épisode réel avec sa propre durée.">
+              épisode {c._episode}
+            </span>
+          )}
           {c.origine === 'HERITEE' && (
             <span className="ml-1.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700" title={`Impact hérité de ${c.coupureOrigine?.site?.nom ?? 'un site amont'}`}>
               ← {c.coupureOrigine?.site?.nom ?? 'amont'}
