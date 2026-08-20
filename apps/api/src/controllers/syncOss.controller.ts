@@ -94,7 +94,15 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         coupureOrigineId: true, source: true, incidentId: true, priseEnChargePar: true,
       },
     });
-    const ouverteParSite = new Map<string, CoupureOuverte>(ouvertesInit.map((c) => [c.siteId, c]));
+    // UNE entrée par site, en PRÉFÉRANT la coupure OSS : si une manuelle et
+    // une OSS coexistent (données d'avant la règle un-site-une-coupure) et que
+    // la manuelle gagnait la place, la branche « connected » ne clôturait
+    // JAMAIS l'OSS (elle exige source OSS) - coupure fantôme éternelle.
+    const ouverteParSite = new Map<string, CoupureOuverte>();
+    for (const c of ouvertesInit) {
+      const prev = ouverteParSite.get(c.siteId);
+      if (!prev || (prev.source !== 'OSS' && c.source === 'OSS')) ouverteParSite.set(c.siteId, c);
+    }
     const ouverteParId = new Map<string, CoupureOuverte>(ouvertesInit.map((c) => [c.id, c]));
     // Entraînement plausible : l'aval tombe APRÈS (ou quasi en même temps que)
     // l'amont — un site tombé bien avant son amont est une panne locale.

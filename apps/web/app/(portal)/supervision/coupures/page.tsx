@@ -139,7 +139,9 @@ export default function CoupuresReseauPage() {
     technologie && `technologie=${technologie}`,
     typeAlarme && `type_alarme=${typeAlarme}`,
     source && `source=${source}`,
-    !avecHeritees && 'origine=LOCALE',
+    // Fidélité affichage/export : en recherche la liste passe à plat (héritées
+    // incluses), l'export doit suivre.
+    !debounced && !avecHeritees && 'origine=LOCALE',
     aQualifier && 'a_qualifier=1',
     du && `date_debut=${du}`,
     au && `date_fin=${au}`,
@@ -746,6 +748,7 @@ function AnnulationPriseEnChargeBloc({ coupureId, priseEnChargePar, onDone }: {
 interface ImportResult {
   lignes: number; crees: number; doublonsIgnores: number;
   clotureesParImport?: number;
+  dejaCouvertesParDetection?: number;
   incidentsResolus?: number;
   heriteesDetectees?: number;
   incidentsCrees?: number;
@@ -779,6 +782,11 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       {result && (
         <div className="mb-3 rounded-lg bg-gray-50 p-3 text-sm">
           <p className="flex items-center gap-1.5 font-medium text-emerald-700"><CheckCircle2 size={15} /> {result.crees} coupure(s) créée(s) · {result.doublonsIgnores} déjà connue(s) sur {result.lignes} lignes</p>
+          {(result.dejaCouvertesParDetection ?? 0) > 0 && (
+            <p className="mt-1 text-indigo-700">
+              {result.dejaCouvertesParDetection} ligne(s) site entier sautée(s) : la panne est déjà suivie par la détection AUTO (une seule coupure ouverte par site).
+            </p>
+          )}
           {(result.clotureesParImport ?? 0) > 0 && (
             <p className="mt-1 text-emerald-700">{result.clotureesParImport} coupure(s) ouverte(s) clôturée(s) par le rapport (apurement).</p>
           )}

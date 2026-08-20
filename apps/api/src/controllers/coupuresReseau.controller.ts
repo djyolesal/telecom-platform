@@ -562,18 +562,39 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
       const aval = await descendantsTransmission(siteId);
       if (aval.length) {
         const racineId = rows[0].id;
-        await prisma.coupureReseau.createMany({
-          data: aval.map((s) => ({
-            siteId: s.id,
-            technologie: 'SITE',
-            dateDebut,
-            cause: champs.cause ?? `Coupure amont - propagation transmission`,
-            typeAlarme: champs.typeAlarme,
-            origine: 'HERITEE',
-            coupureOrigineId: racineId,
-          })),
-          skipDuplicates: true,
+        // UN site = UNE coupure SITE ouverte : l'aval déjà couvert (souvent la
+        // détection AUTO, horodatée différemment) est RATTACHÉ à la racine au
+        // lieu de recevoir une seconde ligne - le double comptage venait d'ici
+        // aussi. Ne sont créées que les héritées des sites non couverts.
+        const dejaOuvertes = await prisma.coupureReseau.findMany({
+          where: { siteId: { in: aval.map((s) => s.id) }, technologie: 'SITE', dateFin: null },
+          select: { id: true, siteId: true, origine: true, incidentId: true },
         });
+        const couverts = new Set(dejaOuvertes.map((c) => c.siteId));
+        const aRattacher = dejaOuvertes
+          .filter((c) => c.origine === 'LOCALE' && !c.incidentId)
+          .map((c) => c.id);
+        if (aRattacher.length) {
+          await prisma.coupureReseau.updateMany({
+            where: { id: { in: aRattacher } },
+            data: { origine: 'HERITEE', coupureOrigineId: racineId },
+          });
+        }
+        const aCreer = aval.filter((s) => !couverts.has(s.id));
+        if (aCreer.length) {
+          await prisma.coupureReseau.createMany({
+            data: aCreer.map((s) => ({
+              siteId: s.id,
+              technologie: 'SITE',
+              dateDebut,
+              cause: champs.cause ?? `Coupure amont - propagation transmission`,
+              typeAlarme: champs.typeAlarme,
+              origine: 'HERITEE',
+              coupureOrigineId: racineId,
+            })),
+            skipDuplicates: true,
+          });
+        }
         sitesImpactes = aval.length;
       }
     }
@@ -1495,9 +1516,18 @@ export async function annulerPriseEnCharge(req: Request, res: Response, next: Ne
     const racineId = cliquee.origine === 'HERITEE' && cliquee.coupureOrigineId ? cliquee.coupureOrigineId : cliquee.id;
     const racine = await prisma.coupureReseau.findUnique({
       where: { id: racineId },
-      select: { id: true, priseEnChargePar: true, source: true },
+      select: { id: true, priseEnChargePar: true, source: true, incidentId: true },
     });
     if (!racine?.priseEnChargePar) throw new AppError("Cette coupure n'est pas prise en charge", 422);
+    // Terrain déjà déclenché (incident + SMS partis) : annuler l'adoption
+    // sortirait la coupure du rapport en laissant l'incident actif - traiter
+    // l'incident d'abord (le clôturer ou le supprimer), puis annuler.
+    if (racine.incidentId) {
+      throw new AppError(
+        "Un incident terrain est rattaché à cette prise en charge - clôturez ou supprimez l'incident avant d'annuler l'adoption.",
+        422
+      );
+    }
 
     const [supprimees, redeclassees] = await prisma.$transaction([
       prisma.coupureReseau.deleteMany({
@@ -1545,23 +1575,29 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
         prisma.coupureReseau.count({ where: { dateFin: null, origine: 'HERITEE', ...surSite } }),
         prisma.coupureReseau.count({ where: { dateFin: { not: null }, ...surSite } }),
         prisma.coupureReseau.count({ where: { dateDebut: { gte: ilYaUneHeure }, ...surSite } }),
+        // RACINES seulement : une héritée n'a jamais d'alarme/classement
+        // propres - les compter gonflait la tuile et divergeait de la liste
+        // filtrée (qui ne montre que les racines).
         prisma.coupureReseau.count({
-          where: { dateFin: null, OR: [{ typeAlarme: null }, { causeCategorie: null }], ...surSite },
+          where: { dateFin: null, origine: 'LOCALE', OR: [{ typeAlarme: null }, { causeCategorie: null }], ...surSite },
         }),
         prisma.coupureReseau.findFirst({
           where: { dateFin: null, origine: 'LOCALE', ...surSite },
           orderBy: { dateDebut: 'asc' },
           select: { dateDebut: true, technologie: true, site: { select: { nom: true } } },
         }),
-        // Sas AUTO = détections OSS non encore prises en charge ; le reste
-        // (manuelles + AUTO adoptées) forme le rapport NOC.
-        prisma.coupureReseau.count({ where: { dateFin: null, source: 'OSS', priseEnChargePar: null, ...surSite } }),
+        // Sas AUTO = détections OSS non encore prises en charge - RACINES
+        // seulement, comme l'onglet qu'il compte (les héritées suivent leur
+        // racine, elles ne sont pas « à traiter » individuellement).
+        prisma.coupureReseau.count({ where: { dateFin: null, source: 'OSS', priseEnChargePar: null, origine: 'LOCALE', ...surSite } }),
       ]);
     res.json({
       success: true,
       data: {
         enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne,
-        enCoursAuto, enCoursManuel: enCours - enCoursAuto,
+        enCoursAuto,
+        // Rapport NOC = racines manuelles + AUTO adoptées (aligné sur l'onglet).
+        enCoursManuel: Math.max(0, enCours - enCoursHeritees - enCoursAuto),
       },
     });
   } catch (err) { next(err); }
@@ -1678,7 +1714,10 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
     const where = await whereCoupures(req);
     const brutes = await prisma.coupureReseau.findMany({
       where,
-      orderBy: { dateDebut: 'desc' },
+      // Même ordre que l'écran : composite pour les en-cours, sinon chronologie inverse.
+      orderBy: req.query.statut === 'EN_COURS'
+        ? [{ technologie: 'desc' as const }, { dateDebut: 'asc' as const }]
+        : { dateDebut: 'desc' as const },
       take: EXPORT_MAX,
       include: {
         site: { select: { nom: true, region: true } },
