@@ -3,15 +3,15 @@
 import { Check, X } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 
-const MODULES = ['Saisie terrain', 'Validation / assignation', 'Rapports', 'Configuration', 'Gestion utilisateurs', 'Monitoring serveur'];
+const MODULES = ['Saisie terrain', 'Validation / assignation', 'Rapports', 'Configuration', 'Gestion utilisateurs', 'Monitoring serveur', 'Base de données'];
 
 // Matrice indicative des droits (alignée sur le middleware RBAC de l'API)
 const MATRIX: Record<string, boolean[]> = {
-  TECHNICIEN: [true, false, false, false, false, false],
-  SUPERVISEUR: [true, true, true, false, false, false],
-  MANAGER: [true, true, true, true, false, false],
-  DIRECTION: [false, false, true, false, false, false],
-  ADMIN: [true, true, true, true, true, true],
+  TECHNICIEN: [true, false, false, false, false, false, false],
+  SUPERVISEUR: [true, true, true, false, false, false, false],
+  MANAGER: [true, true, true, true, false, false, false],
+  DIRECTION: [false, false, true, false, false, false, false],
+  ADMIN: [true, true, true, true, true, true, true],
 };
 
 const LABELS: Record<string, string> = {

@@ -35,6 +35,7 @@ import * as coupuresCtrl from '../controllers/coupuresReseau.controller';
 import { uploadMiddleware, uploadSpreadsheet, verifierSignature } from '../middlewares/upload';
 import * as filesCtrl from '../controllers/files.controller';
 import * as syncOssCtrl from '../controllers/syncOss.controller';
+import * as dbAdminCtrl from '../controllers/dbAdmin.controller';
 
 export const router = Router();
 
@@ -428,6 +429,22 @@ router.get('/admin/audit', rbac(['ADMIN']), adminCtrl.getAuditLogs);
 router.post('/admin/test-email', rbac(['ADMIN']), adminCtrl.testEmail);
 router.get('/admin/health', rbac(['ADMIN']), adminCtrl.getSystemHealth);
 router.get('/admin/metrics', rbac(['ADMIN']), adminCtrl.getMetrics);
+
+// ── Console base de données (ADMIN) ───────────────────────────
+// CRUD générique sur les tables du modèle Prisma. Le nom de table est validé
+// contre le catalogue dérivé du schéma (liste blanche) et chaque écriture part
+// au journal d'audit — cf. services/dbAdmin.service.ts.
+const dbAdmin = rbac(['ADMIN']);
+router.get('/admin/db/tables', dbAdmin, dbAdminCtrl.listerTables);
+router.get('/admin/db/tables/:modele', dbAdmin, dbAdminCtrl.decrireTable);
+router.get('/admin/db/tables/:modele/lignes', dbAdmin, dbAdminCtrl.listerLignes);
+router.get('/admin/db/tables/:modele/options', dbAdmin, dbAdminCtrl.optionsTable);
+router.get('/admin/db/tables/:modele/export/:format(xlsx|pdf)', dbAdmin, heavyLimit, dbAdminCtrl.exporterTable);
+router.get('/admin/db/tables/:modele/lignes/:id', dbAdmin, dbAdminCtrl.lireLigne);
+router.get('/admin/db/tables/:modele/lignes/:id/impact', dbAdmin, dbAdminCtrl.impactLigne);
+router.post('/admin/db/tables/:modele/lignes', dbAdmin, dbAdminCtrl.creerLigne);
+router.patch('/admin/db/tables/:modele/lignes/:id', dbAdmin, dbAdminCtrl.modifierLigne);
+router.delete('/admin/db/tables/:modele/lignes/:id', dbAdmin, dbAdminCtrl.supprimerLigne);
 
 // ── Notifications ─────────────────────────────────────────────
 router.get('/notifications', notifCtrl.getNotifications);

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList, RadioTower, MessageSquareText, Columns3 } from 'lucide-react';
+import { Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList, RadioTower, MessageSquareText, Columns3, Database } from 'lucide-react';
 
 const SECTIONS = [
   { href: '/administration/utilisateurs', icon: Users, title: 'Utilisateurs', desc: 'Créer, modifier et désactiver les comptes.' },
@@ -16,6 +16,7 @@ const SECTIONS = [
   { href: '/administration/types-pylone', icon: RadioTower, title: 'Types de pylône', desc: 'Référentiel éditable des types de pylône.' },
   { href: '/administration/audit', icon: ScrollText, title: 'Journal d\'audit', desc: 'Historique des actions sensibles.' },
   { href: '/administration/serveur', icon: ServerCog, title: 'Santé serveur', desc: 'État des services, métriques et monitoring.' },
+  { href: '/administration/base-de-donnees', icon: Database, title: 'Base de données', desc: 'Consulter et corriger les données de toutes les tables.' },
 ];
 
 export default function AdministrationHubPage() {
