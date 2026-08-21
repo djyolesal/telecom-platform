@@ -524,12 +524,15 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     if (technologies.includes('SITE')) {
       const deja = await prisma.coupureReseau.findFirst({
         where: { siteId, technologie: 'SITE', dateFin: null },
-        select: { source: true, dateDebut: true },
+        select: { id: true, source: true, dateDebut: true },
       });
       if (deja) {
+        // L'id est renvoyé en details : le formulaire propose d'OUVRIR la
+        // coupure existante au lieu de laisser le NOC sur un cul-de-sac.
         throw new AppError(
           `Une coupure site entier est déjà EN COURS sur ce site (${deja.source === 'OSS' ? 'détection AUTO' : 'saisie manuelle'} du ${deja.dateDebut.toLocaleString('fr-FR', { timeZone: 'Africa/Lome' })}) - complétez ou clôturez-la plutôt que d'en créer une seconde.`,
-          422
+          422,
+          { coupureExistanteId: deja.id }
         );
       }
     }

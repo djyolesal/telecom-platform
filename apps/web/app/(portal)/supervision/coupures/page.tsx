@@ -430,7 +430,24 @@ export default function CoupuresReseauPage() {
           </>
         )}
 
-      {showCreate && <CoupureFormModal onClose={() => setShowCreate(false)} onDone={rafraichir} />}
+      {showCreate && (
+        <CoupureFormModal
+          onClose={() => setShowCreate(false)}
+          onDone={rafraichir}
+          onOuvrirExistante={async (coupureId, sId) => {
+            // Passerelle depuis la garde « déjà en cours » : bascule du
+            // formulaire de création vers la coupure existante du site.
+            try {
+              const r = await api.get('/coupures-reseau', {
+                params: { site_id: sId, statut: 'EN_COURS', technologie: 'SITE', limit: 5 },
+              });
+              const liste = (r.data.data ?? []) as Coupure[];
+              const cible = liste.find((c) => c.id === coupureId) ?? liste[0];
+              if (cible) { setShowCreate(false); setEdition(cible); }
+            } catch { /* la liste reste ouverte, l'erreur du formulaire est déjà affichée */ }
+          }}
+        />
+      )}
       {edition && <CoupureEditModal coupure={edition} onClose={() => setEdition(null)} onDone={rafraichir} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} onDone={rafraichir} />}
     </div>
@@ -439,7 +456,10 @@ export default function CoupuresReseauPage() {
 
 // ── Création ────────────────────────────────────────────────────────────────
 
-function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
+  onClose: () => void; onDone: () => void;
+  onOuvrirExistante?: (coupureId: string, siteId: string) => void;
+}) {
   const { data: sites } = useQuery({
     queryKey: ['sites-all'],
     queryFn: () => api.get('/sites', { params: { all: 'true' } }).then((r) => r.data.data as { id: string; nom: string }[]),
@@ -491,7 +511,9 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     setTechnos(next.has('SITE') ? new Set(['SITE']) : next);
   };
 
-  const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+  const errData = (mutation.error as { response?: { data?: { error?: string; details?: { coupureExistanteId?: string } } } } | null)?.response?.data;
+  const errMsg = errData?.error;
+  const coupureExistanteId = errData?.details?.coupureExistanteId;
 
   return (
     <Modal titre="Nouvelle coupure réseau" onClose={onClose}>
@@ -539,7 +561,18 @@ function CoupureFormModal({ onClose, onDone }: { onClose: () => void; onDone: ()
           <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) - <b>propager la coupure</b> à tout l'aval (coupures « héritées », clôturées en cascade avec celle-ci).</span>
         </label>
       )}
-      {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
+      {errMsg && (
+        <div className="rounded-lg bg-red-50 p-3">
+          <p className="text-sm text-red-700">{errMsg}</p>
+          {coupureExistanteId && onOuvrirExistante && (
+            <button type="button"
+              onClick={() => onOuvrirExistante(coupureExistanteId, siteId)}
+              className="mt-2 rounded-lg bg-[#1B3F6B] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#16345a]">
+              Ouvrir la coupure en cours de ce site →
+            </button>
+          )}
+        </div>
+      )}
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Annuler</button>
         <Button onClick={() => mutation.mutate()} disabled={!siteId || !dateDebut || mutation.isPending}>
