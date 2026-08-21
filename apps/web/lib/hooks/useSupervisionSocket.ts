@@ -17,6 +17,7 @@ export interface StockUpdatedEvent {
 }
 
 export interface SupervisionEvents {
+  onCoupuresChangees?: (data: unknown) => void;
   onIncidentCreated?: (data: unknown) => void;
   onIncidentUpdated?: (data: unknown) => void;
   onStockAlert?: (data: unknown) => void;
@@ -49,6 +50,13 @@ export function useSupervisionSocket(handlers: SupervisionEvents = {}) {
     const onStockAlert = (d: unknown) => { handlers.onStockAlert?.(d); invalidate(['dashboard', 'stock']); };
     const onStockUpdated = (d: unknown) => { handlers.onStockUpdated?.(d as StockUpdatedEvent); invalidate(['dashboard', 'stock', 'sites-geojson', 'depotages']); };
 
+    // Coupures réseau : la sync OSS et chaque action NOC émettent -
+    // liste, stats, carte et dashboard NOC se mettent à jour à la seconde.
+    const onCoupures = (d: unknown) => {
+      handlers.onCoupuresChangees?.(d);
+      invalidate(['coupures', 'coupures-stats', 'coupures-en-cours-carte', 'noc-coupures-encours', 'sites-geojson']);
+    };
+    socket.on('coupures:changees', onCoupures);
     socket.on('incident:created', onCreated);
     socket.on('incident:updated', onUpdated);
     socket.on('incident:resolved', onResolved);
@@ -57,6 +65,7 @@ export function useSupervisionSocket(handlers: SupervisionEvents = {}) {
     socket.on('stock:updated', onStockUpdated);
 
     return () => {
+      socket.off('coupures:changees', onCoupures);
       socket.off('incident:created', onCreated);
       socket.off('incident:updated', onUpdated);
       socket.off('incident:resolved', onResolved);

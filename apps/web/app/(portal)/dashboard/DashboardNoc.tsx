@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { WifiOff, MapPin, Network, BarChart3, ClipboardList, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
+import { useSupervisionSocket } from '@/lib/hooks/useSupervisionSocket';
 
 /**
  * Tableau de bord du NOC : l'état des coupures, rien d'autre.
@@ -54,6 +55,8 @@ const ACCES = [
 ];
 
 export function DashboardNoc() {
+  // Push temps réel (poll 60 s en filet).
+  useSupervisionSocket();
   const { data: stats } = useQuery({
     queryKey: ['coupures-stats'],
     queryFn: () => api.get('/coupures-reseau/stats').then((r) => r.data.data as Stats),

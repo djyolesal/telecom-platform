@@ -305,6 +305,11 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       // échappent à la détection — à mapper en priorité (fiche site → NodeID).
       disconnectedNonRapproches: nonRapproches,
     };
+    // Push temps réel : un passage qui a changé quelque chose invalide les
+    // écrans à la seconde (liste, carte, dashboard NOC) - sinon silence.
+    if (creees + cloturees + clotureesHeritees + reclasseesAval + incidentsResolus > 0) {
+      chargerRebouclage().emettreCoupuresChangees({ action: 'syncOss', creees, cloturees });
+    }
     logger.info(`[sync-oss] ${lignes.length} lignes · ${creees} coupure(s) créée(s) · ${cloturees} clôturée(s) · ${nonRapproches.length} down non rapproché(s)`);
     res.json({ success: true, data: bilan });
   } catch (err) { next(err); }

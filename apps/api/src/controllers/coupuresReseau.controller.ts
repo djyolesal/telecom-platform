@@ -11,6 +11,19 @@ import { descendantsTransmission } from '../utils/transmission';
 import { genererReference, alignerCompteur } from '../services/reference.service';
 
 /**
+ * Événement temps réel « les coupures ont changé » (namespace /supervision) :
+ * le web invalide ses requêtes à la seconde au lieu d'attendre le poll 60 s.
+ * Best-effort - ne bloque jamais la mutation qui l'émet.
+ */
+export function emettreCoupuresChangees(detail: Record<string, unknown> = {}): void {
+  try {
+    io.of('/supervision').emit('coupures:changees', { ...detail, a: Date.now() });
+  } catch (e) {
+    logger.warn('[coupures] émission temps réel échouée:', e);
+  }
+}
+
+/**
  * Auto-réparation du compteur de références INC : après un import de données
  * réelles, des incidents existent avec des références jamais passées par le
  * compteur - la première création suivante part en conflit unique (P2002,
@@ -607,6 +620,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     const incidentsCrees = await rattacherIncidentsCoupures(req.user!.id, [siteId]);
 
     await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', rows[0].id, { siteId, technologies, sitesImpactes, incidentsCrees }, req);
+    emettreCoupuresChangees({ action: 'creation', siteId });
     res.status(201).json({ success: true, data: { coupures: rows, sitesImpactes, incidentsCrees } });
   } catch (err) { next(err); }
 }
@@ -729,6 +743,7 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       ...(data.siteId ? { ancienSiteId: existing.siteId, nouveauSiteId: data.siteId } : {}),
       ...(data.technologie ? { ancienneTechnologie: existing.technologie, nouvelleTechnologie: data.technologie } : {}),
     }, req);
+    emettreCoupuresChangees({ action: 'maj', coupureId: existing.id });
     res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu } });
   } catch (err) { next(err); }
 }
@@ -748,6 +763,7 @@ export async function deleteCoupure(req: Request, res: Response, next: NextFunct
       await resoudreIncidentSiPlusDeCoupure(tx, existante.incidentId, new Date());
     });
     await auditLog(req.user!.id, 'DELETE', 'coupure_reseau', req.params.id, {}, req);
+    emettreCoupuresChangees({ action: 'suppression' });
     res.json({ success: true });
   } catch (err) { next(err); }
 }
@@ -1026,6 +1042,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
     );
 
     await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', undefined, { import: true, crees, doublons, clotureesParImport, incidentsResolus, heriteesDetectees, incidentsCrees }, req);
+    emettreCoupuresChangees({ action: 'import' });
     res.json({
       success: true,
       data: {
@@ -1480,6 +1497,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       incidentCree: incidentInfo && !incidentInfo.reutilise ? incidentInfo.id : undefined,
       incidentReutilise: incidentInfo?.reutilise ? incidentInfo.id : undefined,
     }, req);
+    emettreCoupuresChangees({ action: 'priseEnCharge', racineId: racine.id });
     res.json({
       success: true,
       data: {
@@ -1555,6 +1573,7 @@ export async function annulerPriseEnCharge(req: Request, res: Response, next: Ne
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
       annulationPriseEnCharge: true, heriteesSupprimees: supprimees.count, heriteesRedeclassees: redeclassees.count,
     }, req);
+    emettreCoupuresChangees({ action: 'annulationPriseEnCharge', racineId: racine.id });
     res.json({
       success: true,
       data: { racineId: racine.id, heriteesSupprimees: supprimees.count, heriteesRedeclassees: redeclassees.count },

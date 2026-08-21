@@ -15,6 +15,7 @@ import { Button } from '@/components/shared/Button';
 import { Field, Input, Select, Textarea } from '@/components/shared/Form';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useSupervisionSocket } from '@/lib/hooks/useSupervisionSocket';
 import { fmtDateTime } from '@/lib/utils';
 
 interface Coupure {
@@ -99,6 +100,9 @@ export default function CoupuresReseauPage() {
   const [showImport, setShowImport] = useState(false);
   const [edition, setEdition] = useState<Coupure | null>(null);
   const debounced = useDebounce(search);
+  // Push temps réel : le hook invalide coupures/stats à chaque événement -
+  // le poll 60 s reste en filet de sécurité.
+  useSupervisionSocket();
 
   interface CoupuresStats {
     enCours: number; enCoursSiteEntier: number; enCoursHeritees: number; terminees: number;
