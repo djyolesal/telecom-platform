@@ -151,6 +151,9 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
     if (source) where.source = source;
+    // Même périmètre que la liste - l'export contournait le filtre prestataire.
+    const perimetreExp = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetreExp)) where.site = perimetreExp;
 
     const rows = await prisma.releveEnergie.findMany({
       where,

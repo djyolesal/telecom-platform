@@ -139,7 +139,11 @@ export async function listActifs(req: Request, res: Response, next: NextFunction
 /** Export du registre du parc (mêmes filtres que la liste). */
 export async function exportActifs(req: Request, res: Response, next: NextFunction) {
   try {
-    const actifs = await fetchActifs(req.query as Record<string, string>);
+    let actifs = await fetchActifs(req.query as Record<string, string>);
+    // Même périmètre que la liste : un prestataire n'exporte que les actifs
+    // de ses sites (+ dépôt) - l'export contournait le filtre.
+    const ids = await allowedSiteIds(req.user!.id);
+    if (ids) actifs = actifs.filter((a) => !a.siteId || ids.has(a.siteId));
     const LABELS: Record<string, string> = { EN_SERVICE: 'En service', EN_STOCK: 'Au dépôt', EN_TRANSIT: 'En transit', REFORME: 'Réformé' };
     await sendTabular(res, req.params.format as 'xlsx' | 'pdf', 'parc-actifs', "Parc d'actifs", [{
       name: 'Parc',

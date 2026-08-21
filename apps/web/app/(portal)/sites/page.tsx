@@ -86,7 +86,7 @@ export default function SitesPage() {
                 <Upload size={15} /> Importer
               </button>
             )}
-            <ExportButtons base="/sites/export" name="sites" query={region ? `region=${region}` : undefined} />
+            {((session?.user as { role?: string })?.role ?? '') !== 'TECHNICIEN' && <ExportButtons base="/sites/export" name="sites" query={region ? `region=${region}` : undefined} />}
             {peutCreer && <ButtonLink href="/sites/nouveau" icon={Plus}>Nouveau site</ButtonLink>}
           </>
         }

@@ -690,6 +690,9 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
     if (fournisseur) where.fournisseur = { contains: fournisseur, mode: 'insensitive' };
+    // Même périmètre que la liste - l'export contournait le filtre prestataire.
+    const perimetreExp = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetreExp)) where.site = perimetreExp;
 
     const rows = await prisma.depotage.findMany({
       where,

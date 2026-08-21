@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Camera } from 'lucide-react';
@@ -34,6 +35,9 @@ interface Depotage {
 }
 
 function DepotagesPageInner() {
+  // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
+  const { data: sessionExp } = useSession();
+  const roleExport = (sessionExp?.user as { role?: string })?.role ?? '';
   const router = useRouter();
   const searchParams = useSearchParams();
   const siteId = searchParams.get('site_id') || undefined;
@@ -88,9 +92,9 @@ function DepotagesPageInner() {
         title="Dépotages carburant"
         subtitle="Historique des livraisons de gasoil"
         backHref="/carburant/stock"
-        actions={
-          <ExportButtons base="/depotages/export" name="depotages" />
-        }
+        actions={roleExport !== 'TECHNICIEN'
+          ? <ExportButtons base="/depotages/export" name="depotages" />
+          : undefined}
       />
 
       <FilterBar search={fournisseur} onSearch={(v) => { setFournisseur(v); setPage(1); }} searchPlaceholder="Rechercher un fournisseur…" />

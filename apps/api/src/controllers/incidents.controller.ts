@@ -438,6 +438,10 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
     if (statut) where.statut = statut;
     if (site_id) where.siteId = site_id;
     if (region) where.site = { ...(where.site as object ?? {}), region };
+    // Même périmètre que la liste : un prestataire n'exporte que les incidents
+    // de ses lots - l'export contournait le filtre appliqué à l'écran.
+    const perimetreExp = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetreExp)) where.site = { ...(where.site as object ?? {}), ...perimetreExp };
 
     const rows = await prisma.incident.findMany({
       where,

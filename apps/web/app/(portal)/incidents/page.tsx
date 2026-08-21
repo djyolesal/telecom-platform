@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Download, BarChart3 } from 'lucide-react';
@@ -29,6 +30,9 @@ interface Incident {
 }
 
 export default function IncidentsPage() {
+  // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
+  const { data: sessionExp } = useSession();
+  const roleExport = (sessionExp?.user as { role?: string })?.role ?? '';
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [type, setType] = useState('');
@@ -62,7 +66,7 @@ export default function IncidentsPage() {
         actions={
           <>
             <ButtonLink href="/incidents/kpis" variant="secondary" icon={BarChart3}>KPIs</ButtonLink>
-            <ExportButtons base="/incidents/export" name="incidents" />
+            {roleExport !== 'TECHNICIEN' && <ExportButtons base="/incidents/export" name="incidents"/>}
             <ButtonLink href="/incidents/nouveau" icon={Plus}>Déclarer</ButtonLink>
           </>
         }

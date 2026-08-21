@@ -181,7 +181,7 @@ router.get('/sites', sitesCtrl.getSites);
 // sans aucune donnée d'exploitation (ni stock, ni autonomie, ni rupture).
 router.get('/sites/geojson', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION','TRANSPORTEUR']), sitesCtrl.getSitesGeoJSON);
 // SUPERVISEUR inclus : un prestataire exporte SES sites (périmètre appliqué dans le contrôleur).
-router.get('/sites/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.exportSites);
+router.get('/sites/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.exportSites);
 router.get('/sites/import/template', rbac(['MANAGER','ADMIN']), sitesCtrl.sitesImportTemplate);
 router.post('/sites/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), sitesCtrl.importSites);
 // Topologie de transmission : rattachement en masse site → amont + type de liaison.
@@ -268,7 +268,7 @@ router.delete('/lots/:id/sites/:siteId', rbac(['MANAGER', 'ADMIN']), lotsCtrl.re
 router.get('/maintenances', maintenanceCtrl.getMaintenances);
 router.get('/maintenances/planning', maintenanceCtrl.getPlanning);
 router.get('/maintenances/techniciens-assignables', maintenanceCtrl.getTechniciensAssignablesSite);
-router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
+router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
 router.post('/maintenances', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.updateMaintenance);
@@ -283,14 +283,14 @@ router.get('/maintenances/:id/bon-mouvement.pdf', maintenanceCtrl.getBonMouvemen
 
 // ── Actifs (parc GE / batteries / climatiseurs) ───────────────
 router.get('/actifs', actifsCtrl.listActifs);
-router.get('/actifs/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), actifsCtrl.exportActifs);
+router.get('/actifs/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), actifsCtrl.exportActifs);
 router.post('/actifs', rbac(['MANAGER','ADMIN']), actifsCtrl.createActif);
 router.get('/actifs/:type/:id', actifsCtrl.getActif);
 router.delete('/actifs/:type/:id', rbac(['ADMIN']), actifsCtrl.deleteActif);
 
 // ── Dépotages ─────────────────────────────────────────────────
 router.get('/depotages', depotagesCtrl.getDepotages);
-router.get('/depotages/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), depotagesCtrl.exportDepotages);
+router.get('/depotages/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), depotagesCtrl.exportDepotages);
 router.post('/depotages', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), depotagesCtrl.createDepotage);
 router.get('/depotages/:id/bordereau.pdf', depotagesCtrl.exportDepotagePdf);
 router.get('/depotages/:id', depotagesCtrl.getDepotageById);
@@ -364,7 +364,7 @@ router.get('/rapports/rapprochement/:id/export/:format(xlsx|pdf)', rbac(['MANAGE
 
 // ── Relevés énergie ───────────────────────────────────────────
 router.get('/releves', relevesCtrl.getReleves);
-router.get('/releves/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), relevesCtrl.exportReleves);
+router.get('/releves/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), relevesCtrl.exportReleves);
 router.post('/releves', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), relevesCtrl.createReleve);
 router.post('/releves/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), relevesImportCtrl.importReleves);
 router.get('/releves/:id', relevesCtrl.getReleveById);
@@ -372,7 +372,7 @@ router.get('/releves/:id', relevesCtrl.getReleveById);
 // ── Incidents ─────────────────────────────────────────────────
 router.get('/incidents', incidentsCtrl.getIncidents);
 router.get('/incidents/kpis', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC']), incidentsCtrl.getIncidentKPIs);
-router.get('/incidents/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
+router.get('/incidents/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
 router.post('/incidents', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC']), incidentsCtrl.createIncident);
 router.get('/incidents/:id', incidentsCtrl.getIncidentById);
 router.put('/incidents/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.updateIncident);
@@ -388,10 +388,10 @@ router.get('/rapports/stock-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','D
 router.get('/rapports/parc-prestataires', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getParcPrestataires);
 // Bilan carburant sur période : stock aux bornes + conso par conservation + courbe 12 mois.
 router.get('/rapports/bilan-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getBilanCarburant);
-router.get('/rapports/bilan-carburant/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanCarburant);
+router.get('/rapports/bilan-carburant/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanCarburant);
 // Bilan énergie CEET : même logique, l'index compteur joue le rôle de la jauge.
 router.get('/rapports/bilan-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getBilanEnergie);
-router.get('/rapports/bilan-energie/export/:format(xlsx|pdf)', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanEnergie);
+router.get('/rapports/bilan-energie/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanEnergie);
 router.get('/rapports/conso-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConsoEnergie);
 router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMaintenance);
 router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportIncidents);

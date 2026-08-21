@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Download, CalendarDays, Camera } from 'lucide-react';
@@ -38,6 +39,9 @@ interface Maintenance {
 }
 
 export default function MaintenancePage() {
+  // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
+  const { data: sessionExp } = useSession();
+  const roleExport = (sessionExp?.user as { role?: string })?.role ?? '';
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -99,7 +103,7 @@ export default function MaintenancePage() {
         actions={
           <>
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
-            <ExportButtons base="/maintenances/export" name="maintenances" />
+            {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"/>}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
         }
