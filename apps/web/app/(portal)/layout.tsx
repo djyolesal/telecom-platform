@@ -227,9 +227,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         {/* Header */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0">
           <div className="flex items-center gap-4">
-            <h1 className="text-gray-800 font-semibold text-sm">
+            {/* Fil de section (PAS un h1 : le titre de page est l'unique h1,
+                deux h1 identiques cassaient l'accessibilité et les tests). */}
+            <p className="text-gray-800 font-semibold text-sm">
               {visibleItems.find(i => pathname.startsWith(i.href))?.label || 'Portail'}
-            </h1>
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell />
