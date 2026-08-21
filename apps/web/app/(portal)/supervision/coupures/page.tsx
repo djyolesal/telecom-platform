@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, Upload, X, CheckCircle2, AlertTriangle, WifiOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -111,11 +111,14 @@ export default function CoupuresReseauPage() {
     refetchInterval: 60_000,
   });
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au, avecHeritees, aQualifier }],
     // Poll 60 s (comme la carte NOC) : les coupures OSS arrivent toutes les
     // 5 min sans action humaine - la liste doit se rafraîchir toute seule.
     refetchInterval: 60_000,
+    // Changement d'onglet/filtre/page : l'ancien contenu RESTE affiché pendant
+    // le chargement du nouveau - fini le squelette qui remonte toute la page.
+    placeholderData: keepPreviousData,
     queryFn: () => api.get('/coupures-reseau', {
       params: {
         page, limit: 20,
@@ -394,6 +397,9 @@ export default function CoupuresReseauPage() {
             className="h-4 w-4 rounded border-gray-300" />
           Déplier l&apos;aval hérité sous chaque racine{stats && stats.enCoursHeritees > 0 ? ` (${stats.enCoursHeritees} en cours)` : ''}
         </label>
+        {isFetching && !isLoading && (
+          <span className="ml-auto animate-pulse text-xs text-gray-400">actualisation…</span>
+        )}
       </div>
 
       <FilterBar

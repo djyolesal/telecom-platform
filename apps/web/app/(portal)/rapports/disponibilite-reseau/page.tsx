@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { WifiOff, Activity, Zap, RadioTower } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -48,10 +48,13 @@ export default function DisponibiliteReseauPage() {
   const exportQuery = Object.entries(filtres)
     .map(([cle, v]) => `${cle}=${encodeURIComponent(v)}`).join('&');
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['disponibilite-reseau', filtres],
     queryFn: () => api.get('/rapports/disponibilite-reseau', { params: filtres }).then((r) => r.data.data),
     enabled: pret,
+    // Changement de période/technos/alarmes : le rapport précédent reste
+    // affiché pendant le recalcul - pas d'écran « Chargement » intégral.
+    placeholderData: keepPreviousData,
   });
 
   const k = data?.kpis;
@@ -119,6 +122,9 @@ export default function DisponibiliteReseauPage() {
         <span className="text-xs text-gray-400" title="Le sas des détections brutes reste visible sur la liste des coupures et la carte NOC, sans peser sur la disponibilité publiée.">
           Les détections AUTO (OSS) ne comptent qu&apos;une fois prises en charge par le NOC.
         </span>
+        {isFetching && !isLoading && (
+          <span className="animate-pulse text-xs text-gray-400">recalcul…</span>
+        )}
       </div>
 
       {!pret ? <EmptyState title="Période libre" hint="Choisissez les deux dates pour calculer le rapport." />
