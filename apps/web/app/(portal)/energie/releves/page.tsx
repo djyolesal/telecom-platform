@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -12,17 +12,42 @@ import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
 import { SOURCES_ENERGIE } from '@/lib/constants';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
 interface Releve {
   id: string;
+  siteId: string;
   dateReleve: string;
   source: string;
   provenance?: string;
-  consommationKwh?: number;
-  volumeGasoilLitres?: number;
-  heuresFonctGE?: number;
+  indexCompteur?: number | null;
+  consommationKwh?: number | null;
+  volumeGasoilLitres?: number | null;
+  gasoilConsommeLitres?: number | null;
+  indexHeuresGE?: number | null;
+  heuresFonctGE?: number | null;
+  puissanceKva?: number | null;
   site?: { code: string; nom: string };
+  technicien?: { nom: string; prenom: string } | null;
+  maintenance?: { id: string } | null;
+  groupe?: { numero: number } | null;
+}
+
+/** Un PASSAGE = les relevés d'une même intervention fusionnés en une ligne
+ *  (avant : une ligne par source, criblée de tirets). */
+interface Passage {
+  id: string;
+  siteNom: string;
+  dateReleve: string;
+  provenance?: string;
+  technicien?: string;
+  indexCompteur?: number | null;
+  consommationKwh?: number | null;
+  jaugeLitres?: number | null;
+  gasoilConsommeLitres?: number | null;
+  ges: { numero: number | null; index: number | null; marche: number | null }[];
+  puissanceKva?: number | null;
 }
 
 const PROVENANCE_COLOR: Record<string, string> = {
@@ -34,49 +59,131 @@ const PROVENANCE_COLOR: Record<string, string> = {
   'Curage cuve': 'bg-cyan-100 text-cyan-700',
 };
 
+const n = (v: unknown): number | null => (v == null ? null : Number(v));
+
+function fusionnerPassages(rows: Releve[]): Passage[] {
+  const parCle = new Map<string, Passage>();
+  const ordre: string[] = [];
+  for (const r of rows) {
+    // Même intervention (maintenance) ou, à défaut, même site + même minute.
+    const cle = r.maintenance?.id
+      ? `m:${r.maintenance.id}`
+      : `s:${r.siteId}|${r.dateReleve.slice(0, 16)}|${r.provenance ?? ''}`;
+    let p = parCle.get(cle);
+    if (!p) {
+      p = {
+        id: r.id, siteNom: r.site?.nom ?? '—', dateReleve: r.dateReleve,
+        provenance: r.provenance,
+        technicien: r.technicien ? `${r.technicien.prenom} ${r.technicien.nom}` : undefined,
+        ges: [],
+      };
+      parCle.set(cle, p); ordre.push(cle);
+    }
+    if (r.source === 'CEET') {
+      p.indexCompteur = n(r.indexCompteur); p.consommationKwh = n(r.consommationKwh);
+    } else if (r.source === 'GE') {
+      if (p.jaugeLitres == null) p.jaugeLitres = n(r.volumeGasoilLitres);
+      if (p.gasoilConsommeLitres == null) p.gasoilConsommeLitres = n(r.gasoilConsommeLitres);
+      p.ges.push({ numero: r.groupe?.numero ?? null, index: n(r.indexHeuresGE), marche: n(r.heuresFonctGE) });
+    } else if (r.source === 'SOLAIRE') {
+      p.puissanceKva = n(r.puissanceKva);
+    }
+  }
+  return ordre.map((c) => parCle.get(c)!);
+}
+
+const listeGE = (p: Passage, champ: 'index' | 'marche', suffixe: string) => {
+  const vals = p.ges.filter((g) => g[champ] != null);
+  if (!vals.length) return '—';
+  if (vals.length === 1) return `${fmtNumber(vals[0][champ]!)}${suffixe}`;
+  return vals.map((g) => `n°${g.numero ?? '?'} ${fmtNumber(g[champ]!)}${suffixe}`).join(' · ');
+};
+
 export default function RelevesPage() {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [source, setSource] = useState('');
+  const [search, setSearch] = useState('');
+  const [du, setDu] = useState('');
+  const [au, setAu] = useState('');
+  const debounced = useDebounce(search);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['releves', { page, source }],
-    queryFn: () => api.get('/releves', { params: { page, limit: 20, source: source || undefined } }).then((r) => r.data),
+    queryKey: ['releves', { page, source, debounced, du, au }],
+    queryFn: () => api.get('/releves', {
+      params: {
+        page, limit: 30,
+        source: source || undefined,
+        search: debounced || undefined,
+        date_debut: du || undefined, date_fin: au || undefined,
+      },
+    }).then((r) => r.data),
+    placeholderData: keepPreviousData,
   });
 
   const rows: Releve[] = data?.data ?? [];
+  const passages = fusionnerPassages(rows);
   const meta: PaginationMeta | undefined = data?.meta;
 
-  const columns: Column<Releve>[] = [
-    { key: 'site', header: 'Site', render: (r) => <span className="font-medium text-gray-800">{r.site?.nom ?? "—"}</span> },
-    { key: 'dateReleve', header: 'Date', render: (r) => fmtDate(r.dateReleve) },
-    { key: 'provenance', header: 'Provenance', render: (r) => <Badge className={PROVENANCE_COLOR[r.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{r.provenance ?? '—'}</Badge> },
-    { key: 'consommationKwh', header: 'Conso (kWh)', align: 'right', render: (r) => (r.consommationKwh != null ? fmtNumber(Number(r.consommationKwh)) : '—') },
-    { key: 'volumeGasoilLitres', header: 'Gasoil (L)', align: 'right', render: (r) => (r.volumeGasoilLitres != null ? fmtNumber(Number(r.volumeGasoilLitres)) : '—') },
-    { key: 'heuresFonctGE', header: 'Heures GE', align: 'right', render: (r) => (r.heuresFonctGE != null ? Number(r.heuresFonctGE) : '—') },
+  const columns: Column<Passage>[] = [
+    { key: 'siteNom', header: 'Site', render: (p) => <span className="font-medium text-gray-800">{p.siteNom}</span> },
+    { key: 'dateReleve', header: 'Date', render: (p) => fmtDate(p.dateReleve) },
+    { key: 'provenance', header: 'Provenance', render: (p) => <Badge className={PROVENANCE_COLOR[p.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{p.provenance ?? '—'}</Badge> },
+    { key: 'technicien', header: 'Technicien', defaultHidden: true, render: (p) => p.technicien ?? '—' },
+    { key: 'jaugeLitres', header: 'Jauge cuve (L)', align: 'right', render: (p) => p.jaugeLitres != null ? fmtNumber(p.jaugeLitres) : '—' },
+    { key: 'gasoilConsommeLitres', header: 'Gasoil conso (L)', align: 'right', render: (p) => p.gasoilConsommeLitres != null ? fmtNumber(p.gasoilConsommeLitres) : '—' },
+    { key: 'indexGE', header: 'Index GE (h)', align: 'right', sortable: false, render: (p) => listeGE(p, 'index', '') },
+    { key: 'marcheGE', header: 'Marche GE (h)', align: 'right', sortable: false, render: (p) => listeGE(p, 'marche', '') },
+    { key: 'indexCompteur', header: 'Index CEET', align: 'right', render: (p) => p.indexCompteur != null ? fmtNumber(p.indexCompteur) : '—' },
+    { key: 'consommationKwh', header: 'Conso (kWh)', align: 'right', render: (p) => p.consommationKwh != null ? fmtNumber(p.consommationKwh) : '—' },
+    { key: 'puissanceKva', header: 'Solaire (kVA)', align: 'right', defaultHidden: true, render: (p) => p.puissanceKva != null ? fmtNumber(p.puissanceKva) : '—' },
   ];
+
+  const exportQuery = [
+    source && `source=${source}`,
+    debounced && `search=${encodeURIComponent(debounced)}`,
+    du && `date_debut=${du}`,
+    au && `date_fin=${au}`,
+  ].filter(Boolean).join('&');
 
   return (
     <div>
       <PageHeader
         title="Relevés énergie"
+        subtitle="Un passage par ligne - jauges et index saisis, consommations calculées entre deux passages"
         backHref="/energie"
-        actions={<ExportButtons base="/releves/export" name="releves" />}
+        actions={<ExportButtons base="/releves/export" name="releves" query={exportQuery || undefined} />}
       />
 
       <FilterBar
+        search={search}
+        onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Rechercher un site…"
         filters={[{ key: 'source', label: 'Toutes sources', value: source, options: SOURCES_ENERGIE, onChange: (v) => { setSource(v); setPage(1); } }]}
       />
 
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">Période :</span>
+        <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+        <span className="text-gray-400">→</span>
+        <input type="date" value={au} onChange={(e) => { setAu(e.target.value); setPage(1); }}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+        {(du || au) && (
+          <button type="button" onClick={() => { setDu(''); setAu(''); setPage(1); }}
+            className="text-xs font-medium text-[#2471A3] hover:underline">Effacer</button>
+        )}
+      </div>
+
       {isLoading ? (
-        <TableSkeleton cols={6} />
+        <TableSkeleton cols={9} />
       ) : isError ? (
         <ErrorState />
-      ) : rows.length === 0 ? (
+      ) : passages.length === 0 ? (
         <EmptyState title="Aucun relevé" />
       ) : (
         <>
-          <DataTable columns={columns} data={rows} maxHeight="65vh" onRowClick={(r) => router.push(`/energie/releves/${r.id}`)} />
+          <DataTable columns={columns} data={passages} maxHeight="65vh" onRowClick={(p) => router.push(`/energie/releves/${p.id}`)} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}

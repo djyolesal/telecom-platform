@@ -42,14 +42,19 @@ function estimerCout(data: Record<string, any>): number | null {
 
 export async function getReleves(req: Request, res: Response, next: NextFunction) {
   try {
-    const { site_id, source, date_debut, date_fin, page = '1', limit = '20' } =
+    const { site_id, source, search, date_debut, date_fin, page = '1', limit = '20' } =
       req.query as Record<string, string>;
 
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
     if (source) where.source = source;
     const perimetre = await sitePerimetre(req.user!.id);
-    if (isRestreint(perimetre)) where.site = perimetre;
+    if (search || isRestreint(perimetre)) {
+      where.site = {
+        ...(isRestreint(perimetre) ? perimetre : {}),
+        ...(search ? { nom: { contains: search, mode: 'insensitive' } } : {}),
+      };
+    }
     if (date_debut || date_fin) {
       where.dateReleve = {
         ...(date_debut ? { gte: parseISO(date_debut) } : {}),
@@ -65,7 +70,8 @@ export async function getReleves(req: Request, res: Response, next: NextFunction
         include: {
           site: { select: { nom: true, code: true, region: true } },
           technicien: { select: { nom: true, prenom: true } },
-          maintenance: { select: { type: true, tachePreventiveKey: true } },
+          maintenance: { select: { id: true, type: true, tachePreventiveKey: true } },
+          groupe: { select: { numero: true } },
         },
       },
       { page: parseInt(page), limit: parseInt(limit) }
@@ -147,13 +153,25 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
 
 export async function exportReleves(req: Request, res: Response, next: NextFunction) {
   try {
-    const { site_id, source } = req.query as Record<string, string>;
+    const { site_id, source, search, date_debut, date_fin } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
     if (source) where.source = source;
-    // Même périmètre que la liste - l'export contournait le filtre prestataire.
+    if (date_debut || date_fin) {
+      where.dateReleve = {
+        ...(date_debut ? { gte: parseISO(date_debut) } : {}),
+        ...(date_fin ? { lte: parseISO(date_fin) } : {}),
+      };
+    }
+    // Même périmètre et mêmes filtres que la liste - l'export contournait le
+    // filtre prestataire (et ignorait recherche/période).
     const perimetreExp = await sitePerimetre(req.user!.id);
-    if (isRestreint(perimetreExp)) where.site = perimetreExp;
+    if (search || isRestreint(perimetreExp)) {
+      where.site = {
+        ...(isRestreint(perimetreExp) ? perimetreExp : {}),
+        ...(search ? { nom: { contains: search, mode: 'insensitive' } } : {}),
+      };
+    }
 
     const rows = await prisma.releveEnergie.findMany({
       where,
