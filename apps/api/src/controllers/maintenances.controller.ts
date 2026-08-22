@@ -1,5 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables } from '../utils/perimetre';
+import { notificationService } from '../services/notifications.service';
+
+/** Push in-app/FCM au technicien AFFECTÉ (jamais à celui qui s'auto-assigne) :
+ *  l'affectation de maintenance était totalement silencieuse - le technicien
+ *  ne la découvrait qu'en ouvrant sa liste. Best-effort, aucun SMS. */
+function notifierAffectationMaintenance(technicienId: string | null | undefined, affectantId: string, m: { id: string; equipement: string; datePlanifiee: Date }, siteNom: string): void {
+  if (!technicienId || technicienId === affectantId) return;
+  const date = new Date(m.datePlanifiee).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  void notificationService.sendToUser(technicienId, {
+    title: `🗓️ Maintenance assignée - ${siteNom}`,
+    body: `${m.equipement} - planifiée le ${date}`,
+    data: { maintenanceId: m.id, type: 'maintenance_assignee' },
+  }).catch(() => { /* best-effort */ });
+}
 import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
@@ -378,6 +392,10 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
       });
     });
     await auditLog(req.user!.id, 'CREATE', 'maintenances', maintenance.id, data, req);
+    {
+      const siteN = await prisma.site.findUnique({ where: { id: String(data.siteId) }, select: { nom: true } });
+      notifierAffectationMaintenance(maintenance.technicienId, req.user!.id, maintenance, siteN?.nom ?? 'site');
+    }
     res.status(201).json({ success: true, data: maintenance });
   } catch (err) { next(err); }
 }
@@ -418,6 +436,11 @@ export async function updateMaintenance(req: Request, res: Response, next: NextF
 
     const updated = await prisma.maintenance.update({ where: { id: req.params.id }, data });
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, data, req);
+    // Réaffectation à un AUTRE technicien → il est prévenu (in-app + push).
+    if (data.technicienId && data.technicienId !== existing.technicienId) {
+      const siteN = await prisma.site.findUnique({ where: { id: existing.siteId }, select: { nom: true } });
+      notifierAffectationMaintenance(String(data.technicienId), req.user!.id, updated, siteN?.nom ?? 'site');
+    }
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }
