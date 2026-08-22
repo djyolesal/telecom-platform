@@ -386,7 +386,7 @@ export default function CoupuresReseauPage() {
             fonde la disponibilité. Compteurs sur les coupures en cours. */}
         <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
           {[
-            { v: '', l: 'Toutes' },
+            { v: '', l: 'Toutes sources' },
             { v: 'OSS', l: `AUTO à traiter${stats ? ` (${stats.enCoursAuto})` : ''}` },
             { v: 'MANUEL', l: `Rapport NOC${stats ? ` (${stats.enCoursManuel})` : ''}` },
           ].map((o) => (

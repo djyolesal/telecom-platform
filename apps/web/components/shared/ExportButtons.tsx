@@ -72,7 +72,7 @@ export function ExportButtons({ base, name, query }: { base: string; name: strin
   const selectionActive = colonnes != null && exclues.size > 0 && nbGardees > 0;
 
   return (
-    <div className="relative inline-flex items-center gap-2">
+    <div className="relative inline-flex flex-wrap items-center gap-2">
       <button type="button" onClick={ouvrirPicker} className={cls} title="Choisir les colonnes à exporter">
         <SlidersHorizontal size={15} />
         Colonnes{selectionActive ? ` (${nbGardees}/${colonnes!.length})` : ''}

@@ -34,6 +34,12 @@ function LiveDepotageCard({ e, onClose }: { e: StockUpdatedEvent; onClose: () =>
   );
 }
 
+const TYPE_INCIDENT_LABEL: Record<string, string> = {
+  COUPURE_TOTALE: 'Coupure totale', COUPURE_PARTIELLE: 'Coupure partielle',
+  PANNE_GE: 'Panne GE', PANNE_CLIM: 'Panne clim', CARBURANT: 'Carburant',
+  INTRUSION: 'Intrusion', AUTRE: 'Autre',
+};
+
 const COLORS = ['#1B3F6B', '#0E7C6B', '#2471A3', '#F39C12', '#C0392B'];
 
 /**
@@ -93,7 +99,7 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
         {stat(String(ok), 'stock OK', 'text-[#3BC9AF]')}
         {stat(String(faible), 'stock faible', 'text-[#FFB020]')}
         {stat(String(critique), 'critiques / vides', 'text-[#F87171]')}
-        {stat(`${(stockTotal / 1000).toFixed(0)}k L`, 'stock total')}
+        {stat(stockTotal >= 10_000 ? `${(stockTotal / 1000).toFixed(0)}k L` : `${Math.round(stockTotal).toLocaleString('fr-FR')} L`, 'stock total')}
         {stat(autonomie != null ? `${autonomie} j` : '—', 'autonomie médiane')}
       </div>
     </button>
@@ -187,7 +193,7 @@ export function DashboardInterne() {
             {(d.incidentsRecents || []).map((inc: Record<string, string>) => (
               <div key={inc.id} className="flex items-center gap-2.5 rounded-lg p-1.5 text-xs hover:bg-gray-50">
                 <span className={`h-2 w-2 flex-shrink-0 rounded-full ${inc.severite === 'CRITIQUE' ? 'bg-red-500' : inc.severite === 'MAJEUR' ? 'bg-orange-500' : 'bg-yellow-400'}`} />
-                <span className="flex-1 truncate font-medium text-gray-700">{inc.siteNom} - {inc.type}</span>
+                <span className="flex-1 truncate font-medium text-gray-700">{inc.siteNom} - {TYPE_INCIDENT_LABEL[inc.type] ?? inc.type}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${inc.statut === 'OUVERT' ? 'bg-red-100 text-red-700' : inc.statut === 'EN_COURS' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
                   {inc.statut}
                 </span>
@@ -204,6 +210,9 @@ export function DashboardInterne() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
           <h3 className="font-semibold text-gray-700 mb-4 text-sm">Consommation GE mensuelle (kWh)</h3>
+          {!(d.consoMensuelle?.some((m: { ge?: number; ceet?: number }) => (m.ge ?? 0) + (m.ceet ?? 0) > 0)) ? (
+            <p className="flex h-[220px] items-center justify-center text-sm text-gray-400">Aucune consommation enregistrée sur la période.</p>
+          ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={d.consoMensuelle || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -214,6 +223,7 @@ export function DashboardInterne() {
               <Bar dataKey="ceet" fill="#0E7C6B" name="CEET" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">

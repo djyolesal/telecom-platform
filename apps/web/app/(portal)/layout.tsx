@@ -77,6 +77,12 @@ const NAV_ITEMS = [
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
+  // Sur petit écran la barre ouverte écrasait le contenu (2/3 de la largeur) :
+  // repliée par défaut sous 1024 px, et repliée après chaque navigation mobile.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) setSidebarOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
   const router = useRouter();
   const { data: session } = useSession();
   const userRole = (session?.user as { role?: string })?.role || '';
