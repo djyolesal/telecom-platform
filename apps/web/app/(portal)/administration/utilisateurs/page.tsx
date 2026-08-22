@@ -23,6 +23,7 @@ interface User {
   nom: string;
   prenom: string;
   email: string;
+  telephone?: string | null;
   role: string;
   region?: string;
   isActive: boolean;
@@ -93,6 +94,7 @@ function EditModal({ user, onClose }: { user: User; onClose: () => void }) {
     nom: user.nom,
     prenom: user.prenom,
     email: user.email,
+    telephone: user.telephone ?? '',
     role: user.role,
     region: user.region ?? '',
     prestataireId: user.prestataire?.id ?? '',
@@ -113,6 +115,7 @@ function EditModal({ user, onClose }: { user: User; onClose: () => void }) {
       nom: form.nom,
       prenom: form.prenom,
       email: form.email,
+      telephone: form.telephone.trim() || null,
       role: form.role,
       region: form.region || null,
       prestataireId: form.prestataireId || null,
@@ -134,7 +137,8 @@ function EditModal({ user, onClose }: { user: User; onClose: () => void }) {
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="grid grid-cols-2 gap-3">
           <Field label="Prénom" required><Input value={form.prenom} onChange={(e) => set('prenom', e.target.value)} required /></Field>
           <Field label="Nom" required><Input value={form.nom} onChange={(e) => set('nom', e.target.value)} required /></Field>
-          <Field label="Email" required className="col-span-2"><Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required /></Field>
+          <Field label="Email" required><Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required /></Field>
+          <Field label="Téléphone"><Input value={form.telephone} onChange={(e) => set('telephone', e.target.value)} placeholder="+228…" /></Field>
           <Field label="Rôle" required><Select value={form.role} onChange={(e) => set('role', e.target.value)} options={ROLES} /></Field>
           <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="—" /></Field>
           <Field label="Prestataire"><Select value={form.prestataireId} onChange={(e) => set('prestataireId', e.target.value)} options={prestataireOptions} placeholder="(interne)" /></Field>
