@@ -68,6 +68,9 @@ export default function CartePage() {
     queryFn: () => api.get('/sites', { params: { all: true } })
       .then((r) => r.data.data as { id: string; parentTransmissionId?: string | null }[]),
     enabled: modeReseau,
+    // La topologie bouge rarement : 10 min de cache évitent de recharger
+    // 558 sites à chaque montage de la carte.
+    staleTime: 10 * 60_000,
   });
   const etatReseauParSite = useMemo(() => {
     if (!modeReseau) return undefined;
