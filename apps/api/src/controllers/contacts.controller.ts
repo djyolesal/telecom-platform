@@ -4,7 +4,7 @@ import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
-import { normaliserTelephone, envoyerSmsManuel, smsEnvoyesAujourdhui } from '../services/sms.service';
+import { normaliserTelephone, telephoneLocal, envoyerSmsManuel, smsEnvoyesAujourdhui } from '../services/sms.service';
 import { getNum } from '../services/settings.service';
 
 /**
@@ -97,6 +97,81 @@ export async function updateContact(req: Request, res: Response, next: NextFunct
     if ((err as { code?: string }).code === 'P2002') return next(new AppError('Un contact avec ce téléphone existe déjà', 409));
     next(err);
   }
+}
+
+/**
+ * Contrôle de cohérence comptes utilisateurs ↔ fiches contact (option légère,
+ * la fusion des deux référentiels est rangée dans les améliorations
+ * post-bascule). Chaque compte actif est rapproché d'une fiche contact par
+ * email, sinon par téléphone, sinon par nom+prénom, puis on signale les écarts
+ * de numéro et d'email : c'est la dérive silencieuse qui prive un technicien
+ * de ses SMS d'affectation (numéro changé d'un seul côté).
+ */
+export async function getCoherenceContacts(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const [users, contacts] = await Promise.all([
+      prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true, nom: true, prenom: true, email: true, telephone: true, role: true },
+      }),
+      prisma.contact.findMany({ where: { actif: true } }),
+    ]);
+
+    const normEmail = (e?: string | null) => (e ?? '').trim().toLowerCase();
+    const normTel = (t?: string | null) => (t?.trim() ? telephoneLocal(t) : '');
+
+    const parEmail = new Map<string, (typeof contacts)[number]>();
+    const parTel = new Map<string, (typeof contacts)[number]>();
+    const parNom = new Map<string, (typeof contacts)[number]>();
+    for (const c of contacts) {
+      const e = normEmail(c.email);
+      if (e && !parEmail.has(e)) parEmail.set(e, c);
+      const t = normTel(c.telephone);
+      if (t && !parTel.has(t)) parTel.set(t, c);
+      // Nom+prénom dans les deux ordres : les fiches importées d'Excel n'ont
+      // pas toujours le même sens que les comptes.
+      for (const k of [normNom(c.nom + c.prenom), normNom(c.prenom + c.nom)]) {
+        if (k && !parNom.has(k)) parNom.set(k, c);
+      }
+    }
+
+    type Ecart = { champ: 'telephone' | 'email'; compte: string | null; contact: string | null };
+    const rows: {
+      userId: string; userNom: string; userRole: string;
+      contactId: string; contactNom: string; contactSociete: string;
+      critere: 'email' | 'telephone' | 'nom'; ecarts: Ecart[];
+    }[] = [];
+    const utilises = new Set<string>();
+
+    for (const u of users) {
+      const email = normEmail(u.email);
+      const tel = normTel(u.telephone);
+      let critere: 'email' | 'telephone' | 'nom' | null = null;
+      let c = email ? parEmail.get(email) : undefined;
+      if (c) critere = 'email';
+      if (!c && tel) { c = parTel.get(tel); if (c) critere = 'telephone'; }
+      if (!c) { c = parNom.get(normNom(u.nom + u.prenom)); if (c) critere = 'nom'; }
+      if (!c || utilises.has(c.id)) continue;
+      utilises.add(c.id);
+
+      const ecarts: Ecart[] = [];
+      if (normTel(c.telephone) !== tel) {
+        ecarts.push({ champ: 'telephone', compte: u.telephone?.trim() || null, contact: c.telephone });
+      }
+      const emailContact = normEmail(c.email);
+      if (emailContact !== email) {
+        ecarts.push({ champ: 'email', compte: u.email, contact: c.email?.trim() || null });
+      }
+      if (ecarts.length === 0) continue;
+      rows.push({
+        userId: u.id, userNom: `${u.prenom} ${u.nom}`.trim(), userRole: u.role,
+        contactId: c.id, contactNom: `${c.prenom} ${c.nom}`.trim(), contactSociete: c.societe,
+        critere: critere!, ecarts,
+      });
+    }
+
+    res.json({ success: true, data: rows });
+  } catch (err) { next(err); }
 }
 
 export async function deleteContact(req: Request, res: Response, next: NextFunction) {

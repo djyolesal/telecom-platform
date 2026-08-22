@@ -20,6 +20,12 @@ interface Contact {
   toutesSocietes: boolean;
 }
 interface SmsLog { id: string; telephone: string; message: string; evenement: string; statut: string; erreur: string | null; createdAt: string }
+interface Ecart { champ: 'telephone' | 'email'; compte: string | null; contact: string | null }
+interface Coherence {
+  userId: string; userNom: string; userRole: string;
+  contactId: string; contactNom: string; contactSociete: string;
+  critere: 'email' | 'telephone' | 'nom'; ecarts: Ecart[];
+}
 
 const VIDE: Omit<Contact, 'id'> = {
   nom: '', prenom: '', telephone: '', email: '', societe: '', actif: true,
@@ -57,6 +63,10 @@ export default function ContactsPage() {
     queryKey: ['sms-logs'],
     queryFn: () => api.get('/contacts/sms-logs').then((r) => r.data),
     enabled: journalOpen,
+  });
+  const { data: coherence } = useQuery({
+    queryKey: ['contacts-coherence'],
+    queryFn: () => api.get('/contacts/coherence').then((r) => r.data.data as Coherence[]),
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -107,6 +117,8 @@ export default function ContactsPage() {
       />
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</div>}
+
+      {(coherence?.length ?? 0) > 0 && <CoherenceBloc rows={coherence!} />}
 
       {journalOpen && (
         <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4">
@@ -334,6 +346,90 @@ function SmsForm({ selection, contacts, onClose, onSent }: {
         </>
       )}
     </form>
+  );
+}
+
+/**
+ * Écarts compte utilisateur ↔ fiche contact (numéro ou email différent d'un
+ * côté) : la dérive silencieuse type est un technicien qui change de numéro,
+ * corrigé sur une seule des deux fiches — ses SMS d'affectation partent alors
+ * vers l'ancien numéro. Chaque écart s'aligne en un clic, dans le bon sens
+ * (l'email du compte est l'identifiant de connexion : on ne l'écrase jamais
+ * depuis la fiche).
+ */
+function CoherenceBloc({ rows }: { rows: Coherence[] }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const done = () => {
+    queryClient.invalidateQueries({ queryKey: ['contacts-coherence'] });
+    queryClient.invalidateQueries({ queryKey: ['contacts'] });
+  };
+  const versFiche = useMutation({
+    mutationFn: ({ contactId, champ, valeur }: { contactId: string; champ: Ecart['champ']; valeur: string }) =>
+      api.put(`/contacts/${contactId}`, { [champ]: valeur }),
+    onSuccess: () => { done(); toast('Fiche contact alignée sur le compte.', 'success'); },
+    onError: (e: { response?: { data?: { error?: string } } }) => toast(e.response?.data?.error || 'Erreur', 'error'),
+  });
+  const versCompte = useMutation({
+    mutationFn: ({ userId, valeur }: { userId: string; valeur: string }) =>
+      api.put(`/users/${userId}`, { telephone: valeur }),
+    onSuccess: () => { done(); toast('Compte aligné sur la fiche contact.', 'success'); },
+    onError: (e: { response?: { data?: { error?: string } } }) => toast(e.response?.data?.error || 'Erreur', 'error'),
+  });
+  const CRITERE: Record<Coherence['critere'], string> = {
+    email: 'rapproché par email', telephone: 'rapproché par téléphone', nom: 'rapproché par nom (à vérifier)',
+  };
+  const nb = rows.reduce((s, r) => s + r.ecarts.length, 0);
+
+  return (
+    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
+        <p className="text-sm font-semibold text-amber-800">
+          {nb} écart{nb > 1 ? 's' : ''} entre comptes utilisateurs et fiches contact
+        </p>
+        <span className="shrink-0 text-xs font-medium text-amber-700 underline">{open ? 'Masquer' : 'Voir le détail'}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          {rows.map((r) => (
+            <div key={r.userId} className="rounded-lg border border-amber-100 bg-white p-3">
+              <p className="text-sm font-medium text-gray-800">
+                {r.userNom} <span className="text-xs text-gray-500">(compte {r.userRole.toLowerCase()})</span>
+                {' '}↔ fiche « {r.contactNom} » · {r.contactSociete}
+                <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{CRITERE[r.critere]}</span>
+              </p>
+              <div className="mt-2 space-y-1.5">
+                {r.ecarts.map((e) => (
+                  <div key={e.champ} className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                    <span className="w-20 shrink-0 font-medium capitalize text-gray-500">{e.champ === 'telephone' ? 'Téléphone' : 'Email'}</span>
+                    <span>compte : <b>{e.compte ?? '(vide)'}</b></span>
+                    <span>fiche : <b>{e.contact ?? '(vide)'}</b></span>
+                    <span className="flex gap-1.5">
+                      {e.compte && (
+                        <button type="button"
+                          onClick={() => versFiche.mutate({ contactId: r.contactId, champ: e.champ, valeur: e.compte! })}
+                          disabled={versFiche.isPending}
+                          className="rounded-md border border-[#1B3F6B]/30 px-2 py-0.5 font-medium text-[#1B3F6B] hover:bg-[#EAF1F8] disabled:opacity-50">
+                          Copier vers la fiche
+                        </button>
+                      )}
+                      {e.champ === 'telephone' && e.contact && (
+                        <button type="button"
+                          onClick={() => versCompte.mutate({ userId: r.userId, valeur: e.contact! })}
+                          disabled={versCompte.isPending}
+                          className="rounded-md border border-[#1B3F6B]/30 px-2 py-0.5 font-medium text-[#1B3F6B] hover:bg-[#EAF1F8] disabled:opacity-50">
+                          Copier vers le compte
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
