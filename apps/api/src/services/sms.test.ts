@@ -130,3 +130,20 @@ describe('numerosEnEchec (statut SMS par numéro)', () => {
     expect(s.has('97589258')).toBe(false);
   });
 });
+
+describe('translittererGsm7', () => {
+  const { translittererGsm7 } = require('./sms.service') as typeof import('./sms.service');
+
+  it("conserve les accents natifs GSM-7 (é è à ù) - le ç minuscule, absent de l'alphabet, retombe sur c", () => {
+    expect(translittererGsm7('Panne détectée à Kpalimé, çà urge')).toBe('Panne détectée à Kpalimé, cà urge');
+  });
+
+  it("translittère les accents hors alphabet (ê î ô û ') sans basculer en UCS-2", () => {
+    expect(translittererGsm7("Arrêt du GE - l'îlot de Lomé est hors service…"))
+      .toBe("Arret du GE - l'ilot de Lomé est hors service...");
+  });
+
+  it('remplace les caractères inconnus par « ? » au lieu de casser le message', () => {
+    expect(translittererGsm7('OK ✅ site rétabli')).toBe('OK ? site rétabli');
+  });
+});

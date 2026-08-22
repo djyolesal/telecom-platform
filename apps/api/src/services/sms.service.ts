@@ -102,6 +102,38 @@ export function telephoneLocal(tel: string): string {
  * Destinataires en numéros LOCAUX (sans +228).
  * NB : si la passerelle attend d'autres noms de champs, seule cette fonction change.
  */
+// ── Translittération GSM-7 ──────────────────────────────────────────────────
+// L'alphabet SMS de base (GSM-7, 160 car./segment) contient é è à ù ç mais PAS
+// ê â î ô û ë ï œ, ni l'apostrophe typographique ni « » - … · . UN SEUL
+// caractère hors alphabet bascule tout le message en UCS-2 (70 car./segment) :
+// coût ×2-3, et certaines passerelles affichent « ? ». On translittère donc
+// vers l'équivalent GSM-7 le plus proche avant chaque envoi réel.
+const GSM7 = new Set(
+  ('@£$¥èéùìòÇØøÅåÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡' +
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑܧ¿abcdefghijklmnopqrstuvwxyzäöñüà\n\r' +
+    '^{}\\[~]|€').split('')
+);
+const TRANSLIT: Record<string, string> = {
+  'â': 'a', 'ê': 'e', 'î': 'i', 'ô': 'o', 'û': 'u', 'ë': 'e', 'ï': 'i', 'ÿ': 'y',
+  'Â': 'A', 'Ê': 'E', 'Î': 'I', 'Ô': 'O', 'Û': 'U', 'Ë': 'E', 'Ï': 'I',
+  'À': 'A', 'È': 'E', 'Ì': 'I', 'Ò': 'O', 'Ù': 'U', 'Ý': 'Y', 'ý': 'y',
+  'œ': 'oe', 'Œ': 'OE', '’': "'", '‘': "'", '“': '"', '”': '"',
+  '«': '"', '»': '"', '–': '-', '—': '-', '…': '...', '·': '-',
+  ' ': ' ', ' ': ' ',
+};
+/** Ramène un texte dans l'alphabet GSM-7 (accents natifs conservés). */
+export function translittererGsm7(texte: string): string {
+  let sortie = '';
+  for (const c of texte) {
+    if (GSM7.has(c)) { sortie += c; continue; }
+    if (TRANSLIT[c] !== undefined) { sortie += TRANSLIT[c]; continue; }
+    // Dernier recours : décomposer l'accent (ą→a) ; sinon « ? ».
+    const nu = c.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    sortie += nu.length === 1 && GSM7.has(nu) ? nu : '?';
+  }
+  return sortie;
+}
+
 async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Promise<string> {
   let res: Response;
   try {
@@ -114,7 +146,7 @@ async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Pro
       body: JSON.stringify({
         sender: env.SMS_SENDER,
         recipients: telephonesLocaux,
-        message,
+        message: translittererGsm7(message),
       }),
       signal: AbortSignal.timeout(15_000),
     });
