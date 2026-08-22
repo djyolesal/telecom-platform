@@ -41,6 +41,18 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     variables: ['site', 'reference'],
   },
   {
+    key: 'sms.tpl.affectationIncident',
+    label: 'Affectation d\'un incident (SMS au technicien)',
+    defaut: '[E&M OpS] Incident {reference} - {site} vous est assigné ({severite}). Merci d\'intervenir.',
+    variables: ['site', 'reference', 'severite'],
+  },
+  {
+    key: 'sms.tpl.affectationMaintenance',
+    label: 'Affectation d\'une maintenance (SMS au technicien)',
+    defaut: '[E&M OpS] Maintenance {reference} - {site} : {equipement}, planifiée le {date}.',
+    variables: ['site', 'reference', 'equipement', 'date'],
+  },
+  {
     key: 'notif.tpl.incidentResoluAuto',
     label: 'Notification - incident résolu sans intervention (techniciens)',
     defaut: 'Incident {reference} - {site} rétabli, résolution constatée par le NOC. Intervention terrain inutile.',
@@ -315,7 +327,7 @@ async function verifierPlafond(nbAEnvoyer: number): Promise<string | null> {
  * (un seul POST passerelle pour le lot, un SmsLog par contact).
  */
 export async function envoyerLotContacts(
-  cibles: { id: string; telephone: string }[],
+  cibles: { id: string | null; telephone: string }[],
   message: string,
   evenement: string
 ): Promise<void> {
@@ -331,7 +343,7 @@ export async function envoyerLotContacts(
       for (const c of cibles) {
         await prisma.smsLog.create({
           data: {
-            telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
+            telephone: normaliserTelephone(c.telephone), contactId: c.id || null, message, evenement,
             statut: 'PLAFOND', erreur: blocage,
           },
         });
@@ -355,13 +367,31 @@ export async function envoyerLotContacts(
     const rejete = statutLot === 'ENVOYE' && echecs.has(telephoneLocal(c.telephone));
     await prisma.smsLog.create({
       data: {
-        telephone: normaliserTelephone(c.telephone), contactId: c.id, message, evenement,
+        telephone: normaliserTelephone(c.telephone), contactId: c.id || null, message, evenement,
         statut: rejete ? 'ECHEC' : statutLot,
         erreur: rejete ? 'Rejeté par la passerelle' : erreurLot,
       },
     });
   }
   logger.info(`[sms] ${evenement} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
+}
+
+/**
+ * SMS direct à un UTILISATEUR (technicien affecté à un incident ou une
+ * maintenance) - troisième canal après l'in-app et le push. Hérite du
+ * plafond journalier, de la translittération GSM-7, du mode SIMULE et du
+ * journal (contactId null = destinataire hors référentiel contacts).
+ * Interrupteur admin : sms.affectations (1 = actif, 0 = coupé).
+ */
+export async function envoyerSmsUtilisateur(userId: string, message: string, evenement: string): Promise<void> {
+  try {
+    if (getNum('sms.affectations', 1) !== 1) return;
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { telephone: true, isActive: true } });
+    if (!u?.isActive || !u.telephone?.trim()) return;
+    await envoyerLotContacts([{ id: null, telephone: u.telephone }], message, evenement);
+  } catch (err) {
+    logger.warn('[sms] envoi utilisateur échoué:', err);
+  }
 }
 
 /**

@@ -117,6 +117,9 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'notifications.situationIntervalleH', label: 'Intervalle de la situation périodique', groupe: 'Notifications', unite: 'h', defaut: 3 },
     { key: 'notifications.situationSeuilH', label: 'Seuil de dépassement signalé', groupe: 'Notifications', unite: 'h', defaut: 1 },
     { key: 'sms.plafondJournalier', label: 'Plafond de SMS par jour (0 = illimité)', groupe: 'Notifications', unite: 'SMS', defaut: 200 },
+    // SMS au technicien quand on lui affecte un incident ou une maintenance
+    // (en plus de l'in-app et du push). 0 = couper ce canal.
+    { key: 'sms.affectations', label: 'SMS au technicien affecté (incident/maintenance)', groupe: 'Notifications', unite: '0/1', defaut: 1 },
     // Vraisemblance des saisies terrain (avertissements à confirmer, pas des blocages)
     { key: 'vraisemblance.margeCuvePct', label: 'Tolérance au-dessus de la capacité cuve', groupe: 'Vraisemblance saisies', unite: '%', defaut: 2 },
     { key: 'vraisemblance.maxHeuresGEParJour', label: 'Marche GE max par jour écoulé', groupe: 'Vraisemblance saisies', unite: 'h/j', defaut: 24 },

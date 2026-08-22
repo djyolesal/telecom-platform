@@ -2,10 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables } from '../utils/perimetre';
 import { notificationService } from '../services/notifications.service';
 
-/** Push in-app/FCM au technicien AFFECTÉ (jamais à celui qui s'auto-assigne) :
- *  l'affectation de maintenance était totalement silencieuse - le technicien
- *  ne la découvrait qu'en ouvrant sa liste. Best-effort, aucun SMS. */
-function notifierAffectationMaintenance(technicienId: string | null | undefined, affectantId: string, m: { id: string; equipement: string; datePlanifiee: Date }, siteNom: string): void {
+/** Triple canal vers le technicien AFFECTÉ (jamais celui qui s'auto-assigne) :
+ *  in-app + push FCM + SMS sur son numéro (gabarit éditable, interrupteur
+ *  sms.affectations, plafond/GSM-7/journal hérités). Best-effort. */
+function notifierAffectationMaintenance(technicienId: string | null | undefined, affectantId: string, m: { id: string; reference?: string | null; equipement: string; datePlanifiee: Date }, siteNom: string): void {
   if (!technicienId || technicienId === affectantId) return;
   const date = new Date(m.datePlanifiee).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   void notificationService.sendToUser(technicienId, {
@@ -13,6 +13,16 @@ function notifierAffectationMaintenance(technicienId: string | null | undefined,
     body: `${m.equipement} - planifiée le ${date}`,
     data: { maintenanceId: m.id, type: 'maintenance_assignee' },
   }).catch(() => { /* best-effort */ });
+  void envoyerSmsUtilisateur(
+    technicienId,
+    rendreTemplate('sms.tpl.affectationMaintenance', {
+      site: siteNom,
+      reference: m.reference ?? m.id.slice(0, 8),
+      equipement: m.equipement,
+      date,
+    }),
+    'MAINTENANCE_AFFECTATION'
+  );
 }
 import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
 import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
@@ -31,7 +41,7 @@ import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { assertOnSite } from '../utils/geofence';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
-import { notifierAction } from '../services/sms.service';
+import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
 import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite } from '../services/vraisemblance.service';
 

@@ -14,7 +14,7 @@ import { io } from '../server';
 import { differenceInMinutes } from 'date-fns';
 import { assertOnSite } from '../utils/geofence';
 import { publicFileUrl } from '../services/storage.service';
-import { notifierAction } from '../services/sms.service';
+import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
 
 // Photos minimum (prises sur place) pour clôturer un incident.
@@ -208,12 +208,22 @@ export async function assignIncident(req: Request, res: Response, next: NextFunc
 
     await auditLog(req.user!.id, 'ASSIGN', 'incidents', incident.id, { technicienId }, req);
 
-    // Notifier le technicien
+    // Notifier le technicien : in-app + push, ET SMS sur son numéro (gabarit
+    // éditable, interrupteur sms.affectations, plafond/GSM-7/journal hérités).
     await notificationService.sendToUser(technicienId, {
       title: `📋 Incident assigné - ${incident.site.nom}`,
       body: `Vous êtes assigné à l'incident : ${incident.description.substring(0, 80)}`,
       data: { incidentId: incident.id, type: 'incident_assigned' },
     });
+    void envoyerSmsUtilisateur(
+      technicienId,
+      rendreTemplate('sms.tpl.affectationIncident', {
+        site: incident.site.nom,
+        reference: incident.reference ?? incident.id.slice(0, 8),
+        severite: incident.severite,
+      }),
+      'INCIDENT_AFFECTATION'
+    );
 
     res.json({ success: true, data: incident });
   } catch (err) { next(err); }
