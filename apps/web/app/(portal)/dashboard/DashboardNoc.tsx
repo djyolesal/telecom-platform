@@ -55,12 +55,12 @@ const ACCES = [
 ];
 
 export function DashboardNoc() {
-  // Push temps réel (poll 60 s en filet).
+  // Push temps réel (poll 5 min en filet).
   useSupervisionSocket();
   const { data: stats } = useQuery({
     queryKey: ['coupures-stats'],
     queryFn: () => api.get('/coupures-reseau/stats').then((r) => r.data.data as Stats),
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
   // File des coupures actives : racines seulement, tri serveur composite
   // (sites entiers d'abord, puis les plus anciennes).
@@ -68,7 +68,7 @@ export function DashboardNoc() {
     queryKey: ['noc-coupures-encours'],
     queryFn: () => api.get('/coupures-reseau', { params: { statut: 'EN_COURS', origine: 'LOCALE', limit: 8 } })
       .then((r) => r.data.data as CoupureRow[]),
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
   const racines = stats ? Math.max(0, stats.enCours - stats.enCoursHeritees) : null;
 
@@ -76,7 +76,7 @@ export function DashboardNoc() {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">Supervision réseau</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Situation en direct - actualisée toutes les 60 s</p>
+        <p className="mt-0.5 text-sm text-gray-500">Situation en direct - mise à jour en temps réel</p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">

@@ -61,7 +61,7 @@ export default function CartePage() {
     queryFn: () => api.get('/coupures-reseau', { params: { statut: 'EN_COURS', limit: 200 } })
       .then((r) => r.data.data as { siteId?: string; technologie?: string }[]),
     enabled: modeReseau,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
   const { data: liens } = useQuery({
     queryKey: ['sites-all'],
@@ -149,7 +149,7 @@ export default function CartePage() {
         subtitle={vueLivraison
           ? `${all.length} site(s) à livrer selon vos plans en cours`
           : modeReseau
-            ? `${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'DOWN').length} coupé(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'PARTIEL').length} partiel(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'IMPACTE').length} aval menacé(s) · actualisé chaque minute`
+            ? `${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'DOWN').length} coupé(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'PARTIEL').length} partiel(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'IMPACTE').length} aval menacé(s) · temps réel`
             : `${features.length} / ${all.length} sites · temps réel`}
       />
 

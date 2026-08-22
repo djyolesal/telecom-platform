@@ -101,7 +101,7 @@ export default function CoupuresReseauPage() {
   const [edition, setEdition] = useState<Coupure | null>(null);
   const debounced = useDebounce(search);
   // Push temps réel : le hook invalide coupures/stats à chaque événement -
-  // le poll 60 s reste en filet de sécurité.
+  // le poll 5 min n'est qu'un filet de sécurité.
   useSupervisionSocket();
 
   interface CoupuresStats {
@@ -112,14 +112,14 @@ export default function CoupuresReseauPage() {
   const { data: stats } = useQuery({
     queryKey: ['coupures-stats'],
     queryFn: () => api.get('/coupures-reseau/stats').then((r) => r.data.data as CoupuresStats),
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
 
   const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au, avecHeritees, aQualifier }],
-    // Poll 60 s (comme la carte NOC) : les coupures OSS arrivent toutes les
-    // 5 min sans action humaine - la liste doit se rafraîchir toute seule.
-    refetchInterval: 60_000,
+    // Filet de sécurité 5 min : le push temps réel (socket) est la voie
+    // principale de rafraîchissement.
+    refetchInterval: 300_000,
     // Changement d'onglet/filtre/page : l'ancien contenu RESTE affiché pendant
     // le chargement du nouveau - fini le squelette qui remonte toute la page.
     placeholderData: keepPreviousData,
