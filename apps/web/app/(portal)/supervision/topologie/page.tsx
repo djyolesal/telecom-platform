@@ -27,6 +27,31 @@ interface SiteNode {
 const correspond = (s: SiteNode, terme: string) =>
   s.nom.toLowerCase().includes(terme) || (s.code ?? '').toLowerCase().includes(terme);
 
+/** Classement d'un résultat : égalité exacte (nom/code) > préfixe > contient.
+ *  Chercher « ANIE » doit pointer ANIE, pas ANIE2 (premier trouvé dans le DOM). */
+const scoreMatch = (s: SiteNode, terme: string): number => {
+  const nom = s.nom.toLowerCase();
+  const code = (s.code ?? '').toLowerCase();
+  if (nom === terme || code === terme) return 3;
+  if (nom.startsWith(terme) || code.startsWith(terme)) return 2;
+  if (nom.includes(terme) || code.includes(terme)) return 1;
+  return 0;
+};
+
+/** Meilleur site pour un terme (score le plus haut, puis nom le plus court). */
+const meilleurMatch = (liste: SiteNode[], terme: string): SiteNode | null => {
+  let best: SiteNode | null = null;
+  let bestScore = 0;
+  for (const s of liste) {
+    const sc = scoreMatch(s, terme);
+    if (!sc) continue;
+    if (sc > bestScore || (sc === bestScore && best && s.nom.length < best.nom.length)) {
+      best = s; bestScore = sc;
+    }
+  }
+  return best;
+};
+
 interface Arbre { racine: SiteNode; taille: number }
 
 /**
@@ -171,23 +196,31 @@ export default function TopologiePage() {
     return arbres.filter((a) => contient(a.racine.id));
   }, [terme, arbres, enfants, parId]);
 
+  // Le MEILLEUR résultat (exact > préfixe > contient) - c'est lui que le
+  // défilement doit viser, pas le premier trouvé dans l'ordre du DOM.
+  const meilleurId = useMemo(
+    () => (terme ? meilleurMatch(sites ?? [], terme)?.id ?? null : null),
+    [terme, sites]
+  );
+
   // AMENER au site trouvé : les chaînes s'ouvrent (cf. ArbreCard) puis on
-  // défile jusqu'au premier nœud en surbrillance - sans ça, la recherche
-  // filtrait les chaînes mais laissait l'utilisateur chercher à l'œil.
+  // défile jusqu'au MEILLEUR résultat (repli : premier nœud en surbrillance).
   useEffect(() => {
     if (!terme) return;
     const t = setTimeout(() => {
-      document.querySelector('[data-site-trouve="1"]')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const cible = (meilleurId && document.querySelector(`[data-site-id="${meilleurId}"]`))
+        || document.querySelector('[data-site-trouve="1"]');
+      cible?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 200); // laisse les chaînes s'ouvrir et se rendre
     return () => clearTimeout(t);
-  }, [terme, arbresVisibles]);
+  }, [terme, arbresVisibles, meilleurId]);
 
   // Site qui existe mais n'appartient à aucune chaîne (liaison non déclarée) :
   // proposer sa fiche plutôt qu'un simple « aucune chaîne ».
   const siteIsole = useMemo(() => {
     if (!terme || arbresVisibles.length > 0) return null;
-    return (sites ?? []).find((s) => correspond(s, terme)) ?? null;
+    // Même classement que le défilement : « ANIE » propose ANIE, pas ANIE2.
+    return meilleurMatch(sites ?? [], terme);
   }, [terme, arbresVisibles, sites]);
 
   if (isLoading) return <Loading />;
@@ -679,6 +712,7 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
           return (
             <g
               key={s.id}
+              data-site-id={s.id}
               data-site-trouve={surligne ? '1' : undefined}
               onClick={() => { if (!clicApresGlissement()) router.push(`/sites/${s.id}`); }}
               className="cursor-pointer"
@@ -719,6 +753,7 @@ function Noeud({ site, enfants, sitesDown, sitesImpactes, terme, profondeur }: {
     <div className={profondeur > 0 ? 'ml-4 border-l-2 border-gray-100 pl-4' : ''}>
       <button
         type="button"
+        data-site-id={site.id}
         data-site-trouve={surligne ? '1' : undefined}
         onClick={() => router.push(`/sites/${site.id}`)}
         className={`my-1 inline-flex items-center gap-2 rounded-lg border px-2.5 py-1 text-sm transition-colors ${
