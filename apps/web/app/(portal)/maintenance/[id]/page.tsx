@@ -122,7 +122,7 @@ export default function MaintenanceDetailPage() {
 
           {/* ── Relevés énergie capturés ── */}
           {m.releves?.length > 0 && (() => {
-            type R = { id: string; source: string; volumeGasoilLitres?: number; gasoilConsommeLitres?: number; heuresFonctGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number; groupe?: { numero: number } };
+            type R = { id: string; source: string; volumeGasoilLitres?: number; gasoilConsommeLitres?: number; heuresFonctGE?: number; indexHeuresGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number; groupe?: { numero: number } };
             const releves: R[] = m.releves;
             const ge = releves.filter((r) => r.source === 'GE').sort((a, b) => (a.groupe?.numero ?? 0) - (b.groupe?.numero ?? 0));
             const autres = releves.filter((r) => r.source !== 'GE');
@@ -145,7 +145,12 @@ export default function MaintenanceDetailPage() {
                   {ge.map((r) => (
                     <li key={r.id} className="flex justify-between gap-4">
                       <span className="font-medium text-gray-700">Heures de fonctionnement GE{r.groupe?.numero ?? ''}</span>
-                      <span className="text-gray-500 text-right">{r.heuresFonctGE != null ? `${fmtNumber(r.heuresFonctGE)} h` : '—'}</span>
+                      {/* Même format que CEET : delta (— si pas de relevé précédent) · index SAISI.
+                          L'index manquait à l'affichage alors qu'il est exigé à la clôture. */}
+                      <span className="text-gray-500 text-right">
+                        {r.heuresFonctGE != null ? `${fmtNumber(r.heuresFonctGE)} h` : '—'}
+                        {r.indexHeuresGE != null ? ` · index ${fmtNumber(r.indexHeuresGE)} h` : ''}
+                      </span>
                     </li>
                   ))}
                   {ge.length > 1 && hasHeures && (
