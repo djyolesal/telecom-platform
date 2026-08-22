@@ -29,6 +29,16 @@ function emitToUser(userId: string, payload: NotificationPayload & { id: string 
 interface CompteServiceFirebase { project_id: string; client_email: string; private_key: string }
 
 let compteService: CompteServiceFirebase | null | undefined; // undefined = pas encore lu
+/** Diagnostic au DÉMARRAGE : l'état du push était invisible jusqu'au premier
+ *  envoi (qui exige déjà un jeton enregistré) - impossible à vérifier au déploiement. */
+export function verifierConfigFcm(): void {
+  if (!env.FIREBASE_SERVICE_ACCOUNT) {
+    logger.info('ℹ️ Push FCM inactif (FIREBASE_SERVICE_ACCOUNT absent) - notifications in-app/socket seules');
+    return;
+  }
+  chargerCompteService(); // log « actif (projet …) » ou l'erreur de lecture
+}
+
 function chargerCompteService(): CompteServiceFirebase | null {
   if (compteService !== undefined) return compteService;
   compteService = null;

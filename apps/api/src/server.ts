@@ -123,6 +123,9 @@ async function bootstrap() {
     setupCronJobs();
     logger.info('✅ Cron jobs démarrés');
 
+    // État du push FCM visible dès le boot (au lieu du premier envoi).
+    (await import('./services/notifications.service')).verifierConfigFcm();
+
     httpServer.listen(env.PORT, () => {
       logger.info(`✅ API démarrée sur le port ${env.PORT}`);
       logger.info(`📚 Swagger : http://localhost:${env.PORT}/docs`);
