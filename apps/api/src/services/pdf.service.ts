@@ -65,6 +65,18 @@ function sectionTitle(doc: PDFKit.PDFDocument, text: string) {
 const fmtDate = (d?: Date | string | null) =>
   d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
+export interface RelevePdf {
+  source: string;
+  groupeNumero?: number | null;
+  indexHeuresGE?: number | null;
+  heuresFonctGE?: number | null;
+  volumeGasoilLitres?: number | null;
+  gasoilConsommeLitres?: number | null;
+  indexCompteur?: number | null;
+  consommationKwh?: number | null;
+  puissanceKva?: number | null;
+}
+
 export interface MaintenancePdfData {
   id: string;
   reference?: string | null;
@@ -74,13 +86,51 @@ export interface MaintenancePdfData {
   statut: string;
   description?: string | null;
   observations?: string | null;
+  analyseEnergie?: string | null;
   datePlanifiee: Date;
   dateDebut?: Date | null;
   dateFin?: Date | null;
   dureeMinutes?: number | null;
+  dureeSuspendueMinutes?: number | null;
+  nomAgentSecurite?: string | null;
   site?: { nom: string; code: string; region: string } | null;
   technicien?: { nom: string; prenom: string } | null;
+  prestataire?: { nom: string } | null;
   pieces?: Array<{ nom: string; reference?: string | null; quantite: number }>;
+  releves?: RelevePdf[];
+  // Images (buffers MinIO) - facultatives, la fiche reste générable sans.
+  photosAvant?: Buffer[];
+  photosApres?: Buffer[];
+  totalPhotosAvant?: number;
+  totalPhotosApres?: number;
+  signatureTechnicien?: Buffer | null;
+  signatureAgent?: Buffer | null;
+}
+
+const fmtN = (v: number | null | undefined, suffixe = '') =>
+  v == null ? '—' : `${Number(v).toLocaleString('fr-FR')}${suffixe}`;
+
+/** Grille de photos 3 par ligne, saut de page automatique. */
+function grillePhotos(doc: PDFKit.PDFDocument, titre: string, photos: Buffer[], total: number) {
+  if (!photos.length) return;
+  sectionTitle(doc, `${titre} (${total})`);
+  const larg = 158; const haut = 118; const gap = 12; const x0 = 50;
+  let x = x0; let y = doc.y;
+  for (const p of photos) {
+    if (y + haut > doc.page.height - 70) { doc.addPage(); y = 50; x = x0; }
+    try {
+      doc.image(p, x, y, { fit: [larg, haut], align: 'center', valign: 'center' });
+      doc.rect(x, y, larg, haut).lineWidth(0.5).strokeColor('#dddddd').stroke();
+    } catch { /* image illisible : on passe */ }
+    x += larg + gap;
+    if (x + larg > doc.page.width - 50) { x = x0; y += haut + gap; }
+  }
+  doc.y = (x === x0 ? y : y + haut + gap);
+  if (total > photos.length) {
+    doc.fontSize(8).fillColor('#888').text(`+ ${total - photos.length} photo(s) supplémentaire(s) consultable(s) dans l'application.`, x0, doc.y);
+    doc.moveDown(0.4);
+  }
+  doc.fillColor('black');
 }
 
 export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buffer> {
@@ -98,10 +148,33 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
     row(doc, 'Équipement', m.equipement);
     row(doc, 'Statut', m.statut);
     row(doc, 'Technicien', m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—');
+    row(doc, 'Prestataire', m.prestataire?.nom ?? 'Interne');
+    if (m.nomAgentSecurite) row(doc, 'Agent de sécurité', m.nomAgentSecurite);
     row(doc, 'Planifiée le', fmtDate(m.datePlanifiee));
     row(doc, 'Début', fmtDate(m.dateDebut));
     row(doc, 'Fin', fmtDate(m.dateFin));
-    row(doc, 'Durée', m.dureeMinutes != null ? `${m.dureeMinutes} min` : '—');
+    row(doc, 'Durée travaillée', m.dureeMinutes != null
+      ? `${m.dureeMinutes} min${m.dureeSuspendueMinutes ? ` (hors ${m.dureeSuspendueMinutes} min de suspension)` : ''}`
+      : '—');
+
+    // Relevés énergie : mêmes informations que la fiche web (index SAISIS +
+    // deltas depuis le relevé précédent quand ils existent).
+    if (m.releves?.length) {
+      sectionTitle(doc, 'Relevés énergie');
+      const ge = m.releves.filter((r) => r.source === 'GE');
+      const gasoil = ge.find((r) => r.gasoilConsommeLitres != null) ?? ge.find((r) => r.volumeGasoilLitres != null);
+      if (gasoil) {
+        row(doc, 'Gasoil', `${fmtN(gasoil.gasoilConsommeLitres, ' L consommés')} · cuve ${fmtN(gasoil.volumeGasoilLitres, ' L')}`);
+      }
+      for (const r of ge) {
+        row(doc, `GE n°${r.groupeNumero ?? ''}`, `${fmtN(r.heuresFonctGE, ' h de marche')} · index ${fmtN(r.indexHeuresGE, ' h')}`);
+      }
+      for (const r of m.releves.filter((x) => x.source !== 'GE')) {
+        if (r.source === 'CEET') row(doc, 'CEET', `${fmtN(r.consommationKwh, ' kWh')} · index ${fmtN(r.indexCompteur)}`);
+        else if (r.source === 'SOLAIRE') row(doc, 'Solaire', fmtN(r.puissanceKva, ' kVA'));
+        else row(doc, r.source, '—');
+      }
+    }
 
     if (m.description) {
       sectionTitle(doc, 'Description');
@@ -111,12 +184,40 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
       sectionTitle(doc, 'Observations');
       doc.fontSize(10).fillColor('#111').text(m.observations, { align: 'justify' });
     }
+    if (m.analyseEnergie) {
+      sectionTitle(doc, 'Analyse énergie');
+      doc.fontSize(10).fillColor('#111').text(m.analyseEnergie, { align: 'justify' });
+    }
 
     if (m.pieces?.length) {
       sectionTitle(doc, 'Pièces de rechange');
       m.pieces.forEach((p) =>
         row(doc, `${p.quantite}× ${p.nom}`, p.reference ? `Réf. ${p.reference}` : '')
       );
+    }
+
+    grillePhotos(doc, 'Photos avant travaux', m.photosAvant ?? [], m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0));
+    grillePhotos(doc, 'Photos après travaux', m.photosApres ?? [], m.totalPhotosApres ?? (m.photosApres?.length ?? 0));
+
+    // Signatures côte à côte (technicien / agent de sécurité).
+    if (m.signatureTechnicien || m.signatureAgent) {
+      sectionTitle(doc, 'Signatures');
+      const y = doc.y;
+      if (m.signatureTechnicien) {
+        try {
+          doc.image(m.signatureTechnicien, 50, y, { fit: [180, 70] });
+          doc.fontSize(9).fillColor('#666').text(
+            `Technicien : ${m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : ''}`, 50, y + 74);
+        } catch { /* signature illisible */ }
+      }
+      if (m.signatureAgent) {
+        try {
+          doc.image(m.signatureAgent, 300, y, { fit: [180, 70] });
+          doc.fontSize(9).fillColor('#666').text(`Agent de sécurité : ${m.nomAgentSecurite ?? ''}`, 300, y + 74);
+        } catch { /* signature illisible */ }
+      }
+      doc.y = y + 92;
+      doc.fillColor('black');
     }
 
     doc.moveDown(2);
