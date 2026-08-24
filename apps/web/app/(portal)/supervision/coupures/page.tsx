@@ -99,6 +99,9 @@ export default function CoupuresReseauPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [edition, setEdition] = useState<Coupure | null>(null);
+  // Tri d'en-tête DÉLÉGUÉ au serveur : la pagination est côté API, un tri
+  // local ne réordonnerait que les 20 lignes affichées. null = tri composite.
+  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const debounced = useDebounce(search);
   // Push temps réel : le hook invalide coupures/stats à chaque événement -
   // le poll 5 min n'est qu'un filet de sécurité.
@@ -116,7 +119,7 @@ export default function CoupuresReseauPage() {
   });
 
   const { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au, avecHeritees, aQualifier }],
+    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au, avecHeritees, aQualifier, tri }],
     // Filet de sécurité 5 min : le push temps réel (socket) est la voie
     // principale de rafraîchissement.
     refetchInterval: 300_000,
@@ -135,6 +138,7 @@ export default function CoupuresReseauPage() {
         origine: debounced ? undefined : 'LOCALE',
         a_qualifier: aQualifier ? '1' : undefined,
         date_debut: du || undefined, date_fin: au || undefined,
+        tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
       },
     }).then((r) => r.data),
   });
@@ -435,7 +439,11 @@ export default function CoupuresReseauPage() {
         : rows.length === 0 ? <EmptyState title="Aucune coupure" hint="Saisissez une coupure ou importez le rapport de supervision." />
         : (
           <>
-            <DataTable columns={columns} data={lignes} maxHeight="65vh" onRowClick={peutEcrire ? (c) => setEdition(c) : undefined} />
+            <DataTable
+              columns={columns} data={lignes} maxHeight="65vh"
+              onRowClick={peutEcrire ? (c) => setEdition(c) : undefined}
+              serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }}
+            />
             <Pagination meta={meta} onChange={setPage} />
           </>
         )}

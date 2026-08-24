@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
+import { triListe } from '../utils/triListe';
 import { auditLog } from '../services/audit.service';
 import { cacheService } from '../services/cache.service';
 import { calculerStockSite } from '../utils/calculator';
@@ -113,11 +114,31 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
       return res.json({ success: true, data: sites });
     }
 
+    // Tri d'en-tête délégué (liste blanche — l'ancien `sort` libre partait tel
+    // quel dans Prisma : une clé inconnue faisait un 500) ; défaut : nom.
+    const triExplicite = triListe(
+      { tri: req.query.tri ?? sort, sens: req.query.sens },
+      {
+        nom: (s) => ({ nom: s }),
+        region: (s) => ({ region: s }),
+        ville: (s) => ({ ville: s }),
+        powerConfig: (s) => ({ powerConfig: s }),
+        statutGE: (s) => ({ statutGE: s }),
+        puissanceGEkva: (s) => ({ puissanceGEkva: s }),
+        // Colonnes optionnelles (catalogue /config).
+        typePylone: (s) => ({ typePylone: s }),
+        cuveVolumeLitres: (s) => ({ cuveVolumeLitres: s }),
+        telephoneSite: (s) => ({ telephoneSite: s }),
+        gardiennage: (s) => ({ societeGardiennage: s }),
+      },
+      { nom: 'asc' }
+    );
+
     const { data, meta } = await paginate(
       prisma.site,
       {
         where,
-        orderBy: { [sort]: 'asc' },
+        orderBy: triExplicite ?? { nom: 'asc' },
         // La marque GE vit sur les groupes (pas sur le site) : nécessaire à la
         // colonne optionnelle « Marque GE » de la liste web.
         include: { groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, marque: true } } },

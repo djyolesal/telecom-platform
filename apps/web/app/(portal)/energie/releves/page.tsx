@@ -106,16 +106,20 @@ export default function RelevesPage() {
   const [search, setSearch] = useState('');
   const [du, setDu] = useState('');
   const [au, setAu] = useState('');
+  // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
+  // réordonnerait que la page affichée). null = relevés récents d'abord.
+  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const debounced = useDebounce(search);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['releves', { page, source, debounced, du, au }],
+    queryKey: ['releves', { page, source, debounced, du, au, tri }],
     queryFn: () => api.get('/releves', {
       params: {
         page, limit: 30,
         source: source || undefined,
         search: debounced || undefined,
         date_debut: du || undefined, date_fin: au || undefined,
+        tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
       },
     }).then((r) => r.data),
     placeholderData: keepPreviousData,
@@ -128,9 +132,11 @@ export default function RelevesPage() {
   const columns: Column<Passage>[] = [
     { key: 'siteNom', header: 'Site', render: (p) => <span className="font-medium text-gray-800">{p.siteNom}</span> },
     { key: 'dateReleve', header: 'Date', render: (p) => fmtDate(p.dateReleve) },
-    { key: 'provenance', header: 'Provenance', render: (p) => <Badge className={PROVENANCE_COLOR[p.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{p.provenance ?? '—'}</Badge> },
+    // Provenance et jauge : calculées côté client (maintenance liée, fusion GE)
+    // → pas de tri serveur possible.
+    { key: 'provenance', header: 'Provenance', sortable: false, render: (p) => <Badge className={PROVENANCE_COLOR[p.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{p.provenance ?? '—'}</Badge> },
     { key: 'technicien', header: 'Technicien', defaultHidden: true, render: (p) => p.technicien ?? '—' },
-    { key: 'jaugeLitres', header: 'Jauge cuve (L)', align: 'right', render: (p) => p.jaugeLitres != null ? fmtNumber(p.jaugeLitres) : '—' },
+    { key: 'jaugeLitres', header: 'Jauge cuve (L)', align: 'right', sortable: false, render: (p) => p.jaugeLitres != null ? fmtNumber(p.jaugeLitres) : '—' },
     { key: 'gasoilConsommeLitres', header: 'Gasoil conso (L)', align: 'right', render: (p) => p.gasoilConsommeLitres != null ? fmtNumber(p.gasoilConsommeLitres) : '—' },
     { key: 'indexGE', header: 'Index GE (h)', align: 'right', sortable: false, render: (p) => listeGE(p, 'index', '') },
     { key: 'marcheGE', header: 'Marche GE (h)', align: 'right', sortable: false, render: (p) => listeGE(p, 'marche', '') },
@@ -183,7 +189,8 @@ export default function RelevesPage() {
         <EmptyState title="Aucun relevé" />
       ) : (
         <>
-          <DataTable columns={columns} data={passages} maxHeight="65vh" onRowClick={(p) => router.push(`/energie/releves/${p.id}`)} />
+          <DataTable columns={columns} data={passages} maxHeight="65vh" onRowClick={(p) => router.push(`/energie/releves/${p.id}`)}
+            serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}

@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
+import { triListe } from '../utils/triListe';
 import { auditLog } from '../services/audit.service';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission } from '../utils/transmission';
@@ -472,21 +473,45 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   return where;
 }
 
+// Tri délégué par les en-têtes du tableau : liste BLANCHE clé → orderBy Prisma
+// (le tri local du navigateur ne réordonnait que la page affichée). `site` et
+// `region` trient sur la relation ; le reste sur les colonnes brutes.
+const TRIS_COUPURES: Record<string, (sens: 'asc' | 'desc') => Record<string, unknown>> = {
+  site: (s) => ({ site: { nom: s } }),
+  region: (s) => ({ site: { region: s } }),
+  technologie: (s) => ({ technologie: s }),
+  dateDebut: (s) => ({ dateDebut: s }),
+  dateFin: (s) => ({ dateFin: s }),
+  downtimeMinutes: (s) => ({ downtimeMinutes: s }),
+  typeAlarme: (s) => ({ typeAlarme: s }),
+  cause: (s) => ({ cause: s }),
+  frequence: (s) => ({ frequence: s }),
+  secteur: (s) => ({ secteur: s }),
+  causeCategorie: (s) => ({ causeCategorie: s }),
+  actions: (s) => ({ actions: s }),
+  technicienContacte: (s) => ({ technicienContacte: s }),
+  intervenants: (s) => ({ intervenants: s }),
+  observations: (s) => ({ observations: s }),
+  source: (s) => ({ source: s }),
+};
+
 export async function getCoupures(req: Request, res: Response, next: NextFunction) {
   try {
     const { page = '1', limit = '20' } = req.query as Record<string, string>;
     const where = await whereCoupures(req);
+    const triExplicite = triListe(req.query, TRIS_COUPURES, { dateDebut: 'desc' });
     const { data, meta } = await paginate(
       prisma.coupureReseau,
       {
         where,
-        // En cours : tri COMPOSITE — les sites entiers d'abord (l'ordre
+        // Tri d'en-tête s'il est demandé (départage stable par début). Sinon,
+        // en cours : tri COMPOSITE — les sites entiers d'abord (l'ordre
         // alphabétique inverse donne SITE > 5G > … > 2G, du plus large au
         // plus étroit), puis les plus ANCIENNES en tête dans chaque groupe.
         // Sinon : chronologie inverse classique.
-        orderBy: req.query.statut === 'EN_COURS'
+        orderBy: triExplicite ?? (req.query.statut === 'EN_COURS'
           ? [{ technologie: 'desc' as const }, { dateDebut: 'asc' as const }]
-          : { dateDebut: 'desc' as const },
+          : { dateDebut: 'desc' as const }),
         include: {
           site: { select: { nom: true, region: true } },
           coupureOrigine: { select: { id: true, site: { select: { nom: true } } } },

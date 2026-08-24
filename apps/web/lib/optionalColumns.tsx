@@ -51,6 +51,8 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
   },
   {
     key: 'marqueGE', header: 'Marque GE', description: 'Marque des groupes électrogènes du site',
+    // La marque vit sur les groupes (relation multiple) : pas de tri serveur possible.
+    sortable: false,
     sortValue: (s: SiteOptionnel) => s.groupes?.find((g) => g.marque)?.marque ?? null,
     render: (s: SiteOptionnel) => {
       const marques = (s.groupes ?? []).map((g) => g.marque).filter((m): m is string => !!m);

@@ -39,11 +39,17 @@ export default function IncidentsPage() {
   const [severite, setSeverite] = useState('');
   const [statut, setStatut] = useState('');
   const [region, setRegion] = useState('');
+  // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
+  // réordonnerait que la page affichée). null = tri métier par défaut.
+  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['incidents', { page, type, severite, statut, region }],
+    queryKey: ['incidents', { page, type, severite, statut, region, tri }],
     queryFn: () =>
-      api.get('/incidents', { params: { page, limit: 20, type: type || undefined, severite: severite || undefined, statut: statut || undefined, region: region || undefined } }).then((r) => r.data),
+      api.get('/incidents', { params: {
+        page, limit: 20, type: type || undefined, severite: severite || undefined, statut: statut || undefined, region: region || undefined,
+        tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
+      } }).then((r) => r.data),
   });
 
   const rows: Incident[] = data?.data ?? [];
@@ -89,7 +95,8 @@ export default function IncidentsPage() {
         <EmptyState title="Aucun incident" />
       ) : (
         <>
-          <DataTable columns={columns} data={rows} onRowClick={(i) => router.push(`/incidents/${i.id}`)} />
+          <DataTable columns={columns} data={rows} onRowClick={(i) => router.push(`/incidents/${i.id}`)}
+            serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}

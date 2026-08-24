@@ -43,14 +43,20 @@ export default function SitesPage() {
   const [statutGe, setStatutGe] = useState('');
   const [powerConfig, setPowerConfig] = useState('');
   const [showImport, setShowImport] = useState(false);
+  // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
+  // réordonnerait que la page affichée). null = tri par nom.
+  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const debouncedSearch = useDebounce(search);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sites', { page, debouncedSearch, region, statutGe, powerConfig }],
+    queryKey: ['sites', { page, debouncedSearch, region, statutGe, powerConfig, tri }],
     queryFn: () =>
       api
         .get('/sites', {
-          params: { page, limit: 20, search: debouncedSearch || undefined, region: region || undefined, statut_ge: statutGe || undefined, power_config: powerConfig || undefined },
+          params: {
+            page, limit: 20, search: debouncedSearch || undefined, region: region || undefined, statut_ge: statutGe || undefined, power_config: powerConfig || undefined,
+            tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
+          },
         })
         .then((r) => r.data),
   });
@@ -113,7 +119,8 @@ export default function SitesPage() {
         <EmptyState title="Aucun site" hint="Ajustez les filtres ou créez un nouveau site." />
       ) : (
         <>
-          <DataTable columns={columns} data={sites} onRowClick={(s) => router.push(`/sites/${s.id}`)} />
+          <DataTable columns={columns} data={sites} onRowClick={(s) => router.push(`/sites/${s.id}`)}
+            serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}

@@ -32,6 +32,7 @@ import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
 import { dateBornee } from '../utils/dates';
 import { paginate } from '../utils/paginator';
+import { triListe } from '../utils/triListe';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf, generateBonMouvementPdf } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
@@ -249,9 +250,27 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       prestataire: { select: { id: true, nom: true } },
       _count: { select: { photos: true } },
     };
+    // Tri d'en-tête délégué (liste blanche) ; défaut : planification récente.
+    const triExplicite = triListe(req.query, {
+      reference: (s) => ({ reference: s }),
+      site: (s) => ({ site: { nom: s } }),
+      equipement: (s) => ({ equipement: s }),
+      type: (s) => ({ type: s }),
+      categorie: (s) => ({ categorie: s }),
+      prestataire: (s) => ({ prestataire: { nom: s } }),
+      statut: (s) => ({ statut: s }),
+      technicien: (s) => ({ technicien: { nom: s } }),
+      datePlanifiee: (s) => ({ datePlanifiee: s }),
+      // Colonnes optionnelles (catalogue /config).
+      region: (s) => ({ site: { region: s } }),
+      dateDebut: (s) => ({ dateDebut: s }),
+      dateFin: (s) => ({ dateFin: s }),
+      dureeMinutes: (s) => ({ dureeMinutes: s }),
+    }, { datePlanifiee: 'desc' });
+
     const { data, meta } = await paginate(
       prisma.maintenance,
-      { where, orderBy: { datePlanifiee: 'desc' }, include },
+      { where, orderBy: triExplicite ?? { datePlanifiee: 'desc' }, include },
       { page: parseInt(page), limit: parseInt(limit) }
     );
 

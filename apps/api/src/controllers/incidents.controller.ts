@@ -7,6 +7,7 @@ import { cloturerHeriteesRecursif } from './coupuresReseau.controller';
 import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
+import { triListe } from '../utils/triListe';
 import { auditLog } from '../services/audit.service';
 import { notificationService } from '../services/notifications.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
@@ -40,11 +41,22 @@ export async function getIncidents(req: Request, res: Response, next: NextFuncti
     if (isRestreint(perimetre)) where.site = { ...(where.site as object ?? {}), ...perimetre };
     if (region) where.site = { ...(where.site as object ?? {}), region };
 
+    // Tri d'en-tête délégué (liste blanche) ; défaut : sévérité puis récence.
+    const triExplicite = triListe(req.query, {
+      reference: (s) => ({ reference: s }),
+      site: (s) => ({ site: { nom: s } }),
+      type: (s) => ({ type: s }),
+      severite: (s) => ({ severite: s }),
+      statut: (s) => ({ statut: s }),
+      technicien: (s) => ({ technicien: { nom: s } }),
+      dateOuverture: (s) => ({ dateOuverture: s }),
+    }, { dateOuverture: 'desc' });
+
     const { data, meta } = await paginate(
       prisma.incident,
       {
         where,
-        orderBy: [{ severite: 'asc' }, { dateOuverture: 'desc' }],
+        orderBy: triExplicite ?? [{ severite: 'asc' }, { dateOuverture: 'desc' }],
         include: {
           site: { select: { nom: true, code: true, region: true } },
           technicien: { select: { nom: true, prenom: true } },

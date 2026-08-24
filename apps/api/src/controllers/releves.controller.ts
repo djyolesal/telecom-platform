@@ -6,6 +6,7 @@ import { AppError } from '../utils/AppError';
 import { dateBornee } from '../utils/dates';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { paginate } from '../utils/paginator';
+import { triListe } from '../utils/triListe';
 import { auditLog } from '../services/audit.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
@@ -62,11 +63,23 @@ export async function getReleves(req: Request, res: Response, next: NextFunction
       };
     }
 
+    // Tri d'en-tête délégué (liste blanche) ; défaut : relevés récents.
+    // `siteNom`/`technicien` sont les clés d'affichage de la page web.
+    const triExplicite = triListe(req.query, {
+      siteNom: (s) => ({ site: { nom: s } }),
+      dateReleve: (s) => ({ dateReleve: s }),
+      technicien: (s) => ({ technicien: { nom: s } }),
+      gasoilConsommeLitres: (s) => ({ gasoilConsommeLitres: s }),
+      indexCompteur: (s) => ({ indexCompteur: s }),
+      consommationKwh: (s) => ({ consommationKwh: s }),
+      puissanceKva: (s) => ({ puissanceKva: s }),
+    }, { dateReleve: 'desc' });
+
     const { data, meta } = await paginate(
       prisma.releveEnergie,
       {
         where,
-        orderBy: { dateReleve: 'desc' },
+        orderBy: triExplicite ?? { dateReleve: 'desc' },
         include: {
           site: { select: { nom: true, code: true, region: true } },
           technicien: { select: { nom: true, prenom: true } },

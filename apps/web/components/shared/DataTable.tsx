@@ -42,6 +42,8 @@ export function DataTable<T>({
   emptyMessage = 'Aucune donnée à afficher',
   maxHeight,
   toolbar = true,
+  serverSort,
+  onServerSort,
 }: {
   columns: Column<T>[];
   data: T[];
@@ -53,6 +55,14 @@ export function DataTable<T>({
   maxHeight?: string;
   /** false = masque la barre d'outils (compteur, densité, colonnes) - petits tableaux. */
   toolbar?: boolean;
+  /** Tri DÉLÉGUÉ (pagination serveur) : l'état de tri courant, tenu par la page. */
+  serverSort?: { key: string; dir: 1 | -1 } | null;
+  /**
+   * Fourni = le clic d'en-tête remonte {key, dir} à la page (qui interroge
+   * l'API) au lieu de trier localement — un tri local sur pagination serveur
+   * ne réordonnerait que la page affichée, en le laissant croire global.
+   */
+  onServerSort?: (s: { key: string; dir: 1 | -1 } | null) => void;
 }) {
   // Préférences par page (les clés de colonnes distinguent plusieurs tableaux d'une même page).
   const storageKey = useMemo(
@@ -97,18 +107,23 @@ export function DataTable<T>({
   const sortValueOf = (col: Column<T>, row: T): unknown =>
     col.sortValue ? col.sortValue(row) : (row as Record<string, unknown>)[col.key];
 
+  // Tri délégué : l'état vit chez la page, les lignes arrivent déjà triées.
+  const delegue = !!onServerSort;
+  const sortActif = delegue ? (serverSort ?? null) : sort;
+
   const isSortable = (col: Column<T>): boolean => {
     if (col.sortable === false) return false;
+    if (delegue) return true; // le serveur sait trier même une colonne vide sur cette page
     if (col.sortValue) return true;
     return data.some((r) => (r as Record<string, unknown>)[col.key] != null);
   };
 
   const rows = useMemo(() => {
-    if (!sort) return data;
+    if (delegue || !sort) return data;
     const col = columns.find((c) => c.key === sort.key);
     if (!col) return data;
     return [...data].sort((a, b) => compare(sortValueOf(col, a), sortValueOf(col, b)) * sort.dir);
-  }, [data, sort, columns]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, sort, columns, delegue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleCol = (key: string) => {
     const next = new Set(hidden);
@@ -185,11 +200,17 @@ export function DataTable<T>({
             <tr className="border-b border-gray-100">
               {visibles.map((c) => {
                 const triable = isSortable(c);
-                const actif = sort?.key === c.key;
+                const actif = sortActif?.key === c.key;
+                const cycle = () => {
+                  // asc → desc → tri par défaut
+                  const suivant = actif && sortActif!.dir === -1 ? null : { key: c.key, dir: (actif ? -1 : 1) as 1 | -1 };
+                  if (delegue) onServerSort!(suivant);
+                  else setSort(suivant);
+                };
                 return (
                   <th
                     key={c.key}
-                    onClick={triable ? () => setSort(actif && sort!.dir === -1 ? null : { key: c.key, dir: actif ? -1 : 1 }) : undefined}
+                    onClick={triable ? cycle : undefined}
                     className={cn(
                       'sticky top-0 z-10 bg-gray-50/95 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide backdrop-blur',
                       actif ? 'text-[#1B3F6B]' : 'text-gray-500',
@@ -200,7 +221,7 @@ export function DataTable<T>({
                   >
                     <span className="inline-flex items-center gap-0.5">
                       {c.header}
-                      {actif && (sort!.dir === 1 ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                      {actif && (sortActif!.dir === 1 ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                     </span>
                   </th>
                 );

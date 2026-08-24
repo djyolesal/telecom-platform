@@ -48,6 +48,9 @@ export default function MaintenancePage() {
   const [type, setType] = useState('');
   const [statut, setStatut] = useState('');
   const [prestataireId, setPrestataireId] = useState('');
+  // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
+  // réordonnerait que la page affichée). null = tri métier par défaut.
+  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const debouncedSearch = useDebounce(search);
 
   const { data: prestataires } = useQuery({
@@ -57,9 +60,12 @@ export default function MaintenancePage() {
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['maintenances', { page, debouncedSearch, type, statut, prestataireId }],
+    queryKey: ['maintenances', { page, debouncedSearch, type, statut, prestataireId, tri }],
     queryFn: () =>
-      api.get('/maintenances', { params: { page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined } }).then((r) => r.data),
+      api.get('/maintenances', { params: {
+        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined,
+        tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
+      } }).then((r) => r.data),
   });
 
   const rows: Maintenance[] = data?.data ?? [];
@@ -128,7 +134,8 @@ export default function MaintenancePage() {
         <EmptyState title="Aucune maintenance" />
       ) : (
         <>
-          <DataTable columns={columns} data={rows} onRowClick={(m) => router.push(`/maintenance/${m.id}`)} />
+          <DataTable columns={columns} data={rows} onRowClick={(m) => router.push(`/maintenance/${m.id}`)}
+            serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}
