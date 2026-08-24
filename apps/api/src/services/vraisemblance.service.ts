@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { getNum } from './settings.service';
+import { configCuveDuSite } from './cuve.service';
 
 /**
  * Contrôles de vraisemblance des saisies terrain (relevés énergie, dépotages).
@@ -237,6 +238,10 @@ export async function contexteSaisieSite(siteId: string, groupeIds: string[]) {
 
   return {
     cuveVolumeLitres: site?.cuveVolumeLitres != null ? Number(site.cuveVolumeLitres) : null,
+    // Config de conversion hauteur → litres : embarquée dans le contexte de
+    // saisie (donc dans le cache hors-ligne du mobile) pour que le formulaire
+    // de clôture convertisse la hauteur mesurée sans réseau.
+    cuve: await configCuveDuSite(siteId),
     dernierNiveauCuve: niveau ? { valeur: niveau.valeur, date: niveau.date.toISOString() } : null,
     dernierIndexCeet: ceet?.indexCompteur != null ? { valeur: Number(ceet.indexCompteur), date: ceet.dateReleve.toISOString() } : null,
     dernierIndexGE: indexGE,

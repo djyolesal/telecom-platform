@@ -33,6 +33,7 @@ import { pick } from '../utils/pick';
 import { dateBornee } from '../utils/dates';
 import { paginate } from '../utils/paginator';
 import { triListe } from '../utils/triListe';
+import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf, generateBonMouvementPdf } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
@@ -917,7 +918,15 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
           const techId = existing.technicienId ?? req.user!.id;
           for (const source of sources) {
             if (source === 'GE') {
-              const tank = num(e.volumeGasoilLitres);
+              // Hauteur mesurée envoyée par le mobile : cuve calculable → le
+              // serveur convertit et FAIT FOI pour le niveau (même moteur que
+              // le client) ; la mesure brute est conservée sur le relevé.
+              const hauteurCuveCm = num(e.hauteurCuveCm);
+              let tank = num(e.volumeGasoilLitres);
+              if (hauteurCuveCm != null) {
+                const calc = litresPourHauteur(await configCuveDuSite(existing.siteId), hauteurCuveCm);
+                if (calc != null) tank = calc;
+              }
               const geHours = (e.geHours ?? {}) as Record<string, unknown>;
               const groupes = existing.site.groupes ?? [];
               let gasoilConso: number | null = null;
@@ -962,6 +971,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
                 }
                 if (first) {
                   data.volumeGasoilLitres = tank;
+                  data.hauteurCuveCm = hauteurCuveCm;
                   data.gasoilConsommeLitres = gasoilConso;
                   data.coutEstime = gasoilCost;
                   first = false;

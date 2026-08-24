@@ -32,6 +32,135 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     _tachesFuture = repo.getTachesPreventives(widget.siteId);
   }
 
+  /// Mini-fiche de campagne : forme + dimensions internes mesurees, envoyees
+  /// au serveur (en ligne uniquement). Le volume nominal est facultatif.
+  Future<void> _mesurerCuve(Site s) async {
+    var forme = s.formeCuve ?? 'CYLINDRE_COUCHE';
+    final longueur = TextEditingController();
+    final largeur = TextEditingController();
+    final hauteur = TextEditingController();
+    final diametre = TextEditingController();
+    final volume = TextEditingController(
+        text: s.cuveVolumeLitres?.toStringAsFixed(0) ?? '');
+    const numKb = TextInputType.numberWithOptions(decimal: true);
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(
+              left: 16, right: 16, top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Mesurer la cuve',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text(
+                  'Dimensions INTERNES en cm, au metre ruban. Elles activent le calcul automatique hauteur -> litres.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: forme,
+                decoration: const InputDecoration(labelText: 'Forme de la cuve'),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'CYLINDRE_COUCHE', child: Text('Cylindre couche')),
+                  DropdownMenuItem(
+                      value: 'RECTANGULAIRE', child: Text('Rectangulaire')),
+                ],
+                onChanged: (v) => setSheet(() => forme = v ?? forme),
+              ),
+              const SizedBox(height: 10),
+              if (forme == 'CYLINDRE_COUCHE') ...[
+                TextField(
+                    controller: diametre,
+                    keyboardType: numKb,
+                    decoration: const InputDecoration(
+                        labelText: 'Diametre interne (cm)')),
+                const SizedBox(height: 10),
+                TextField(
+                    controller: longueur,
+                    keyboardType: numKb,
+                    decoration: const InputDecoration(
+                        labelText: 'Longueur interne (cm)')),
+              ] else ...[
+                TextField(
+                    controller: longueur,
+                    keyboardType: numKb,
+                    decoration: const InputDecoration(
+                        labelText: 'Longueur interne (cm)')),
+                const SizedBox(height: 10),
+                TextField(
+                    controller: largeur,
+                    keyboardType: numKb,
+                    decoration: const InputDecoration(
+                        labelText: 'Largeur interne (cm)')),
+                const SizedBox(height: 10),
+                TextField(
+                    controller: hauteur,
+                    keyboardType: numKb,
+                    decoration: const InputDecoration(
+                        labelText: 'Hauteur interne (cm)')),
+              ],
+              const SizedBox(height: 10),
+              TextField(
+                  controller: volume,
+                  keyboardType: numKb,
+                  decoration: const InputDecoration(
+                      labelText: 'Volume nominal (L, plaque de la cuve)')),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Annuler')),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Enregistrer')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    double? n(TextEditingController c) =>
+        double.tryParse(c.text.trim().replaceAll(',', '.'));
+    final data = <String, dynamic>{
+      'formeCuve': forme,
+      if (forme == 'CYLINDRE_COUCHE') ...{
+        'cuveDiametreCm': n(diametre),
+        'cuveLongueurCm': n(longueur),
+      } else ...{
+        'cuveLongueurCm': n(longueur),
+        'cuveLargeurCm': n(largeur),
+        'cuveHauteurCm': n(hauteur),
+      },
+      if (n(volume) != null) 'cuveVolumeLitres': n(volume),
+    };
+    try {
+      await context.read<SiteRepository>().majCuve(s.id, data);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Cuve enregistree - conversion hauteur -> litres active.')));
+      setState(() =>
+          _siteFuture = context.read<SiteRepository>().getSite(widget.siteId));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Envoi impossible (connexion requise) - reessayez en zone couverte.')));
+    }
+  }
+
   Color _tacheColor(String s) {
     switch (s) {
       case 'EN_RETARD':
@@ -130,6 +259,16 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                       if (s.cuveDimensions != null &&
                           s.cuveDimensions!.isNotEmpty)
                         _row('Dimensions cuve', s.cuveDimensions!),
+                      // Campagne cuves : mesurer sur place (metre ruban) pour
+                      // activer la conversion hauteur -> litres du site.
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () => _mesurerCuve(s),
+                          icon: const Icon(Icons.straighten, size: 18),
+                          label: const Text('Mesurer la cuve'),
+                        ),
+                      ),
                       _row('Agent de sécurité', s.hasGardien ? 'Oui' : 'Non'),
                       if (s.societeGardiennage != null &&
                           s.societeGardiennage!.isNotEmpty)

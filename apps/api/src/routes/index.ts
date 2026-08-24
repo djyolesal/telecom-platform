@@ -207,6 +207,8 @@ router.get('/sites/cuves/couverture', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN
 router.get('/sites/:id', sitesCtrl.getSiteById);
 router.put('/sites/:id', rbac(['MANAGER','ADMIN']), sitesCtrl.updateSite);
 router.put('/sites/:id/baremage', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceBaremage);
+// Campagne terrain : le technicien mesure la cuve à la première visite.
+router.put('/sites/:id/cuve', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.updateCuveSite);
 router.put('/sites/:id/groupes', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceSiteGroupes);
 router.delete('/sites/:id', rbac(['ADMIN']), sitesCtrl.deleteSite);
 router.get('/sites/:id/transmission', sitesCtrl.getSiteTransmission);

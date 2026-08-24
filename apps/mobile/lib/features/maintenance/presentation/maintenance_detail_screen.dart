@@ -665,6 +665,9 @@ class _CloseSheet extends StatefulWidget {
 class _CloseSheetState extends State<_CloseSheet> {
   final _obs = TextEditingController();
   final _gasoil = TextEditingController();
+  // Hauteur de gasoil mesurée (cm) : si la cuve du site est calculable, le
+  // volume en litres est déduit automatiquement (le serveur refait le calcul).
+  final _hauteurCuve = TextEditingController();
   final _heures = TextEditingController();
   final _index = TextEditingController();
   final _puissance = TextEditingController();
@@ -695,6 +698,7 @@ class _CloseSheetState extends State<_CloseSheet> {
     for (final c in [
       _obs,
       _gasoil,
+      _hauteurCuve,
       _heures,
       _index,
       _puissance,
@@ -739,6 +743,29 @@ class _CloseSheetState extends State<_CloseSheet> {
     return v == null
         ? null
         : 'Dernier index connu : ${_fmtV(v.valeur)} h${_fmtDate(v.date)}';
+  }
+
+  /// Hauteur mesurée → volume gasoil auto-rempli (moteur identique au serveur).
+  void _appliquerHauteur() {
+    final cuve = _ctx?.cuve;
+    final h = _num(_hauteurCuve);
+    if (cuve == null || h == null) return;
+    final litres = cuve.litresPourHauteur(h);
+    if (litres != null) _gasoil.text = litres.toStringAsFixed(1);
+  }
+
+  String? _hintHauteur() {
+    final cuve = _ctx?.cuve;
+    if (cuve == null) return null;
+    final h = _num(_hauteurCuve);
+    final max = cuve.hauteurMaxCm;
+    if (h != null && max != null && h > max) {
+      return 'Au-delà de la hauteur de cuve (${max.toStringAsFixed(0)} cm) - volume plafonné.';
+    }
+    final l = h != null ? cuve.litresPourHauteur(h) : null;
+    return l != null
+        ? '≈ ${l.toStringAsFixed(0)} L (calculé automatiquement)'
+        : 'Le volume en litres sera calculé automatiquement.';
   }
 
   String? _hintCeet() {
@@ -898,6 +925,9 @@ class _CloseSheetState extends State<_CloseSheet> {
       }
       energie['volumeGasoilLitres'] =
           _num(_gasoil); // niveau actuel de la cuve (partagée)
+      // Mesure brute : le serveur refait la conversion et fait foi.
+      final hCuve = _num(_hauteurCuve);
+      if (hCuve != null) energie['hauteurCuveCm'] = hCuve;
       final groupes = widget.maintenance.siteGroupes;
       if (groupes.isNotEmpty) {
         final geHours = <String, dynamic>{};
@@ -1128,6 +1158,21 @@ class _CloseSheetState extends State<_CloseSheet> {
                                       color: Colors.blue.shade800)),
                               const SizedBox(height: 10),
                               if (sources.contains('GE')) ...[
+                                if (_ctx?.cuve?.calculable ?? false) ...[
+                                  TextField(
+                                    controller: _hauteurCuve,
+                                    keyboardType: numKb,
+                                    onChanged: (_) =>
+                                        setState(_appliquerHauteur),
+                                    decoration: InputDecoration(
+                                      labelText:
+                                          'Hauteur de gasoil mesurée (cm)',
+                                      helperText: _hintHauteur(),
+                                      helperMaxLines: 2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                ],
                                 TextField(
                                   controller: _gasoil,
                                   keyboardType: numKb,

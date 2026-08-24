@@ -119,7 +119,12 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
     // Mode « tous » (sélecteurs, liste mobile) : pas de pagination (le paginateur
     // plafonne à 200, ce qui tronquerait les sites au-delà).
     if ((req.query.all as string) === 'true') {
-      const sites = await prisma.site.findMany({ where, orderBy: { nom: 'asc' }, take: 2000 });
+      // Barème embarqué : la liste « tous » est le cache hors-ligne du mobile,
+      // qui doit convertir hauteur → litres sans réseau (dépotages, relevés).
+      const sites = await prisma.site.findMany({
+        where, orderBy: { nom: 'asc' }, take: 2000,
+        include: { baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } } },
+      });
       return res.json({ success: true, data: sites });
     }
 
@@ -228,6 +233,44 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
       success: true,
       data: { ...site, groupes, cuve, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250) },
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Campagne terrain : un TECHNICIEN (ou superviseur) renseigne la config de la
+ * cuve du site où il se trouve — forme, dimensions internes mesurées au mètre
+ * ruban, volume nominal lu sur la plaque. Liste blanche restreinte à la cuve
+ * (rien d'autre du site n'est modifiable par ce canal), périmètre vérifié,
+ * audit systématique. Le contrôle de cohérence (écart volume calculé/nominal)
+ * signale les mesures farfelues dans la fiche web.
+ */
+export async function updateCuveSite(req: Request, res: Response, next: NextFunction) {
+  try {
+    await assertSiteInPerimetre(req.user!.id, req.params.id);
+    const site = await prisma.site.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!site) throw new AppError('Site introuvable', 404);
+
+    const b = req.body as Record<string, unknown>;
+    const numOuNull = (v: unknown) => {
+      if (v == null || v === '') return null;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0 || n > 1e5) throw new AppError('Dimension invalide', 400);
+      return n;
+    };
+    const data: Prisma.SiteUncheckedUpdateInput = {};
+    if ('formeCuve' in b) {
+      const f = b.formeCuve ? String(b.formeCuve).toUpperCase() : null;
+      if (f && !['RECTANGULAIRE', 'CYLINDRE_COUCHE'].includes(f)) throw new AppError('formeCuve invalide', 400);
+      data.formeCuve = f as FormeCuve | null;
+    }
+    for (const k of ['cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'cuveVolumeLitres'] as const) {
+      if (k in b) data[k] = numOuNull(b[k]);
+    }
+    if (Object.keys(data).length === 0) throw new AppError('Aucun champ cuve fourni.', 400);
+
+    const updated = await prisma.site.update({ where: { id: site.id }, data });
+    await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { cuve: data }, req);
+    res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }
 

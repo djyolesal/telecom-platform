@@ -1,3 +1,5 @@
+import '../../../core/utils/cuve.dart';
+
 /// Groupe électrogène d'un site (pour la saisie des index horaires par GE).
 class GroupeGE {
   final String id;
@@ -183,6 +185,10 @@ class ContexteSaisie {
   final double maxHeuresGEParJour;
   final double margeCuvePct;
 
+  /// Config de conversion hauteur → litres de la cuve du site (null si le
+  /// serveur ne l'a pas fournie — anciens caches).
+  final ConfigCuve? cuve;
+
   const ContexteSaisie({
     this.cuveVolumeLitres,
     this.dernierNiveauCuve,
@@ -191,6 +197,7 @@ class ContexteSaisie {
     this.dernierIndexGEMono,
     this.maxHeuresGEParJour = 24,
     this.margeCuvePct = 2,
+    this.cuve,
   });
 
   factory ContexteSaisie.fromJson(Map<String, dynamic> j) {
@@ -209,6 +216,9 @@ class ContexteSaisie {
       maxHeuresGEParJour:
           double.tryParse(j['maxHeuresGEParJour']?.toString() ?? '') ?? 24,
       margeCuvePct: double.tryParse(j['margeCuvePct']?.toString() ?? '') ?? 2,
+      cuve: j['cuve'] is Map<String, dynamic>
+          ? ConfigCuve.fromJson(j['cuve'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

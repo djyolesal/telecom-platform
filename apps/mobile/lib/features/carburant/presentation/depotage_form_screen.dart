@@ -12,6 +12,7 @@ import '../../../core/sync/sync_service.dart';
 import '../../../core/widgets/avertissements_dialog.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../../../core/widgets/site_picker.dart';
+import '../../../core/utils/cuve.dart';
 import '../data/depotage_model.dart';
 import '../data/depotage_repository.dart';
 import '../data/depotage_draft.dart';
@@ -35,6 +36,11 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _stockAvant = TextEditingController();
   final _stockApres = TextEditingController();
+  // Hauteurs mesurees (cm) : si la cuve du site est calculable, les stocks en
+  // litres sont deduits automatiquement (le serveur refait la conversion).
+  final _hauteurAvant = TextEditingController();
+  final _hauteurApres = TextEditingController();
+  ConfigCuve? _cuve;
   final _volumeAnnonce = TextEditingController();
   final _fournisseur = TextEditingController();
   final _bon = TextEditingController();
@@ -116,6 +122,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       'agentPresent': _agentPresent,
       'stockAvant': _stockAvant.text,
       'stockApres': _stockApres.text,
+      'hauteurAvant': _hauteurAvant.text,
+      'hauteurApres': _hauteurApres.text,
       'volumeAnnonce': _volumeAnnonce.text,
       'fournisseur': _fournisseur.text,
       'bon': _bon.text,
@@ -168,6 +176,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       _agentPresent = d['agentPresent'] as bool?;
       _stockAvant.text = d['stockAvant'] as String? ?? '';
       _stockApres.text = d['stockApres'] as String? ?? '';
+      _hauteurAvant.text = d['hauteurAvant'] as String? ?? '';
+      _hauteurApres.text = d['hauteurApres'] as String? ?? '';
       _volumeAnnonce.text = d['volumeAnnonce'] as String? ?? '';
       _fournisseur.text = d['fournisseur'] as String? ?? '';
       _bon.text = d['bon'] as String? ?? '';
@@ -195,6 +205,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       _ligneLivraisonId = null;
       _lignes = [];
       _groupes = [];
+      _cuve = null;
+      _hauteurAvant.clear();
+      _hauteurApres.clear();
       for (final c in _geIndex.values) {
         c.dispose();
       }
@@ -239,6 +252,35 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     } finally {
       if (mounted) setState(() => _loadingLignes = false);
     }
+    // Config cuve (conversion hauteur -> litres) : best-effort, en ligne
+    // uniquement - hors-ligne le technicien saisit les litres comme avant.
+    try {
+      final cuve = await repo.getConfigCuve(siteId);
+      if (mounted) setState(() => _cuve = (cuve?.calculable ?? false) ? cuve : null);
+    } catch (_) {
+      if (mounted) setState(() => _cuve = null);
+    }
+  }
+
+  /// Hauteur mesuree -> stock en litres auto-rempli (meme moteur que le serveur).
+  void _appliquerHauteur(TextEditingController hauteur, TextEditingController stock) {
+    final cuve = _cuve;
+    final h = _num(hauteur);
+    if (cuve == null || h == null) return;
+    final litres = cuve.litresPourHauteur(h);
+    if (litres != null) stock.text = litres.toStringAsFixed(1);
+  }
+
+  String? _hintHauteur(TextEditingController hauteur) {
+    final cuve = _cuve;
+    if (cuve == null) return null;
+    final h = _num(hauteur);
+    final max = cuve.hauteurMaxCm;
+    if (h != null && max != null && h > max) {
+      return 'Au-dela de la hauteur de cuve (${max.toStringAsFixed(0)} cm) - volume plafonne.';
+    }
+    final l = h != null ? cuve.litresPourHauteur(h) : null;
+    return l != null ? '= ${l.toStringAsFixed(0)} L (calcule automatiquement)' : null;
   }
 
   /// Volume prévu au plan pour la ligne rattachée - affiché en repère, jamais
@@ -273,6 +315,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     _stockApres.removeListener(_onFieldChanged);
     for (final c in [
       _stockAvant,
+      _hauteurAvant,
+      _hauteurApres,
       _stockApres,
       _volumeAnnonce,
       _fournisseur,
@@ -432,6 +476,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             agentPresent: _agentPresent!,
             stockAvantLitres: _num(_stockAvant),
             stockApresLitres: _num(_stockApres),
+            hauteurAvantCm: _num(_hauteurAvant),
+            hauteurApresCm: _num(_hauteurApres),
             volumeAnnonceLitres: _num(_volumeAnnonce),
             fournisseur: _fournisseur.text.trim(),
             numeroBonLivraison: _bon.text.trim(),
@@ -530,6 +576,21 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
               const SizedBox(height: 14),
             ],
             // ── Jauge cuve : le volume livré est DÉRIVÉ (après − avant) ──
+            if (_cuve != null) ...[
+              TextFormField(
+                controller: _hauteurAvant,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) =>
+                    setState(() => _appliquerHauteur(_hauteurAvant, _stockAvant)),
+                decoration: InputDecoration(
+                  labelText: 'Hauteur AVANT dépotage (cm)',
+                  helperText: _hintHauteur(_hauteurAvant),
+                  prefixIcon: const Icon(Icons.straighten),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             TextFormField(
               controller: _stockAvant,
               keyboardType:
@@ -541,6 +602,21 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                   _num(_stockAvant) == null ? 'Jauge avant requise' : null,
             ),
             const SizedBox(height: 14),
+            if (_cuve != null) ...[
+              TextFormField(
+                controller: _hauteurApres,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) =>
+                    setState(() => _appliquerHauteur(_hauteurApres, _stockApres)),
+                decoration: InputDecoration(
+                  labelText: 'Hauteur APRÈS dépotage (cm)',
+                  helperText: _hintHauteur(_hauteurApres),
+                  prefixIcon: const Icon(Icons.straighten),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             TextFormField(
               controller: _stockApres,
               keyboardType:

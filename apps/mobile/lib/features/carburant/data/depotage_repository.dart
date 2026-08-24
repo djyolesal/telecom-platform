@@ -1,6 +1,7 @@
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/network_info.dart';
 import '../../../core/sync/sync_service.dart';
+import '../../../core/utils/cuve.dart';
 import 'depotage_model.dart';
 
 class DepotageRepository {
@@ -54,12 +55,29 @@ class DepotageRepository {
     );
   }
 
+  /// Config de conversion hauteur → litres de la cuve du site (en ligne
+  /// uniquement — hors-ligne, le technicien saisit les litres comme avant).
+  Future<ConfigCuve?> getConfigCuve(String siteId) async {
+    if (!await _network.isConnected) return null;
+    return _client.request(
+      (dio) => dio.get('/sites/$siteId'),
+      (data) {
+        final d = data['data'];
+        return d is Map<String, dynamic> ? ConfigCuve.fromJson(d) : null;
+      },
+    );
+  }
+
   Future<SubmitResult> create({
     required String siteId,
     required double volumeLitres,
     required bool agentPresent,
     double? stockAvantLitres,
     double? stockApresLitres,
+    // Hauteurs mesurées (cm) : le serveur convertit et fait foi si la cuve
+    // du site est calculable ; les stocks en litres restent le repli.
+    double? hauteurAvantCm,
+    double? hauteurApresCm,
     double? volumeAnnonceLitres,
     String? fournisseur,
     String? numeroBonLivraison,
@@ -111,6 +129,8 @@ class DepotageRepository {
         'dateDepotage': DateTime.now().toUtc().toIso8601String(),
         if (stockAvantLitres != null) 'stockAvantLitres': stockAvantLitres,
         if (stockApresLitres != null) 'stockApresLitres': stockApresLitres,
+        if (hauteurAvantCm != null) 'hauteurAvantCm': hauteurAvantCm,
+        if (hauteurApresCm != null) 'hauteurApresCm': hauteurApresCm,
         if (volumeAnnonceLitres != null)
           'volumeAnnonceLitres': volumeAnnonceLitres,
         if (fournisseur != null && fournisseur.isNotEmpty)

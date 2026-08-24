@@ -87,6 +87,15 @@ class SiteRepository {
     return Site.fromCache(c);
   }
 
+  /// Campagne cuves : le technicien envoie forme + dimensions mesurees.
+  /// En ligne uniquement (leve NetworkException hors reseau).
+  Future<void> majCuve(String id, Map<String, dynamic> data) async {
+    await _client.request(
+      (dio) => dio.put('/sites/$id/cuve', data: data),
+      (r) => r,
+    );
+  }
+
   Future<SiteStock?> getStock(String id) async {
     if (!await _network.isConnected) return null;
     try {
