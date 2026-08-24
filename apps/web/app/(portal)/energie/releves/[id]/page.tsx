@@ -54,7 +54,7 @@ export default function ReleveDetailPage() {
         <Row label="Source" value={<Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{r.source}</Badge>} />
         {r.indexCompteur != null && <Row label="Index compteur" value={fmtNumber(Number(r.indexCompteur))} />}
         {r.consommationKwh != null && <Row label="Consommation" value={`${fmtNumber(Number(r.consommationKwh))} kWh`} />}
-        {r.volumeGasoilLitres != null && <Row label="Niveau cuve" value={`${fmtNumber(Number(r.volumeGasoilLitres))} L`} />}
+        {r.volumeGasoilLitres != null && <Row label="Niveau cuve" value={`${fmtNumber(Number(r.volumeGasoilLitres))} L${r.hauteurCuveCm != null ? ` (${Number(r.hauteurCuveCm)} cm mesurés)` : ''}`} />}
         {r.gasoilConsommeLitres != null && <Row label="Gasoil consommé" value={`${fmtNumber(Number(r.gasoilConsommeLitres))} L`} />}
         {r.heuresFonctGE != null && <Row label="Heures GE" value={`${fmtNumber(Number(r.heuresFonctGE))} h`} />}
         {r.groupe?.numero != null && <Row label="Groupe électrogène" value={`GE n°${r.groupe.numero}${r.groupe.puissanceKva != null ? ` · ${fmtNumber(Number(r.groupe.puissanceKva))} kVA` : ''}`} />}

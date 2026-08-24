@@ -7,6 +7,7 @@ import { dateBornee } from '../utils/dates';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { paginate } from '../utils/paginator';
 import { triListe } from '../utils/triListe';
+import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
 import { auditLog } from '../services/audit.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
@@ -138,9 +139,20 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
       if (deja) return res.status(200).json({ success: true, data: deja, idempotent: true });
     }
 
+    // Hauteur de gasoil mesurée (cm) : quand la cuve du site est calculable,
+    // LE SERVEUR fait foi pour les litres (même moteur que le web et le
+    // mobile) — la mesure brute est conservée à côté, ce qui permettra un
+    // recalcul si le barème de la cuve est corrigé plus tard.
+    const hauteurCuveCm = bounded(b.hauteurCuveCm, 1e4);
+    let volumeGasoil = bounded(b.volumeGasoilLitres, 1e6);
+    if (hauteurCuveCm != null) {
+      const calc = litresPourHauteur(await configCuveDuSite(String(b.siteId)), hauteurCuveCm);
+      if (calc != null) volumeGasoil = calc;
+    }
+
     // Liste blanche stricte : jamais de gasoilConsommeLitres/isSynced/technicienId
     // arbitraires depuis le client (mass-assignment fermé).
-    const coutEstime = estimerCout(b);
+    const coutEstime = estimerCout({ ...b, volumeGasoilLitres: volumeGasoil });
     const releve = await prisma.releveEnergie.create({
       data: {
         ...(clientUuid ? { id: clientUuid } : {}),
@@ -151,7 +163,8 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
         groupeId: b.groupeId ? String(b.groupeId) : null,
         indexCompteur: bounded(b.indexCompteur, 1e8),
         indexHeuresGE: bounded(b.indexHeuresGE, 1e9),
-        volumeGasoilLitres: bounded(b.volumeGasoilLitres, 1e6),
+        volumeGasoilLitres: volumeGasoil,
+        hauteurCuveCm,
         puissanceKva: bounded(b.puissanceKva, 1e4),
         observations: b.observations ? String(b.observations) : null,
         latitude: b.latitude != null ? Number(b.latitude) : null,
@@ -204,6 +217,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
         { header: 'Index compteur', key: 'index', width: 14 },
         { header: 'Conso (kWh)', key: 'kwh', width: 12 },
         { header: 'Gasoil (L)', key: 'gasoil', width: 12 },
+        { header: 'Hauteur cuve (cm)', key: 'hauteurCuve', width: 16 },
         { header: 'Heures GE', key: 'heures', width: 10 },
         { header: 'Coût estimé', key: 'cout', width: 14 },
       ],
@@ -215,6 +229,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
         index: r.indexCompteur != null ? Number(r.indexCompteur) : '',
         kwh: r.consommationKwh != null ? Number(r.consommationKwh) : '',
         gasoil: r.volumeGasoilLitres != null ? Number(r.volumeGasoilLitres) : '',
+        hauteurCuve: r.hauteurCuveCm != null ? Number(r.hauteurCuveCm) : '',
         heures: r.heuresFonctGE != null ? Number(r.heuresFonctGE) : '',
         cout: r.coutEstime != null ? Number(r.coutEstime) : '',
       })),

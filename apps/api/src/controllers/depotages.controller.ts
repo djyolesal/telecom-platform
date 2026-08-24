@@ -4,6 +4,7 @@ import { parseISO } from 'date-fns';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
 import { dateBornee } from '../utils/dates';
 import { assertOnSite } from '../utils/geofence';
 import { memeChauffeur } from '../utils/referentielTransport';
@@ -329,6 +330,26 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     if (!siteDepotage) throw new AppError('Site introuvable', 404);
     assertOnSite(siteDepotage, b.latitude, b.longitude, 'le dépotage');
 
+    // Hauteurs mesurées (cm) avant/après : quand la cuve du site est
+    // calculable, le serveur convertit et FAIT FOI pour les stocks en litres —
+    // les mesures brutes sont conservées (recalcul possible si le barème est
+    // corrigé). Sans config cuve, les litres saisis restent la référence.
+    const hauteurAvantCm = b.hauteurAvantCm != null && Number.isFinite(Number(b.hauteurAvantCm)) && Number(b.hauteurAvantCm) >= 0
+      ? Number(b.hauteurAvantCm) : null;
+    const hauteurApresCm = b.hauteurApresCm != null && Number.isFinite(Number(b.hauteurApresCm)) && Number(b.hauteurApresCm) >= 0
+      ? Number(b.hauteurApresCm) : null;
+    if (hauteurAvantCm != null || hauteurApresCm != null) {
+      const cfgCuve = await configCuveDuSite(siteId);
+      if (hauteurAvantCm != null) {
+        const l = litresPourHauteur(cfgCuve, hauteurAvantCm);
+        if (l != null) b.stockAvantLitres = l;
+      }
+      if (hauteurApresCm != null) {
+        const l = litresPourHauteur(cfgCuve, hauteurApresCm);
+        if (l != null) b.stockApresLitres = l;
+      }
+    }
+
     const { volume, stockAvant, stockApres } = deriveVolume(b);
 
     // GE actifs du site → validation des heures saisies + réconciliation conso.
@@ -457,6 +478,8 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
           signatureTechnicienPath: b.signatureTechnicienPath ? String(b.signatureTechnicienPath) : null,
           bonLivraisonPath: b.bonLivraisonPath ? String(b.bonLivraisonPath) : null,
           stockApresLitres: stockApres,
+          hauteurAvantCm,
+          hauteurApresCm,
           volumeAnnonceLitres: recon.volumeAnnonceLitres,
           gasoilAttenduLitres: recon.gasoilAttenduLitres,
           ecartConsoLitres: recon.ecartConsoLitres,
@@ -539,7 +562,22 @@ export async function updateDepotage(req: Request, res: Response, next: NextFunc
       // sortait en manquant critique chaque nuit, et le seul remède était la
       // suppression (ADMIN), qui détruit photos et signatures.
       'ligneLivraisonId', 'volumeAnnonceLitres',
+      'hauteurAvantCm', 'hauteurApresCm',
     ]);
+
+    // Hauteurs mesurées éditées : mêmes règles qu'à la création — cuve
+    // calculable → le serveur convertit et fait foi pour les stocks.
+    if (data.hauteurAvantCm != null || data.hauteurApresCm != null) {
+      const cfgCuve = await configCuveDuSite(existing.siteId);
+      if (data.hauteurAvantCm != null) {
+        const l = litresPourHauteur(cfgCuve, Number(data.hauteurAvantCm));
+        if (l != null) data.stockAvantLitres = l;
+      }
+      if (data.hauteurApresCm != null) {
+        const l = litresPourHauteur(cfgCuve, Number(data.hauteurApresCm));
+        if (l != null) data.stockApresLitres = l;
+      }
+    }
 
     // La ligne visée doit exister et porter sur LE MÊME site : sinon on
     // déplacerait la livraison d'un site à l'autre par la bande.

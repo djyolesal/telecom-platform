@@ -121,8 +121,8 @@ export default function DepotageDetailPage() {
         <Row label="Site" value={d.site?.nom ?? '—'} />
         <Row label="Date" value={fmtDateTime(d.dateDepotage)} />
         <Row label="Volume livré (jauge)" value={`${fmtNumber(Number(d.volumeLitres))} L`} />
-        <Row label="Stock avant" value={d.stockAvantLitres != null ? `${fmtNumber(Number(d.stockAvantLitres))} L` : '—'} />
-        <Row label="Stock après" value={d.stockApresLitres != null ? `${fmtNumber(Number(d.stockApresLitres))} L` : '—'} />
+        <Row label="Stock avant" value={d.stockAvantLitres != null ? `${fmtNumber(Number(d.stockAvantLitres))} L${d.hauteurAvantCm != null ? ` (${Number(d.hauteurAvantCm)} cm mesurés)` : ''}` : '—'} />
+        <Row label="Stock après" value={d.stockApresLitres != null ? `${fmtNumber(Number(d.stockApresLitres))} L${d.hauteurApresCm != null ? ` (${Number(d.hauteurApresCm)} cm mesurés)` : ''}` : '—'} />
         <Row label="Fournisseur" value={d.fournisseur} />
         <Row label="Bon de livraison" value={d.numeroBonLivraison} />
         <Row label="Technicien" value={d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—'} />
