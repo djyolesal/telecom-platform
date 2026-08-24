@@ -1433,6 +1433,22 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
           data: { coupureOrigineId: racine.id, priseEnChargePar: nom, priseEnChargeLe: quand },
         })
       : { count: 0 };
+    // Héritées de RANG 2 : accrochées à une coupure AVAL encore ouverte (nées
+    // ainsi par l'ordre de parcours du flux OSS quand la racine est parsée en
+    // dernier). Remontées à la racine : sans ça elles n'apparaissent pas dans
+    // les « impactés » de la racine et surtout ÉCHAPPENT à l'estampille
+    // d'adoption — donc au rapport NOC et à la disponibilité.
+    const imbriquees = avalIds.length
+      ? await prisma.coupureReseau.updateMany({
+          where: {
+            siteId: { in: avalIds }, technologie: 'SITE', dateFin: null,
+            origine: 'HERITEE', incidentId: null,
+            id: { not: racine.id }, coupureOrigineId: { not: racine.id },
+            coupureOrigine: { dateFin: null, siteId: { in: avalIds } },
+          },
+          data: { coupureOrigineId: racine.id, priseEnChargePar: nom, priseEnChargeLe: quand },
+        })
+      : { count: 0 };
     await prisma.coupureReseau.updateMany({
       where: { coupureOrigineId: racine.id, dateFin: null, priseEnChargePar: null },
       data: { priseEnChargePar: nom, priseEnChargeLe: quand },
@@ -1557,7 +1573,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
     }
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
-      priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count + orphelines.count, heriteesCreees,
+      priseEnCharge: true, depuisCoupure: coupure.id, heriteesReclassees: reclassees.count + orphelines.count + imbriquees.count, heriteesCreees,
       incidentCree: incidentInfo && !incidentInfo.reutilise ? incidentInfo.id : undefined,
       incidentReutilise: incidentInfo?.reutilise ? incidentInfo.id : undefined,
     }, req);
@@ -1568,7 +1584,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
         racineId: racine.id,
         racineSiteNom: parId.get(racine.siteId)?.nom ?? '—',
         estRacine: racine.id === coupure.id,
-        heriteesReclassees: reclassees.count + orphelines.count,
+        heriteesReclassees: reclassees.count + orphelines.count + imbriquees.count,
         heriteesCreees,
         priseEnChargePar: nom,
         incident: incidentInfo,

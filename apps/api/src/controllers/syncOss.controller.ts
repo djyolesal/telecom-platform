@@ -217,19 +217,32 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         // vraie panne) : sans ce re-rattachement, la nouvelle panne affichait
         // « 1 impacté » alors que tout l'aval restait coupé sous l'ancienne.
         if (!entrainee) {
-          const aReclasser: CoupureOuverte[] = [];
+          // Descendance complète d'abord : nécessaire pour reconnaître les
+          // héritées de RANG 2 (rattachées à une coupure aval, pas à la racine).
+          const descendance = new Set<string>();
           const file = [site.id];
           while (file.length) {
             const idSite = file.shift()!;
             for (const enfant of enfantsDe.get(idSite) ?? []) {
-              const c = ouverteParSite.get(enfant);
-              const locale = !!c && c.origine === 'LOCALE' && c.source === 'OSS' && !c.incidentId
-                && c.dateDebut.getTime() >= creee.dateDebut.getTime() - TOLERANCE_MS;
-              const orpheline = !!c && c.origine === 'HERITEE' && !!c.coupureOrigineId
-                && !ouverteParId.has(c.coupureOrigineId) && c.coupureOrigineId !== creee.id;
-              if (c && (locale || orpheline)) aReclasser.push(c);
-              file.push(enfant);
+              if (descendance.has(enfant)) continue;
+              descendance.add(enfant); file.push(enfant);
             }
+          }
+          const aReclasser: CoupureOuverte[] = [];
+          for (const idSite of descendance) {
+            const c = ouverteParSite.get(idSite);
+            if (!c) continue;
+            const locale = c.origine === 'LOCALE' && c.source === 'OSS' && !c.incidentId
+              && c.dateDebut.getTime() >= creee.dateDebut.getTime() - TOLERANCE_MS;
+            const orpheline = c.origine === 'HERITEE' && !!c.coupureOrigineId
+              && !ouverteParId.has(c.coupureOrigineId) && c.coupureOrigineId !== creee.id;
+            // Rang 2 : née accrochée au plus proche amont parce que la racine
+            // n'était pas encore parsée (ordre des nodeId du flux). Remontée à
+            // la racine — sinon elle échappe au badge « impactés » ET à
+            // l'estampille d'adoption, donc au rapport NOC.
+            const parent = c.origine === 'HERITEE' && c.coupureOrigineId ? ouverteParId.get(c.coupureOrigineId) : undefined;
+            const imbriquee = !!parent && parent.id !== creee.id && !c.incidentId && descendance.has(parent.siteId);
+            if (locale || orpheline || imbriquee) aReclasser.push(c);
           }
           if (aReclasser.length) {
             await prisma.coupureReseau.updateMany({
