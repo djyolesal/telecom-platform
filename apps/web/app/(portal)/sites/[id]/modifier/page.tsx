@@ -12,6 +12,7 @@ import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON } from '@/lib/constants';
 import { useTypesLiaison } from '@/lib/liaisons';
+import { litresPourHauteur, volumeMaxLitres, type ConfigCuve } from '@/lib/cuve';
 
 export default function ModifierSitePage() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,7 @@ export default function ModifierSitePage() {
     latitude: '', longitude: '', lotId: '',
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
+    cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '',
     hasGardien: 'false', gardiennageNuitSeulement: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
     parentTransmissionId: '', typeLiaison: '', nodeId: '',
     marqueGE: '',
@@ -35,6 +37,11 @@ export default function ModifierSitePage() {
   const [error, setError] = useState('');
   // Groupes électrogènes supplémentaires (GE n°2, 3…). Le GE n°1 = champs statut/puissance ci-dessus.
   const [extraGEs, setExtraGEs] = useState<{ puissanceKva: string; statut: string; marque: string }[]>([]);
+  // Table de barémage de la cuve (hauteur cm → litres) : prioritaire sur les
+  // dimensions pour la conversion. Remplacée en bloc à l'enregistrement.
+  const [bareme, setBareme] = useState<{ hauteurCm: string; litres: string }[]>([]);
+  const [collerBareme, setCollerBareme] = useState(false);
+  const [texteBareme, setTexteBareme] = useState('');
 
   const { data: site, isLoading, isError } = useQuery({
     queryKey: ['site', id],
@@ -87,6 +94,10 @@ export default function ModifierSitePage() {
       cuveVolumeLitres: site.cuveVolumeLitres != null ? String(site.cuveVolumeLitres) : '',
       formeCuve: site.formeCuve ?? '',
       cuveDimensions: site.cuveDimensions ?? '',
+      cuveLongueurCm: site.cuveLongueurCm != null ? String(site.cuveLongueurCm) : '',
+      cuveLargeurCm: site.cuveLargeurCm != null ? String(site.cuveLargeurCm) : '',
+      cuveHauteurCm: site.cuveHauteurCm != null ? String(site.cuveHauteurCm) : '',
+      cuveDiametreCm: site.cuveDiametreCm != null ? String(site.cuveDiametreCm) : '',
       hasGardien: site.hasGardien ? 'true' : 'false',
       gardiennageNuitSeulement: site.gardiennageNuitSeulement ? 'true' : 'false',
       societeGardiennage: site.societeGardiennage ?? '',
@@ -102,9 +113,40 @@ export default function ModifierSitePage() {
       .sort((a: { numero: number }, b: { numero: number }) => a.numero - b.numero)
       .map((g: { puissanceKva: number; statut: string; marque?: string | null }) => ({ puissanceKva: String(g.puissanceKva ?? 0), statut: g.statut ?? 'GE_SECOURS', marque: g.marque ?? '' }));
     setExtraGEs(extras);
+    setBareme(((site.baremage ?? []) as { hauteurCm: number; litres: number }[])
+      .map((b) => ({ hauteurCm: String(Number(b.hauteurCm)), litres: String(Number(b.litres)) })));
   }, [site]);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Points de barème valides (lignes vides ignorées) pour l'API et l'aperçu.
+  const pointsBareme = () => bareme
+    .map((b) => ({ hauteurCm: Number(b.hauteurCm), litres: Number(b.litres) }))
+    .filter((p) => Number.isFinite(p.hauteurCm) && Number.isFinite(p.litres) && p.hauteurCm > 0 && p.litres >= 0);
+
+  // Aperçu en direct : la config telle que saisie → volume théorique + écart
+  // au volume nominal (même moteur que le serveur et le mobile).
+  const configCuve: ConfigCuve = {
+    formeCuve: (form.formeCuve || null) as ConfigCuve['formeCuve'],
+    cuveLongueurCm: form.cuveLongueurCm ? Number(form.cuveLongueurCm) : null,
+    cuveLargeurCm: form.cuveLargeurCm ? Number(form.cuveLargeurCm) : null,
+    cuveHauteurCm: form.cuveHauteurCm ? Number(form.cuveHauteurCm) : null,
+    cuveDiametreCm: form.cuveDiametreCm ? Number(form.cuveDiametreCm) : null,
+    baremage: pointsBareme(),
+  };
+  const volumeTheorique = volumeMaxLitres(configCuve);
+  const nominal = form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null;
+  const ecartPct = volumeTheorique != null && nominal
+    ? Math.round(Math.abs(volumeTheorique - nominal) / nominal * 1000) / 10 : null;
+
+  const collerLignesBareme = () => {
+    // Formats acceptés : « hauteur;litres », « hauteur<tab>litres », « hauteur litres » — une ligne par point.
+    const points = texteBareme.split(/\r?\n/)
+      .map((l) => l.trim().split(/[;\t ]+/).map((v) => Number(v.replace(',', '.'))))
+      .filter((v) => v.length >= 2 && Number.isFinite(v[0]) && Number.isFinite(v[1]))
+      .map(([h, l]) => ({ hauteurCm: String(h), litres: String(l) }));
+    if (points.length) { setBareme(points); setCollerBareme(false); setTexteBareme(''); }
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -121,6 +163,10 @@ export default function ModifierSitePage() {
         cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null,
         formeCuve: form.formeCuve || null,
         cuveDimensions: form.cuveDimensions || null,
+        cuveLongueurCm: form.cuveLongueurCm ? Number(form.cuveLongueurCm) : null,
+        cuveLargeurCm: form.cuveLargeurCm ? Number(form.cuveLargeurCm) : null,
+        cuveHauteurCm: form.cuveHauteurCm ? Number(form.cuveHauteurCm) : null,
+        cuveDiametreCm: form.cuveDiametreCm ? Number(form.cuveDiametreCm) : null,
         hasGardien: form.hasGardien === 'true',
         gardiennageNuitSeulement: form.gardiennageNuitSeulement === 'true',
         societeGardiennage: form.societeGardiennage || null,
@@ -137,6 +183,8 @@ export default function ModifierSitePage() {
       }
       extraGEs.forEach((g, i) => groupes.push({ numero: i + 2, puissanceKva: Number(g.puissanceKva) || 0, statut: g.statut, marque: g.marque || undefined }));
       await api.put(`/sites/${id}/groupes`, { groupes });
+      // Barémage : remplacement complet (lignes vides ignorées).
+      await api.put(`/sites/${id}/baremage`, { points: pointsBareme() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site', id] });
@@ -213,15 +261,79 @@ export default function ModifierSitePage() {
           <Field label="Extincteurs sur le site">
             <Select value={form.hasExtincteurs} onChange={(e) => set('hasExtincteurs', e.target.value)} options={OUI_NON} />
           </Field>
-          <Field label="Volume cuve gasoil (L)">
+          <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Cuve gasoil - conversion hauteur → litres</div>
+          <Field label="Volume nominal (L)">
             <Input type="number" step="0.01" value={form.cuveVolumeLitres} onChange={(e) => set('cuveVolumeLitres', e.target.value)} placeholder="2000" />
           </Field>
           <Field label="Forme de la cuve">
             <Select value={form.formeCuve} onChange={(e) => set('formeCuve', e.target.value)} options={FORMES_CUVE} placeholder="Sélectionner…" />
           </Field>
-          <Field label="Dimensions de la cuve">
-            <Input value={form.cuveDimensions} onChange={(e) => set('cuveDimensions', e.target.value)} placeholder="ex: 2m × 1m × 1m" />
-          </Field>
+          {form.formeCuve === 'RECTANGULAIRE' && (
+            <>
+              <Field label="Longueur interne (cm)"><Input type="number" step="0.1" value={form.cuveLongueurCm} onChange={(e) => set('cuveLongueurCm', e.target.value)} placeholder="200" /></Field>
+              <Field label="Largeur interne (cm)"><Input type="number" step="0.1" value={form.cuveLargeurCm} onChange={(e) => set('cuveLargeurCm', e.target.value)} placeholder="100" /></Field>
+              <Field label="Hauteur interne (cm)"><Input type="number" step="0.1" value={form.cuveHauteurCm} onChange={(e) => set('cuveHauteurCm', e.target.value)} placeholder="100" /></Field>
+            </>
+          )}
+          {form.formeCuve === 'CYLINDRE_COUCHE' && (
+            <>
+              <Field label="Diamètre interne (cm)"><Input type="number" step="0.1" value={form.cuveDiametreCm} onChange={(e) => set('cuveDiametreCm', e.target.value)} placeholder="100" /></Field>
+              <Field label="Longueur interne (cm)"><Input type="number" step="0.1" value={form.cuveLongueurCm} onChange={(e) => set('cuveLongueurCm', e.target.value)} placeholder="255" /></Field>
+            </>
+          )}
+          {form.cuveDimensions && (
+            <Field label="Dimensions (texte hérité, lecture)">
+              <Input value={form.cuveDimensions} onChange={(e) => set('cuveDimensions', e.target.value)} />
+              <p className="mt-1 text-xs text-gray-400">Ancienne saisie libre - reportez les valeurs dans les champs structurés ci-dessus (en cm), seuls eux servent au calcul.</p>
+            </Field>
+          )}
+
+          <div className="md:col-span-2">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Table de barémage <span className="font-normal text-gray-400">(certificat de jaugeage - prioritaire sur les dimensions)</span></span>
+              <span className="flex gap-3">
+                <button type="button" onClick={() => setCollerBareme((v) => !v)} className="text-sm font-medium text-[#2471A3] hover:underline">Coller un barème</button>
+                <button type="button" onClick={() => setBareme((b) => [...b, { hauteurCm: '', litres: '' }])} className="text-sm font-medium text-[#2471A3] hover:underline">+ Ajouter un point</button>
+              </span>
+            </div>
+            {collerBareme && (
+              <div className="mb-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <textarea value={texteBareme} onChange={(e) => setTexteBareme(e.target.value)} rows={5}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono"
+                  placeholder={'Une ligne par point : hauteur_cm;litres\n20;300\n60;1100\n100;1900'} />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" onClick={() => setCollerBareme(false)} className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-white">Annuler</button>
+                  <button type="button" onClick={collerLignesBareme} className="rounded-lg bg-[#1B3F6B] px-3 py-1.5 text-sm font-medium text-white">Remplacer la table</button>
+                </div>
+              </div>
+            )}
+            {bareme.length === 0 ? (
+              <p className="text-xs text-gray-400">Aucun barème - la conversion utilisera les dimensions ci-dessus. Si la cuve a une table de jaugeage (plaque ou certificat), saisissez-la : elle est plus précise.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {bareme.map((b, i) => (
+                  <span key={i} className="flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1">
+                    <input value={b.hauteurCm} onChange={(e) => setBareme((arr) => arr.map((x, j) => j === i ? { ...x, hauteurCm: e.target.value } : x))}
+                      className="w-14 border-0 p-0 text-right text-sm focus:ring-0" placeholder="cm" inputMode="decimal" />
+                    <span className="text-xs text-gray-400">cm →</span>
+                    <input value={b.litres} onChange={(e) => setBareme((arr) => arr.map((x, j) => j === i ? { ...x, litres: e.target.value } : x))}
+                      className="w-16 border-0 p-0 text-right text-sm focus:ring-0" placeholder="L" inputMode="decimal" />
+                    <span className="text-xs text-gray-400">L</span>
+                    <button type="button" onClick={() => setBareme((arr) => arr.filter((_, j) => j !== i))} className="ml-1 text-red-400 hover:text-red-600"><Trash2 size={13} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {pointsBareme().length === 1 && <p className="mt-1 text-xs text-red-600">Un barème utilisable compte au moins 2 points.</p>}
+            {volumeTheorique != null ? (
+              <p className={`mt-2 text-xs ${ecartPct != null && ecartPct > 15 ? 'text-amber-700' : 'text-green-700'}`}>
+                Conversion active : volume calculé à hauteur max = <b>{volumeTheorique.toLocaleString('fr-FR')} L</b>
+                {ecartPct != null && <> - écart au volume nominal : <b>{ecartPct} %</b>{ecartPct > 15 ? ' (vérifiez dimensions ou barème)' : ''}</>}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-gray-400">Conversion inactive : renseignez les dimensions internes ou un barème d&apos;au moins 2 points.</p>
+            )}
+          </div>
 
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Gardiennage & contact</div>
           <Field label="Agent de sécurité sur le site">

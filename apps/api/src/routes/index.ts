@@ -202,8 +202,11 @@ router.get('/rapports/echeancier-preventif', rbac(['SUPERVISEUR', 'MANAGER', 'AD
 router.get('/rapports/fiche-validation', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), tachesCtrl.getFicheValidation);
 router.get('/rapports/fiches-validation/batch', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), tachesCtrl.getFichesBatch);
 router.post('/sites', rbac(['MANAGER','ADMIN']), sitesCtrl.createSite);
+// Campagne « cuves calculables » : couverture + sites restant à configurer.
+router.get('/sites/cuves/couverture', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), sitesCtrl.getCouvertureCuves);
 router.get('/sites/:id', sitesCtrl.getSiteById);
 router.put('/sites/:id', rbac(['MANAGER','ADMIN']), sitesCtrl.updateSite);
+router.put('/sites/:id/baremage', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceBaremage);
 router.put('/sites/:id/groupes', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceSiteGroupes);
 router.delete('/sites/:id', rbac(['ADMIN']), sitesCtrl.deleteSite);
 router.get('/sites/:id/transmission', sitesCtrl.getSiteTransmission);

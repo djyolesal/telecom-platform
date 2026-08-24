@@ -186,7 +186,13 @@ model Site {
   typePylone       String?     @map("type_pylone") @db.VarChar(40) // code du référentiel types_pylone
   cuveVolumeLitres Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
   formeCuve        FormeCuve?  @map("forme_cuve")
-  cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100)
+  cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100) // texte libre hérité (lecture seule)
+  // Dimensions INTERNES en cm — la conversion hauteur mesurée → litres :
+  // rectangulaire = longueur × largeur × hauteur ; cylindre couché = diamètre × longueur.
+  cuveLongueurCm   Decimal?    @map("cuve_longueur_cm") @db.Decimal(6, 1)
+  cuveLargeurCm    Decimal?    @map("cuve_largeur_cm") @db.Decimal(6, 1)
+  cuveHauteurCm    Decimal?    @map("cuve_hauteur_cm") @db.Decimal(6, 1)
+  cuveDiametreCm   Decimal?    @map("cuve_diametre_cm") @db.Decimal(6, 1)
   // Gardiennage et contact local (préparation d'intervention, litiges manquants)
   hasGardien         Boolean  @default(false) @map("has_gardien")
   // Poste tenu UNIQUEMENT la nuit (plage paramétrable, défaut 18h→6h GMT) :
@@ -213,6 +219,7 @@ model Site {
   releves         ReleveEnergie[]
   incidents       Incident[]
   groupes         GroupeElectrogene[]
+  baremage        BaremageCuve[]
   coupuresReseau  CoupureReseau[]
   // Topologie de transmission : site AMONT dont dépend le lien de ce site.
   parentTransmissionId String? @map("parent_transmission_id")
@@ -234,6 +241,21 @@ model Site {
 }
 
 // Groupe électrogène d'un site. Un site peut en avoir plusieurs (1, 2, 3…).
+// Table de barémage d'une cuve (métrologie) : couples hauteur mesurée → litres
+// fournis par le certificat de jaugeage ou relevés sur la plaque de la cuve.
+// Interpolation linéaire entre points ; prioritaire sur la formule géométrique.
+model BaremageCuve {
+  id        String  @id @default(uuid())
+  siteId    String  @map("site_id")
+  hauteurCm Decimal @map("hauteur_cm") @db.Decimal(6, 1)
+  litres    Decimal @db.Decimal(8, 1)
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, hauteurCm])
+  @@map("baremage_cuve")
+}
+
 // Chaque GE a son propre compteur horaire ; la cuve à gasoil est partagée au niveau du site.
 model GroupeElectrogene {
   id           String      @id @default(uuid())

@@ -100,6 +100,8 @@ export default function SitesPage() {
 
       {showImport && <ImportSitesModal onClose={() => setShowImport(false)} />}
 
+      <CouvertureCuvesBloc />
+
       <FilterBar
         search={search}
         onSearch={(v) => { setSearch(v); setPage(1); }}
@@ -217,6 +219,48 @@ function ImportSitesModal({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Campagne « cuves calculables » : combien de sites avec GE ont une conversion
+ * hauteur → litres opérationnelle, et lesquels restent à configurer (à
+ * mesurer à la prochaine visite ou à charger depuis un certificat de jaugeage).
+ * Masqué quand la campagne est terminée.
+ */
+function CouvertureCuvesBloc() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const { data } = useQuery({
+    queryKey: ['cuves-couverture'],
+    queryFn: () => api.get('/sites/cuves/couverture').then((r) => r.data.data as {
+      total: number; configures: number; restants: { id: string; nom: string; region: string }[];
+    }),
+    staleTime: 5 * 60_000,
+  });
+  if (!data || data.total === 0 || data.restants.length === 0) return null;
+  const pct = Math.round((data.configures / data.total) * 100);
+  return (
+    <div className="mb-4 rounded-xl border border-[#1B3F6B]/15 bg-[#EAF1F8] p-4">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
+        <p className="text-sm text-[#1B3F6B]">
+          <span className="font-semibold">Cuves calculables : {data.configures}/{data.total} sites ({pct} %)</span>
+          <span className="text-[#1B3F6B]/70"> - {data.restants.length} cuve(s) à configurer (dimensions ou barème) pour la conversion hauteur → litres</span>
+        </p>
+        <span className="shrink-0 text-xs font-medium text-[#1B3F6B] underline">{open ? 'Masquer' : 'Voir les sites'}</span>
+      </button>
+      {open && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {data.restants.map((s) => (
+            <button key={s.id} type="button" onClick={() => router.push(`/sites/${s.id}/modifier`)}
+              className="rounded-full border border-[#1B3F6B]/20 bg-white px-2.5 py-1 text-xs text-[#1B3F6B] hover:bg-[#1B3F6B]/5"
+              title={s.region}>
+              {s.nom}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

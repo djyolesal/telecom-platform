@@ -16,6 +16,7 @@ import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { generateEtiquettesQrPdf } from '../services/pdf.service';
 import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission, assertSansCycle } from '../utils/transmission';
+import { ConfigCuve, cuveCalculable, hauteurMaxCm, volumeMaxLitres } from '../utils/cuve';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
 const IMPORT_COLUMNS = [
@@ -36,6 +37,10 @@ const IMPORT_COLUMNS = [
   { key: 'cuveVolumeLitres', header: 'cuveVolumeLitres' },
   { key: 'formeCuve', header: 'formeCuve' },
   { key: 'cuveDimensions', header: 'cuveDimensions' },
+  { key: 'cuveLongueurCm', header: 'cuveLongueurCm' },
+  { key: 'cuveLargeurCm', header: 'cuveLargeurCm' },
+  { key: 'cuveHauteurCm', header: 'cuveHauteurCm' },
+  { key: 'cuveDiametreCm', header: 'cuveDiametreCm' },
   { key: 'puissanceGE2', header: 'puissanceGE2' },
   { key: 'statutGE2', header: 'statutGE2' },
   { key: 'hasGardien', header: 'gardien' },
@@ -70,6 +75,10 @@ const HEADER_ALIASES: Record<string, string> = {
   cuvevolumelitres: 'cuveVolumeLitres', volumecuve: 'cuveVolumeLitres', volumegasoil: 'cuveVolumeLitres', capacitecuve: 'cuveVolumeLitres',
   formecuve: 'formeCuve', forme: 'formeCuve',
   cuvedimensions: 'cuveDimensions', dimensionscuve: 'cuveDimensions', dimensions: 'cuveDimensions',
+  cuvelongueurcm: 'cuveLongueurCm', longueurcuve: 'cuveLongueurCm', longueurcuvecm: 'cuveLongueurCm',
+  cuvelargeurcm: 'cuveLargeurCm', largeurcuve: 'cuveLargeurCm', largeurcuvecm: 'cuveLargeurCm',
+  cuvehauteurcm: 'cuveHauteurCm', hauteurcuve: 'cuveHauteurCm', hauteurcuvecm: 'cuveHauteurCm',
+  cuvediametrecm: 'cuveDiametreCm', diametrecuve: 'cuveDiametreCm', diametrecuvecm: 'cuveDiametreCm',
   puissancege2: 'puissanceGE2', puissgege2: 'puissanceGE2', kvage2: 'puissanceGE2',
   statutge2: 'statutGE2',
   gardien: 'hasGardien', hasgardien: 'hasGardien', agentsecurite: 'hasGardien', agentdesecurite: 'hasGardien',
@@ -166,11 +175,35 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         },
         gardiennagePrestataire: { select: { id: true, nom: true, contactTechnique: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
+        baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } },
         parentTransmission: { select: { id: true, nom: true } },
         enfantsTransmission: { where: { isActive: true }, select: { id: true, nom: true }, orderBy: { nom: 'asc' } },
       },
     });
     if (!site) throw new AppError('Site introuvable', 404);
+
+    // État de la conversion hauteur → litres : calculable ?, volume théorique à
+    // hauteur max, écart au volume nominal déclaré (contrôle de cohérence).
+    const configCuve: ConfigCuve = {
+      formeCuve: site.formeCuve,
+      cuveLongueurCm: site.cuveLongueurCm != null ? Number(site.cuveLongueurCm) : null,
+      cuveLargeurCm: site.cuveLargeurCm != null ? Number(site.cuveLargeurCm) : null,
+      cuveHauteurCm: site.cuveHauteurCm != null ? Number(site.cuveHauteurCm) : null,
+      cuveDiametreCm: site.cuveDiametreCm != null ? Number(site.cuveDiametreCm) : null,
+      baremage: site.baremage.map((b) => ({ hauteurCm: Number(b.hauteurCm), litres: Number(b.litres) })),
+    };
+    const volumeTheorique = volumeMaxLitres(configCuve);
+    const nominal = site.cuveVolumeLitres != null ? Number(site.cuveVolumeLitres) : null;
+    const cuve = {
+      calculable: volumeTheorique != null,
+      hauteurMaxCm: hauteurMaxCm(configCuve),
+      volumeTheoriqueLitres: volumeTheorique,
+      // > 15 % d'écart entre volume calculé et nominal déclaré : dimensions ou
+      // barème probablement faux — signalé dans la fiche, jamais bloquant.
+      ecartNominalPct: volumeTheorique != null && nominal
+        ? Math.round(Math.abs(volumeTheorique - nominal) / nominal * 1000) / 10
+        : null,
+    };
 
     // Compteur vidange par GE : dernier index horaire relevé + heures écoulées
     // depuis la dernière vidange confirmée (null si jamais enregistrée).
@@ -193,8 +226,88 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
     }));
     res.json({
       success: true,
-      data: { ...site, groupes, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250) },
+      data: { ...site, groupes, cuve, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250) },
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Remplace la table de barémage de la cuve d'un site (couples hauteur cm →
+ * litres du certificat de jaugeage). Remplacement complet : la table est
+ * courte (quelques dizaines de points) et l'édition partielle multiplierait
+ * les incohérences (points orphelins d'un ancien barème).
+ */
+export async function replaceBaremage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const site = await prisma.site.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!site) throw new AppError('Site introuvable', 404);
+
+    const brut = (req.body as { points?: unknown }).points;
+    if (!Array.isArray(brut) || brut.length > 500) throw new AppError('points : tableau attendu (500 max)', 400);
+    const points = brut.map((p, i) => {
+      const hauteurCm = Number((p as { hauteurCm?: unknown }).hauteurCm);
+      const litres = Number((p as { litres?: unknown }).litres);
+      if (!Number.isFinite(hauteurCm) || hauteurCm < 0 || !Number.isFinite(litres) || litres < 0) {
+        throw new AppError(`Point ${i + 1} invalide : hauteurCm et litres numériques positifs requis`, 400);
+      }
+      return { hauteurCm: Math.round(hauteurCm * 10) / 10, litres: Math.round(litres * 10) / 10 };
+    }).sort((a, b) => a.hauteurCm - b.hauteurCm);
+    // Un barème est MONOTONE : hauteurs strictement croissantes (doublon =
+    // erreur de saisie), litres jamais décroissants.
+    for (let i = 1; i < points.length; i++) {
+      if (points[i].hauteurCm === points[i - 1].hauteurCm) {
+        throw new AppError(`Deux points à la même hauteur (${points[i].hauteurCm} cm)`, 400);
+      }
+      if (points[i].litres < points[i - 1].litres) {
+        throw new AppError(`Litres décroissants à ${points[i].hauteurCm} cm : un barème est monotone`, 400);
+      }
+    }
+    if (points.length === 1) throw new AppError('Un barème utilisable compte au moins 2 points (ou 0 pour l’effacer)', 400);
+
+    await prisma.$transaction([
+      prisma.baremageCuve.deleteMany({ where: { siteId: site.id } }),
+      ...(points.length
+        ? [prisma.baremageCuve.createMany({ data: points.map((p) => ({ ...p, siteId: site.id })) })]
+        : []),
+    ]);
+    await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { baremage: `${points.length} point(s)` }, req);
+    res.json({ success: true, data: { points: points.length } });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Couverture de la campagne « cuves calculables » : combien de sites actifs
+ * (hors sites sans GE, donc sans cuve) ont une conversion hauteur → litres
+ * opérationnelle — et la liste de ceux qui restent à configurer.
+ */
+export async function getCouvertureCuves(req: Request, res: Response, next: NextFunction) {
+  try {
+    const perimetre = await sitePerimetre(req.user!.id);
+    const sites = await prisma.site.findMany({
+      where: { isActive: true, statutGE: { not: 'PAS_DE_GE' }, ...perimetre },
+      select: {
+        id: true, nom: true, region: true, formeCuve: true, cuveVolumeLitres: true,
+        cuveLongueurCm: true, cuveLargeurCm: true, cuveHauteurCm: true, cuveDiametreCm: true,
+        _count: { select: { baremage: true } },
+        baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } },
+      },
+    });
+    const restants: { id: string; nom: string; region: string }[] = [];
+    let configures = 0;
+    for (const s of sites) {
+      const ok = cuveCalculable({
+        formeCuve: s.formeCuve,
+        cuveLongueurCm: s.cuveLongueurCm != null ? Number(s.cuveLongueurCm) : null,
+        cuveLargeurCm: s.cuveLargeurCm != null ? Number(s.cuveLargeurCm) : null,
+        cuveHauteurCm: s.cuveHauteurCm != null ? Number(s.cuveHauteurCm) : null,
+        cuveDiametreCm: s.cuveDiametreCm != null ? Number(s.cuveDiametreCm) : null,
+        baremage: s.baremage.map((b) => ({ hauteurCm: Number(b.hauteurCm), litres: Number(b.litres) })),
+      });
+      if (ok) configures++;
+      else restants.push({ id: s.id, nom: s.nom, region: s.region });
+    }
+    restants.sort((a, b) => a.region.localeCompare(b.region) || a.nom.localeCompare(b.nom));
+    res.json({ success: true, data: { total: sites.length, configures, restants } });
   } catch (err) { next(err); }
 }
 
@@ -288,7 +401,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
-      'cuveDimensions', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
+      'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
@@ -319,7 +432,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
-      'cuveDimensions', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
+      'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
@@ -410,6 +523,8 @@ export async function sitesImportTemplate(_req: Request, res: Response, next: Ne
         powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: 100, lot: 'LOT-01',
         typePylone: 'GREENFIELD', hasClimatiseur: 'oui', hasExtincteurs: 'oui',
         cuveVolumeLitres: 2000, formeCuve: 'CYLINDRE_COUCHE', cuveDimensions: '2m x 1m x 1m',
+        // Dimensions INTERNES en cm : cylindre couché = diamètre + longueur ; rectangulaire = longueur + largeur + hauteur.
+        cuveLongueurCm: 255, cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: 100,
         puissanceGE2: '', statutGE2: '', // remplir pour un 2e GE (ex: 100 / GE_SECOURS)
         hasGardien: 'oui', gardiennageNuitSeulement: 'non', societeGardiennage: 'SECURITOGO', telephoneSite: '+228 90 00 00 00',
         marqueGE: 'CATERPILLAR', marqueGE2: '',
@@ -551,6 +666,11 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           ...(colByField.gardiennageNuitSeulement != null ? { gardiennageNuitSeulement: toBool(cellText(row, 'gardiennageNuitSeulement')) } : {}),
           ...(colByField.societeGardiennage != null ? { societeGardiennage: cellText(row, 'societeGardiennage') || null } : {}),
           ...(colByField.telephoneSite != null ? { telephoneSite: cellText(row, 'telephoneSite') || null } : {}),
+          // Dimensions internes de la cuve (cm) — conversion hauteur → litres.
+          ...(colByField.cuveLongueurCm != null ? { cuveLongueurCm: numOrNull(cellText(row, 'cuveLongueurCm')) } : {}),
+          ...(colByField.cuveLargeurCm != null ? { cuveLargeurCm: numOrNull(cellText(row, 'cuveLargeurCm')) } : {}),
+          ...(colByField.cuveHauteurCm != null ? { cuveHauteurCm: numOrNull(cellText(row, 'cuveHauteurCm')) } : {}),
+          ...(colByField.cuveDiametreCm != null ? { cuveDiametreCm: numOrNull(cellText(row, 'cuveDiametreCm')) } : {}),
           // NodeID OSS (rapprochement de la détection automatique des coupures).
           ...(colByField.nodeId != null ? { nodeId: cellText(row, 'nodeId') || null } : {}),
           isActive: true,

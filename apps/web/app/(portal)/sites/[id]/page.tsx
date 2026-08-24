@@ -14,6 +14,7 @@ import { Button, ButtonLink } from '@/components/shared/Button';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { DataTable } from '@/components/shared/DataTable';
 import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/components/shared/Badge';
+import { litresPourHauteur, hauteurMaxCm, type ConfigCuve } from '@/lib/cuve';
 import { POWER_CONFIGS, STATUTS_GE, TYPES_PYLONE, FORMES_CUVE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 import { useTypesLiaison, couleurLiaison } from '@/lib/liaisons';
@@ -248,11 +249,26 @@ export default function SiteDetailPage() {
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
           <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '—'} />
           <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '—'} />
-          <InfoRow label="Dimensions cuve" value={site.cuveDimensions || '—'} />
+          <InfoRow label="Dimensions cuve" value={
+            site.cuveDiametreCm != null || site.cuveHauteurCm != null
+              ? (site.formeCuve === 'CYLINDRE_COUCHE'
+                ? `Ø ${fmtNumber(site.cuveDiametreCm)} × L ${fmtNumber(site.cuveLongueurCm)} cm`
+                : `${fmtNumber(site.cuveLongueurCm)} × ${fmtNumber(site.cuveLargeurCm)} × h ${fmtNumber(site.cuveHauteurCm)} cm`)
+              : (site.cuveDimensions || '—')
+          } />
+          <InfoRow label="Conversion hauteur → litres" value={
+            site.cuve?.calculable ? (
+              <span className={site.cuve.ecartNominalPct != null && site.cuve.ecartNominalPct > 15 ? 'text-amber-700' : 'text-green-700'}>
+                Active{site.baremage?.length >= 2 ? ` (barème, ${site.baremage.length} pts)` : ' (dimensions)'} · max {fmtNumber(site.cuve.volumeTheoriqueLitres)} L
+                {site.cuve.ecartNominalPct != null && site.cuve.ecartNominalPct > 15 ? ` · écart nominal ${site.cuve.ecartNominalPct} % !` : ''}
+              </span>
+            ) : <span className="text-gray-400">Non configurée - le technicien saisit les litres à la main</span>
+          } />
           <InfoRow label="Agent de sécurité" value={site.hasGardien ? 'Oui' : 'Non'} />
           <InfoRow label="Sté gardiennage" value={site.gardiennagePrestataire?.nom ?? site.societeGardiennage ?? '—'} />
           <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[#2471A3] hover:underline">{site.telephoneSite}</a> : '—'} />
         </div>
+        {site.cuve?.calculable && <ConvertisseurCuve site={site} />}
         {site.groupes?.length > 0 && (
           <div className="mt-3 border-t border-gray-50 pt-3">
             <p className="mb-1.5 text-xs font-medium text-gray-500">Groupes électrogènes ({site.groupes.length})</p>
@@ -422,6 +438,39 @@ function TransmissionModal({ siteId, parentActuel, liaisonActuelle, onClose, onS
           <Button type="button" loading={mutation.isPending} onClick={() => { setError(''); mutation.mutate(); }}>Enregistrer</Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Testeur hauteur → litres (même moteur que le serveur et le mobile). */
+function ConvertisseurCuve({ site }: {
+  site: {
+    formeCuve?: 'RECTANGULAIRE' | 'CYLINDRE_COUCHE' | null;
+    cuveLongueurCm?: number | string | null; cuveLargeurCm?: number | string | null;
+    cuveHauteurCm?: number | string | null; cuveDiametreCm?: number | string | null;
+    baremage?: { hauteurCm: number | string; litres: number | string }[];
+  };
+}) {
+  const [hauteur, setHauteur] = useState('');
+  const cfg: ConfigCuve = {
+    formeCuve: site.formeCuve ?? null,
+    cuveLongueurCm: site.cuveLongueurCm != null ? Number(site.cuveLongueurCm) : null,
+    cuveLargeurCm: site.cuveLargeurCm != null ? Number(site.cuveLargeurCm) : null,
+    cuveHauteurCm: site.cuveHauteurCm != null ? Number(site.cuveHauteurCm) : null,
+    cuveDiametreCm: site.cuveDiametreCm != null ? Number(site.cuveDiametreCm) : null,
+    baremage: (site.baremage ?? []).map((b) => ({ hauteurCm: Number(b.hauteurCm), litres: Number(b.litres) })),
+  };
+  const max = hauteurMaxCm(cfg);
+  const litres = hauteur !== '' ? litresPourHauteur(cfg, Number(hauteur.replace(',', '.'))) : null;
+  const depasse = max != null && hauteur !== '' && Number(hauteur.replace(',', '.')) > max;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[#EAF1F8] px-3 py-2 text-sm text-[#1B3F6B]">
+      <span className="font-medium">Hauteur mesurée :</span>
+      <input value={hauteur} onChange={(e) => setHauteur(e.target.value)} inputMode="decimal"
+        className="w-20 rounded-md border border-[#1B3F6B]/20 bg-white px-2 py-1 text-right text-sm" placeholder="cm" />
+      <span>cm →</span>
+      <b>{litres != null ? `${litres.toLocaleString('fr-FR')} L` : '…'}</b>
+      {depasse && <span className="text-xs text-amber-700">hauteur au-delà du max ({max} cm) - volume plafonné</span>}
     </div>
   );
 }
