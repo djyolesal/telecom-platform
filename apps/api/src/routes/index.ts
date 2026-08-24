@@ -227,7 +227,9 @@ router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSp
 router.post('/coupures-reseau/:id/prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.prendreEnChargeCoupure);
 router.post('/coupures-reseau/:id/annuler-prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.annulerPriseEnCharge);
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
-router.delete('/coupures-reseau/:id', rbac(['ADMIN']), coupuresCtrl.deleteCoupure);
+// Saisie erronée du NOC : suppression ouverte au NOC/manager mais limitée aux
+// coupures MANUELLES (garde dans le contrôleur) ; l'ADMIN peut tout supprimer.
+router.delete('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.deleteCoupure);
 router.get('/rapports/disponibilite-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);
 router.get('/rapports/disponibilite-reseau/export/:format', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.exportDisponibiliteReseau);
 

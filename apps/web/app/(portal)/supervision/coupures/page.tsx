@@ -596,6 +596,8 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
 // ── Édition / clôture ───────────────────────────────────────────────────────
 
 function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onClose: () => void; onDone: () => void }) {
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string })?.role ?? '';
   const toLocal = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
   const [dateDebut, setDateDebut] = useState(toLocal(coupure.dateDebut));
   const [dateFin, setDateFin] = useState(toLocal(coupure.dateFin));
@@ -625,6 +627,16 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
     onSuccess: () => { onDone(); onClose(); },
   });
   const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+
+  // Saisie erronée : suppression réservée à l'ADMIN pour les AUTO ; le NOC et
+  // le manager ne suppriment que les coupures saisies à la main.
+  const peutSupprimer = role === 'ADMIN' || (['NOC', 'MANAGER'].includes(role) && coupure.source === 'MANUEL');
+  const [confirmerSuppression, setConfirmerSuppression] = useState(false);
+  const suppression = useMutation({
+    mutationFn: () => api.delete(`/coupures-reseau/${coupure.id}`),
+    onSuccess: () => { onDone(); onClose(); },
+  });
+  const errSuppr = (suppression.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
 
   return (
     <Modal titre={`${coupure.site?.nom ?? 'Coupure'} · ${coupure.technologie === 'SITE' ? 'Site entier' : coupure.technologie}`} onClose={onClose}>
@@ -676,12 +688,38 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         </label>
       )}
       {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
-      <div className="mt-4 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Annuler</button>
-        <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-          {mutation.isPending ? 'Enregistrement…' : dateFin ? 'Clôturer la coupure' : 'Enregistrer'}
-        </Button>
-      </div>
+      {errSuppr && <p className="text-sm text-red-600">{errSuppr}</p>}
+      {confirmerSuppression ? (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-800">
+            Supprimer définitivement cette coupure{nbHeritees > 0 ? <> et ses <b>{nbHeritees} coupure(s) héritée(s)</b></> : null} ?
+            Elle disparaîtra des rapports et du calcul de disponibilité
+            {coupure.incident ? ' ; l’incident lié sera résolu s’il ne reste plus de coupure ouverte' : ''}.
+          </p>
+          <div className="mt-2 flex justify-end gap-2">
+            <button type="button" onClick={() => setConfirmerSuppression(false)} className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-white">Garder</button>
+            <button type="button" onClick={() => suppression.mutate()} disabled={suppression.isPending}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+              {suppression.isPending ? 'Suppression…' : 'Supprimer définitivement'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex items-center justify-between gap-2">
+          {peutSupprimer ? (
+            <button type="button" onClick={() => setConfirmerSuppression(true)}
+              className="text-xs font-medium text-red-600 hover:underline">
+              Supprimer (saisie erronée)
+            </button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Annuler</button>
+            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+              {mutation.isPending ? 'Enregistrement…' : dateFin ? 'Clôturer la coupure' : 'Enregistrer'}
+            </Button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }

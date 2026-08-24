@@ -675,15 +675,27 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       }
     }
     // Clôture (ou ré-ouverture) → downtime recalculé, jamais saisi à la main.
+    // Les saisies web sont à la MINUTE alors que le début stocké garde les
+    // secondes : « début 09:09:32, fin saisie 09:09 » était refusé à tort.
+    // Comparaison à la minute ; une fin dans la même minute que le début est
+    // calée dessus (downtime 0).
+    const laMinute = (d: Date) => Math.floor(d.getTime() / 60_000);
     const debutEffectif = (data.dateDebut as Date | undefined) ?? existing.dateDebut;
     if ('dateFin' in data) {
-      const fin = data.dateFin as Date | null;
-      if (fin && fin < debutEffectif) throw new AppError('La fin ne peut pas précéder le début', 400);
+      let fin = data.dateFin as Date | null;
+      if (fin && fin < debutEffectif) {
+        if (laMinute(fin) < laMinute(debutEffectif)) throw new AppError('La fin ne peut pas précéder le début', 400);
+        fin = debutEffectif;
+        data.dateFin = fin;
+      }
       data.downtimeMinutes = fin ? minutesEntre(debutEffectif, fin) : null;
     } else if (data.dateDebut instanceof Date && existing.dateFin) {
       // Début corrigé sur une coupure déjà rétablie : le downtime suit.
-      if (existing.dateFin < data.dateDebut) throw new AppError('Le début ne peut pas dépasser la fin existante', 400);
-      data.downtimeMinutes = minutesEntre(data.dateDebut, existing.dateFin);
+      if (existing.dateFin < data.dateDebut) {
+        if (laMinute(existing.dateFin) < laMinute(data.dateDebut)) throw new AppError('Le début ne peut pas dépasser la fin existante', 400);
+        data.dateDebut = existing.dateFin;
+      }
+      data.downtimeMinutes = minutesEntre(data.dateDebut as Date, existing.dateFin);
     }
     const updated = await prisma.coupureReseau.update({ where: { id: existing.id }, data });
 
@@ -752,19 +764,46 @@ export async function deleteCoupure(req: Request, res: Response, next: NextFunct
   try {
     const existante = await prisma.coupureReseau.findUnique({
       where: { id: req.params.id },
-      select: { incidentId: true },
+      select: { id: true, incidentId: true, source: true, siteId: true, dateDebut: true, origine: true },
     });
     if (!existante) throw new AppError('Coupure introuvable', 404);
-    // Supprimer la DERNIÈRE coupure ouverte d'un incident (saisie erronée du
-    // NOC) doit reboucler l'incident, comme une clôture : sinon il reste
-    // OUVERT sans plus aucune coupure — jamais résolvable, escaladé à vie.
+    // Le NOC/manager ne supprime que les saisies MANUELLES erronées : une
+    // détection AUTO (source OSS) reflète l'état du réseau — elle se clôture
+    // ou se dé-adopte (annuler la prise en charge), jamais ne se supprime.
+    if (req.user!.role !== 'ADMIN' && existante.source !== 'MANUEL') {
+      throw new AppError('Seules les coupures saisies manuellement peuvent être supprimées — une détection AUTO se clôture ou se dé-adopte', 422);
+    }
+    // Cascade explicite sur toute la descendance héritée : la FK est en
+    // SET NULL — sans ça les héritées resteraient ouvertes à vie, absentes des
+    // listes (sous-lignes d'une racine disparue) mais comptées dans la dispo.
+    // Et supprimer la DERNIÈRE coupure ouverte d'un incident doit le reboucler,
+    // comme une clôture : sinon il reste OUVERT — escaladé et SMS à vie.
+    let heriteesSupprimees = 0;
+    const incidents = new Set<string>();
+    if (existante.incidentId) incidents.add(existante.incidentId);
     await prisma.$transaction(async (tx) => {
-      await tx.coupureReseau.delete({ where: { id: req.params.id } });
-      await resoudreIncidentSiPlusDeCoupure(tx, existante.incidentId, new Date());
+      let niveau = [existante.id];
+      const descendance: string[] = [];
+      for (let profondeur = 0; profondeur < 50 && niveau.length; profondeur++) {
+        const enfants = await tx.coupureReseau.findMany({
+          where: { coupureOrigineId: { in: niveau } },
+          select: { id: true, incidentId: true },
+        });
+        for (const e of enfants) { descendance.push(e.id); if (e.incidentId) incidents.add(e.incidentId); }
+        niveau = enfants.map((e) => e.id);
+      }
+      if (descendance.length) {
+        heriteesSupprimees = (await tx.coupureReseau.deleteMany({ where: { id: { in: descendance } } })).count;
+      }
+      await tx.coupureReseau.delete({ where: { id: existante.id } });
+      for (const incId of incidents) await resoudreIncidentSiPlusDeCoupure(tx, incId, new Date());
     });
-    await auditLog(req.user!.id, 'DELETE', 'coupure_reseau', req.params.id, {}, req);
+    await auditLog(req.user!.id, 'DELETE', 'coupure_reseau', existante.id, {
+      motif: 'saisie_erronee', siteId: existante.siteId, dateDebut: existante.dateDebut,
+      source: existante.source, heriteesSupprimees,
+    }, req);
     emettreCoupuresChangees({ action: 'suppression' });
-    res.json({ success: true });
+    res.json({ success: true, data: { heriteesSupprimees } });
   } catch (err) { next(err); }
 }
 
