@@ -69,7 +69,8 @@ void main() {
     expect(find.text('Enregistrer'), findsOneWidget);
   });
 
-  testWidgets('la saisie des dimensions part bien au serveur', (tester) async {
+  testWidgets('sans les 3 photos exigées, l\'enregistrement est bloqué',
+      (tester) async {
     final repo = _FakeSiteRepo();
     await tester.pumpWidget(
       RepositoryProvider<SiteRepository>.value(
@@ -93,10 +94,12 @@ void main() {
     await tester.tap(find.text('Enregistrer'));
     await tester.pumpAndSettle();
 
-    expect(repo.envoye, isNotNull, reason: 'majCuve doit être appelé');
-    expect(repo.envoye!['formeCuve'], 'CYLINDRE_COUCHE');
-    expect(repo.envoye!['cuveDiametreCm'], 100);
-    expect(repo.envoye!['cuveLongueurCm'], 255);
-    expect(find.textContaining('Cuve enregistree'), findsOneWidget);
+    // Aucune photo prise (la caméra n'existe pas en test) : la feuille reste
+    // ouverte, le message d'exigence s'affiche, rien ne part au serveur.
+    expect(find.textContaining('3 photos minimum'), findsOneWidget);
+    expect(find.text('Forme de la cuve'), findsOneWidget,
+        reason: 'la feuille doit rester ouverte');
+    expect(repo.envoye, isNull,
+        reason: 'majCuve ne doit pas être appelé sans les photos exigées');
   });
 }

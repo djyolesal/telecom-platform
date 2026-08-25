@@ -51,6 +51,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     // uniquement, memes bornes que les photos de maintenance (anti-ANR).
     final photos = <XFile>[];
     final picker = ImagePicker();
+    String? erreurPhotos;
 
     final ok = await showModalBottomSheet<bool>(
       context: context,
@@ -124,7 +125,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
               Row(
                 children: [
                   OutlinedButton.icon(
-                    onPressed: photos.length >= 3
+                    onPressed: photos.length >= 5
                         ? null
                         : () async {
                             try {
@@ -134,15 +135,21 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                                 maxHeight: 1600,
                                 imageQuality: 70,
                               );
-                              if (img != null) setSheet(() => photos.add(img));
+                              if (img != null) {
+                                setSheet(() {
+                                  photos.add(img);
+                                  erreurPhotos = null;
+                                });
+                              }
                             } catch (_) {/* annule / permission refusee */}
                           },
                     icon: const Icon(Icons.photo_camera, size: 18),
-                    label: Text('Photo (${photos.length}/3)'),
+                    label: Text('Photo (${photos.length}/5)'),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text('Plaque, cuve, table de baremage…',
+                    child: Text(
+                        '3 exigees : plaque, cuve entiere, barème/jauge - 2 de plus si utile.',
                         style: TextStyle(
                             fontSize: 11, color: Colors.grey.shade600)),
                   ),
@@ -184,6 +191,13 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                     ],
                   ),
                 ),
+              if (erreurPhotos != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(erreurPhotos!,
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.red)),
+                ),
               const SizedBox(height: 14),
               // Le thème impose minimumSize Size.fromHeight(50) aux
               // FilledButton (largeur infinie) : dans une Row il faut le
@@ -197,7 +211,14 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
+                        onPressed: () {
+                          if (photos.length < 3) {
+                            setSheet(() => erreurPhotos =
+                                '3 photos minimum (${photos.length} prise${photos.length > 1 ? 's' : ''}) : plaque, cuve entiere, barème ou jauge.');
+                            return;
+                          }
+                          Navigator.pop(ctx, true);
+                        },
                         child: const Text('Enregistrer')),
                   ),
                 ],

@@ -204,7 +204,7 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
     const photosCuve = await prisma.photo.findMany({
       where: { entityType: 'site_cuve', entityId: site.id },
       orderBy: { createdAt: 'desc' },
-      take: 8,
+      take: 10,
       select: { id: true, url: true, minioKey: true, createdAt: true },
     });
     const cuve = {
@@ -281,9 +281,10 @@ export async function updateCuveSite(req: Request, res: Response, next: NextFunc
     // permet de vérifier une mesure douteuse SANS repasser sur site. Fichiers
     // déjà déposés via /upload/image ({url, key}) — on garde l'historique
     // (chaque campagne de mesure ajoute les siennes, la fiche montre les
-    // plus récentes).
+    // plus récentes). Le mobile EXIGE 3 photos à la saisie ; le serveur ne
+    // borne que le plafond — un upload perdu ne doit jamais bloquer la mesure.
     const brutPhotos = (b.photos as Array<{ url?: string; key?: string }> | undefined) ?? [];
-    if (!Array.isArray(brutPhotos) || brutPhotos.length > 4) throw new AppError('4 photos max par mesure', 400);
+    if (!Array.isArray(brutPhotos) || brutPhotos.length > 5) throw new AppError('5 photos max par mesure', 400);
     const photos = brutPhotos.filter((p) => p && p.url && p.key);
 
     const updated = await prisma.site.update({ where: { id: site.id }, data });
