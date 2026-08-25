@@ -408,6 +408,14 @@ export async function resoudreIncidentSiPlusDeCoupure(
     select: { statut: true, dateOuverture: true, dateIntervention: true, actionCorrective: true },
   });
   if (!inc || !['OUVERT', 'EN_COURS'].includes(inc.statut)) return false;
+  // La résolution ne peut pas PRÉCÉDER l'ouverture (contrainte SQL
+  // incidents_resolution_apres_ouverture). Le cas réel : l'incident naît à la
+  // PRISE EN CHARGE, donc APRÈS le début de la coupure — si le NOC clôture
+  // ensuite avec un rétablissement antérieur à l'adoption, la résolution
+  // tomberait avant l'ouverture et TOUTE la clôture partait en 500. On borne
+  // à l'ouverture (durée 0) : l'incident a couvert un rétablissement déjà
+  // acquis, la durée d'indisponibilité réelle vit sur la coupure.
+  const quandEffectif = quand < inc.dateOuverture ? inc.dateOuverture : quand;
   // Rétabli SANS passage sur site (aucune intervention enregistrée) : le dire
   // explicitement — sinon l'incident résolu ressemble, dans les stats et à la
   // relecture, à une intervention terrain qui n'a jamais eu lieu.
@@ -416,8 +424,8 @@ export async function resoudreIncidentSiPlusDeCoupure(
     where: { id: incidentId },
     data: {
       statut: 'RESOLU',
-      dateResolution: quand,
-      dureeCoupureMinutes: minutesEntre(inc.dateOuverture, quand),
+      dateResolution: quandEffectif,
+      dureeCoupureMinutes: minutesEntre(inc.dateOuverture, quandEffectif),
       ...(sansIntervention && !inc.actionCorrective
         ? { actionCorrective: 'Rétablissement constaté par le NOC - aucune intervention terrain.' }
         : {}),
