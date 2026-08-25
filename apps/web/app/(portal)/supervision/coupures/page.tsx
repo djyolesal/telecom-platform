@@ -615,8 +615,19 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const [intervenants, setIntervenants] = useState(coupure.intervenants ?? '');
   const [causeCategorie, setCauseCategorie] = useState(coupure.causeCategorie ?? '');
   // Qualification NOC : l'OSS ne voit que l'eNodeB et classe « Site entier » —
-  // quand seule la 4G est tombée, l'opérateur requalifie ici.
-  const [technologie, setTechnologie] = useState(coupure.technologie);
+  // quand seules certaines technologies sont tombées, l'opérateur requalifie
+  // ici. MULTI-sélection comme à la déclaration : la ligne existante prend une
+  // techno, le serveur crée les autres en copie (mêmes dates, même incident).
+  const [technos, setTechnos] = useState<Set<string>>(new Set([coupure.technologie]));
+  const siteEntier = technos.has('SITE');
+  const toggleTechno = (v: string) => {
+    setTechnos((prev) => {
+      if (v === 'SITE') return new Set(['SITE']);
+      const next = new Set([...prev].filter((t) => t !== 'SITE'));
+      if (next.has(v)) next.delete(v); else next.add(v);
+      return next.size ? next : new Set(['SITE']);
+    });
+  };
   const [cloturerHeritees, setCloturerHeritees] = useState(true);
   const nbHeritees = coupure._count?.heritees ?? 0;
   // Retirer la date de fin d'une coupure clôturée = réouverture : l'incident
@@ -627,13 +638,16 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
     mutationFn: () => api.put(`/coupures-reseau/${coupure.id}`, {
       // Début envoyé seulement s'il a été corrigé (l'audit trace l'ancien).
       ...(dateDebut && dateDebut !== toLocal(coupure.dateDebut) ? { dateDebut } : {}),
-      // Technologie envoyée seulement si requalifiée (l'audit trace l'ancienne).
-      ...(technologie !== coupure.technologie ? { technologie } : {}),
+      // Technologie(s) envoyée(s) seulement si requalifiée(s) — plusieurs
+      // pastilles = une coupure par techno (la ligne existante + des copies).
+      ...(technos.size === 1
+        ? ([...technos][0] !== coupure.technologie ? { technologie: [...technos][0] } : {})
+        : { technologies: [...technos] }),
       dateFin: dateFin || null,
       // Hors « Site entier », la cascade n'a plus de sens : les héritées sont
       // les pannes d'AUTRES sites - on ne les clôture jamais depuis une
       // coupure devenue partielle.
-      cloturerHeritees: technologie === 'SITE' ? cloturerHeritees : false,
+      cloturerHeritees: siteEntier ? cloturerHeritees : false,
       cause: cause || null,
       actions: actions || null,
       typeAlarme: typeAlarme || null,
@@ -660,7 +674,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           mécanique du régime SITE ENTIER : dès que la pastille le quitte,
           elle disparaît - proposer de « déclencher le terrain » sur une
           coupure requalifiée partielle serait contradictoire. */}
-      {coupure.source === 'OSS' && !coupure.priseEnChargePar && !coupure.dateFin && technologie === 'SITE' && (
+      {coupure.source === 'OSS' && !coupure.priseEnChargePar && !coupure.dateFin && siteEntier && (
         <PriseEnChargeBloc coupureId={coupure.id} onDone={onDone} />
       )}
       {coupure.priseEnChargePar && (
@@ -677,17 +691,18 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       <Field label="Technologie (qualification NOC)">
         <div className="flex flex-wrap gap-2">
           {TECHNOS.map((t) => (
-            <button key={t.value} type="button" onClick={() => setTechnologie(t.value)}
-              className={`rounded-full border px-3 py-1 text-sm font-medium ${technologie === t.value ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+            <button key={t.value} type="button" onClick={() => toggleTechno(t.value)}
+              className={`rounded-full border px-3 py-1 text-sm font-medium ${technos.has(t.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
               {t.label}
             </button>
           ))}
         </div>
       </Field>
-      {technologie !== coupure.technologie && coupure.technologie === 'SITE' && (
+      {coupure.technologie === 'SITE' && !siteEntier && (
         <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Requalifier hors « Site entier » : la coupure devient <b>partielle</b> (elle sort du régime site entier
-          et ne compte plus que contre la {technologie}).
+          Requalifier hors « Site entier » : la coupure devient <b>partielle</b> et ne compte plus que contre
+          la {[...technos].join(' + ')}.
+          {technos.size > 1 ? ' Une coupure par technologie cochée sera créée (mêmes dates, même incident).' : ''}
           {coupure.incident ? " L'incident lié reste tel quel - ajustez sa sévérité si besoin." : ''}
           {nbHeritees > 0 ? ` Les ${nbHeritees} héritée(s) restent rattachées et ne seront PAS clôturées en cascade - supprimez celles qui n'ont pas lieu d'être.` : ''}
         </p>
@@ -719,7 +734,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           {reouverture && <span className="text-amber-700"> - la réouverture rouvrira cet incident et notifiera le prestataire.</span>}
         </p>
       )}
-      {nbHeritees > 0 && dateFin && technologie === 'SITE' && (
+      {nbHeritees > 0 && dateFin && siteEntier && (
         <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-[#EAF1F8] p-3 text-sm text-[#1B3F6B]">
           <input type="checkbox" checked={cloturerHeritees} onChange={(e) => setCloturerHeritees(e.target.checked)} className="mt-0.5 h-4 w-4 rounded" />
           <span>Clôturer aussi les <b>{nbHeritees} coupure(s) héritée(s)</b> des sites en aval (même heure de rétablissement).</span>

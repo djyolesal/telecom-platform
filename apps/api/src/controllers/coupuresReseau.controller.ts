@@ -706,14 +706,28 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       data.siteId = cible.id;
     }
     // Technologie : QUALIFIABLE par le NOC (mêmes rôles que l'édition). Cas
-    // réel : l'OSS ne voit que l'eNodeB et classe « SITE » — quand seule la 4G
-    // est réellement tombée (baseband LTE), le NOC requalifie en 4G : la
-    // coupure sort du régime site entier (classée partielle) sans perdre son
-    // historique. L'audit consigne ancienne → nouvelle valeur.
-    if ('technologie' in b && b.technologie) {
-      const t = String(b.technologie).toUpperCase();
-      if (!['SITE', '2G', '3G', '4G', '5G'].includes(t)) throw new AppError('technologie invalide', 400);
-      data.technologie = t;
+    // réel : l'OSS ne voit que l'eNodeB et classe « SITE » — quand seules la
+    // 3G/4G sont réellement tombées, le NOC requalifie : la coupure sort du
+    // régime site entier sans perdre son historique. Comme à la déclaration,
+    // PLUSIEURS technologies peuvent être cochées : la ligne existante prend
+    // la première, les autres sont CRÉÉES en copie (mêmes dates, même
+    // incident — le rebouclage attendra leur clôture) sans re-notifier.
+    let technosSupplementaires: string[] = [];
+    const technosDemandees = Array.isArray(b.technologies) && b.technologies.length
+      ? (b.technologies as unknown[]).map((t) => String(t).toUpperCase())
+      : ('technologie' in b && b.technologie ? [String(b.technologie).toUpperCase()] : null);
+    if (technosDemandees) {
+      if (technosDemandees.some((t) => !['SITE', '2G', '3G', '4G', '5G'].includes(t))) {
+        throw new AppError('technologie invalide', 400);
+      }
+      if (technosDemandees.includes('SITE') && technosDemandees.length > 1) {
+        throw new AppError('« Site entier » couvre déjà toutes les technologies', 400);
+      }
+      // La ligne existante garde sa technologie si elle reste cochée, sinon
+      // prend la première — les autres cochées seront créées en copie.
+      const principale = technosDemandees.includes(existing.technologie) ? existing.technologie : technosDemandees[0];
+      if (principale !== existing.technologie) data.technologie = principale;
+      technosSupplementaires = technosDemandees.filter((t) => t !== principale);
     }
     // Clôture (ou ré-ouverture) → downtime recalculé, jamais saisi à la main.
     // Les saisies web sont à la MINUTE alors que le début stocké garde les
@@ -739,6 +753,43 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       data.downtimeMinutes = minutesEntre(data.dateDebut as Date, existing.dateFin);
     }
     const updated = await prisma.coupureReseau.update({ where: { id: existing.id }, data });
+
+    // Éclatement multi-technologies : chaque techno cochée en plus naît en
+    // COPIE de la ligne requalifiée (mêmes dates et champs, même incident —
+    // le rebouclage attendra la clôture de toutes). skipDuplicates : l'index
+    // unique (site, techno, fréquence, début) absorbe une ligne déjà connue.
+    let technologiesCreees = 0;
+    if (technosSupplementaires.length) {
+      const copies = await prisma.coupureReseau.createMany({
+        data: technosSupplementaires.map((t) => ({
+          siteId: updated.siteId,
+          technologie: t,
+          frequence: updated.frequence,
+          secteur: updated.secteur,
+          dateDebut: updated.dateDebut,
+          dateFin: updated.dateFin,
+          downtimeMinutes: updated.downtimeMinutes,
+          heureContact: updated.heureContact,
+          technicienContacte: updated.technicienContacte,
+          dateArriveeSite: updated.dateArriveeSite,
+          intervenants: updated.intervenants,
+          cause: updated.cause,
+          actions: updated.actions,
+          typeAlarme: updated.typeAlarme,
+          nocEngineer: updated.nocEngineer,
+          observations: updated.observations,
+          causeCategorie: updated.causeCategorie,
+          source: updated.source,
+          origine: updated.origine,
+          coupureOrigineId: updated.coupureOrigineId,
+          incidentId: updated.incidentId,
+          priseEnChargePar: updated.priseEnChargePar,
+          priseEnChargeLe: updated.priseEnChargeLe,
+        })),
+        skipDuplicates: true,
+      });
+      technologiesCreees = copies.count;
+    }
 
     // Clôture en cascade : rétablir la racine rétablit les coupures héritées
     // encore ouvertes (même heure de fin, downtime calculé pour chacune).
@@ -791,13 +842,14 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, {
       cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu,
+      ...(technologiesCreees ? { technologiesCreees: technosSupplementaires } : {}),
       // Corrections sensibles : l'ancienne valeur est consignée.
       ...(data.dateDebut instanceof Date ? { ancienDebut: existing.dateDebut, nouveauDebut: data.dateDebut } : {}),
       ...(data.siteId ? { ancienSiteId: existing.siteId, nouveauSiteId: data.siteId } : {}),
       ...(data.technologie ? { ancienneTechnologie: existing.technologie, nouvelleTechnologie: data.technologie } : {}),
     }, req);
     emettreCoupuresChangees({ action: 'maj', coupureId: existing.id });
-    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu } });
+    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu, technologiesCreees } });
   } catch (err) { next(err); }
 }
 
