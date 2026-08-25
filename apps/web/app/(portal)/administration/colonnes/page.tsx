@@ -28,16 +28,25 @@ export default function ColonnesTableauxPage() {
     queryKey: ['app-config'],
     queryFn: () => api.get('/config').then((r) => r.data.data as {
       colonnesOptionnelles?: Partial<Record<TableOptionnelle, string[] | null>> | null;
+      colonnesMasquees?: Partial<Record<TableOptionnelle, string[] | null>> | null;
     }),
   });
 
-  // null = toutes autorisées (défaut).
+  // Nouveau mode : liste NOIRE (colonnes masquées) — une colonne ajoutée au
+  // catalogue plus tard est cochée d'office. Repli : ancienne liste blanche
+  // (null = toutes) tant que rien n'a été ré-enregistré ici.
   useEffect(() => {
     if (data === undefined) return;
     const next = {} as Record<TableOptionnelle, Set<string>>;
     for (const t of TABLES) {
-      const autorisees = data.colonnesOptionnelles?.[t];
-      next[t] = new Set(autorisees ?? COLONNES_OPTIONNELLES[t].colonnes.map((c) => c.key));
+      const catalogue = COLONNES_OPTIONNELLES[t].colonnes.map((c) => c.key);
+      const masquees = data.colonnesMasquees?.[t];
+      if (Array.isArray(masquees)) {
+        next[t] = new Set(catalogue.filter((k) => !masquees.includes(k)));
+      } else {
+        const autorisees = data.colonnesOptionnelles?.[t];
+        next[t] = new Set(autorisees ?? catalogue);
+      }
     }
     setActives(next);
   }, [data]);
@@ -45,9 +54,12 @@ export default function ColonnesTableauxPage() {
   const save = useMutation({
     mutationFn: () =>
       api.put('/admin/settings', TABLES.map((t) => ({
-        key: `web.colonnesOptionnelles.${t}`,
-        value: COLONNES_OPTIONNELLES[t].colonnes.filter((c) => actives[t].has(c.key)).map((c) => c.key),
-        description: `Colonnes optionnelles proposées - ${COLONNES_OPTIONNELLES[t].titre}`,
+        // Liste NOIRE : on enregistre ce qui est DÉCOCHÉ. L'ancienne liste
+        // blanche figeait le catalogue — toute colonne ajoutée ensuite
+        // disparaissait de tous les sélecteurs sans trace.
+        key: `web.colonnesMasquees.${t}`,
+        value: COLONNES_OPTIONNELLES[t].colonnes.filter((c) => !actives[t].has(c.key)).map((c) => c.key),
+        description: `Colonnes optionnelles masquées - ${COLONNES_OPTIONNELLES[t].titre}`,
       }))),
     onSuccess: () => {
       setSavedOk(true);
@@ -84,6 +96,17 @@ export default function ColonnesTableauxPage() {
                 <Columns3 size={15} className="text-[#1B3F6B]" />
                 <span className="text-sm font-semibold text-gray-800">{def.titre}</span>
                 <span className="ml-auto text-xs text-gray-400">{actives[table].size}/{def.colonnes.length}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const toutes = actives[table].size === def.colonnes.length;
+                    setActives((prev) => ({ ...prev, [table]: new Set(toutes ? [] : def.colonnes.map((c) => c.key)) }));
+                    setSavedOk(false);
+                  }}
+                  className="text-xs font-medium text-[#2471A3] hover:underline"
+                >
+                  {actives[table].size === def.colonnes.length ? 'Tout décocher' : 'Tout cocher'}
+                </button>
               </div>
               <div className="divide-y divide-gray-50">
                 {def.colonnes.map((c) => (

@@ -27,6 +27,18 @@ export function getAppConfig(_req: Request, res: Response) {
           depotages: arr('web.colonnesOptionnelles.depotages'),
         };
       })(),
+      // Colonnes MASQUÉES par l'admin (liste noire) — remplace la liste
+      // blanche ci-dessus : une liste blanche figée excluait silencieusement
+      // toute colonne ajoutée au catalogue APRÈS l'enregistrement. Tableau
+      // présent (même vide) = nouveau mode ; absent = repli sur l'ancienne.
+      colonnesMasquees: (() => {
+        const arr = (k: string) => { const v = getRaw(k); return Array.isArray(v) ? (v as string[]) : null; };
+        return {
+          sites: arr('web.colonnesMasquees.sites'),
+          maintenances: arr('web.colonnesMasquees.maintenances'),
+          depotages: arr('web.colonnesMasquees.depotages'),
+        };
+      })(),
     },
   });
 }
