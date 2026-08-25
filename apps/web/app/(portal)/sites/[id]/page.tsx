@@ -15,6 +15,7 @@ import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { DataTable } from '@/components/shared/DataTable';
 import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { litresPourHauteur, hauteurMaxCm, type ConfigCuve } from '@/lib/cuve';
+import { PhotoGallery } from '@/components/shared/PhotoGallery';
 import { POWER_CONFIGS, STATUTS_GE, TYPES_PYLONE, FORMES_CUVE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 import { useTypesLiaison, couleurLiaison } from '@/lib/liaisons';
@@ -269,6 +270,13 @@ export default function SiteDetailPage() {
           <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[#2471A3] hover:underline">{site.telephoneSite}</a> : '—'} />
         </div>
         {site.cuve?.calculable && <ConvertisseurCuve site={site} />}
+        {(site.cuve?.photos?.length ?? 0) > 0 && (
+          <div className="mt-3">
+            {/* Preuves des mesures terrain (plaque, cuve, table de barémage) :
+                permet de vérifier une dimension douteuse sans repasser sur site. */}
+            <PhotoGallery photos={site.cuve.photos} title="Photos de la cuve (mesures terrain)" />
+          </div>
+        )}
         {site.groupes?.length > 0 && (
           <div className="mt-3 border-t border-gray-50 pt-3">
             <p className="mb-1.5 text-xs font-medium text-gray-500">Groupes électrogènes ({site.groupes.length})</p>

@@ -17,6 +17,7 @@ import { generateEtiquettesQrPdf } from '../services/pdf.service';
 import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission, assertSansCycle } from '../utils/transmission';
 import { ConfigCuve, cuveCalculable, hauteurMaxCm, volumeMaxLitres } from '../utils/cuve';
+import { publicFileUrl } from '../services/storage.service';
 
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
 const IMPORT_COLUMNS = [
@@ -199,7 +200,15 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
     };
     const volumeTheorique = volumeMaxLitres(configCuve);
     const nominal = site.cuveVolumeLitres != null ? Number(site.cuveVolumeLitres) : null;
+    // Photos des mesures terrain (plaque, cuve, barème) — les plus récentes.
+    const photosCuve = await prisma.photo.findMany({
+      where: { entityType: 'site_cuve', entityId: site.id },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: { id: true, url: true, minioKey: true, createdAt: true },
+    });
     const cuve = {
+      photos: photosCuve.map((p) => ({ id: p.id, createdAt: p.createdAt, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
       calculable: volumeTheorique != null,
       hauteurMaxCm: hauteurMaxCm(configCuve),
       volumeTheoriqueLitres: volumeTheorique,
@@ -268,8 +277,22 @@ export async function updateCuveSite(req: Request, res: Response, next: NextFunc
     }
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ cuve fourni.', 400);
 
+    // Photos d'accompagnement (plaque, cuve, table de barémage) : la preuve qui
+    // permet de vérifier une mesure douteuse SANS repasser sur site. Fichiers
+    // déjà déposés via /upload/image ({url, key}) — on garde l'historique
+    // (chaque campagne de mesure ajoute les siennes, la fiche montre les
+    // plus récentes).
+    const brutPhotos = (b.photos as Array<{ url?: string; key?: string }> | undefined) ?? [];
+    if (!Array.isArray(brutPhotos) || brutPhotos.length > 4) throw new AppError('4 photos max par mesure', 400);
+    const photos = brutPhotos.filter((p) => p && p.url && p.key);
+
     const updated = await prisma.site.update({ where: { id: site.id }, data });
-    await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { cuve: data }, req);
+    if (photos.length) {
+      await prisma.photo.createMany({
+        data: photos.map((p) => ({ entityType: 'site_cuve', entityId: site.id, url: p.url!, minioKey: p.key! })),
+      });
+    }
+    await auditLog(req.user!.id, 'UPDATE', 'sites', site.id, { cuve: data, photosCuve: photos.length }, req);
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }

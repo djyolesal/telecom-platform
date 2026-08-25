@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import '../../../core/services/upload_service.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/maps_launcher.dart';
 import '../../../core/theme/app_theme.dart';
@@ -43,6 +46,11 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     final volume = TextEditingController(
         text: s.cuveVolumeLitres?.toStringAsFixed(0) ?? '');
     const numKb = TextInputType.numberWithOptions(decimal: true);
+    // Photos d'accompagnement (plaque, cuve, table de baremage) : la preuve
+    // qui permet de verifier la mesure sans repasser sur site. Camera
+    // uniquement, memes bornes que les photos de maintenance (anti-ANR).
+    final photos = <XFile>[];
+    final picker = ImagePicker();
 
     final ok = await showModalBottomSheet<bool>(
       context: context,
@@ -112,6 +120,70 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   keyboardType: numKb,
                   decoration: const InputDecoration(
                       labelText: 'Volume nominal (L, plaque de la cuve)')),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: photos.length >= 3
+                        ? null
+                        : () async {
+                            try {
+                              final img = await picker.pickImage(
+                                source: ImageSource.camera,
+                                maxWidth: 1600,
+                                maxHeight: 1600,
+                                imageQuality: 70,
+                              );
+                              if (img != null) setSheet(() => photos.add(img));
+                            } catch (_) {/* annule / permission refusee */}
+                          },
+                    icon: const Icon(Icons.photo_camera, size: 18),
+                    label: Text('Photo (${photos.length}/3)'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Plaque, cuve, table de baremage…',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey.shade600)),
+                  ),
+                ],
+              ),
+              if (photos.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < photos.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(File(photos[i].path),
+                                    width: 64, height: 64, fit: BoxFit.cover),
+                              ),
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setSheet(() => photos.removeAt(i)),
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle),
+                                    child: const Icon(Icons.close,
+                                        size: 16, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 14),
               // Le thème impose minimumSize Size.fromHeight(50) aux
               // FilledButton (largeur infinie) : dans une Row il faut le
@@ -151,6 +223,23 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       },
       if (n(volume) != null) 'cuveVolumeLitres': n(volume),
     };
+    // Upload des photos AVANT l'envoi de la mesure (meme exigence de reseau).
+    // Une photo qui echoue n'empeche pas la mesure de partir.
+    if (photos.isNotEmpty) {
+      final uploader = context.read<UploadService>();
+      final envoyees = <Map<String, String>>[];
+      for (final ph in photos) {
+        try {
+          final up = await uploader.uploadImage(
+              await ph.readAsBytes(),
+              'cuve_${s.id}_${envoyees.length}.jpg',
+              folder: 'cuves');
+          if (up != null) envoyees.add(up.toJson());
+        } catch (_) {/* photo perdue - la mesure part quand meme */}
+      }
+      if (envoyees.isNotEmpty) data['photos'] = envoyees;
+    }
+    if (!mounted) return;
     try {
       await context.read<SiteRepository>().majCuve(s.id, data);
       if (!mounted) return;
