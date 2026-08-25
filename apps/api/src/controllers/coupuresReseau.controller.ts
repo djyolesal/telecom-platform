@@ -164,6 +164,11 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           severite: 'CRITIQUE',
           description: `Site entier hors service (coupure ${technos.join('/')}) signalé par le NOC${coupures[0].typeAlarme ? ` - alarme ${coupures[0].typeAlarme}` : ''}.`,
           declarePar: userId,
+          // L'incident s'ouvre au DÉBUT réel de la panne, pas au moment de la
+          // saisie : le NOC insère souvent APRÈS coup (début rétroactif) —
+          // sinon le MTTR est faux et une clôture antérieure à la saisie
+          // violait la contrainte résolution ≥ ouverture. Borné à maintenant.
+          dateOuverture: new Date(Math.min(...coupures.map((c) => c.dateDebut.getTime()), Date.now())),
         },
         select: { id: true, reference: true },
       });
@@ -1510,7 +1515,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
     if (creerIncident) {
       const racineFull = await prisma.coupureReseau.findUnique({
         where: { id: racine.id },
-        select: { siteId: true, dateFin: true, technologie: true, site: { select: { nom: true } } },
+        select: { siteId: true, dateDebut: true, dateFin: true, technologie: true, site: { select: { nom: true } } },
       });
       if (racineFull && !racineFull.dateFin && racineFull.technologie === 'SITE') {
         const { incident, cree } = await avecRattrapageReferenceInc(() => prisma.$transaction(async (tx) => {
@@ -1531,6 +1536,10 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
               severite: 'CRITIQUE',
               description: `Site entier hors service - détection OSS prise en charge par ${nom}.`,
               declarePar: req.user!.id,
+              // Même règle qu'à la saisie NOC : l'incident s'ouvre au début
+              // réel de la panne (la détection OSS peut précéder l'adoption
+              // de plusieurs heures) — MTTR honnête, résolution ≥ ouverture.
+              dateOuverture: new Date(Math.min(racineFull.dateDebut.getTime(), Date.now())),
             },
             select: { id: true, reference: true },
           });
