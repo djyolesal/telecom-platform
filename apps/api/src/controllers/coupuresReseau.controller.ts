@@ -554,7 +554,7 @@ export async function getCoupures(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
-/** Création manuelle — plusieurs technologies d'un coup (une ligne par techno). */
+/** Création manuelle — plusieurs technologies = UNE ligne combinée (« 2G/4G »). */
 export async function createCoupure(req: Request, res: Response, next: NextFunction) {
   try {
     const b = req.body as Record<string, unknown>;
@@ -568,13 +568,21 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     if (technologies.some((t) => !TECHNOLOGIES.includes(t as never))) {
       throw new AppError('Technologie invalide (2G, 3G, 4G, 5G ou SITE)', 400);
     }
+    // MÊME MOTIF que la qualification : plusieurs pastilles → UNE ligne à
+    // valeur combinée en ordre canonique (« 2G/4G »). SITE explicite ou les
+    // quatre technos cochées = site entier.
+    const siteEntier = technologies.includes('SITE')
+      || ['2G', '3G', '4G', '5G'].every((t) => technologies.includes(t));
+    const technoValeur = siteEntier
+      ? 'SITE'
+      : ['2G', '3G', '4G', '5G'].filter((t) => technologies.includes(t)).join('/');
     const dateDebut = b.dateDebut ? new Date(String(b.dateDebut)) : null;
     if (!dateDebut || Number.isNaN(dateDebut.getTime())) throw new AppError('Date de début invalide', 400);
 
     // UN site = UNE coupure SITE ouverte, quelle que soit la source. Deux
     // lignes ouvertes pour la même panne (OSS + saisie NOC à des heures
     // différentes) faisaient compter le site deux fois dans les héritées.
-    if (technologies.includes('SITE')) {
+    if (siteEntier) {
       const deja = await prisma.coupureReseau.findFirst({
         where: { siteId, technologie: 'SITE', dateFin: null },
         select: { id: true, source: true, dateDebut: true },
@@ -601,9 +609,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
       typeAlarme: b.typeAlarme ? String(b.typeAlarme).slice(0, 10).toUpperCase() : null,
       observations: b.observations ? String(b.observations) : null,
     };
-    const rows = await prisma.$transaction(
-      technologies.map((technologie) => prisma.coupureReseau.create({ data: { ...champs, technologie } }))
-    );
+    const rows = [await prisma.coupureReseau.create({ data: { ...champs, technologie: technoValeur } })];
 
     // Propagation à l'AVAL de transmission : les descendants perdent leur lien
     // → une coupure SITE entier « héritée » par site aval, liée à la racine.
@@ -611,8 +617,6 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     // down, site alimenté) laisse la transmission en service — propager créerait
     // des héritées fictives sur tout l'aval (règle vérifiée ici, pas seulement
     // dans le formulaire web).
-    const siteEntier = technologies.includes('SITE')
-      || ['2G', '3G', '4G', '5G'].every((t) => technologies.includes(t));
     let sitesImpactes = 0;
     if (b.propagerAval === true && siteEntier) {
       const aval = await descendantsTransmission(siteId);
@@ -960,7 +964,16 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
         }
         const technoBrut = String(cell(row, 2) ?? '').trim();
         // « 2G/3G/4G » (toutes technos) → coupure SITE entier.
-        const technologie = technoParDefaut ?? (technoBrut.includes('/') ? 'SITE' : (technoBrut || 'SITE'));
+        // « 2G/4G » du rapport = coupure PARTIELLE multi-technologies, conservée
+        // en valeur combinée (ordre canonique) — plus interprétée « site
+        // entier ». SITE explicite ou les quatre technos → SITE.
+        const technologie = technoParDefaut ?? (() => {
+          const tokens = [...new Set(technoBrut.toUpperCase().split(/[^0-9A-Z]+/))]
+            .filter((t) => ['SITE', '2G', '3G', '4G', '5G'].includes(t));
+          if (!tokens.length) return technoBrut || 'SITE';
+          if (tokens.includes('SITE') || ['2G', '3G', '4G', '5G'].every((t) => tokens.includes(t))) return 'SITE';
+          return ['2G', '3G', '4G', '5G'].filter((t) => tokens.includes(t)).join('/');
+        })();
         const freq = String(cell(row, 3) ?? '').trim();
         lots.push({
           siteId,

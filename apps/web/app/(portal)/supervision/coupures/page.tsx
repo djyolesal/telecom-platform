@@ -552,7 +552,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
             </button>
           ))}
         </div>
-        <p className="mt-1 text-xs text-gray-400">« Site entier » = toutes les technologies down ; sinon une coupure par technologie cochée.</p>
+        <p className="mt-1 text-xs text-gray-400">« Site entier » = toutes les technologies down ; sinon une seule coupure combinée (ex. 2G/4G).</p>
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Début de la coupure" required>
