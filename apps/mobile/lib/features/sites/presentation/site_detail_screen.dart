@@ -113,16 +113,21 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   decoration: const InputDecoration(
                       labelText: 'Volume nominal (L, plaque de la cuve)')),
               const SizedBox(height: 14),
+              // Le thème impose minimumSize Size.fromHeight(50) aux
+              // FilledButton (largeur infinie) : dans une Row il faut le
+              // borner avec Expanded, sinon le layout de la feuille explose
+              // et le modal ne s'affiche jamais.
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
                       child: const Text('Annuler')),
                   const SizedBox(width: 8),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Enregistrer')),
+                  Expanded(
+                    child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Enregistrer')),
+                  ),
                 ],
               ),
             ],
