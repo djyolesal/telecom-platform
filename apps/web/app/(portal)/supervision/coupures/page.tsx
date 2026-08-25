@@ -614,6 +614,9 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const [typeAlarme, setTypeAlarme] = useState(coupure.typeAlarme === 'NA' ? '' : coupure.typeAlarme ?? '');
   const [intervenants, setIntervenants] = useState(coupure.intervenants ?? '');
   const [causeCategorie, setCauseCategorie] = useState(coupure.causeCategorie ?? '');
+  // Qualification NOC : l'OSS ne voit que l'eNodeB et classe « Site entier » —
+  // quand seule la 4G est tombée, l'opérateur requalifie ici.
+  const [technologie, setTechnologie] = useState(coupure.technologie);
   const [cloturerHeritees, setCloturerHeritees] = useState(true);
   const nbHeritees = coupure._count?.heritees ?? 0;
   // Retirer la date de fin d'une coupure clôturée = réouverture : l'incident
@@ -624,6 +627,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
     mutationFn: () => api.put(`/coupures-reseau/${coupure.id}`, {
       // Début envoyé seulement s'il a été corrigé (l'audit trace l'ancien).
       ...(dateDebut && dateDebut !== toLocal(coupure.dateDebut) ? { dateDebut } : {}),
+      // Technologie envoyée seulement si requalifiée (l'audit trace l'ancienne).
+      ...(technologie !== coupure.technologie ? { technologie } : {}),
       dateFin: dateFin || null,
       cloturerHeritees,
       cause: cause || null,
@@ -663,10 +668,24 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
+        <Field label="Technologie (qualification NOC)">
+          <Select value={technologie} onChange={(e) => setTechnologie(e.target.value)} options={TECHNOS} />
+        </Field>
         <Field label="Type d'alarme">
           <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="N/A" />
         </Field>
+      </div>
+      {technologie !== coupure.technologie && coupure.technologie === 'SITE' && (
+        <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Requalifier hors « Site entier » : la coupure devient <b>partielle</b> (elle sort du régime site entier
+          et ne compte plus que contre la {technologie}).
+          {coupure.incident ? " L'incident lié reste tel quel - ajustez sa sévérité si besoin." : ''}
+          {nbHeritees > 0 ? ` Les ${nbHeritees} héritée(s) restent rattachées - supprimez celles qui n'ont pas lieu d'être.` : ''}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Intervenant(s)"><Input value={intervenants} onChange={(e) => setIntervenants(e.target.value)} /></Field>
+        <span />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Cause"><Input value={cause} onChange={(e) => setCause(e.target.value)} /></Field>

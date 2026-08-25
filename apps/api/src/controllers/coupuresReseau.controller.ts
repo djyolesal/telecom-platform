@@ -698,19 +698,22 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       if (debut > new Date()) throw new AppError('Le début ne peut pas être dans le futur', 400);
       data.dateDebut = debut;
     }
-    // Site et technologie : corrigeables par l'ADMIN uniquement (une erreur de
-    // cible change l'imputation — la correction reste possible sans supprimer).
-    if (req.user!.role === 'ADMIN') {
-      if ('siteId' in b && b.siteId) {
-        const cible = await prisma.site.findUnique({ where: { id: String(b.siteId) }, select: { id: true } });
-        if (!cible) throw new AppError('Site cible introuvable', 404);
-        data.siteId = cible.id;
-      }
-      if ('technologie' in b && b.technologie) {
-        const t = String(b.technologie).toUpperCase();
-        if (!['SITE', '2G', '3G', '4G', '5G'].includes(t)) throw new AppError('technologie invalide', 400);
-        data.technologie = t;
-      }
+    // Site : corrigeable par l'ADMIN uniquement (une erreur de cible change
+    // l'imputation — la correction reste possible sans supprimer).
+    if (req.user!.role === 'ADMIN' && 'siteId' in b && b.siteId) {
+      const cible = await prisma.site.findUnique({ where: { id: String(b.siteId) }, select: { id: true } });
+      if (!cible) throw new AppError('Site cible introuvable', 404);
+      data.siteId = cible.id;
+    }
+    // Technologie : QUALIFIABLE par le NOC (mêmes rôles que l'édition). Cas
+    // réel : l'OSS ne voit que l'eNodeB et classe « SITE » — quand seule la 4G
+    // est réellement tombée (baseband LTE), le NOC requalifie en 4G : la
+    // coupure sort du régime site entier (classée partielle) sans perdre son
+    // historique. L'audit consigne ancienne → nouvelle valeur.
+    if ('technologie' in b && b.technologie) {
+      const t = String(b.technologie).toUpperCase();
+      if (!['SITE', '2G', '3G', '4G', '5G'].includes(t)) throw new AppError('technologie invalide', 400);
+      data.technologie = t;
     }
     // Clôture (ou ré-ouverture) → downtime recalculé, jamais saisi à la main.
     // Les saisies web sont à la MINUTE alors que le début stocké garde les
