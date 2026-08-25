@@ -445,7 +445,9 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
     req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (site_id) where.siteId = site_id;
-  if (technologie) where.technologie = technologie;
+  // `contains` et non l'égalité : une coupure requalifiée multi porte une
+  // valeur combinée (« 2G/4G ») qui doit sortir avec le filtre 2G comme 4G.
+  if (technologie) where.technologie = { contains: technologie };
   if (type_alarme) where.typeAlarme = type_alarme;
   // Source LOGIQUE (pas la colonne brute) : le rapport NOC (MANUEL) inclut
   // les AUTO ADOPTÉES — c'est lui qui est envoyé et qui fonde la dispo ;
@@ -707,27 +709,25 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     }
     // Technologie : QUALIFIABLE par le NOC (mêmes rôles que l'édition). Cas
     // réel : l'OSS ne voit que l'eNodeB et classe « SITE » — quand seules la
-    // 3G/4G sont réellement tombées, le NOC requalifie : la coupure sort du
-    // régime site entier sans perdre son historique. Comme à la déclaration,
-    // PLUSIEURS technologies peuvent être cochées : la ligne existante prend
-    // la première, les autres sont CRÉÉES en copie (mêmes dates, même
-    // incident — le rebouclage attendra leur clôture) sans re-notifier.
-    let technosSupplementaires: string[] = [];
+    // 3G/4G sont réellement tombées, le NOC requalifie. PLUSIEURS pastilles →
+    // UNE seule ligne à valeur combinée en ordre canonique (« 2G/4G ») — le
+    // format du rapport NOC ; les filtres passent en `contains` et la dispo
+    // fait déjà l'union par site, donc rien n'est compté double.
     const technosDemandees = Array.isArray(b.technologies) && b.technologies.length
       ? (b.technologies as unknown[]).map((t) => String(t).toUpperCase())
       : ('technologie' in b && b.technologie ? [String(b.technologie).toUpperCase()] : null);
     if (technosDemandees) {
-      if (technosDemandees.some((t) => !['SITE', '2G', '3G', '4G', '5G'].includes(t))) {
+      const uniques = [...new Set(technosDemandees)];
+      if (uniques.some((t) => !['SITE', '2G', '3G', '4G', '5G'].includes(t))) {
         throw new AppError('technologie invalide', 400);
       }
-      if (technosDemandees.includes('SITE') && technosDemandees.length > 1) {
+      if (uniques.includes('SITE') && uniques.length > 1) {
         throw new AppError('« Site entier » couvre déjà toutes les technologies', 400);
       }
-      // La ligne existante garde sa technologie si elle reste cochée, sinon
-      // prend la première — les autres cochées seront créées en copie.
-      const principale = technosDemandees.includes(existing.technologie) ? existing.technologie : technosDemandees[0];
-      if (principale !== existing.technologie) data.technologie = principale;
-      technosSupplementaires = technosDemandees.filter((t) => t !== principale);
+      const valeur = uniques.includes('SITE')
+        ? 'SITE'
+        : ['2G', '3G', '4G', '5G'].filter((t) => uniques.includes(t)).join('/');
+      if (valeur !== existing.technologie) data.technologie = valeur;
     }
     // Clôture (ou ré-ouverture) → downtime recalculé, jamais saisi à la main.
     // Les saisies web sont à la MINUTE alors que le début stocké garde les
@@ -754,42 +754,6 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     }
     const updated = await prisma.coupureReseau.update({ where: { id: existing.id }, data });
 
-    // Éclatement multi-technologies : chaque techno cochée en plus naît en
-    // COPIE de la ligne requalifiée (mêmes dates et champs, même incident —
-    // le rebouclage attendra la clôture de toutes). skipDuplicates : l'index
-    // unique (site, techno, fréquence, début) absorbe une ligne déjà connue.
-    let technologiesCreees = 0;
-    if (technosSupplementaires.length) {
-      const copies = await prisma.coupureReseau.createMany({
-        data: technosSupplementaires.map((t) => ({
-          siteId: updated.siteId,
-          technologie: t,
-          frequence: updated.frequence,
-          secteur: updated.secteur,
-          dateDebut: updated.dateDebut,
-          dateFin: updated.dateFin,
-          downtimeMinutes: updated.downtimeMinutes,
-          heureContact: updated.heureContact,
-          technicienContacte: updated.technicienContacte,
-          dateArriveeSite: updated.dateArriveeSite,
-          intervenants: updated.intervenants,
-          cause: updated.cause,
-          actions: updated.actions,
-          typeAlarme: updated.typeAlarme,
-          nocEngineer: updated.nocEngineer,
-          observations: updated.observations,
-          causeCategorie: updated.causeCategorie,
-          source: updated.source,
-          origine: updated.origine,
-          coupureOrigineId: updated.coupureOrigineId,
-          incidentId: updated.incidentId,
-          priseEnChargePar: updated.priseEnChargePar,
-          priseEnChargeLe: updated.priseEnChargeLe,
-        })),
-        skipDuplicates: true,
-      });
-      technologiesCreees = copies.count;
-    }
 
     // Clôture en cascade : rétablir la racine rétablit les coupures héritées
     // encore ouvertes (même heure de fin, downtime calculé pour chacune).
@@ -842,14 +806,13 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, {
       cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu,
-      ...(technologiesCreees ? { technologiesCreees: technosSupplementaires } : {}),
       // Corrections sensibles : l'ancienne valeur est consignée.
       ...(data.dateDebut instanceof Date ? { ancienDebut: existing.dateDebut, nouveauDebut: data.dateDebut } : {}),
       ...(data.siteId ? { ancienSiteId: existing.siteId, nouveauSiteId: data.siteId } : {}),
       ...(data.technologie ? { ancienneTechnologie: existing.technologie, nouvelleTechnologie: data.technologie } : {}),
     }, req);
     emettreCoupuresChangees({ action: 'maj', coupureId: existing.id });
-    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu, technologiesCreees } });
+    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu } });
   } catch (err) { next(err); }
 }
 
@@ -1242,7 +1205,11 @@ async function calculerDisponibiliteReseau(req: Request) {
           // Les brutes restent un sas d'attente — visibles sur la liste et la
           // carte, sans peser sur la dispo publiée ni sur les prestataires.
           AND: [{ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] }],
-          ...(technosSel.length ? { technologie: { in: [...new Set([...technosSel, 'SITE'])] } } : {}),
+          // OR de contains : les valeurs combinées (« 2G/4G ») comptent pour
+          // chacune de leurs technologies dans le rapport filtré.
+          ...(technosSel.length
+            ? { OR: [...new Set([...technosSel, 'SITE'])].map((t) => ({ technologie: { contains: t } })) }
+            : {}),
           ...(alarmesSel.length ? { typeAlarme: { in: alarmesSel } } : {}),
           ...(restreint ? { site: perimetre } : {}),
         },

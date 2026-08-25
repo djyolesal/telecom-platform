@@ -616,10 +616,13 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const [causeCategorie, setCauseCategorie] = useState(coupure.causeCategorie ?? '');
   // Qualification NOC : l'OSS ne voit que l'eNodeB et classe « Site entier » —
   // quand seules certaines technologies sont tombées, l'opérateur requalifie
-  // ici. MULTI-sélection comme à la déclaration : la ligne existante prend une
-  // techno, le serveur crée les autres en copie (mêmes dates, même incident).
-  const [technos, setTechnos] = useState<Set<string>>(new Set([coupure.technologie]));
+  // ici. MULTI-sélection → UNE seule ligne à valeur combinée (« 2G/4G »),
+  // le format du rapport NOC.
+  const [technos, setTechnos] = useState<Set<string>>(
+    new Set(coupure.technologie === 'SITE' ? ['SITE'] : coupure.technologie.split('/'))
+  );
   const siteEntier = technos.has('SITE');
+  const technoCanonique = siteEntier ? 'SITE' : ['2G', '3G', '4G', '5G'].filter((t) => technos.has(t)).join('/');
   const toggleTechno = (v: string) => {
     setTechnos((prev) => {
       if (v === 'SITE') return new Set(['SITE']);
@@ -638,11 +641,9 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
     mutationFn: () => api.put(`/coupures-reseau/${coupure.id}`, {
       // Début envoyé seulement s'il a été corrigé (l'audit trace l'ancien).
       ...(dateDebut && dateDebut !== toLocal(coupure.dateDebut) ? { dateDebut } : {}),
-      // Technologie(s) envoyée(s) seulement si requalifiée(s) — plusieurs
-      // pastilles = une coupure par techno (la ligne existante + des copies).
-      ...(technos.size === 1
-        ? ([...technos][0] !== coupure.technologie ? { technologie: [...technos][0] } : {})
-        : { technologies: [...technos] }),
+      // Technologies envoyées seulement si la qualification change — le
+      // serveur recompose la valeur combinée en ordre canonique.
+      ...(technoCanonique !== coupure.technologie ? { technologies: [...technos] } : {}),
       dateFin: dateFin || null,
       // Hors « Site entier », la cascade n'a plus de sens : les héritées sont
       // les pannes d'AUTRES sites - on ne les clôture jamais depuis une
@@ -700,9 +701,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       </Field>
       {coupure.technologie === 'SITE' && !siteEntier && (
         <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Requalifier hors « Site entier » : la coupure devient <b>partielle</b> et ne compte plus que contre
-          la {[...technos].join(' + ')}.
-          {technos.size > 1 ? ' Une coupure par technologie cochée sera créée (mêmes dates, même incident).' : ''}
+          Requalifier hors « Site entier » : la coupure devient <b>partielle</b> ({technoCanonique}) et ne
+          compte plus que contre {technos.size > 1 ? 'ces technologies' : 'cette technologie'}.
           {coupure.incident ? " L'incident lié reste tel quel - ajustez sa sévérité si besoin." : ''}
           {nbHeritees > 0 ? ` Les ${nbHeritees} héritée(s) restent rattachées et ne seront PAS clôturées en cascade - supprimez celles qui n'ont pas lieu d'être.` : ''}
         </p>
