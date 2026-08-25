@@ -194,7 +194,13 @@ export function DataTable<T>({
       </div>
       )}
 
-      <div className="overflow-x-auto" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+      {/* Barre horizontale TOUJOURS dessinée quand le contenu déborde : sur
+          macOS la barre système n'apparaît qu'au survol — les colonnes de
+          droite semblaient simplement absentes. */}
+      <div
+        className="overflow-x-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-gray-50"
+        style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}
+      >
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">

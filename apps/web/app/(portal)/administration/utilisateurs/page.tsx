@@ -181,18 +181,25 @@ export default function UtilisateursPage() {
   const rows: User[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
 
+  // Emails/libellés longs poussaient les dernières colonnes hors écran (le
+  // défilement horizontal existe mais reste invisible sur macOS) : tout ce qui
+  // peut être long est TRONQUÉ avec l'infobulle qui porte la valeur complète.
   const columns: Column<User>[] = [
-    { key: 'nom', header: 'Nom', render: (u) => <span className="font-medium text-gray-800">{u.prenom} {u.nom}</span> },
-    { key: 'email', header: 'Email' },
+    { key: 'nom', header: 'Nom', render: (u) => <span className="block max-w-[160px] truncate font-medium text-gray-800" title={`${u.prenom} ${u.nom}`}>{u.prenom} {u.nom}</span> },
+    { key: 'email', header: 'Email', render: (u) => <span className="block max-w-[190px] truncate" title={u.email}>{u.email}</span> },
+    { key: 'telephone', header: 'Téléphone', render: (u) => u.telephone ? <span className="tabular-nums">{u.telephone}</span> : <span className="text-gray-300" title="Sans numéro : ce compte ne recevra pas les SMS d'affectation">—</span> },
     { key: 'role', header: 'Rôle', render: (u) => ROLES.find((r) => r.value === u.role)?.label ?? u.role },
-    { key: 'prestataire', header: 'Prestataire', render: (u) => (u.prestataire ? `${u.prestataire.nom}${u.equipe ? ` (${u.equipe === 'PASSIVE' ? 'passive' : 'active'})` : ''}` : 'Interne') },
+    { key: 'prestataire', header: 'Prestataire', render: (u) => {
+      const libelle = u.prestataire ? `${u.prestataire.nom}${u.equipe ? ` (${u.equipe === 'PASSIVE' ? 'passive' : 'active'})` : ''}` : 'Interne';
+      return <span className="block max-w-[140px] truncate" title={libelle}>{libelle}</span>;
+    } },
     { key: 'region', header: 'Région', render: (u) => u.region || '—' },
     { key: 'isActive', header: 'Statut', render: (u) => <Badge className={u.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>{u.isActive ? 'Actif' : 'Inactif'}</Badge> },
-    { key: 'lastLoginAt', header: 'Dernière connexion', render: (u) => fmtDateTime(u.lastLoginAt) },
+    { key: 'lastLoginAt', header: 'Dern. connexion', render: (u) => <span className="whitespace-nowrap text-xs">{fmtDateTime(u.lastLoginAt)}</span> },
     {
       key: 'appareil', header: 'Appareil lié',
       render: (u) => u.appareilLabel
-        ? <span className="text-xs text-gray-600" title={`Lié le ${fmtDateTime(u.appareilLieLe)}`}>{u.appareilLabel}</span>
+        ? <span className="block max-w-[110px] truncate text-xs text-gray-600" title={`${u.appareilLabel} - lié le ${fmtDateTime(u.appareilLieLe)}`}>{u.appareilLabel}</span>
         : <span className="text-xs text-gray-300">—</span>,
     },
     {
