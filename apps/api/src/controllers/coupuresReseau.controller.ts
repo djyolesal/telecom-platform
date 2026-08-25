@@ -441,7 +441,7 @@ export async function resoudreIncidentSiPlusDeCoupure(
 
 /** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
 async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
-  const { site_id, technologie, type_alarme, statut, date_debut, date_fin, search, source, origine, a_qualifier } =
+  const { site_id, technologie, technologies, type_alarme, statut, date_debut, date_fin, search, source, origine, a_qualifier } =
     req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (site_id) where.siteId = site_id;
@@ -460,6 +460,14 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   // Conditions à OR internes cumulables : chacune pousse dans AND pour ne pas
   // s'écraser mutuellement (a_qualifier + période utilisent tous deux un OR).
   const et: Record<string, unknown>[] = [];
+  // Filtre MULTI-technologies (pastilles de la page) : OU de contains — cocher
+  // 2G sort les lignes « 2G » comme « 2G/4G ». Dans et[] pour ne pas écraser
+  // les autres OR.
+  if (technologies) {
+    const liste = technologies.split(',').map((t) => t.trim().toUpperCase())
+      .filter((t) => ['SITE', '2G', '3G', '4G', '5G'].includes(t));
+    if (liste.length) et.push({ OR: liste.map((t) => ({ technologie: { contains: t } })) });
+  }
   // « À qualifier » : type d'alarme ou classement actif/passif manquant —
   // typiquement les détections AUTO OSS, dont les rapports ont besoin.
   if (a_qualifier === '1') et.push({ OR: [{ typeAlarme: null }, { causeCategorie: null }] });

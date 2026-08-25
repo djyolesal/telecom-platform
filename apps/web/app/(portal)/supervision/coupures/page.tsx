@@ -91,7 +91,9 @@ export default function CoupuresReseauPage() {
   // défaut, le badge « X impacté(s) » de la racine dit déjà l'ampleur.
   const [avecHeritees, setAvecHeritees] = useState(false);
   const [aQualifier, setAQualifier] = useState(false);
-  const [technologie, setTechnologie] = useState('');
+  // Filtre technologies MULTI (pastilles) : vide = toutes. OU entre cochées,
+  // et « 2G » sort aussi les lignes combinées « 2G/4G ».
+  const [technosFiltre, setTechnosFiltre] = useState<Set<string>>(new Set());
   const [typeAlarme, setTypeAlarme] = useState('');
   const [source, setSource] = useState('');
   const [du, setDu] = useState('');
@@ -119,7 +121,7 @@ export default function CoupuresReseauPage() {
   });
 
   const { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ['coupures', { page, debounced, statut, technologie, typeAlarme, source, du, au, avecHeritees, aQualifier, tri }],
+    queryKey: ['coupures', { page, debounced, statut, technosFiltre: [...technosFiltre].sort().join(','), typeAlarme, source, du, au, avecHeritees, aQualifier, tri }],
     // Filet de sécurité 5 min : le push temps réel (socket) est la voie
     // principale de rafraîchissement.
     refetchInterval: 300_000,
@@ -130,7 +132,8 @@ export default function CoupuresReseauPage() {
       params: {
         page, limit: 20,
         search: debounced || undefined, statut: statut || undefined,
-        technologie: technologie || undefined, type_alarme: typeAlarme || undefined,
+        technologies: technosFiltre.size ? [...technosFiltre].join(',') : undefined,
+        type_alarme: typeAlarme || undefined,
         source: source || undefined,
         // Racines seulement : l'aval hérité arrive EMBARQUÉ sous chaque racine
         // (sous-lignes dépliables). En recherche, on repasse à plat pour
@@ -147,7 +150,7 @@ export default function CoupuresReseauPage() {
   const exportQuery = [
     debounced && `search=${encodeURIComponent(debounced)}`,
     statut && `statut=${statut}`,
-    technologie && `technologie=${technologie}`,
+    technosFiltre.size > 0 && `technologies=${[...technosFiltre].join(',')}`,
     typeAlarme && `type_alarme=${typeAlarme}`,
     source && `source=${source}`,
     // Fidélité affichage/export : en recherche la liste passe à plat (héritées
@@ -415,12 +418,32 @@ export default function CoupuresReseauPage() {
         onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Rechercher un site…"
         filters={[
-          { key: 'techno', label: 'Toutes technologies', value: technologie, options: TECHNOS, onChange: (v) => { setTechnologie(v); setPage(1); } },
           { key: 'alarme', label: 'Toutes alarmes', value: typeAlarme, options: TYPES_ALARME, onChange: (v) => { setTypeAlarme(v); setPage(1); } },
         ]}
       />
 
-      {/* Période (début de coupure) : borne les données affichées ET les exports. */}
+      {/* Technologies (multi) + période : bornent les données affichées ET les exports. */}
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">Technologies :</span>
+        {TECHNOS.map((t) => (
+          <button key={t.value} type="button"
+            onClick={() => {
+              setTechnosFiltre((prev) => {
+                const next = new Set(prev);
+                if (next.has(t.value)) next.delete(t.value); else next.add(t.value);
+                return next;
+              });
+              setPage(1);
+            }}
+            className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${technosFiltre.has(t.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+            {t.label}
+          </button>
+        ))}
+        {technosFiltre.size > 0 && (
+          <button type="button" onClick={() => { setTechnosFiltre(new Set()); setPage(1); }}
+            className="text-xs font-medium text-[#2471A3] hover:underline">Toutes</button>
+        )}
+      </div>
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="text-gray-500">Période :</span>
         <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
