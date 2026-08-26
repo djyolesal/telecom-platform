@@ -14,7 +14,7 @@ import { fmtDateTime } from '@/lib/utils';
 
 interface Contact {
   id: string; nom: string; prenom: string; telephone: string; email: string | null;
-  societe: string; actif: boolean;
+  societe: string; actif: boolean; prestataireId?: string | null;
   notifDemarrage: boolean; notifCloture: boolean; notifMaintenances: boolean; notifIncidents: boolean;
   notifCoupures: boolean; notifSituations: boolean;
   toutesSocietes: boolean;
@@ -26,6 +26,13 @@ interface Coherence {
   contactId: string; contactNom: string; contactSociete: string;
   critere: 'email' | 'telephone' | 'nom'; ecarts: Ecart[];
 }
+
+// Miroir du normNom serveur : rapprochement de la société saisie.
+const normSociete = (v: string) => v.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
+/** ZONE MORTE du ciblage : ni « toutes sociétés » ni prestataire reconnu →
+ *  le contact ne reçoit NI incidents NI coupures NI situations. */
+const horsPerimetre = (c: { toutesSocietes: boolean; prestataireId?: string | null }) =>
+  !c.toutesSocietes && !c.prestataireId;
 
 const VIDE: Omit<Contact, 'id'> = {
   nom: '', prenom: '', telephone: '', email: '', societe: '', actif: true,
@@ -68,6 +75,13 @@ export default function ContactsPage() {
     queryKey: ['contacts-coherence'],
     queryFn: () => api.get('/contacts/coherence').then((r) => r.data.data as Coherence[]),
   });
+  // Noms des prestataires connus : alimente l'avertissement « périmètre vide »
+  // du formulaire (société saisie non reconnue + toutes sociétés décoché).
+  const { data: prestatairesRef } = useQuery({
+    queryKey: ['prestataires-select'],
+    queryFn: () => api.get('/prestataires', { params: { is_active: true, limit: 200 } }).then((r) => r.data.data as { nom: string }[]),
+  });
+  const nomsPrestataires = (prestatairesRef ?? []).map((p) => normSociete(p.nom));
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['contacts'] });
   const onErr = (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur');
@@ -183,6 +197,7 @@ export default function ContactsPage() {
         <ContactForm
           initial={edit ?? VIDE}
           societes={societes}
+          nomsPrestataires={nomsPrestataires}
           loading={save.isPending}
           onCancel={() => { setEdit(null); setCreation(false); }}
           onSubmit={(c) => save.mutate(edit ? { ...c, id: edit.id } : c)}
@@ -233,6 +248,11 @@ export default function ContactsPage() {
                       {!c.notifCoupures && <Chip off>Sans coupures</Chip>}
                       {!c.notifSituations && <Chip off>Sans situations</Chip>}
                       <Chip accent={c.toutesSocietes}>{c.toutesSocietes ? 'Toutes sociétés' : 'Sa société'}</Chip>
+                      {horsPerimetre(c) && (
+                        <span title="Société non reconnue comme prestataire et « toutes sociétés » décoché : ce contact ne recevra ni incidents, ni coupures, ni situations périodiques. Cochez « toutes les sociétés » (contact interne/NOC) ou corrigez la société.">
+                          <Chip off>⚠ périmètre vide</Chip>
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-center">
@@ -441,14 +461,21 @@ function Chip({ children, off, accent }: { children: React.ReactNode; off?: bool
   );
 }
 
-function ContactForm({ initial, societes, loading, onCancel, onSubmit }: {
+function ContactForm({ initial, societes, nomsPrestataires, loading, onCancel, onSubmit }: {
   initial: Omit<Contact, 'id'> | Contact;
   societes: string[];
+  nomsPrestataires: string[];
   loading: boolean;
   onCancel: () => void;
   onSubmit: (c: Omit<Contact, 'id'>) => void;
 }) {
   const [f, setF] = useState({ ...initial, email: initial.email ?? '' });
+  // Société saisie ni INTERNE ni prestataire connu, et « toutes sociétés »
+  // décoché : le contact tomberait dans la ZONE MORTE du ciblage (aucun SMS
+  // d'incident/coupure/situation) — c'est le piège classique des fiches NOC.
+  const societeNorm = normSociete(f.societe || '');
+  const perimetreVide = !!f.societe && !f.toutesSocietes
+    && societeNorm !== 'INTERNE' && !nomsPrestataires.includes(societeNorm);
   const set = (patch: Partial<typeof f>) => setF((v) => ({ ...v, ...patch }));
   const Check = ({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) => (
     <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -482,6 +509,13 @@ function ContactForm({ initial, societes, loading, onCancel, onSubmit }: {
         <Check label="Situations périodiques (récap dépassements)" value={f.notifSituations} onChange={(v) => set({ notifSituations: v })} />
         <Check label="Toutes les sociétés (sinon : la sienne uniquement)" value={f.toutesSocietes} onChange={(v) => set({ toutesSocietes: v })} />
       </div>
+      {perimetreVide && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <b>« {f.societe} » n&apos;est ni INTERNE ni un prestataire connu</b> : sans « toutes les sociétés »,
+          ce contact ne recevra <b>aucun</b> SMS d&apos;incident, de coupure ni de situation périodique.
+          Pour un contact NOC/interne, cochez « toutes les sociétés » — ou corrigez la société.
+        </p>
+      )}
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="submit" loading={loading}>Enregistrer</Button>
