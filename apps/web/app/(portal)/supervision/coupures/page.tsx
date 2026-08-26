@@ -3,11 +3,10 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { Plus, Upload, X, CheckCircle2, AlertTriangle, WifiOff } from 'lucide-react';
+import { Plus, Upload, X, CheckCircle2, AlertTriangle, WifiOff, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { FilterBar } from '@/components/shared/FilterBar';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
@@ -418,48 +417,48 @@ export default function CoupuresReseauPage() {
         )}
       </div>
 
-      <FilterBar
-        search={search}
-        onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Rechercher un site…"
-        filters={[
-          { key: 'alarme', label: 'Toutes alarmes', value: typeAlarme, options: TYPES_ALARME, onChange: (v) => { setTypeAlarme(v); setPage(1); } },
-        ]}
-      />
-
-      {/* Technologies (multi) + période : bornent les données affichées ET les exports. */}
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-gray-500">Technologies :</span>
-        {TECHNOS.map((t) => (
-          <button key={t.value} type="button"
-            onClick={() => {
-              setTechnosFiltre((prev) => {
-                const next = new Set(prev);
-                if (next.has(t.value)) next.delete(t.value); else next.add(t.value);
-                return next;
-              });
-              setPage(1);
-            }}
-            className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${technosFiltre.has(t.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
-            {t.label}
-          </button>
-        ))}
-        {technosFiltre.size > 0 && (
-          <button type="button" onClick={() => { setTechnosFiltre(new Set()); setPage(1); }}
-            className="text-xs font-medium text-[#2471A3] hover:underline">Toutes</button>
-        )}
-      </div>
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-gray-500">Période :</span>
-        <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
-        <span className="text-gray-400">→</span>
-        <input type="date" value={au} onChange={(e) => { setAu(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
-        {(du || au) && (
-          <button type="button" onClick={() => { setDu(''); setAu(''); setPage(1); }}
-            className="text-xs font-medium text-[#2471A3] hover:underline">Effacer</button>
-        )}
+      {/* Filtres sur UNE rangée extensible : recherche compacte, pastilles
+          technologies, alarmes et période côte à côte (repli en colonnes sur
+          petit écran). Tous bornent les données affichées ET les exports. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        <div className="relative w-64">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Rechercher un site…" className="pl-9" />
+        </div>
+        <span className="flex items-center gap-1.5">
+          {TECHNOS.map((t) => (
+            <button key={t.value} type="button"
+              onClick={() => {
+                setTechnosFiltre((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(t.value)) next.delete(t.value); else next.add(t.value);
+                  return next;
+                });
+                setPage(1);
+              }}
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium ${technosFiltre.has(t.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              {t.label}
+            </button>
+          ))}
+          {technosFiltre.size > 0 && (
+            <button type="button" onClick={() => { setTechnosFiltre(new Set()); setPage(1); }}
+              className="text-xs font-medium text-[#2471A3] hover:underline">Toutes</button>
+          )}
+        </span>
+        <Select value={typeAlarme} onChange={(e) => { setTypeAlarme(e.target.value); setPage(1); }}
+          options={TYPES_ALARME} placeholder="Toutes alarmes" className="w-40" />
+        <span className="flex items-center gap-1.5">
+          <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+          <span className="text-gray-400">→</span>
+          <input type="date" value={au} onChange={(e) => { setAu(e.target.value); setPage(1); }}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+          {(du || au) && (
+            <button type="button" onClick={() => { setDu(''); setAu(''); setPage(1); }}
+              className="text-xs font-medium text-[#2471A3] hover:underline">Effacer</button>
+          )}
+        </span>
       </div>
 
       {isLoading ? <TableSkeleton cols={7} />
