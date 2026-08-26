@@ -209,7 +209,7 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
     where: {
       prestataireId: presta.id, statut: 'TERMINEE', tachePreventiveKey: { not: null },
       dateFin: { gte: monthStart, lt: monthEnd },
-      ...(lotId ? { site: { lotId } } : {}),
+      ...(lotId ? { site: contrat === 'SOLAIRE' ? { lotSolaireId: lotId } : { lotId } } : {}),
     },
     select: { siteId: true, tachePreventiveKey: true },
   });
