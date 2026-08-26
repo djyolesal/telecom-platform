@@ -24,6 +24,12 @@ export default function FicheValidationPage() {
   const [mois, setMois] = useState(String(now.getMonth() + 1));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [busyAll, setBusyAll] = useState(false);
+  // PASSIF (défaut) ou SOLAIRE : les deux contrats ont chacun leur fiche.
+  // Déclaré AVANT lotOptions qui en dépend — en dessous, la TDZ faisait
+  // crasher la page (« Cannot access 'contrat' before initialization »)
+  // dès qu'un prestataire avec attributions était sélectionné.
+  const [contrat, setContrat] = useState('PASSIF');
 
   const { data: prestataires, isLoading: chargePrestataires } = useQuery({
     queryKey: ['prestataires-select'],
@@ -45,10 +51,6 @@ export default function FicheValidationPage() {
         .map((a: { lot: { id: string; code: string; nom: string } }) => [a.lot.id, { value: a.lot.id, label: `${a.lot.code} - ${a.lot.nom}` }]),
     ).values(),
   ] as { value: string; label: string }[];
-
-  const [busyAll, setBusyAll] = useState(false);
-  // PASSIF (défaut) ou SOLAIRE : les deux contrats ont chacun leur fiche.
-  const [contrat, setContrat] = useState('PASSIF');
 
   const download = async () => {
     if (!prestataireId) { setError('Sélectionnez un prestataire.'); return; }
