@@ -1,5 +1,28 @@
 import '../../../core/utils/cuve.dart';
 
+/// Item de la checklist contractuelle attendue à la clôture (référentiel
+/// SERVEUR : le formulaire se dessine depuis cette liste — une évolution du
+/// PV solaire ne demande pas de nouvelle version d'application).
+class ItemChecklistAttendue {
+  final String cle;
+  final String libelle;
+  final String? mesurePlaceholder; // non null = l'item attend une mesure
+  const ItemChecklistAttendue(this.cle, this.libelle, this.mesurePlaceholder);
+
+  static List<ItemChecklistAttendue> listeFromJson(dynamic j) {
+    if (j is! List) return const [];
+    return [
+      for (final e in j)
+        if (e is Map)
+          ItemChecklistAttendue(
+            e['cle']?.toString() ?? '',
+            e['libelle']?.toString() ?? '',
+            e['mesure'] is Map ? (e['mesure']['placeholder']?.toString()) : null,
+          ),
+    ];
+  }
+}
+
 /// Groupe électrogène d'un site (pour la saisie des index horaires par GE).
 class GroupeGE {
   final String id;
@@ -57,6 +80,7 @@ class Maintenance {
   /// Dernières valeurs connues du site (détail uniquement) : repères affichés
   /// sous les champs de saisie + pré-contrôle de vraisemblance avant envoi.
   final ContexteSaisie? contexteSaisie;
+  final List<ItemChecklistAttendue> checklistAttendue;
 
   const Maintenance({
     required this.id,
@@ -88,6 +112,7 @@ class Maintenance {
     this.photoCount = 0,
     this.requiresEnergie = false,
     this.contexteSaisie,
+    this.checklistAttendue = const [],
   });
 
   /// Catégories considérées « passives » (relevés énergie requis à la clôture).
@@ -147,6 +172,7 @@ class Maintenance {
       requiresEnergie: (j['requiresEnergieReleve'] as bool?) ??
           ((j['natureTravaux'] as String? ?? 'ENTRETIEN') == 'ENTRETIEN' &&
               passiveCategories.contains(j['categorie'] as String)),
+      checklistAttendue: ItemChecklistAttendue.listeFromJson(j['checklistAttendue']),
       contexteSaisie: j['contexteSaisie'] is Map<String, dynamic>
           ? ContexteSaisie.fromJson(j['contexteSaisie'] as Map<String, dynamic>)
           : null,

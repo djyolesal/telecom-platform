@@ -226,6 +226,8 @@ class MaintenanceRepository {
     String? nomAgentSecurite,
     String? signatureAgentLocalPath,
     Map<String, dynamic>? energie,
+    // Checklist contractuelle (solaire) : [{cle, resultat, valeur?, commentaire?}].
+    List<Map<String, dynamic>> checklist = const [],
     List<String> photoPaths = const [],
     double? latitude,
     double? longitude,
@@ -257,6 +259,7 @@ class MaintenanceRepository {
         'dateFin': DateTime.now().toUtc().toIso8601String(),
         if (observations != null) 'observations': observations,
         if (energie != null && energie.isNotEmpty) 'energie': energie,
+        if (checklist.isNotEmpty) 'checklist': checklist,
         if (confirmerVraisemblance) 'confirmerVraisemblance': true,
         // Position au moment de la clôture (vérification "sur site" côté serveur).
         if (latitude != null) 'latitude': latitude,

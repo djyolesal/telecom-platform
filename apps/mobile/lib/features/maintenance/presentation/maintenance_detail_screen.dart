@@ -319,6 +319,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             nomAgentSecurite: result['nomAgentSecurite'] as String?,
             signatureAgentLocalPath: result['signatureAgentLocalPath'] as String?,
             energie: result['energie'] as Map<String, dynamic>?,
+            checklist: (result['checklist'] as List?)
+                    ?.cast<Map<String, dynamic>>() ??
+                const [],
             photoPaths: photoPaths,
             latitude: check.lat,
             longitude: check.lng,
@@ -678,6 +681,11 @@ class _CloseSheetState extends State<_CloseSheet> {
   // Vidange par GE : choix explicite du technicien (sinon pré-cochage au seuil).
   final Map<String, bool> _vidange = {};
   final Set<String> _vidangeTouched = {};
+  // Checklist contractuelle (solaire) : un statut par opération du PV, dessinée
+  // depuis le référentiel SERVEUR (checklistAttendue) — hors-ligne compris.
+  final Map<String, String> _ckResultats = {};
+  final Map<String, TextEditingController> _ckValeurs = {};
+  final Map<String, TextEditingController> _ckComms = {};
   // Déclaration obligatoire : agent de gardiennage présent sur site ?
   bool? _agentPresent;
   // Présent ⇒ il signe (exigé par le serveur, comme au dépotage).
@@ -691,6 +699,10 @@ class _CloseSheetState extends State<_CloseSheet> {
     for (final g in widget.maintenance.siteGroupes) {
       _geCtrls[g.id] = TextEditingController();
     }
+    for (final item in widget.maintenance.checklistAttendue) {
+      _ckValeurs[item.cle] = TextEditingController();
+      _ckComms[item.cle] = TextEditingController();
+    }
   }
 
   @override
@@ -703,7 +715,9 @@ class _CloseSheetState extends State<_CloseSheet> {
       _index,
       _puissance,
       _nomAgent,
-      ..._geCtrls.values
+      ..._geCtrls.values,
+      ..._ckValeurs.values,
+      ..._ckComms.values,
     ]) {
       c.dispose();
     }
@@ -846,6 +860,79 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   /// Case « Vidange effectuée » sous l'index horaire du GE, avec le compteur
   /// d'heures depuis la dernière vidange (seuil configurable, 250 h par défaut).
+  /// Une opération de la checklist : libellé + Conforme / Non conforme / N-A,
+  /// champ mesure si l'item en attend une, commentaire ouvert sur non-conformité.
+  Widget _checklistTile(ItemChecklistAttendue item) {
+    const numKb = TextInputType.numberWithOptions(decimal: true);
+    final resultat = _ckResultats[item.cle];
+    Widget choix(String val, String label, Color couleur) {
+      final actif = resultat == val;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() {
+            _ckResultats[item.cle] = val;
+            _error = null;
+          }),
+          child: Container(
+            margin: const EdgeInsets.only(right: 6),
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: actif ? couleur : Colors.white,
+              border: Border.all(color: actif ? couleur : Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: actif ? Colors.white : Colors.grey.shade700)),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(item.libelle, style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 6),
+          Row(children: [
+            choix('CONFORME', 'Conforme', Colors.green.shade600),
+            choix('NON_CONFORME', 'Non conforme', Colors.red.shade600),
+            choix('NA', 'N/A', Colors.grey.shade500),
+          ]),
+          if (item.mesurePlaceholder != null && resultat != 'NA') ...[
+            const SizedBox(height: 6),
+            TextField(
+              controller: _ckValeurs[item.cle],
+              keyboardType:
+                  RegExp(r'kWh|°C|Ω').hasMatch(item.mesurePlaceholder!)
+                      ? numKb
+                      : TextInputType.text,
+              decoration: InputDecoration(
+                isDense: true,
+                labelText: 'Mesure (${item.mesurePlaceholder})',
+              ),
+            ),
+          ],
+          if (resultat == 'NON_CONFORME') ...[
+            const SizedBox(height: 6),
+            TextField(
+              controller: _ckComms[item.cle],
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Constat (repris dans la corrective automatique)',
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _vidangeTile(GroupeGE g) {
     final seuil = AppConfig.intervalleVidangeHeures;
     final h = _heuresDepuisVidange(g);
@@ -990,9 +1077,34 @@ class _CloseSheetState extends State<_CloseSheet> {
       if (!confirme || !mounted) return;
     }
 
+    // Checklist solaire : chaque opération doit être statuée (le serveur le
+    // ré-exige de toute façon — autant échouer AVANT la file hors-ligne).
+    final attendue = widget.maintenance.checklistAttendue;
+    if (attendue.isNotEmpty) {
+      final manquants =
+          attendue.where((i) => _ckResultats[i.cle] == null).toList();
+      if (manquants.isNotEmpty) {
+        setState(() => _error =
+            'Checklist : statuez chaque opération (${manquants.length} restante(s)) - ex. « ${manquants.first.libelle} ».');
+        return;
+      }
+    }
+
     Navigator.pop(context, {
       'observations': _obs.text.trim(),
       'energie': energie,
+      if (attendue.isNotEmpty)
+        'checklist': [
+          for (final i in attendue)
+            {
+              'cle': i.cle,
+              'resultat': _ckResultats[i.cle],
+              if (_ckValeurs[i.cle]!.text.trim().isNotEmpty)
+                'valeur': _ckValeurs[i.cle]!.text.trim(),
+              if (_ckComms[i.cle]!.text.trim().isNotEmpty)
+                'commentaire': _ckComms[i.cle]!.text.trim(),
+            }
+        ],
       'photos': _photos,
       'agentPresent': _agentPresent,
       if (_nomAgent.text.trim().isNotEmpty)
@@ -1137,6 +1249,32 @@ class _CloseSheetState extends State<_CloseSheet> {
                                         fontSize: 12,
                                         color: Colors.green.shade800))),
                           ]),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      // Checklist contractuelle (solaire) : dessinée depuis
+                      // le référentiel serveur - un statut par opération.
+                      if (m.checklistAttendue.isNotEmpty) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  'Checklist contractuelle (${m.checklistAttendue.length} opérations)',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.amber.shade900)),
+                              const SizedBox(height: 6),
+                              for (final item in m.checklistAttendue)
+                                _checklistTile(item),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
                       ],
