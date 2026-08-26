@@ -485,8 +485,15 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
     if (au) where.dateDebut = { lte: au };
     if (du) et.push({ OR: [{ dateFin: null }, { dateFin: { gte: du } }] });
   }
-  if (et.length) where.AND = et;
   const perimetre = await sitePerimetre(req.user!.id);
+  // Sas AUTO invisible aux prestataires : un utilisateur rattaché à un
+  // prestataire ne voit que ce qui fonde ses rapports — manuelles + AUTO
+  // ADOPTÉES. La matière brute non qualifiée (rebonds, faux positifs) reste
+  // interne au NOC, comme les notifications qui ne partent qu'à l'adoption.
+  if (isRestreint(perimetre)) {
+    et.push({ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] });
+  }
+  if (et.length) where.AND = et;
   if (search || isRestreint(perimetre)) {
     where.site = {
       ...(isRestreint(perimetre) ? perimetre : {}),
@@ -1728,7 +1735,13 @@ export async function annulerPriseEnCharge(req: Request, res: Response, next: Ne
 export async function getCoupuresStats(req: Request, res: Response, next: NextFunction) {
   try {
     const perimetre = await sitePerimetre(req.user!.id);
-    const surSite = isRestreint(perimetre) ? { site: perimetre } : {};
+    const restreint = isRestreint(perimetre);
+    // Prestataires : le sas AUTO non adopté est invisible (cf. whereCoupures) —
+    // leurs tuiles ne comptent que ce que leur liste montre.
+    const surSite = {
+      ...(restreint ? { site: perimetre } : {}),
+      ...(restreint ? { AND: [{ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] }] } : {}),
+    };
     const ilYaUneHeure = new Date(Date.now() - 3600_000);
     const [enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne, enCoursAuto] =
       await Promise.all([
@@ -1760,6 +1773,9 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
         enCoursAuto,
         // Rapport NOC = racines manuelles + AUTO adoptées (aligné sur l'onglet).
         enCoursManuel: Math.max(0, enCours - enCoursHeritees - enCoursAuto),
+        // Prestataire rattaché : le web masque l'aiguillage sources (leur sas
+        // AUTO est vide par construction).
+        perimetreRestreint: restreint,
       },
     });
   } catch (err) { next(err); }

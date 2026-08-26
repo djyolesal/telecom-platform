@@ -113,6 +113,7 @@ export default function CoupuresReseauPage() {
     enCours: number; enCoursSiteEntier: number; enCoursHeritees: number; terminees: number;
     nouvellesDerniereHeure: number; aQualifier: number; enCoursAuto: number; enCoursManuel: number;
     plusAncienne?: { dateDebut: string; technologie: string; site?: { nom: string } } | null;
+    perimetreRestreint?: boolean;
   }
   const { data: stats } = useQuery({
     queryKey: ['coupures-stats'],
@@ -390,7 +391,10 @@ export default function CoupuresReseauPage() {
         </div>
         {/* Sas AUTO (détections non traitées) vs rapport NOC : une AUTO prise
             en charge REJOINT le rapport NOC - c'est lui qui est envoyé et qui
-            fonde la disponibilité. Compteurs sur les coupures en cours. */}
+            fonde la disponibilité. Compteurs sur les coupures en cours.
+            Masqué pour les prestataires : leur sas AUTO est invisible par
+            construction (serveur), l'aiguillage n'aurait aucun effet. */}
+        {!stats?.perimetreRestreint && (
         <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
           {[
             { v: '', l: 'Toutes sources' },
@@ -403,6 +407,7 @@ export default function CoupuresReseauPage() {
             </button>
           ))}
         </div>
+        )}
         <label className="flex cursor-pointer items-center gap-1.5 text-sm text-gray-600">
           <input type="checkbox" checked={avecHeritees} onChange={(e) => { setAvecHeritees(e.target.checked); setPage(1); }}
             className="h-4 w-4 rounded border-gray-300" />
