@@ -34,6 +34,7 @@ import { dateBornee } from '../utils/dates';
 import { paginate } from '../utils/paginator';
 import { triListe } from '../utils/triListe';
 import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
+import { CHECKLIST_SOLAIRE, RESULTATS_CHECKLIST } from '../utils/checklistSolaire';
 import { auditLog } from '../services/audit.service';
 import { generateMaintenancePdf, generateBonMouvementPdf } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
@@ -153,23 +154,26 @@ function sourcesForConfig(powerConfig: string): SourceEnergie[] {
  * et du périmètre (passive/active déduit de la catégorie). Renvoie null si non attribué.
  */
 async function resolvePrestataireId(siteId: string, categorie: string): Promise<string | null> {
-  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { lotId: true } });
-  if (!site?.lotId) return null;
+  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { lotId: true, lotSolaireId: true } });
 
-  const scope = SOLAIRE_CATS.includes(categorie)
-    ? 'SOLAIRE'
-    : PASSIVE_CATS.includes(categorie)
-      ? 'PASSIVE'
-      : ACTIVE_CATS.includes(categorie)
-        ? 'ACTIVE'
-        : null;
-  // Périmètre spécifique d'abord, puis "les deux" — SAUF solaire : contrat
-  // séparé, LES_DEUX (passive+active) ne le couvre pas.
-  const scopes: ScopeMaintenance[] = scope === 'SOLAIRE'
-    ? ['SOLAIRE']
-    : scope
-      ? [scope as ScopeMaintenance, 'LES_DEUX']
-      : ['LES_DEUX'];
+  // Contrat SOLAIRE : découpage de lots DISTINCT — l'attribution vit sur le
+  // lot solaire du site, jamais couverte par LES_DEUX (passive+active).
+  if (SOLAIRE_CATS.includes(categorie)) {
+    if (!site?.lotSolaireId) return null;
+    const a = await prisma.lotAssignment.findFirst({ where: { lotId: site.lotSolaireId, scope: 'SOLAIRE' } });
+    return a?.prestataireId ?? null;
+  }
+
+  if (!site?.lotId) return null;
+  const scope = PASSIVE_CATS.includes(categorie)
+    ? 'PASSIVE'
+    : ACTIVE_CATS.includes(categorie)
+      ? 'ACTIVE'
+      : null;
+  // Périmètre spécifique d'abord, puis "les deux"
+  const scopes: ScopeMaintenance[] = scope
+    ? [scope as ScopeMaintenance, 'LES_DEUX']
+    : ['LES_DEUX'];
 
   const assignment = await prisma.lotAssignment.findFirst({
     where: { lotId: site.lotId, scope: { in: scopes } },
@@ -322,6 +326,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
         prestataire: { select: { id: true, nom: true, contactCommercial: true, contactTechnique: true } },
         pieces: true,
         photos: true,
+        checklist: { orderBy: { cle: 'asc' } },
         releves: { include: { groupe: { select: { numero: true } } }, orderBy: { source: 'asc' } },
         incident: { select: { id: true, type: true, severite: true } },
       },
@@ -337,6 +342,12 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
       // Dernières valeurs connues du site : repères affichés sous les champs de
       // saisie mobile + pré-contrôle de vraisemblance avant mise en file hors-ligne.
       contexteSaisie: await contexteSaisieSite(maintenance.siteId, (maintenance.site.groupes ?? []).map((g) => g.id)),
+      // Checklist contractuelle attendue à la clôture (référentiel serveur) :
+      // le mobile dessine son formulaire depuis cette liste — une évolution du
+      // PV ne demande pas de nouvelle version d'application.
+      checklistAttendue: maintenance.tachePreventiveKey
+        ? (CHECKLIST_SOLAIRE[maintenance.tachePreventiveKey] ?? null)
+        : null,
       photos: maintenance.photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
     };
     res.json({ success: true, data });
@@ -843,6 +854,35 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       }
     }
 
+    // CHECKLIST contractuelle SOLAIRE : chaque opération du PV doit être
+    // statuée (Conforme / Non conforme / N-A) — c'est elle qui remplace le
+    // rapport Word. Validée AVANT toute écriture.
+    const itemsAttendus = existing.tachePreventiveKey ? CHECKLIST_SOLAIRE[existing.tachePreventiveKey] : undefined;
+    type LigneChecklist = { cle: string; resultat: string; valeur?: string | null; commentaire?: string | null };
+    let checklistValidee: LigneChecklist[] = [];
+    if (itemsAttendus) {
+      const brut = ((req.body as Record<string, unknown>).checklist ?? []) as LigneChecklist[];
+      const parCle = new Map(Array.isArray(brut) ? brut.map((l) => [String(l.cle), l]) : []);
+      const manquants: string[] = [];
+      for (const item of itemsAttendus) {
+        const l = parCle.get(item.cle);
+        const resultat = l ? String(l.resultat).toUpperCase() : '';
+        if (!RESULTATS_CHECKLIST.includes(resultat as never)) { manquants.push(item.libelle); continue; }
+        checklistValidee.push({
+          cle: item.cle,
+          resultat,
+          valeur: l?.valeur ? String(l.valeur).slice(0, 200) : null,
+          commentaire: l?.commentaire ? String(l.commentaire).slice(0, 300) : null,
+        });
+      }
+      if (manquants.length) {
+        throw new AppError(
+          `Checklist solaire incomplète — statuez chaque opération (Conforme, Non conforme ou N-A) : ${manquants.slice(0, 3).join(' ; ')}${manquants.length > 3 ? ` (+${manquants.length - 3} autres)` : ''}.`,
+          422
+        );
+      }
+    }
+
     // Vraisemblance des relevés : valeurs inhabituelles (jauge > cuve, index qui
     // recule, bond impossible…) → 422 avec la liste, jusqu'à confirmation
     // explicite du technicien (confirmerVraisemblance: true). La confirmation
@@ -918,6 +958,36 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
               .filter((p) => p && p.url && p.key)
               .map((p) => ({ entityType: 'maintenance', entityId: existing.id, url: p.url, minioKey: p.key, phase: 'APRES' })),
           });
+        }
+
+        // Checklist solaire : une ligne par opération du PV ; les
+        // NON-CONFORMITÉS ouvrent UNE maintenance corrective planifiée chez le
+        // même prestataire — le panneau fissuré ne meurt plus dans un Word.
+        if (checklistValidee.length) {
+          await tx.maintenanceChecklist.createMany({
+            data: checklistValidee.map((l) => ({ ...l, maintenanceId: existing.id })),
+            skipDuplicates: true,
+          });
+          const nc = checklistValidee.filter((l) => l.resultat === 'NON_CONFORME');
+          if (nc.length) {
+            const libelles = nc.map((l) => {
+              const item = (CHECKLIST_SOLAIRE[existing.tachePreventiveKey!] ?? []).find((i) => i.cle === l.cle);
+              return `- ${item?.libelle ?? l.cle}${l.commentaire ? ` (${l.commentaire})` : ''}`;
+            });
+            await tx.maintenance.create({
+              data: {
+                reference: await genererReference(tx, 'MNT', new Date()),
+                siteId: existing.siteId,
+                type: 'CURATIVE',
+                categorie: 'SOLAIRE',
+                equipement: 'Levée des non-conformités solaires',
+                description: `Non-conformités relevées à la clôture de ${existing.reference ?? 'la visite'} :\n${libelles.join('\n')}`,
+                statut: 'PLANIFIEE',
+                datePlanifiee: new Date(Date.now() + 7 * 86400000),
+                prestataireId: existing.prestataireId,
+              },
+            });
+          }
         }
 
         let m = await tx.maintenance.findUniqueOrThrow({ where: { id: req.params.id } });

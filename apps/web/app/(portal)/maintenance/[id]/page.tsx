@@ -121,6 +121,36 @@ export default function MaintenanceDetailPage() {
           )}
 
           {/* ── Relevés énergie capturés ── */}
+          {(m.checklist?.length ?? 0) > 0 && (() => {
+            type LigneCk = { cle: string; resultat: string; valeur?: string | null; commentaire?: string | null };
+            const lignes: LigneCk[] = m.checklist;
+            const attendue: { cle: string; libelle: string }[] = m.checklistAttendue ?? [];
+            const libelleDe = (cle: string) => attendue.find((i) => i.cle === cle)?.libelle ?? cle;
+            const badge = (r: string) => r === 'CONFORME'
+              ? 'bg-green-100 text-green-700'
+              : r === 'NON_CONFORME' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500';
+            const nc = lignes.filter((l) => l.resultat === 'NON_CONFORME').length;
+            return (
+              <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
+                <h3 className="mb-3 text-sm font-semibold text-gray-700">
+                  Checklist contractuelle solaire
+                  {nc > 0 && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{nc} non-conformité(s)</span>}
+                </h3>
+                <div className="space-y-1.5">
+                  {lignes.map((l) => (
+                    <div key={l.cle} className="flex flex-wrap items-start gap-2 border-b border-gray-50 pb-1.5 text-sm last:border-0">
+                      <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${badge(l.resultat)}`}>
+                        {l.resultat === 'CONFORME' ? 'Conforme' : l.resultat === 'NON_CONFORME' ? 'Non conforme' : 'N/A'}
+                      </span>
+                      <span className="flex-1 text-gray-700">{libelleDe(l.cle)}</span>
+                      {l.valeur && <span className="font-medium tabular-nums text-gray-800">{l.valeur}</span>}
+                      {l.commentaire && <span className="w-full pl-1 text-xs text-gray-500">{l.commentaire}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {m.releves?.length > 0 && (() => {
             type R = { id: string; source: string; volumeGasoilLitres?: number; gasoilConsommeLitres?: number; heuresFonctGE?: number; indexHeuresGE?: number; indexCompteur?: number; consommationKwh?: number; puissanceKva?: number; groupe?: { numero: number } };
             const releves: R[] = m.releves;

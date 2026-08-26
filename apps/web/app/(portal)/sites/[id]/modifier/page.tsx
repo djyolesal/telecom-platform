@@ -21,7 +21,7 @@ export default function ModifierSitePage() {
   const [form, setForm] = useState({
     code: '', nom: '', region: '', ville: '', adresse: '',
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
-    latitude: '', longitude: '', lotId: '',
+    latitude: '', longitude: '', lotId: '', lotSolaireId: '',
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '',
@@ -72,7 +72,14 @@ export default function ModifierSitePage() {
     ...typesLiaisonRef.map((t) => ({ value: t.code, label: `${t.code} - ${t.libelle} (${t.constructeur})` })),
   ];
 
-  const lotOptions = (lots ?? []).map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} - ${l.nom}` }));
+  // Deux découpages : lots passifs/actifs pour le rattachement principal,
+  // lots SOLAIRES pour le contrat solaire.
+  const lotOptions = (lots ?? [])
+    .filter((l: { contrat?: string }) => l.contrat !== 'SOLAIRE')
+    .map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} - ${l.nom}` }));
+  const lotSolaireOptions = (lots ?? [])
+    .filter((l: { contrat?: string }) => l.contrat === 'SOLAIRE')
+    .map((l: { id: string; code: string; nom: string }) => ({ value: l.id, label: `${l.code} - ${l.nom}` }));
 
   useEffect(() => {
     if (!site) return;
@@ -88,6 +95,7 @@ export default function ModifierSitePage() {
       latitude: site.latitude != null ? String(site.latitude) : '',
       longitude: site.longitude != null ? String(site.longitude) : '',
       lotId: site.lotId ?? '',
+      lotSolaireId: site.lotSolaireId ?? '',
       hasClimatiseur: site.hasClimatiseur ? 'true' : 'false',
       hasExtincteurs: site.hasExtincteurs ? 'true' : 'false',
       typePylone: site.typePylone ?? '',
@@ -157,6 +165,7 @@ export default function ModifierSitePage() {
         latitude: form.latitude ? Number(form.latitude) : null,
         longitude: form.longitude ? Number(form.longitude) : null,
         lotId: form.lotId || null,
+        lotSolaireId: form.lotSolaireId || null,
         hasClimatiseur: form.hasClimatiseur === 'true',
         hasExtincteurs: form.hasExtincteurs === 'true',
         typePylone: form.typePylone || null,
@@ -240,6 +249,9 @@ export default function ModifierSitePage() {
           </Field>
           <Field label="Lot (rattachement / prestataire)">
             <Select value={form.lotId} onChange={(e) => set('lotId', e.target.value)} options={lotOptions} placeholder="Aucun lot" />
+          </Field>
+          <Field label="Lot solaire (contrat solaire, découpage distinct)">
+            <Select value={form.lotSolaireId} onChange={(e) => set('lotSolaireId', e.target.value)} options={lotSolaireOptions} placeholder="Aucun (site sans contrat solaire)" />
           </Field>
           <Field label="Adresse">
             <Input value={form.adresse} onChange={(e) => set('adresse', e.target.value)} />

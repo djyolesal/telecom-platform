@@ -208,10 +208,13 @@ model Site {
   telephoneSite      String?  @map("telephone_site") @db.VarChar(30)
   isActive         Boolean     @default(true) @map("is_active")
   lotId            String?     @map("lot_id")
+  // Rattachement au lot SOLAIRE (découpage distinct du lot passif/actif).
+  lotSolaireId     String?     @map("lot_solaire_id")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
   lot             Lot?                @relation(fields: [lotId], references: [id])
+  lotSolaire      Lot?                @relation("SitesSolaires", fields: [lotSolaireId], references: [id])
   gardiennagePrestataire Prestataire? @relation("GardiennageSites", fields: [gardiennagePrestataireId], references: [id])
   maintenances    Maintenance[]
   depotages       Depotage[]
@@ -236,12 +239,31 @@ model Site {
   @@index([statutGE])
   @@index([powerConfig])
   @@index([lotId])
+  @@index([lotSolaireId])
   @@index([gardiennagePrestataireId])
   @@index([parentTransmissionId])
   @@map("sites")
 }
 
 // Groupe électrogène d'un site. Un site peut en avoir plusieurs (1, 2, 3…).
+// Checklist contractuelle typée d'une clôture (contrat solaire) : une ligne
+// par opération du PV — résultat CONFORME | NON_CONFORME | NA, mesure
+// éventuelle (Isc/Voc, tensions, Ω…) et commentaire. Le référentiel des
+// opérations vit dans le code (utils/checklistSolaire).
+model MaintenanceChecklist {
+  id            String  @id @default(uuid())
+  maintenanceId String  @map("maintenance_id")
+  cle           String  @db.VarChar(60)
+  resultat      String  @db.VarChar(15)
+  valeur        String? @db.VarChar(200)
+  commentaire   String? @db.VarChar(300)
+
+  maintenance Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+
+  @@unique([maintenanceId, cle])
+  @@map("maintenance_checklist")
+}
+
 // Table de barémage d'une cuve (métrologie) : couples hauteur mesurée → litres
 // fournis par le certificat de jaugeage ou relevés sur la plaque de la cuve.
 // Interpolation linéaire entre points ; prioritaire sur la formule géométrique.
@@ -357,6 +379,7 @@ model Maintenance {
   photos      Photo[]
   releves     ReleveEnergie[]
 
+  checklist      MaintenanceChecklist[]
   @@index([siteId])
   @@index([technicienId])
   @@index([prestataireId])
@@ -737,11 +760,16 @@ model Lot {
   code      String   @unique @db.VarChar(30)
   nom       String   @db.VarChar(120)
   region    String?  @db.VarChar(50)
+  // Contrat porté par le lot : les lots SOLAIRES découpent le parc
+  // différemment des lots passifs — un site est rattaché aux deux via
+  // lotId (passif/actif) et lotSolaireId.
+  contrat   String   @default("PASSIF_ACTIF") @db.VarChar(15) // PASSIF_ACTIF | SOLAIRE
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  sites       Site[]
-  assignments LotAssignment[]
+  sites         Site[]
+  sitesSolaires Site[] @relation("SitesSolaires")
+  assignments   LotAssignment[]
 
   @@map("lots")
 }

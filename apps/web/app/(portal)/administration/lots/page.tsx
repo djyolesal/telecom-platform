@@ -22,20 +22,21 @@ interface Lot {
   code: string;
   nom: string;
   region?: string;
+  contrat?: string;
   assignments: Assignment[];
-  _count?: { sites: number };
+  _count?: { sites: number; sitesSolaires?: number };
 }
 
 const scopeLabel = (s: string) => SCOPES_MAINTENANCE.find((o) => o.value === s)?.label ?? s;
 
 function CreateModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ code: '', nom: '', region: '' });
+  const [form, setForm] = useState({ code: '', nom: '', region: '', contrat: 'PASSIF_ACTIF' });
   const [error, setError] = useState('');
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const mutation = useMutation({
-    mutationFn: () => api.post('/lots', { code: form.code, nom: form.nom, region: form.region || undefined }),
+    mutationFn: () => api.post('/lots', { code: form.code, nom: form.nom, region: form.region || undefined, contrat: form.contrat }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['lots'] }); onClose(); },
     onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur'),
   });
@@ -52,6 +53,14 @@ function CreateModal({ onClose }: { onClose: () => void }) {
           <Field label="Code" required><Input value={form.code} onChange={(e) => set('code', e.target.value)} required placeholder="LOT-MAR-01" /></Field>
           <Field label="Nom" required><Input value={form.nom} onChange={(e) => set('nom', e.target.value)} required placeholder="Lot Maritime Sud" /></Field>
           <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="—" /></Field>
+          <Field label="Contrat porté par le lot">
+            <Select value={form.contrat} onChange={(e) => set('contrat', e.target.value)}
+              options={[
+                { value: 'PASSIF_ACTIF', label: 'Passive / Active' },
+                { value: 'SOLAIRE', label: 'Solaire (découpage distinct)' },
+              ]} />
+            <p className="mt-1 text-xs text-gray-400">Les lots solaires découpent le parc différemment : un site est rattaché à son lot passif ET, s&apos;il est solaire, à un lot solaire.</p>
+          </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
             <Button type="submit" loading={mutation.isPending}>Créer</Button>
@@ -81,8 +90,12 @@ export default function LotsPage() {
   const columns: Column<Lot>[] = [
     { key: 'code', header: 'Code', render: (l) => <span className="font-medium text-gray-800">{l.code}</span> },
     { key: 'nom', header: 'Nom' },
-    { key: 'region', header: 'Région', render: (l) => l.region || '—' },
-    { key: 'sites', header: 'Sites', align: 'center', render: (l) => l._count?.sites ?? 0 },
+    { key: 'contrat', header: 'Contrat', render: (l) => (
+      <Badge className={l.contrat === 'SOLAIRE' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600'}>
+        {l.contrat === 'SOLAIRE' ? 'Solaire' : 'Passive / Active'}
+      </Badge>
+    ) },
+    { key: 'sites', header: 'Sites', align: 'center', render: (l) => (l.contrat === 'SOLAIRE' ? l._count?.sitesSolaires ?? 0 : l._count?.sites ?? 0) },
     {
       key: 'assignments', header: 'Attributions', render: (l) => (
         <div className="flex flex-wrap gap-1">

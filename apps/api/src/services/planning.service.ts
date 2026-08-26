@@ -61,9 +61,9 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
 
   for (const site of sites) {
     for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
-      const prestataireId = site.lotId
-        ? (t.categorie === 'SOLAIRE' ? solaireByLot.get(site.lotId) : passifByLot.get(site.lotId))
-        : undefined;
+      const prestataireId = t.categorie === 'SOLAIRE'
+        ? (site.lotSolaireId ? solaireByLot.get(site.lotSolaireId) : undefined)
+        : (site.lotId ? passifByLot.get(site.lotId) : undefined);
       const mapKey = `${site.id}:${t.key}`;
       if (ouvertSet.has(mapKey)) continue;
       const freq = FREQUENCE_MOIS[t.frequence]!;

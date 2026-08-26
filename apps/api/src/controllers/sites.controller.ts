@@ -179,6 +179,8 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
             },
           },
         },
+        // Lot SOLAIRE (découpage distinct du lot passif/actif) + son titulaire.
+        lotSolaire: { include: { assignments: { where: { scope: 'SOLAIRE' }, include: { prestataire: { select: { id: true, nom: true } } } } } },
         gardiennagePrestataire: { select: { id: true, nom: true, contactTechnique: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
         baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } },
@@ -466,7 +468,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
     // createdAt/relations arbitraires injectés à la création.
     const data = pick<Prisma.SiteUncheckedCreateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
-      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
@@ -497,7 +499,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
     // Liste blanche : jamais de isActive/createdAt/marqueGE arbitraires ici.
     const data = pick<Prisma.SiteUncheckedUpdateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
-      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'typePylone',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone',
       'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',

@@ -17,6 +17,13 @@ const FICHE_ROWS: { numero: number; description: string; key: string; freq6: num
   { numero: 12, key: 'depotage', freq6: 6, description: 'Suivi des livraisons et relevé de niveau de carburant' },
 ];
 
+/** Fiche du CONTRAT SOLAIRE : les 3 visites contractuelles (mêmes clés que le catalogue). */
+const FICHE_ROWS_SOLAIRE: { numero: number; description: string; key: string; freq6: number }[] = [
+  { numero: 1, key: 'solaire_mensuel', freq6: 6, description: "Visite mensuelle solaire : énergie moyenne délivrée par jour, état de marche Auto/Manuel avec le GE, déport des alarmes et backup des configurations" },
+  { numero: 2, key: 'solaire_nettoyage', freq6: 2, description: "Nettoyage et dépoussiérage des panneaux solaires à l'eau déminéralisée, avec photos horodatées et géolocalisées" },
+  { numero: 3, key: 'solaire_semestriel', freq6: 1, description: "Grande visite semestrielle : panneaux (inspection, câblage, fixations, mises à la terre, mesures Isc/Voc par string), batteries (visuel, aérations, tension et température par élément, nettoyage), régulateur et coffret outdoor (fixation, parafoudres, ventilation, alarmes, nettoyage)" },
+];
+
 const MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 export interface FichePrestataire {
@@ -48,6 +55,8 @@ export interface FicheValidationData {
   sites: SiteEligibilite[];
   // Exécutions du mois : nb de sites distincts réalisés par clé de tâche.
   realisesParKey: Record<string, number>;
+  /** PASSIF (défaut) ou SOLAIRE : choisit les lignes contractuelles de la fiche. */
+  contrat?: 'PASSIF' | 'SOLAIRE';
   prestataireLogo?: FicheLogo | null;
   clientLogo?: FicheLogo | null;
 }
@@ -111,7 +120,9 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
   // ── Section ──
   ws.mergeCells('B22:I22');
   const sec = ws.getCell('B22');
-  sec.value = 'OPERATION DE MAINTENANCE PREVENTIVE';
+  sec.value = d.contrat === 'SOLAIRE'
+    ? 'OPERATION DE MAINTENANCE PREVENTIVE — CONTRAT SOLAIRE'
+    : 'OPERATION DE MAINTENANCE PREVENTIVE';
   sec.font = { bold: true };
   sec.alignment = { horizontal: 'center' };
   sec.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F0' } };
@@ -137,7 +148,7 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
 
   // ── Lignes des tâches ──
   let r = 24;
-  for (const row of FICHE_ROWS) {
+  for (const row of (d.contrat === 'SOLAIRE' ? FICHE_ROWS_SOLAIRE : FICHE_ROWS)) {
     const t = TASK_BY_KEY[row.key];
     const concernes = t ? d.sites.filter((s) => t.eligible(s)).length : 0;
     const realises = d.realisesParKey[row.key] ?? 0;

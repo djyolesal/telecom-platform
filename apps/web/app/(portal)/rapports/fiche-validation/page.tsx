@@ -40,12 +40,15 @@ export default function FicheValidationPage() {
   const lotOptions = [
     ...new Map(
       (prestaDetail?.assignments ?? [])
-        .filter((a: { scope: string; lot?: { id: string } }) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
+        .filter((a: { scope: string; lot?: { id: string } }) =>
+          contrat === 'SOLAIRE' ? a.scope === 'SOLAIRE' : a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
         .map((a: { lot: { id: string; code: string; nom: string } }) => [a.lot.id, { value: a.lot.id, label: `${a.lot.code} - ${a.lot.nom}` }]),
     ).values(),
   ] as { value: string; label: string }[];
 
   const [busyAll, setBusyAll] = useState(false);
+  // PASSIF (défaut) ou SOLAIRE : les deux contrats ont chacun leur fiche.
+  const [contrat, setContrat] = useState('PASSIF');
 
   const download = async () => {
     if (!prestataireId) { setError('Sélectionnez un prestataire.'); return; }
@@ -55,7 +58,9 @@ export default function FicheValidationPage() {
       const presta = (prestataires ?? []).find((p: { id: string; nom: string }) => p.id === prestataireId);
       const nom = (presta?.nom ?? 'prestataire').replace(/[^a-z0-9]+/gi, '_');
       const lotPart = lotId ? `&lot_id=${lotId}` : '';
-      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}`, `fiche-validation-${nom}-${mois}-${annee}.xlsx`);
+      const contratPart = contrat === 'SOLAIRE' ? '&contrat=SOLAIRE' : '';
+      const suffixe = contrat === 'SOLAIRE' ? '-solaire' : '';
+      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}${contratPart}`, `fiche-validation${suffixe}-${nom}-${mois}-${annee}.xlsx`);
     } catch {
       setError('Échec du téléchargement. Vérifiez le prestataire et la période.');
     } finally {
@@ -81,6 +86,10 @@ export default function FicheValidationPage() {
       <FormCard>
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Field label="Contrat" className="md:col-span-3">
+            <Select value={contrat} onChange={(e) => { setContrat(e.target.value); setLotId(''); }}
+              options={[{ value: 'PASSIF', label: 'Maintenance passive' }, { value: 'SOLAIRE', label: 'Maintenance solaire' }]} />
+          </Field>
           <Field label="Prestataire" required className="md:col-span-3">
             <Select value={prestataireId} onChange={(e) => { setPrestataireId(e.target.value); setLotId(''); }} options={prestataireOptions} placeholder={chargePrestataires ? 'Chargement des prestataires…' : 'Sélectionner un prestataire…'} />
           </Field>

@@ -26,6 +26,7 @@ const SCOPE_LABELS: Record<string, string> = {
   PASSIVE: 'Passive',
   ACTIVE: 'Active',
   LES_DEUX: 'Passive + Active',
+  SOLAIRE: 'Solaire',
 };
 
 export default function SiteDetailPage() {
@@ -245,6 +246,12 @@ export default function SiteDetailPage() {
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Infrastructure</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+          <InfoRow label="Lot solaire" value={
+            site.lotSolaire
+              ? `${site.lotSolaire.code ?? ''} ${site.lotSolaire.nom ?? ''}`.trim() +
+                (site.lotSolaire.assignments?.[0]?.prestataire?.nom ? ` — ${site.lotSolaire.assignments[0].prestataire.nom}` : ' — (non attribué)')
+              : '—'
+          } />
           <InfoRow label="Type de pylône" value={pyloneOptions.find((t) => t.value === site.typePylone)?.label ?? site.typePylone ?? '—'} />
           <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />

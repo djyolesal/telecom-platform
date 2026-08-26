@@ -28,7 +28,7 @@ export async function getLots(req: Request, res: Response, next: NextFunction) {
       {
         where,
         orderBy: { code: 'asc' },
-        include: { ...assignmentInclude, _count: { select: { sites: true } } },
+        include: { ...assignmentInclude, _count: { select: { sites: true, sitesSolaires: true } } },
       },
       { page: parseInt(page), limit: parseInt(limit) }
     );
@@ -43,6 +43,7 @@ export async function getLotById(req: Request, res: Response, next: NextFunction
       include: {
         ...assignmentInclude,
         sites: { select: { id: true, code: true, nom: true, region: true }, orderBy: { code: 'asc' } },
+        sitesSolaires: { select: { id: true, code: true, nom: true, region: true }, orderBy: { code: 'asc' } },
       },
     });
     if (!lot) throw new AppError('Lot introuvable', 404);
@@ -52,9 +53,12 @@ export async function getLotById(req: Request, res: Response, next: NextFunction
 
 export async function createLot(req: Request, res: Response, next: NextFunction) {
   try {
-    const { code, nom, region } = req.body;
+    const { code, nom, region, contrat } = req.body;
     if (!code || !nom) throw new AppError('Code et nom requis', 400);
-    const lot = await prisma.lot.create({ data: { code, nom, region } });
+    // Type de contrat figé à la création : les lots SOLAIRES sont un
+    // découpage de parc distinct des lots passifs/actifs.
+    const c = contrat === 'SOLAIRE' ? 'SOLAIRE' : 'PASSIF_ACTIF';
+    const lot = await prisma.lot.create({ data: { code, nom, region, contrat: c } });
     await auditLog(req.user!.id, 'CREATE', 'lots', lot.id, { code }, req);
     res.status(201).json({ success: true, data: lot });
   } catch (err) { next(err); }
@@ -88,6 +92,17 @@ export async function addAssignment(req: Request, res: Response, next: NextFunct
     const { prestataireId, scope, dateDebut, dateFin } = req.body;
     if (!prestataireId || !SCOPES.includes(scope)) {
       throw new AppError('prestataireId et scope (PASSIVE|ACTIVE|LES_DEUX|SOLAIRE) requis', 400);
+    }
+    // Cohérence contrat ↔ scope : une attribution SOLAIRE ne se pose que sur
+    // un lot SOLAIRE, et réciproquement — sinon l'imputation des visites et
+    // le périmètre du prestataire deviendraient ambigus.
+    const lotCible = await prisma.lot.findUnique({ where: { id: req.params.id }, select: { contrat: true } });
+    if (!lotCible) throw new AppError('Lot introuvable', 404);
+    if (lotCible.contrat === 'SOLAIRE' && scope !== 'SOLAIRE') {
+      throw new AppError('Ce lot est SOLAIRE : seule une attribution SOLAIRE peut s\'y poser', 422);
+    }
+    if (lotCible.contrat !== 'SOLAIRE' && scope === 'SOLAIRE') {
+      throw new AppError('Attribution SOLAIRE réservée aux lots de contrat SOLAIRE (créez un lot solaire)', 422);
     }
     const lot = await prisma.lot.findUnique({ where: { id: req.params.id } });
     if (!lot) throw new AppError('Lot introuvable', 404);

@@ -126,9 +126,13 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
     // que des sites de ses lots (les internes voient tout le parc).
     const sites = await prisma.site.findMany({
       where: { isActive: true, ...(await sitePerimetre(req.user!.id)) },
-      // SOLAIRE inclus : chaque tâche est imputée au titulaire de SON contrat
-      // (solaire → attribution SOLAIRE, le reste → passif/les-deux).
-      include: { lot: { include: { assignments: { where: { scope: { in: [...SCOPES_PASSIFS, 'SOLAIRE'] } }, include: { prestataire: { select: { id: true, nom: true } } }, orderBy: { scope: 'asc' as const } } } } },
+      // Deux découpages : le lot passif porte les attributions passives, le
+      // lot SOLAIRE (découpage distinct) porte l'attribution solaire — chaque
+      // tâche est imputée au titulaire de SON contrat.
+      include: {
+        lot: { include: { assignments: { where: { scope: { in: SCOPES_PASSIFS } }, include: { prestataire: { select: { id: true, nom: true } } }, orderBy: { scope: 'asc' as const } } } },
+        lotSolaire: { include: { assignments: { where: { scope: 'SOLAIRE' }, include: { prestataire: { select: { id: true, nom: true } } } } } },
+      },
     });
 
     const done = await prisma.maintenance.groupBy({
@@ -143,9 +147,8 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
     let aJour = 0, enRetard = 0, jamais = 0;
 
     for (const site of sites) {
-      const attributions = site.lot?.assignments ?? [];
-      const prestaPassif = attributions.find((a) => a.scope !== 'SOLAIRE')?.prestataire ?? null;
-      const prestaSolaire = attributions.find((a) => a.scope === 'SOLAIRE')?.prestataire ?? null;
+      const prestaPassif = site.lot?.assignments?.[0]?.prestataire ?? null;
+      const prestaSolaire = site.lotSolaire?.assignments?.[0]?.prestataire ?? null;
       for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
         const presta = t.categorie === 'SOLAIRE' ? prestaSolaire : prestaPassif;
         if (prestataire_id && presta?.id !== prestataire_id) continue;
@@ -183,12 +186,21 @@ function clientBlock(client?: string): { nom: string; adresse: string[] } {
 }
 
 /** Génère le buffer xlsx d'une fiche pour un prestataire (et un lot optionnel). */
-async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null): Promise<Buffer> {
+async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null, contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF'): Promise<Buffer> {
+  // Deux découpages de parc : la fiche PASSIVE suit les lots passifs (lot),
+  // la fiche SOLAIRE suit les lots solaires (lotSolaire) — contrats séparés.
   const sites = await prisma.site.findMany({
     where: {
       isActive: true,
-      lot: { assignments: { some: { prestataireId: presta.id, scope: { in: SCOPES_PASSIFS } } } },
-      ...(lotId ? { lotId } : {}),
+      ...(contrat === 'SOLAIRE'
+        ? {
+            lotSolaire: { assignments: { some: { prestataireId: presta.id, scope: 'SOLAIRE' } } },
+            ...(lotId ? { lotSolaireId: lotId } : {}),
+          }
+        : {
+            lot: { assignments: { some: { prestataireId: presta.id, scope: { in: SCOPES_PASSIFS } } } },
+            ...(lotId ? { lotId } : {}),
+          }),
     },
   });
   const monthStart = new Date(an, mo - 1, 1);
@@ -222,7 +234,7 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
     prestataire: { nom: presta.nom, adresse: presta.adresse, rccm: presta.rccm, nif: presta.nif, contactCommercial: presta.contactCommercial, contactTechnique: presta.contactTechnique },
     client: cb,
     zone, nbSites: sites.length, annee: an, mois: mo,
-    sites: sites as unknown as SiteEligibilite[], realisesParKey, prestataireLogo, clientLogo,
+    sites: sites as unknown as SiteEligibilite[], realisesParKey, prestataireLogo, clientLogo, contrat,
   });
 }
 
@@ -232,7 +244,7 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
  */
 export async function getFicheValidation(req: Request, res: Response, next: NextFunction) {
   try {
-    const { prestataire_id, annee, mois, client, lot_id } = req.query as Record<string, string>;
+    const { prestataire_id, annee, mois, client, lot_id, contrat } = req.query as Record<string, string>;
     if (!prestataire_id) throw new AppError('prestataire_id requis.', 400);
     const an = parseInt(annee) || new Date().getFullYear();
     const mo = parseInt(mois);
@@ -241,11 +253,13 @@ export async function getFicheValidation(req: Request, res: Response, next: Next
     const presta = await prisma.prestataire.findUnique({ where: { id: prestataire_id } });
     if (!presta) throw new AppError('Prestataire introuvable.', 404);
 
+    const typeContrat: 'PASSIF' | 'SOLAIRE' = contrat === 'SOLAIRE' ? 'SOLAIRE' : 'PASSIF';
     const clientLogo = await loadLogo(process.env.CLIENT_LOGO_KEY);
-    const buf = await produceFiche(presta, lot_id || null, an, mo, clientBlock(client), clientLogo);
+    const buf = await produceFiche(presta, lot_id || null, an, mo, clientBlock(client), clientLogo, typeContrat);
 
     const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');
-    setXlsxHeaders(res, `fiche-validation-${safeNom}-${String(mo).padStart(2, '0')}-${an}.xlsx`);
+    const suffixe = typeContrat === 'SOLAIRE' ? '-solaire' : '';
+    setXlsxHeaders(res, `fiche-validation${suffixe}-${safeNom}-${String(mo).padStart(2, '0')}-${an}.xlsx`);
     res.send(buf);
   } catch (err) { next(err); }
 }
@@ -262,8 +276,8 @@ export async function getFichesBatch(req: Request, res: Response, next: NextFunc
     if (!(mo >= 1 && mo <= 12)) throw new AppError('Mois invalide (1-12).', 422);
 
     const assignments = await prisma.lotAssignment.findMany({
-      where: { scope: { in: SCOPES_PASSIFS }, prestataire: { isActive: true } },
-      include: { prestataire: true, lot: { select: { id: true, code: true } } },
+      where: { scope: { in: [...SCOPES_PASSIFS, 'SOLAIRE'] }, prestataire: { isActive: true } },
+      include: { prestataire: true, lot: { select: { id: true, code: true, contrat: true } } },
       orderBy: [{ prestataireId: 'asc' }, { lotId: 'asc' }],
     });
 
@@ -276,12 +290,13 @@ export async function getFichesBatch(req: Request, res: Response, next: NextFunc
       const k = `${a.prestataireId}:${a.lotId}`;
       if (seen.has(k)) continue;
       seen.add(k);
-      const buf = await produceFiche(a.prestataire, a.lotId, an, mo, cb, clientLogo);
+      const solaire = a.lot.contrat === 'SOLAIRE';
+      const buf = await produceFiche(a.prestataire, a.lotId, an, mo, cb, clientLogo, solaire ? 'SOLAIRE' : 'PASSIF');
       const safe = (s: string) => s.replace(/[^a-z0-9]+/gi, '_');
-      zip.file(`${safe(a.prestataire.nom)}__${safe(a.lot.code)}.xlsx`, buf);
+      zip.file(`${safe(a.prestataire.nom)}__${safe(a.lot.code)}${solaire ? '__SOLAIRE' : ''}.xlsx`, buf);
       count++;
     }
-    if (count === 0) throw new AppError('Aucun couple prestataire/lot passif à exporter.', 404);
+    if (count === 0) throw new AppError('Aucun couple prestataire/lot à exporter.', 404);
 
     const zipBuf = await zip.generateAsync({ type: 'nodebuffer' });
     res.setHeader('Content-Type', 'application/zip');

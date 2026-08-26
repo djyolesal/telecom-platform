@@ -11,7 +11,17 @@ import { AppError } from './AppError';
 /** Fragment Prisma à appliquer sur le modèle SITE ({} si utilisateur interne). */
 export async function sitePerimetre(userId: string): Promise<Record<string, unknown>> {
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { prestataireId: true } });
-  return me?.prestataireId ? { lot: { assignments: { some: { prestataireId: me.prestataireId } } } } : {};
+  // Deux découpages de parc coexistent : lots passifs/actifs (lot) et lots
+  // SOLAIRES (lotSolaire) — le prestataire voit les sites de ses lots, quel
+  // que soit le contrat qui les lui confie.
+  return me?.prestataireId
+    ? {
+        OR: [
+          { lot: { assignments: { some: { prestataireId: me.prestataireId } } } },
+          { lotSolaire: { assignments: { some: { prestataireId: me.prestataireId } } } },
+        ],
+      }
+    : {};
 }
 
 /** true si le périmètre est restreint (utilisateur rattaché à un prestataire). */
