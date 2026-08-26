@@ -29,6 +29,10 @@ export interface SiteEligibilite {
 
 const hasCuve = (s: SiteEligibilite) => s.cuveVolumeLitres != null && Number(s.cuveVolumeLitres) > 0;
 const hasGE = (s: SiteEligibilite) => s.statutGE !== 'PAS_DE_GE';
+// Sites équipés de solaire : solaire pur ou hybrides (le rapport contractuel
+// « maintenance des sites hybrides » couvre ces configurations).
+const aDuSolaire = (s: SiteEligibilite) =>
+  ['SOLAIRE_UNIQUEMENT', 'HYBRIDE_GE', 'HYBRIDE_CEET_GE'].includes(s.powerConfig);
 
 export interface TachePreventive {
   numero: number;
@@ -101,6 +105,28 @@ export const CONTRACTUAL_TASKS: TachePreventive[] = [
     numero: 12, key: 'curage_cuve', libelle: 'Curage et nettoyage des cuves à gasoil', categorie: 'GE',
     frequence: 'SEMESTRIELLE', cible: 'Sites avec cuve',
     eligible: (s) => hasCuve(s),
+  },
+  // ── Contrat SOLAIRE (scope contractuel séparé de la passive — même contrat
+  // pour tous les prestataires solaires ; fréquences du PV contractuel). Les
+  // 17 opérations du contrat deviennent la checklist typée de la clôture ;
+  // ici, les VISITES qui se planifient, regroupées par fréquence. ──
+  {
+    numero: 13, key: 'solaire_mensuel',
+    libelle: 'Visite mensuelle solaire : énergie moyenne délivrée/jour, marche Auto/Manuel avec le GE, déport des alarmes et backup des configurations',
+    categorie: 'SOLAIRE', frequence: 'MENSUELLE', cible: 'Sites solaires et hybrides',
+    eligible: aDuSolaire,
+  },
+  {
+    numero: 14, key: 'solaire_nettoyage',
+    libelle: 'Nettoyage et dépoussiérage des panneaux solaires (eau déminéralisée de préférence)',
+    categorie: 'SOLAIRE', frequence: 'TRIMESTRIELLE', cible: 'Sites solaires et hybrides',
+    eligible: aDuSolaire,
+  },
+  {
+    numero: 15, key: 'solaire_semestriel',
+    libelle: 'Grande visite semestrielle solaire : panneaux (inspection, câblage, fixations, mises à la terre, Isc/Voc par string), batteries (visuel, aérations, tension et température par élément, nettoyage), régulateur et coffret outdoor (fixation, parafoudres, ventilation forcée, alarmes, courants/tensions PV, nettoyage)',
+    categorie: 'SOLAIRE', frequence: 'SEMESTRIELLE', cible: 'Sites solaires et hybrides',
+    eligible: aDuSolaire,
   },
 ];
 

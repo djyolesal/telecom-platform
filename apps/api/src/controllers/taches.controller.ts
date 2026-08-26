@@ -126,7 +126,9 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
     // que des sites de ses lots (les internes voient tout le parc).
     const sites = await prisma.site.findMany({
       where: { isActive: true, ...(await sitePerimetre(req.user!.id)) },
-      include: { lot: { include: { assignments: { where: { scope: { in: SCOPES_PASSIFS } }, include: { prestataire: { select: { id: true, nom: true } } } } } } },
+      // SOLAIRE inclus : chaque tâche est imputée au titulaire de SON contrat
+      // (solaire → attribution SOLAIRE, le reste → passif/les-deux).
+      include: { lot: { include: { assignments: { where: { scope: { in: [...SCOPES_PASSIFS, 'SOLAIRE'] } }, include: { prestataire: { select: { id: true, nom: true } } }, orderBy: { scope: 'asc' as const } } } } },
     });
 
     const done = await prisma.maintenance.groupBy({
@@ -141,9 +143,12 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
     let aJour = 0, enRetard = 0, jamais = 0;
 
     for (const site of sites) {
-      const presta = site.lot?.assignments?.[0]?.prestataire ?? null;
-      if (prestataire_id && presta?.id !== prestataire_id) continue;
+      const attributions = site.lot?.assignments ?? [];
+      const prestaPassif = attributions.find((a) => a.scope !== 'SOLAIRE')?.prestataire ?? null;
+      const prestaSolaire = attributions.find((a) => a.scope === 'SOLAIRE')?.prestataire ?? null;
       for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
+        const presta = t.categorie === 'SOLAIRE' ? prestaSolaire : prestaPassif;
+        if (prestataire_id && presta?.id !== prestataire_id) continue;
         const last = lastByKey.get(`${site.id}:${t.key}`) ?? null;
         const { statut, prochaine } = statutEcheance(last, FREQUENCE_MOIS[t.frequence], now);
         if (statut === 'A_JOUR') aJour++; else if (statut === 'EN_RETARD') enRetard++; else jamais++;

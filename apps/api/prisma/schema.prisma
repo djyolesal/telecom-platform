@@ -65,6 +65,7 @@ enum CategorieEquipement {
   ANTENNE
   CABLE
   RESEAU
+  SOLAIRE // installation photovoltaïque (contrat solaire dédié)
   AUTRE
 }
 
@@ -639,11 +640,13 @@ model Notification {
 enum ScopeMaintenance {
   PASSIVE
   ACTIVE
-  LES_DEUX
+  LES_DEUX // passive + active (le solaire reste un contrat séparé)
+  SOLAIRE
 }
 
 // Équipe d'un technicien chez un prestataire (un agent fait passive OU active).
 enum EquipeMaintenance {
+  SOLAIRE
   PASSIVE
   ACTIVE
 }

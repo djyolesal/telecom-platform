@@ -66,6 +66,7 @@ export const CATEGORIES_EQUIPEMENT = [
   { value: 'ANTENNE', label: 'Antenne' },
   { value: 'CABLE', label: 'Câble' },
   { value: 'RESEAU', label: 'Réseau' },
+  { value: 'SOLAIRE', label: 'Solaire (photovoltaïque)' },
   { value: 'AUTRE', label: 'Autre' },
 ];
 
@@ -105,12 +106,14 @@ export const SCOPES_MAINTENANCE = [
   { value: 'PASSIVE', label: 'Passive' },
   { value: 'ACTIVE', label: 'Active' },
   { value: 'LES_DEUX', label: 'Passive + Active' },
+  { value: 'SOLAIRE', label: 'Solaire (contrat dédié)' },
 ];
 
 export const SCOPE_COLORS: Record<string, string> = {
   PASSIVE: 'bg-blue-100 text-blue-700',
   ACTIVE: 'bg-orange-100 text-orange-700',
   LES_DEUX: 'bg-purple-100 text-purple-700',
+  SOLAIRE: 'bg-yellow-100 text-yellow-800',
 };
 
 // Catégories d'équipement considérées « passives » (→ relevés énergie à la clôture)

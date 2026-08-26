@@ -34,7 +34,11 @@ interface User {
   prestataire?: { id: string; nom: string };
 }
 
-const EQUIPES = [{ value: 'PASSIVE', label: 'Passive' }, { value: 'ACTIVE', label: 'Active' }];
+const EQUIPES = [
+  { value: 'PASSIVE', label: 'Passive' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'SOLAIRE', label: 'Solaire' },
+];
 
 function CreateModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();

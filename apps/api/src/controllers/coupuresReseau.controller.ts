@@ -208,7 +208,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
         });
         const prestas = (lot?.lot?.assignments ?? [])
-          .filter((a) => a.scope !== 'ACTIVE')
+          .filter((a) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
           .map((a) => a.prestataireId);
         if (prestas.length) {
           const techs = await prisma.user.findMany({
@@ -382,7 +382,7 @@ export async function notifierResolutionAutomatique(incidentId: string | null): 
     // Une vraie intervention a eu lieu : la clôture terrain suit son cours.
     if (!inc || inc.dateIntervention) return;
     const prestas = (inc.site.lot?.assignments ?? [])
-      .filter((a) => a.scope !== 'ACTIVE')
+      .filter((a) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
       .map((a) => a.prestataireId);
     if (!prestas.length) return;
     const techs = await prisma.user.findMany({
@@ -1622,7 +1622,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
               where: { id: racineFull.siteId },
               select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
             });
-            const prestas = (lot?.lot?.assignments ?? []).filter((a) => a.scope !== 'ACTIVE').map((a) => a.prestataireId);
+            const prestas = (lot?.lot?.assignments ?? []).filter((a) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX').map((a) => a.prestataireId);
             if (prestas.length) {
               const techs = await prisma.user.findMany({
                 where: { role: 'TECHNICIEN', isActive: true, prestataireId: { in: prestas } },

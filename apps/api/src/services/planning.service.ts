@@ -25,13 +25,19 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
 
   const sites = await prisma.site.findMany({ where: { isActive: true } });
 
-  // Préchargement : prestataire passif par lot.
+  // Préchargement : prestataire par lot ET par contrat — les tâches SOLAIRE
+  // vont au titulaire du contrat solaire, les autres au passif. Un lot sans
+  // titulaire du contrat concerné = tâche ignorée (comptée sansPrestataire).
   const assignments = await prisma.lotAssignment.findMany({
-    where: { scope: { in: SCOPES_PASSIFS } },
-    orderBy: { scope: 'asc' },
+    where: { scope: { in: [...SCOPES_PASSIFS, 'SOLAIRE'] } },
+    orderBy: { scope: 'asc' }, // PASSIVE avant LES_DEUX (ordre de l'enum)
   });
   const passifByLot = new Map<string, string>();
-  for (const a of assignments) if (!passifByLot.has(a.lotId)) passifByLot.set(a.lotId, a.prestataireId);
+  const solaireByLot = new Map<string, string>();
+  for (const a of assignments) {
+    if (a.scope === 'SOLAIRE') { if (!solaireByLot.has(a.lotId)) solaireByLot.set(a.lotId, a.prestataireId); }
+    else if (!passifByLot.has(a.lotId)) passifByLot.set(a.lotId, a.prestataireId);
+  }
 
   // Dernières exécutions terminées (site+clé).
   const done = await prisma.maintenance.groupBy({
@@ -54,8 +60,10 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
   const aCreer: { siteId: string; categorie: string; equipement: string; key: string; datePlanifiee: Date; prestataireId: string }[] = [];
 
   for (const site of sites) {
-    const prestataireId = site.lotId ? passifByLot.get(site.lotId) : undefined;
     for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
+      const prestataireId = site.lotId
+        ? (t.categorie === 'SOLAIRE' ? solaireByLot.get(site.lotId) : passifByLot.get(site.lotId))
+        : undefined;
       const mapKey = `${site.id}:${t.key}`;
       if (ouvertSet.has(mapKey)) continue;
       const freq = FREQUENCE_MOIS[t.frequence]!;

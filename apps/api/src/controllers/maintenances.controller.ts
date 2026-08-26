@@ -52,6 +52,9 @@ const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 // Catégories d'équipement → nature de maintenance (passive = infra/énergie, active = télécom).
 const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
 const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
+// Contrat solaire : catégorie et équipe dédiées — jamais couvertes par
+// LES_DEUX (qui ne fusionne que passive+active).
+const SOLAIRE_CATS = ['SOLAIRE'];
 const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
 const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
 // Configurables via variables d'environnement (cf. config/env.ts).
@@ -153,15 +156,20 @@ async function resolvePrestataireId(siteId: string, categorie: string): Promise<
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { lotId: true } });
   if (!site?.lotId) return null;
 
-  const scope = PASSIVE_CATS.includes(categorie)
-    ? 'PASSIVE'
-    : ACTIVE_CATS.includes(categorie)
-      ? 'ACTIVE'
-      : null;
-  // Périmètre spécifique d'abord, puis "les deux"
-  const scopes: ScopeMaintenance[] = scope
-    ? [scope as ScopeMaintenance, 'LES_DEUX']
-    : ['LES_DEUX'];
+  const scope = SOLAIRE_CATS.includes(categorie)
+    ? 'SOLAIRE'
+    : PASSIVE_CATS.includes(categorie)
+      ? 'PASSIVE'
+      : ACTIVE_CATS.includes(categorie)
+        ? 'ACTIVE'
+        : null;
+  // Périmètre spécifique d'abord, puis "les deux" — SAUF solaire : contrat
+  // séparé, LES_DEUX (passive+active) ne le couvre pas.
+  const scopes: ScopeMaintenance[] = scope === 'SOLAIRE'
+    ? ['SOLAIRE']
+    : scope
+      ? [scope as ScopeMaintenance, 'LES_DEUX']
+      : ['LES_DEUX'];
 
   const assignment = await prisma.lotAssignment.findFirst({
     where: { lotId: site.lotId, scope: { in: scopes } },
@@ -217,7 +225,9 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       if (me?.prestataireId) {
         const entreprise: Record<string, unknown> = { prestataireId: me.prestataireId };
         if (me.equipe) {
-          entreprise.categorie = { in: me.equipe === 'ACTIVE' ? ACTIVE_CATS : PASSIVE_CATS };
+          entreprise.categorie = {
+            in: me.equipe === 'ACTIVE' ? ACTIVE_CATS : me.equipe === 'SOLAIRE' ? SOLAIRE_CATS : PASSIVE_CATS,
+          };
         }
         scope.push(entreprise);
       }

@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 
-const SCOPES = ['PASSIVE', 'ACTIVE', 'LES_DEUX'];
+const SCOPES = ['PASSIVE', 'ACTIVE', 'LES_DEUX', 'SOLAIRE'];
 
 const assignmentInclude = {
   assignments: {
@@ -87,7 +87,7 @@ export async function addAssignment(req: Request, res: Response, next: NextFunct
   try {
     const { prestataireId, scope, dateDebut, dateFin } = req.body;
     if (!prestataireId || !SCOPES.includes(scope)) {
-      throw new AppError('prestataireId et scope (PASSIVE|ACTIVE|LES_DEUX) requis', 400);
+      throw new AppError('prestataireId et scope (PASSIVE|ACTIVE|LES_DEUX|SOLAIRE) requis', 400);
     }
     const lot = await prisma.lot.findUnique({ where: { id: req.params.id } });
     if (!lot) throw new AppError('Lot introuvable', 404);
