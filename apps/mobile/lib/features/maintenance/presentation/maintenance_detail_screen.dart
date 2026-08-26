@@ -986,7 +986,14 @@ class _CloseSheetState extends State<_CloseSheet> {
   Future<void> _submit() async {
     final m = widget.maintenance;
     final sources =
-        m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+        m.requiresEnergie
+            ? (m.categorie == 'SOLAIRE'
+                // Contrat solaire : les relevés GE/gasoil et CEET sont hors
+                // périmètre — seule la puissance solaire est relevée (même
+                // règle que le serveur, HYBRIDE_CEET_GE compris).
+                ? const ['SOLAIRE']
+                : sourcesForConfig(m.sitePowerConfig))
+            : <String>[];
     final energie = <String, dynamic>{};
 
     // Photos obligatoires pour une maintenance préventive
@@ -1199,7 +1206,14 @@ class _CloseSheetState extends State<_CloseSheet> {
   Widget build(BuildContext context) {
     final m = widget.maintenance;
     final sources =
-        m.requiresEnergie ? sourcesForConfig(m.sitePowerConfig) : <String>[];
+        m.requiresEnergie
+            ? (m.categorie == 'SOLAIRE'
+                // Contrat solaire : les relevés GE/gasoil et CEET sont hors
+                // périmètre — seule la puissance solaire est relevée (même
+                // règle que le serveur, HYBRIDE_CEET_GE compris).
+                ? const ['SOLAIRE']
+                : sourcesForConfig(m.sitePowerConfig))
+            : <String>[];
     // Photos requises : 6 pour une préventive, 2 pour un travail de cycle de vie.
     final minPhotos = m.type == 'PREVENTIVE'
         ? AppConfig.minPhotosPreventive

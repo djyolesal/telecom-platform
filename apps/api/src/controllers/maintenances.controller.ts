@@ -826,7 +826,14 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // Relevés énergie obligatoires selon la config du site, sauf tâches d'exclusion
     // (pylône, terre, désherbage, serrures, climatiseur, extincteurs → photos seules).
     const passive = requiresEnergieReleve(existing);
-    const sources = passive ? sourcesForConfig(existing.site.powerConfig) : [];
+    let sources = passive ? sourcesForConfig(existing.site.powerConfig) : [];
+    // Contrat SOLAIRE : les relevés GE/gasoil et CEET sont HORS périmètre — le
+    // technicien solaire ne relève que la puissance solaire (la production
+    // détaillée vit dans la checklist). Couvre aussi HYBRIDE_CEET_GE, dont la
+    // config n'inclut pas SOLAIRE dans les sources génériques.
+    if (passive && SOLAIRE_CATS.includes(existing.categorie)) {
+      sources = ['SOLAIRE'];
+    }
     const e = energie ?? {};
     const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
 
