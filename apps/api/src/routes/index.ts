@@ -406,7 +406,10 @@ router.get('/rapports/bilan-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIR
 router.get('/rapports/bilan-energie/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportBilanEnergie);
 router.get('/rapports/conso-energie', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConsoEnergie);
 router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMaintenance);
-router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportIncidents);
+// NOC inclus : le suivi des incidents fait partie de sa supervision réseau, et
+// NOC_ALLOW l'autorisait déjà — sans NOC ici l'entrée d'allowlist était morte
+// (la route répondait 403 à un rôle pourtant censé y accéder).
+router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC']), rapportsCtrl.getRapportIncidents);
 router.get('/rapports/conformite', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConformiteMaintenance);
 router.get('/rapports/sla-prestataires', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getSlaPrestataires);
 router.get('/rapports/gardiennage', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportGardiennage);

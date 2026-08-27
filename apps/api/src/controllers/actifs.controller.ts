@@ -190,6 +190,15 @@ export async function getActif(req: Request, res: Response, next: NextFunction) 
     }
     if (!actif) throw new AppError('Actif introuvable', 404);
 
+    // Périmètre prestataire : le détail doit respecter EXACTEMENT le même
+    // cloisonnement que la liste (`listActifs`), sinon un prestataire lisait par
+    // id un actif d'un site hors de son périmètre (la liste le masquait déjà).
+    // Actif au dépôt (siteId null) = visible, comme dans la liste.
+    const permis = await allowedSiteIds(req.user!.id);
+    if (permis && actif.siteId && !permis.has(actif.siteId)) {
+      throw new AppError('Actif introuvable', 404);
+    }
+
     // Historique : maintenances de cycle de vie ciblant cet actif (borné).
     const mouvements = await prisma.maintenance.findMany({
       where: { actifId: id, natureTravaux: { not: 'ENTRETIEN' } },

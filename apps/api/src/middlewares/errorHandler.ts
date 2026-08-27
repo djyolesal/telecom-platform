@@ -10,6 +10,13 @@ import { logger } from '../utils/logger';
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
+  // Corps de requête JSON malformé : express.json() lève une SyntaxError
+  // (type entity.parse.failed). Sans ce cas, une accolade oubliée renvoyait
+  // un 500 au lieu d'un 400, et exposait le détail du parseur.
+  if (err instanceof SyntaxError && 'body' in err) {
+    return res.status(400).json({ success: false, error: 'Corps de requête JSON invalide.' });
+  }
+
   // Erreurs de validation Zod
   if (err instanceof ZodError) {
     return res.status(422).json({
@@ -33,6 +40,30 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     if (err.code === 'P2003') {
       return res.status(400).json({ success: false, error: 'Référence invalide (clé étrangère)' });
     }
+    // P2000 = valeur trop longue (dépassement VarChar) ; P2011 = contrainte
+    // NOT NULL ; P2012 = champ requis manquant. Une entrée cliente fautive doit
+    // répondre 4xx, pas 500. `err.meta` ne contient que des noms de colonnes
+    // (jamais de chemin source), donc on peut nommer le champ concerné.
+    if (err.code === 'P2000') {
+      const col = err.meta?.column_name as string | undefined;
+      return res.status(400).json({ success: false, error: col ? `Valeur trop longue pour le champ « ${col} ».` : 'Valeur trop longue pour un champ.' });
+    }
+    if (err.code === 'P2011' || err.code === 'P2012') {
+      return res.status(400).json({ success: false, error: 'Champ obligatoire manquant.' });
+    }
+    // Tout autre code connu : requête invalide, message neutre (le message brut
+    // de Prisma embarque un extrait du fichier source — jamais renvoyé).
+    logger.warn(`[Prisma ${err.code}] ${req.method} ${req.originalUrl}`);
+    return res.status(400).json({ success: false, error: 'Requête invalide.' });
+  }
+
+  // Erreur de validation Prisma : type/enum/date invalide passé à un create/
+  // update (ex. severite hors enum, latitude non numérique). Le message brut
+  // contient le chemin ABSOLU du fichier et un extrait de code : ne JAMAIS le
+  // renvoyer, même hors production. Réponse 422 neutre.
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    logger.warn(`[Prisma validation] ${req.method} ${req.originalUrl}`);
+    return res.status(422).json({ success: false, error: 'Données invalides.' });
   }
 
   // Erreurs applicatives typées
@@ -49,8 +80,16 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   const message = err instanceof Error ? err.message : String(err);
   logger.error(`[500] ${req.method} ${req.originalUrl} - ${message}`, err);
 
+  // Les erreurs Prisma restantes (Unknown/Initialization/RustPanic) embarquent
+  // le chemin source dans leur message : on ne le renvoie jamais, même hors
+  // production, où seules les erreurs applicatives gardent un message détaillé.
+  const estPrisma =
+    err instanceof Prisma.PrismaClientUnknownRequestError ||
+    err instanceof Prisma.PrismaClientInitializationError ||
+    err instanceof Prisma.PrismaClientRustPanicError;
+
   return res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production' ? 'Erreur interne du serveur' : message,
+    error: process.env.NODE_ENV === 'production' || estPrisma ? 'Erreur interne du serveur' : message,
   });
 }

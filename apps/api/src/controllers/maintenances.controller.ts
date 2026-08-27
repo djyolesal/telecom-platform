@@ -173,27 +173,34 @@ async function resolvePrestataireId(siteId: string, categorie: string): Promise<
     : ACTIVE_CATS.includes(categorie)
       ? 'ACTIVE'
       : null;
-  // Périmètre spécifique d'abord, puis "les deux"
-  const scopes: ScopeMaintenance[] = scope
-    ? [scope as ScopeMaintenance, 'LES_DEUX']
-    : ['LES_DEUX'];
-
-  const assignment = await prisma.lotAssignment.findFirst({
-    where: { lotId: site.lotId, scope: { in: scopes } },
-    orderBy: { scope: 'asc' },
-  });
-  return assignment?.prestataireId ?? null;
+  // Périmètre spécifique d'abord, puis "les deux" en repli. Un tri
+  // alphabétique (`scope: 'asc'`) plaçait LES_DEUX avant PASSIVE (L < P) et
+  // court-circuitait une attribution PASSIVE dédiée : on choisit donc le scope
+  // spécifique explicitement, LES_DEUX seulement s'il est absent.
+  return pickPrestataireSpecifique(site.lotId, scope as ScopeMaintenance | null);
 }
 
 /** Résout le prestataire d'un site pour un périmètre donné (+ LES_DEUX en repli). */
 async function resolvePrestataireIdByScope(siteId: string, scope: 'PASSIVE' | 'ACTIVE'): Promise<string | null> {
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { lotId: true } });
   if (!site?.lotId) return null;
-  const assignment = await prisma.lotAssignment.findFirst({
-    where: { lotId: site.lotId, scope: { in: [scope, 'LES_DEUX'] as ScopeMaintenance[] } },
-    orderBy: { scope: 'asc' },
+  return pickPrestataireSpecifique(site.lotId, scope as ScopeMaintenance);
+}
+
+/**
+ * Attribution d'un lot pour un scope : le scope SPÉCIFIQUE prime toujours sur
+ * LES_DEUX (repli). Sans `scope`, seul LES_DEUX est considéré.
+ */
+async function pickPrestataireSpecifique(lotId: string, scope: ScopeMaintenance | null): Promise<string | null> {
+  const scopes: ScopeMaintenance[] = scope ? [scope, 'LES_DEUX'] : ['LES_DEUX'];
+  const assignments = await prisma.lotAssignment.findMany({
+    where: { lotId, scope: { in: scopes } },
+    select: { prestataireId: true, scope: true },
   });
-  return assignment?.prestataireId ?? null;
+  if (assignments.length === 0) return null;
+  const specifique = scope ? assignments.find((a) => a.scope === scope) : undefined;
+  const lesDeux = assignments.find((a) => a.scope === 'LES_DEUX');
+  return (specifique ?? lesDeux)?.prestataireId ?? null;
 }
 
 export async function getMaintenances(req: Request, res: Response, next: NextFunction) {

@@ -707,11 +707,19 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     if (!siteId) throw new AppError('Site obligatoire', 400);
     await assertSiteInPerimetre(req.user!.id, siteId);
 
-    const technologies: string[] = Array.isArray(b.technologies) && b.technologies.length
-      ? (b.technologies as string[])
-      : [String(b.technologie ?? 'SITE')];
+    // Même normalisation que la requalification (updateCoupure) : casse
+    // tolérée (« 2g » accepté), doublons écrasés, et « SITE » exclusif — les
+    // deux chemins d'écriture doivent partager exactement la même sémantique.
+    const technologies: string[] = [...new Set(
+      (Array.isArray(b.technologies) && b.technologies.length
+        ? (b.technologies as unknown[])
+        : [b.technologie ?? 'SITE']).map((t) => String(t).toUpperCase()),
+    )];
     if (technologies.some((t) => !TECHNOLOGIES.includes(t as never))) {
       throw new AppError('Technologie invalide (2G, 3G, 4G, 5G ou SITE)', 400);
+    }
+    if (technologies.includes('SITE') && technologies.length > 1) {
+      throw new AppError('« Site entier » couvre déjà toutes les technologies', 400);
     }
     // MÊME MOTIF que la qualification : plusieurs pastilles → UNE ligne à
     // valeur combinée en ordre canonique (« 2G/4G »). SITE explicite ou les
@@ -945,12 +953,27 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
           data: { statut: 'EN_COURS', dateResolution: null, dureeCoupureMinutes: null },
         });
         incidentRouvert = true;
-        // Symétrie : les héritées fermées par la cascade sont rouvertes, sinon
-        // l'indisponibilité aval du second épisode n'était jamais comptée.
-        await prisma.coupureReseau.updateMany({
-          where: { coupureOrigineId: existing.id, dateFin: existing.dateFin },
-          data: { dateFin: null, downtimeMinutes: null },
-        });
+        // Symétrie avec `cloturerHeriteesRecursif` : la clôture ferme TOUTE la
+        // sous-arborescence (rang ≥ 2 compris) en propageant la même `dateFin`.
+        // La réouverture doit descendre de la même façon — se limiter aux
+        // enfants directs laissait les héritées de rang 2+ closes et perdait
+        // leur indisponibilité aval du second épisode. On ne rouvre que celles
+        // fermées PAR cette cascade (même `dateFin` que la racine), pour ne pas
+        // ressusciter une héritée rétablie pour son propre compte.
+        let niveauRouvert = [existing.id];
+        for (let profondeur = 0; profondeur < 50 && niveauRouvert.length; profondeur++) {
+          const enfants = await prisma.coupureReseau.findMany({
+            where: { coupureOrigineId: { in: niveauRouvert }, dateFin: existing.dateFin },
+            select: { id: true },
+          });
+          if (!enfants.length) break;
+          const ids = enfants.map((e) => e.id);
+          await prisma.coupureReseau.updateMany({
+            where: { id: { in: ids } },
+            data: { dateFin: null, downtimeMinutes: null },
+          });
+          niveauRouvert = ids;
+        }
         await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'reouverture_noc', coupureId: existing.id }, req);
         await notifierIncidentCoupure(
           existing.siteId,
