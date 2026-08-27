@@ -41,7 +41,9 @@ export default function SitesPage() {
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState('');
   const [statutGe, setStatutGe] = useState('');
-  const [powerConfig, setPowerConfig] = useState('');
+  // Config énergie MULTI (pastilles) : vide = toutes ; OU entre cochées —
+  // « tout ce qui a du solaire » = Solaire + Hybride GE + Hybride CEET+GE.
+  const [configsFiltre, setConfigsFiltre] = useState<Set<string>>(new Set());
   const [prestataireId, setPrestataireId] = useState('');
   const [showImport, setShowImport] = useState(false);
   // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
@@ -67,12 +69,13 @@ export default function SitesPage() {
   });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sites', { page, debouncedSearch, region, statutGe, powerConfig, prestataireId, tri }],
+    queryKey: ['sites', { page, debouncedSearch, region, statutGe, configs: [...configsFiltre].sort().join(','), prestataireId, tri }],
     queryFn: () =>
       api
         .get('/sites', {
           params: {
-            page, limit: 20, search: debouncedSearch || undefined, region: region || undefined, statut_ge: statutGe || undefined, power_config: powerConfig || undefined,
+            page, limit: 20, search: debouncedSearch || undefined, region: region || undefined, statut_ge: statutGe || undefined,
+            power_configs: configsFiltre.size ? [...configsFiltre].join(',') : undefined,
             prestataire_id: prestataireId || undefined,
             tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
           },
@@ -111,7 +114,12 @@ export default function SitesPage() {
                 <Upload size={15} /> Importer
               </button>
             )}
-            {((session?.user as { role?: string })?.role ?? '') !== 'TECHNICIEN' && <ExportButtons base="/sites/export" name="sites" query={region ? `region=${region}` : undefined} />}
+            {((session?.user as { role?: string })?.role ?? '') !== 'TECHNICIEN' && <ExportButtons base="/sites/export" name="sites" query={[
+              region && `region=${region}`,
+              statutGe && `statut_ge=${statutGe}`,
+              configsFiltre.size > 0 && `power_configs=${[...configsFiltre].join(',')}`,
+              prestataireId && `prestataire_id=${prestataireId}`,
+            ].filter(Boolean).join('&') || undefined} />}
             {peutCreer && <ButtonLink href="/sites/nouveau" icon={Plus}>Nouveau site</ButtonLink>}
           </>
         }
@@ -128,7 +136,6 @@ export default function SitesPage() {
         filters={[
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
           { key: 'statut', label: 'Tous statuts GE', value: statutGe, options: STATUTS_GE, onChange: (v) => { setStatutGe(v); setPage(1); } },
-          { key: 'power', label: 'Toutes configs énergie', value: powerConfig, options: POWER_CONFIGS, onChange: (v) => { setPowerConfig(v); setPage(1); } },
           ...(filtrePrestataire ? [{
             key: 'prestataire', label: 'Tous prestataires', value: prestataireId,
             options: (prestataires ?? []).map((p) => ({ value: p.id, label: p.nom })),
@@ -136,6 +143,29 @@ export default function SitesPage() {
           }] : []),
         ]}
       />
+
+      {/* Config énergie en pastilles multi (OU) - borne la liste ET l'export. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">Config énergie :</span>
+        {POWER_CONFIGS.map((c) => (
+          <button key={c.value} type="button"
+            onClick={() => {
+              setConfigsFiltre((prev) => {
+                const next = new Set(prev);
+                if (next.has(c.value)) next.delete(c.value); else next.add(c.value);
+                return next;
+              });
+              setPage(1);
+            }}
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium ${configsFiltre.has(c.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+            {c.label}
+          </button>
+        ))}
+        {configsFiltre.size > 0 && (
+          <button type="button" onClick={() => { setConfigsFiltre(new Set()); setPage(1); }}
+            className="text-xs font-medium text-[#2471A3] hover:underline">Toutes</button>
+        )}
+      </div>
 
       {isLoading ? (
         <TableSkeleton cols={7} />

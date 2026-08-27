@@ -100,12 +100,19 @@ const HEADER_ALIASES: Record<string, string> = {
  */
 export async function getSites(req: Request, res: Response, next: NextFunction) {
   try {
-    const { region, statut_ge, power_config, prestataire_id, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
+    const { region, statut_ge, power_config, power_configs, prestataire_id, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
 
     const where: Record<string, unknown> = { isActive: true };
     if (region) where.region = region;
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
+    // Multi-sélection (pastilles) : power_configs=A,B — OU entre configs,
+    // liste blanche sur l'enum. Prioritaire sur power_config (hérité).
+    if (power_configs) {
+      const liste = power_configs.split(',').map((v) => v.trim())
+        .filter((v) => ['CEET_GE', 'CEET_UNIQUEMENT', 'GE_UNIQUEMENT', 'HYBRIDE_GE', 'SOLAIRE_UNIQUEMENT', 'HYBRIDE_CEET_GE'].includes(v));
+      if (liste.length) where.powerConfig = { in: liste };
+    }
     // Filtre prestataire TOUS CONTRATS : sites dont il tient le lot passif OU
     // le lot solaire (dans AND — le OR de la recherche vit à côté).
     if (prestataire_id) {
@@ -1049,11 +1056,25 @@ export async function getSiteReleves(req: Request, res: Response, next: NextFunc
  */
 export async function exportSites(req: Request, res: Response, next: NextFunction) {
   try {
-    const { region, statut_ge, power_config } = req.query as Record<string, string>;
+    const { region, statut_ge, power_config, power_configs, prestataire_id } = req.query as Record<string, string>;
     const where: Record<string, unknown> = { isActive: true };
     if (region) where.region = region;
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
+    // Fidélité affichage/export : mêmes filtres que la liste.
+    if (power_configs) {
+      const liste = power_configs.split(',').map((v) => v.trim())
+        .filter((v) => ['CEET_GE', 'CEET_UNIQUEMENT', 'GE_UNIQUEMENT', 'HYBRIDE_GE', 'SOLAIRE_UNIQUEMENT', 'HYBRIDE_CEET_GE'].includes(v));
+      if (liste.length) where.powerConfig = { in: liste };
+    }
+    if (prestataire_id) {
+      where.AND = [{
+        OR: [
+          { lot: { assignments: { some: { prestataireId: prestataire_id } } } },
+          { lotSolaire: { assignments: { some: { prestataireId: prestataire_id } } } },
+        ],
+      }];
+    }
     // Superviseur prestataire : il exporte SES sites (mêmes colonnes — aucune
     // donnée financière dans ce fichier), jamais le parc entier.
     Object.assign(where, await sitePerimetre(req.user!.id));
