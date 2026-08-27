@@ -1,12 +1,14 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env';
+import { prisma } from '../config/database';
 import { getNum, getRaw, typesLiaison } from '../services/settings.service';
 
 /**
  * Paramètres terrain exposés aux applications (mobile/web) pour garder les
  * pré-contrôles côté client alignés sur les règles autoritaires du serveur.
  */
-export function getAppConfig(_req: Request, res: Response) {
+export async function getAppConfig(_req: Request, res: Response, next: NextFunction) {
+  try {
   res.json({
     success: true,
     data: {
@@ -17,6 +19,14 @@ export function getAppConfig(_req: Request, res: Response) {
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       // Référentiel des types de liaison de transmission (badges topologie, fiche site).
       typesLiaison: typesLiaison(),
+      // Référentiel des types d'incident (éditable en admin) : le mobile le
+      // met en cache hors-ligne avec le reste de la config — les évolutions ne
+      // demandent pas de nouvelle version d'application.
+      typesIncident: await prisma.typeIncidentRef.findMany({
+        where: { actif: true },
+        select: { code: true, libelle: true },
+        orderBy: [{ systeme: 'desc' }, { libelle: 'asc' }],
+      }),
       // Colonnes optionnelles par tableau que l'admin autorise à l'affichage
       // (null = toutes celles du catalogue web).
       colonnesOptionnelles: (() => {
@@ -41,4 +51,5 @@ export function getAppConfig(_req: Request, res: Response) {
       })(),
     },
   });
+  } catch (err) { next(err); }
 }

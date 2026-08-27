@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, EmptyState } from '@/components/shared/states';
 import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { useSupervisionSocket } from '@/lib/hooks/useSupervisionSocket';
-import { TYPES_INCIDENT } from '@/lib/constants';
+import { useTypesIncident } from '@/lib/typesIncident';
 import { fmtDateTime } from '@/lib/utils';
 
 interface Incident {
@@ -23,6 +23,7 @@ interface Incident {
 }
 
 export default function SupervisionIncidentsPage() {
+  const { labelDe } = useTypesIncident();
   const router = useRouter();
   useSupervisionSocket();
 
@@ -68,7 +69,7 @@ export default function SupervisionIncidentsPage() {
                   <StatutIncidentBadge value={inc.statut} />
                 </div>
               </div>
-              <p className="text-xs font-medium text-gray-600">{TYPES_INCIDENT.find((t) => t.value === inc.type)?.label ?? inc.type}</p>
+              <p className="text-xs font-medium text-gray-600">{labelDe(inc.type)}</p>
               <p className="text-xs text-gray-500 mt-1 line-clamp-2">{inc.description}</p>
               <div className="mt-2 flex items-center justify-between text-[11px] text-gray-400">
                 <span>{inc.site?.region}</span>

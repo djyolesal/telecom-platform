@@ -218,6 +218,53 @@ export async function getMetrics(_req: Request, res: Response, next: NextFunctio
 
 // ── Référentiel des types de pylône (liste éditable par l'admin) ──
 
+// ── Référentiel des types d'incident (même motif que les types de pylône) ──
+export async function listTypesIncident(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const types = await prisma.typeIncidentRef.findMany({ orderBy: [{ systeme: 'desc' }, { libelle: 'asc' }] });
+    res.json({ success: true, data: types });
+  } catch (err) { next(err); }
+}
+
+export async function upsertTypeIncident(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { code, libelle, actif } = req.body as { code?: string; libelle?: string; actif?: boolean };
+    if (!code?.trim() || !libelle?.trim()) throw new AppError('Code et libellé requis.', 422);
+    const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30);
+    if (!cleanCode) throw new AppError('Code invalide.', 422);
+    const existant = await prisma.typeIncidentRef.findUnique({ where: { code: cleanCode } });
+    // Un code SYSTÈME est créé par le code applicatif (COUPURE_TOTALE par les
+    // coupures, AUTRE en repli) : libellé modifiable, jamais désactivable.
+    if (existant?.systeme && actif === false) {
+      throw new AppError('Ce type est créé par la plateforme elle-même : il ne peut pas être désactivé.', 422);
+    }
+    const type = await prisma.typeIncidentRef.upsert({
+      where: { code: cleanCode },
+      create: { code: cleanCode, libelle: libelle.trim(), actif: actif !== false },
+      update: { libelle: libelle.trim(), ...(typeof actif === 'boolean' && !existant?.systeme ? { actif } : {}) },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'types_incident', type.code, { libelle: type.libelle, actif: type.actif }, req);
+    res.json({ success: true, data: type });
+  } catch (err) { next(err); }
+}
+
+export async function deleteTypeIncident(req: Request, res: Response, next: NextFunction) {
+  try {
+    const code = req.params.code;
+    const existant = await prisma.typeIncidentRef.findUnique({ where: { code } });
+    if (!existant) throw new AppError('Type introuvable.', 404);
+    if (existant.systeme) throw new AppError('Ce type est créé par la plateforme elle-même : il ne peut pas être supprimé.', 422);
+    const used = await prisma.incident.count({ where: { type: code } });
+    if (used > 0) {
+      // L'historique porte ce code : on DÉSACTIVE au lieu de supprimer.
+      throw new AppError(`Type utilisé par ${used} incident(s) - désactivez-le plutôt (il reste lisible dans l'historique).`, 409);
+    }
+    await prisma.typeIncidentRef.delete({ where: { code } });
+    await auditLog(req.user!.id, 'DELETE', 'types_incident', code, {}, req);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
 export async function listTypesPylone(_req: Request, res: Response, next: NextFunction) {
   try {
     const types = await prisma.typePyloneRef.findMany({ orderBy: { libelle: 'asc' } });

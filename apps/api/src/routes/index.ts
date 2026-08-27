@@ -113,6 +113,7 @@ const NOC_ALLOW: RegExp[] = [
   /^\/rapports\/(dashboard|disponibilite-reseau|incidents)$/,
   /^\/rapports\/disponibilite-reseau\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
+  /^\/types-incident$/,               // libellés des types (déclaration/lecture)
   /^\/prestataires$/,                  // liste seule : options du filtre prestataire (page Sites)
 ];
 router.use((req, _res, next) => {
@@ -427,6 +428,9 @@ router.post('/users/:id/delier-appareil', rbac(['ADMIN']), usersCtrl.delierAppar
 // ── Administration ────────────────────────────────────────────
 // Référentiel types de pylône : lecture pour tous (formulaires), édition admin.
 router.get('/types-pylone', adminCtrl.listTypesPylone);
+router.get('/types-incident', adminCtrl.listTypesIncident);
+router.post('/admin/types-incident', rbac(['ADMIN']), adminCtrl.upsertTypeIncident);
+router.delete('/admin/types-incident/:code', rbac(['ADMIN']), adminCtrl.deleteTypeIncident);
 router.post('/admin/types-pylone', rbac(['ADMIN']), adminCtrl.upsertTypePylone);
 router.delete('/admin/types-pylone/:code', rbac(['ADMIN']), adminCtrl.deleteTypePylone);
 router.get('/admin/settings', rbac(['ADMIN']), adminCtrl.getSettings);

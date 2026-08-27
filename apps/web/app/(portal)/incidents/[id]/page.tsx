@@ -11,7 +11,7 @@ import { Button } from '@/components/shared/Button';
 import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
-import { TYPES_INCIDENT } from '@/lib/constants';
+import { useTypesIncident } from '@/lib/typesIncident';
 import { fmtDateTime } from '@/lib/utils';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -38,6 +38,7 @@ function TimelineItem({ icon: Icon, label, date, done }: { icon: React.ElementTy
 }
 
 export default function IncidentDetailPage() {
+  const { labelDe } = useTypesIncident();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [technicienId, setTechnicienId] = useState('');
@@ -70,7 +71,7 @@ export default function IncidentDetailPage() {
     <div>
       <PageHeader
         title={`${inc.reference ?? "Incident"} - ${inc.site?.nom ?? ""}`}
-        subtitle={TYPES_INCIDENT.find((t) => t.value === inc.type)?.label ?? inc.type}
+        subtitle={labelDe(inc.type)}
         backHref="/incidents"
         actions={<div className="flex gap-2"><SeveriteBadge value={inc.severite} /><StatutIncidentBadge value={inc.statut} /></div>}
       />

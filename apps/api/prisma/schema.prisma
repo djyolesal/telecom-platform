@@ -91,16 +91,6 @@ enum NatureTravaux {
   DEPLACEMENT
 }
 
-enum TypeIncident {
-  ALARME
-  COUPURE_CEET
-  COUPURE_TOTALE
-  PANNE_GE
-  INTRUSION
-  VANDALISME
-  AUTRE
-}
-
 enum NiveauSeverite {
   CRITIQUE
   MAJEUR
@@ -542,7 +532,8 @@ model Incident {
   id                       String         @id @default(uuid())
   reference                String?        @unique @db.VarChar(20) // INC-2026-00112
   siteId                   String         @map("site_id")
-  type                     TypeIncident
+  // Code du référentiel types_incident (éditable en admin — ex-enum).
+  type                     String         @db.VarChar(30)
   severite                 NiveauSeverite
   statut                   StatutIncident @default(OUVERT)
   description              String
@@ -603,6 +594,18 @@ model AuditLog {
 }
 
 // Référentiel éditable des types de pylône (CRUD admin web) — remplace l'ancien enum figé.
+// Référentiel des types d'incident (éditable en admin ; systeme = créé par le
+// code applicatif, ni supprimable ni désactivable).
+model TypeIncidentRef {
+  code      String   @id @db.VarChar(30)
+  libelle   String   @db.VarChar(80)
+  actif     Boolean  @default(true)
+  systeme   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("types_incident")
+}
+
 model TypePyloneRef {
   code      String   @id @db.VarChar(40)
   libelle   String   @db.VarChar(80)

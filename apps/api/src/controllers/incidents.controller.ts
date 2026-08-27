@@ -107,6 +107,11 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
     // Un compte prestataire ne déclare que sur SES sites (sinon : incident
     // fantôme chez un concurrent, avec notification à ses superviseurs).
     await assertSiteInPerimetre(req.user!.id, String(b.siteId));
+    // Le type vient du RÉFÉRENTIEL éditable (ex-enum) : la validation que
+    // Prisma faisait au niveau de l'enum se fait désormais ici.
+    const typeRef = await prisma.typeIncidentRef.findUnique({ where: { code: String(b.type).toUpperCase() } });
+    if (!typeRef || !typeRef.actif) throw new AppError('Type d\'incident inconnu ou désactivé.', 422);
+    b.type = typeRef.code;
     // Liste blanche : statut/dates/technicien fixés par le workflow, declarePar
     // toujours l'utilisateur courant (jamais usurpé depuis le client).
     const data = pick<Prisma.IncidentUncheckedCreateInput>(b, [

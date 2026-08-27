@@ -9,9 +9,11 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Select, Textarea } from '@/components/shared/Form';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Button } from '@/components/shared/Button';
-import { TYPES_INCIDENT, SEVERITES } from '@/lib/constants';
+import { SEVERITES } from '@/lib/constants';
+import { useTypesIncident } from '@/lib/typesIncident';
 
 export default function NouvelIncidentPage() {
+  const { options: typesOptions } = useTypesIncident();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [error, setError] = useState('');
@@ -46,7 +48,7 @@ export default function NouvelIncidentPage() {
             <SearchSelect value={form.siteId} onChange={(v) => set('siteId', v)} options={siteOptions} placeholder="Rechercher un site (nom ou code)…" />
           </Field>
           <Field label="Type" required>
-            <Select value={form.type} onChange={(e) => set('type', e.target.value)} options={TYPES_INCIDENT} />
+            <Select value={form.type} onChange={(e) => set('type', e.target.value)} options={typesOptions} />
           </Field>
           <Field label="Sévérité" required>
             <Select value={form.severite} onChange={(e) => set('severite', e.target.value)} options={SEVERITES} />

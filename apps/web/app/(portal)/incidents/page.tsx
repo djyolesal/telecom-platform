@@ -15,7 +15,8 @@ import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { ButtonLink } from '@/components/shared/Button';
 import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
-import { TYPES_INCIDENT, SEVERITES, STATUTS_INCIDENT, regionOptions } from '@/lib/constants';
+import { SEVERITES, STATUTS_INCIDENT, regionOptions } from '@/lib/constants';
+import { useTypesIncident } from '@/lib/typesIncident';
 import { fmtDateTime } from '@/lib/utils';
 
 interface Incident {
@@ -30,6 +31,7 @@ interface Incident {
 }
 
 export default function IncidentsPage() {
+  const { options: typesOptions, labelDe } = useTypesIncident();
   // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
   const { data: sessionExp } = useSession();
   const roleExport = (sessionExp?.user as { role?: string })?.role ?? '';
@@ -58,7 +60,7 @@ export default function IncidentsPage() {
   const columns: Column<Incident>[] = [
     { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
     { key: 'site', header: 'Site', render: (i) => <span className="font-medium text-gray-800">{i.site?.nom ?? "—"}</span> },
-    { key: 'type', header: 'Type', render: (i) => TYPES_INCIDENT.find((t) => t.value === i.type)?.label ?? i.type },
+    { key: 'type', header: 'Type', render: (i) => labelDe(i.type) },
     { key: 'severite', header: 'Sévérité', render: (i) => <SeveriteBadge value={i.severite} /> },
     { key: 'statut', header: 'Statut', render: (i) => <StatutIncidentBadge value={i.statut} /> },
     { key: 'technicien', header: 'Technicien', render: (i) => (i.technicien ? `${i.technicien.prenom} ${i.technicien.nom}` : '—') },
@@ -80,7 +82,7 @@ export default function IncidentsPage() {
 
       <FilterBar
         filters={[
-          { key: 'type', label: 'Tous types', value: type, options: TYPES_INCIDENT, onChange: (v) => { setType(v); setPage(1); } },
+          { key: 'type', label: 'Tous types', value: type, options: typesOptions, onChange: (v) => { setType(v); setPage(1); } },
           { key: 'severite', label: 'Toutes sévérités', value: severite, options: SEVERITES, onChange: (v) => { setSeverite(v); setPage(1); } },
           { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_INCIDENT, onChange: (v) => { setStatut(v); setPage(1); } },
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
