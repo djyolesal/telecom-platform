@@ -15,7 +15,7 @@ interface Actif { id: string; actifType: string; categorie: string; libelle: str
 
 const NATURE_OPTIONS = [
   { value: 'ENTRETIEN', label: 'Entretien (tâche contractuelle)' },
-  { value: 'CURATIVE', label: 'Dépannage / curative (GE en panne)' },
+  { value: 'CURATIVE', label: 'Dépannage / curative (équipement en panne)' },
   { value: 'INSTALLATION', label: 'Installation d’un actif' },
   { value: 'DESINSTALLATION', label: 'Désinstallation d’un actif' },
   { value: 'DEPLACEMENT', label: 'Déplacement d’un actif' },
@@ -29,7 +29,7 @@ export default function NouvelleMaintenancePage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState('');
   const [form, setForm] = useState({
-    nature: 'ENTRETIEN', siteId: '', tacheKey: '', actifKey: '', description: '', datePlanifiee: '', technicienId: '',
+    nature: 'ENTRETIEN', siteId: '', tacheKey: '', actifKey: '', equipementCode: '', precision: '', description: '', datePlanifiee: '', technicienId: '',
   });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const isEntretien = form.nature === 'ENTRETIEN';
@@ -59,11 +59,20 @@ export default function NouvelleMaintenancePage() {
     queryFn: () => api.get('/actifs', { params: form.nature === 'INSTALLATION' ? { en_stock: 'true' } : { statut: 'EN_SERVICE' } }).then((r) => r.data.data),
     enabled: isMouvement,
   });
+  // Référentiel des équipements de dépannage (ATS, TGBT, GE, compteur CEET…) :
+  // le choix fixe la catégorie contractuelle côté serveur.
+  const { data: equipements } = useQuery({
+    queryKey: ['equipements-ref'],
+    queryFn: () => api.get('/equipements').then((r) => r.data.data as { code: string; libelle: string; actif: boolean }[]),
+    enabled: isCurative,
+    staleTime: 5 * 60_000,
+  });
+  const equipementOptions = (equipements ?? []).filter((e) => e.actif).map((e) => ({ value: e.code, label: e.libelle }));
   // GE du site sélectionné (dépannage curatif : on impute la panne à un GE précis).
   const { data: gesDuSite } = useQuery<Actif[]>({
     queryKey: ['ges-site', form.siteId],
     queryFn: () => api.get('/actifs', { params: { type: 'GE', site_id: form.siteId } }).then((r) => r.data.data),
-    enabled: isCurative && !!form.siteId,
+    enabled: isCurative && !!form.siteId && form.equipementCode === 'GE',
   });
   const geOptions = (gesDuSite ?? []).map((g) => ({ value: g.id, label: g.libelle ?? 'GE' }));
 
@@ -98,15 +107,18 @@ export default function NouvelleMaintenancePage() {
           technicienId: form.technicienId || undefined,
         });
       }
-      // Dépannage curatif rattaché à un GE précis (pas un mouvement d'actif).
+      // Dépannage curatif : l'ÉQUIPEMENT du référentiel fixe la catégorie
+      // contractuelle côté serveur ; un GE en panne reste rattachable à un GE
+      // précis du site (cycle de vie de l'actif).
       if (isCurative) {
         if (!form.siteId) throw new Error('Sélectionnez un site.');
-        if (!form.actifKey) throw new Error('Sélectionnez le GE concerné.');
-        const ge = (gesDuSite ?? []).find((g) => g.id === form.actifKey);
+        if (!form.equipementCode) throw new Error('Sélectionnez l\'équipement en panne.');
+        if (form.equipementCode === 'GE' && !form.actifKey) throw new Error('Sélectionnez le GE concerné.');
         return api.post('/maintenances', {
-          siteId: form.siteId, type: 'CURATIVE', categorie: 'GE',
-          equipement: `Dépannage - ${ge?.libelle ?? 'GE'}`,
-          actifType: 'GE', actifId: form.actifKey,
+          siteId: form.siteId, type: 'CURATIVE',
+          equipementCode: form.equipementCode,
+          precision: form.precision || undefined,
+          ...(form.equipementCode === 'GE' && form.actifKey ? { actifType: 'GE', actifId: form.actifKey } : {}),
           description: form.description || undefined,
           datePlanifiee: new Date(form.datePlanifiee).toISOString(),
           technicienId: form.technicienId || undefined,
@@ -161,10 +173,19 @@ export default function NouvelleMaintenancePage() {
               <Field label="Site" required className="md:col-span-2">
                 <SearchSelect value={form.siteId} onChange={(v) => { set('siteId', v); set('actifKey', ''); }} options={siteOptions} placeholder="Rechercher un site (nom ou code)…" />
               </Field>
-              <Field label="GE concerné" required className="md:col-span-2">
-                <Select value={form.actifKey} onChange={(e) => set('actifKey', e.target.value)} required disabled={!form.siteId}
-                  options={geOptions} placeholder={form.siteId ? (geOptions.length ? 'Sélectionner le GE en panne…' : 'Aucun GE sur ce site') : 'Choisissez d’abord un site'} />
+              <Field label="Équipement en panne" required>
+                <Select value={form.equipementCode} onChange={(e) => { set('equipementCode', e.target.value); set('actifKey', ''); }} required
+                  options={equipementOptions} placeholder="ATS, TGBT, GE, compteur CEET…" />
               </Field>
+              <Field label="Précision (optionnel)">
+                <Input value={form.precision} onChange={(e) => set('precision', e.target.value)} placeholder="ex. ATS 2, contacteur amont" />
+              </Field>
+              {form.equipementCode === 'GE' && (
+                <Field label="GE concerné" required className="md:col-span-2">
+                  <Select value={form.actifKey} onChange={(e) => set('actifKey', e.target.value)} required disabled={!form.siteId}
+                    options={geOptions} placeholder={form.siteId ? (geOptions.length ? 'Sélectionner le GE en panne…' : 'Aucun GE sur ce site') : 'Choisissez d’abord un site'} />
+                </Field>
+              )}
             </>
           ) : (
             <>

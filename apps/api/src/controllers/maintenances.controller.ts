@@ -51,7 +51,10 @@ import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite } from '.
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
 // Catégories d'équipement → nature de maintenance (passive = infra/énergie, active = télécom).
-const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
+// AUTRE inclus côté passif (répartition exploitant 27/08 : ATS, TGBT,
+// compteur CEET, atelier d'énergie, pylône/balisage sont du contrat passif) —
+// le routage prestataire et la visibilité de l'équipe passive suivent.
+const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE', 'AUTRE'];
 const ACTIVE_CATS = ['ANTENNE', 'RESEAU'];
 // Contrat solaire : catégorie et équipe dédiées — jamais couvertes par
 // LES_DEUX (qui ne fusionne que passive+active).
@@ -363,6 +366,19 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
       'siteId', 'type', 'categorie', 'equipement', 'description', 'datePlanifiee',
       'tachePreventiveKey', 'natureTravaux', 'actifType', 'actifId', 'siteSourceId', 'technicienId',
     ]);
+    // Équipement STRUCTURÉ (référentiel éditable) : le code résout la
+    // catégorie contractuelle et le libellé — la « précision » libre s'y
+    // ajoute. L'ancien chemin (categorie+equipement libres) reste accepté
+    // (planning, anciens clients).
+    const equipementCode = (req.body as { equipementCode?: string }).equipementCode;
+    if (equipementCode) {
+      const ref = await prisma.equipementRef.findUnique({ where: { code: String(equipementCode).toUpperCase() } });
+      if (!ref || !ref.actif) throw new AppError('Équipement inconnu ou désactivé.', 422);
+      const precision = (req.body as { precision?: string }).precision;
+      data.categorie = ref.categorie;
+      data.equipement = `${ref.libelle}${precision?.trim() ? ` - ${String(precision).trim().slice(0, 80)}` : ''}`;
+      data.equipementCode = ref.code;
+    }
     if (!data.siteId || !data.type || !data.categorie || !data.equipement || !data.datePlanifiee) {
       throw new AppError('Site, type, catégorie, équipement et date planifiée sont requis.', 400);
     }

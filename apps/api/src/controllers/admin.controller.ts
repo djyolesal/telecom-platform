@@ -218,6 +218,46 @@ export async function getMetrics(_req: Request, res: Response, next: NextFunctio
 
 // ── Référentiel des types de pylône (liste éditable par l'admin) ──
 
+// ── Référentiel des ÉQUIPEMENTS de dépannage ──────────────────
+export async function listEquipements(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const rows = await prisma.equipementRef.findMany({ orderBy: { libelle: 'asc' } });
+    res.json({ success: true, data: rows });
+  } catch (err) { next(err); }
+}
+
+const CATEGORIES_EQUIPEMENT_VALIDES = ['GE', 'BATTERIE', 'CLIMATISEUR', 'ANTENNE', 'CABLE', 'RESEAU', 'SOLAIRE', 'AUTRE'];
+
+export async function upsertEquipement(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { code, libelle, categorie, actif } = req.body as { code?: string; libelle?: string; categorie?: string; actif?: boolean };
+    if (!code?.trim() || !libelle?.trim() || !categorie) throw new AppError('Code, libellé et catégorie requis.', 422);
+    if (!CATEGORIES_EQUIPEMENT_VALIDES.includes(categorie)) throw new AppError('Catégorie invalide.', 422);
+    const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+    if (!cleanCode) throw new AppError('Code invalide.', 422);
+    const row = await prisma.equipementRef.upsert({
+      where: { code: cleanCode },
+      create: { code: cleanCode, libelle: libelle.trim(), categorie: categorie as never, actif: actif !== false },
+      update: { libelle: libelle.trim(), categorie: categorie as never, ...(typeof actif === 'boolean' ? { actif } : {}) },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'equipements_ref', row.code, { libelle: row.libelle, categorie: row.categorie, actif: row.actif }, req);
+    res.json({ success: true, data: row });
+  } catch (err) { next(err); }
+}
+
+export async function deleteEquipement(req: Request, res: Response, next: NextFunction) {
+  try {
+    const code = req.params.code;
+    const used = await prisma.maintenance.count({ where: { equipementCode: code } });
+    if (used > 0) {
+      throw new AppError(`Équipement utilisé par ${used} intervention(s) - désactivez-le plutôt (il reste lisible dans l'historique).`, 409);
+    }
+    await prisma.equipementRef.delete({ where: { code } });
+    await auditLog(req.user!.id, 'DELETE', 'equipements_ref', code, {}, req);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
 // ── Référentiel des types d'incident (même motif que les types de pylône) ──
 export async function listTypesIncident(_req: Request, res: Response, next: NextFunction) {
   try {

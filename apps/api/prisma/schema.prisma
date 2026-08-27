@@ -326,6 +326,9 @@ model Maintenance {
   type           TypeMaintenance
   categorie      CategorieEquipement
   equipement     String              @db.VarChar(100)
+  // Code du référentiel equipements_ref (statistiques par équipement) — le
+  // libellé lisible reste dans `equipement`.
+  equipementCode String?             @map("equipement_code") @db.VarChar(40)
   description    String?
   statut         StatutMaintenance   @default(PLANIFIEE)
   datePlanifiee  DateTime            @map("date_planifiee")
@@ -594,6 +597,19 @@ model AuditLog {
 }
 
 // Référentiel éditable des types de pylône (CRUD admin web) — remplace l'ancien enum figé.
+// Référentiel des ÉQUIPEMENTS de dépannage (éditable en admin) : la catégorie
+// parente route l'intervention (contrat passif/actif/solaire, équipe, règles
+// de clôture) ; le code est l'identifiant stable des statistiques.
+model EquipementRef {
+  code      String              @id @db.VarChar(40)
+  libelle   String              @db.VarChar(80)
+  categorie CategorieEquipement
+  actif     Boolean             @default(true)
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  @@map("equipements_ref")
+}
+
 // Référentiel des types d'incident (éditable en admin ; systeme = créé par le
 // code applicatif, ni supprimable ni désactivable).
 model TypeIncidentRef {

@@ -27,6 +27,13 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
         select: { code: true, libelle: true },
         orderBy: [{ systeme: 'desc' }, { libelle: 'asc' }],
       }),
+      // Référentiel des équipements de dépannage (même mécanique : le mobile
+      // le met en cache avec sa config, aucune mise à jour d'app requise).
+      equipements: await prisma.equipementRef.findMany({
+        where: { actif: true },
+        select: { code: true, libelle: true, categorie: true },
+        orderBy: { libelle: 'asc' },
+      }),
       // Colonnes optionnelles par tableau que l'admin autorise à l'affichage
       // (null = toutes celles du catalogue web).
       colonnesOptionnelles: (() => {
