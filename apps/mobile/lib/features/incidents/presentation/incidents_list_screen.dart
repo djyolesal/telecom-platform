@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/config/app_config.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/bloc/list_cubit.dart';
@@ -123,7 +124,7 @@ class _IncidentsViewState extends State<_IncidentsView> {
                                   size: 20),
                             ),
                             title: Text(
-                                '${inc.siteNom ?? '—'} · ${kTypeIncident[inc.type] ?? inc.type}',
+                                '${inc.siteNom ?? '—'} · ${AppConfig.typesIncident[inc.type] ?? kTypeIncident[inc.type] ?? inc.type}',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600)),
                             subtitle: Text(

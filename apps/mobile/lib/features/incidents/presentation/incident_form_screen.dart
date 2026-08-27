@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/config/app_config.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/enums.dart';
@@ -84,7 +85,7 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
             DropdownButtonFormField<String>(
               initialValue: _type,
               decoration: const InputDecoration(labelText: 'Type'),
-              items: kTypeIncident.entries
+              items: AppConfig.typesIncident.entries
                   .map((e) =>
                       DropdownMenuItem(value: e.key, child: Text(e.value)))
                   .toList(),

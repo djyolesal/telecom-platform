@@ -198,7 +198,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                        '${inc.reference != null ? '${inc.reference} · ' : ''}${inc.siteNom ?? ''} · ${kTypeIncident[inc.type] ?? inc.type}',
+                        '${inc.reference != null ? '${inc.reference} · ' : ''}${inc.siteNom ?? ''} · ${AppConfig.typesIncident[inc.type] ?? kTypeIncident[inc.type] ?? inc.type}',
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
                   ),

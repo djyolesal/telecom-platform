@@ -8,6 +8,19 @@ class AppConfig {
   static int minPhotosPreventive = 6;
   static int minPhotosMouvement = 2;
   static int intervalleVidangeHeures = 250;
+
+  /// Référentiel des types d'incident (code → libellé), éditable en admin et
+  /// servi par /config : une évolution ne demande pas de nouvelle version de
+  /// l'application. Repli sur la liste historique tant que rien n'est chargé.
+  static Map<String, String> typesIncident = {
+    'ALARME': 'Alarme',
+    'COUPURE_CEET': 'Coupure CEET',
+    'COUPURE_TOTALE': 'Coupure totale',
+    'PANNE_GE': 'Panne GE',
+    'INTRUSION': 'Intrusion',
+    'VANDALISME': 'Vandalisme',
+    'AUTRE': 'Autre',
+  };
 }
 
 /// Charge la configuration applicative depuis l'API et met à jour [AppConfig].
@@ -27,6 +40,14 @@ class ConfigService {
             AppConfig.minPhotosPreventive = (d['minPhotosPreventive'] as num?)?.toInt() ?? AppConfig.minPhotosPreventive;
             AppConfig.minPhotosMouvement = (d['minPhotosMouvement'] as num?)?.toInt() ?? AppConfig.minPhotosMouvement;
             AppConfig.intervalleVidangeHeures = (d['intervalleVidangeHeures'] as num?)?.toInt() ?? AppConfig.intervalleVidangeHeures;
+            final types = d['typesIncident'];
+            if (types is List && types.isNotEmpty) {
+              AppConfig.typesIncident = {
+                for (final t in types)
+                  if (t is Map && t['code'] != null)
+                    t['code'].toString(): t['libelle']?.toString() ?? t['code'].toString(),
+              };
+            }
           }
         },
       );
