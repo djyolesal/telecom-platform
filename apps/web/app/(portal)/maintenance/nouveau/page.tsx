@@ -175,10 +175,10 @@ export default function NouvelleMaintenancePage() {
               </Field>
               <Field label="Équipement en panne" required>
                 <Select value={form.equipementCode} onChange={(e) => { set('equipementCode', e.target.value); set('actifKey', ''); }} required
-                  options={equipementOptions} placeholder="ATS, TGBT, GE, compteur CEET…" />
+                  options={equipementOptions} placeholder="— Sélectionner l'équipement —" />
               </Field>
               <Field label="Précision (optionnel)">
-                <Input value={form.precision} onChange={(e) => set('precision', e.target.value)} placeholder="ex. ATS 2, contacteur amont" />
+                <Input value={form.precision} onChange={(e) => set('precision', e.target.value)} placeholder="ex. : climatiseur nº 2, contacteur amont" />
               </Field>
               {form.equipementCode === 'GE' && (
                 <Field label="GE concerné" required className="md:col-span-2">

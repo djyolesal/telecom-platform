@@ -375,7 +375,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                 isExpanded: true,
                 decoration: const InputDecoration(
                     labelText: 'Équipement en panne *',
-                    hintText: 'ATS, TGBT, GE, compteur CEET…'),
+                    hintText: '— Sélectionner l\'équipement —'),
                 items: AppConfig.equipements
                     .map((e) => DropdownMenuItem(
                         value: e['code'],
@@ -394,7 +394,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                 controller: _precision,
                 decoration: const InputDecoration(
                     labelText: 'Précision (optionnel)',
-                    hintText: 'ex. ATS 2, contacteur amont'),
+                    hintText: 'ex. : climatiseur nº 2, contacteur amont'),
               ),
               if (_equipementCode == 'GE') ...[
                 const SizedBox(height: 14),
