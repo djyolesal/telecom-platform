@@ -810,7 +810,9 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 // (dont celle-ci) sont reclassées héritées et la liste retombe à un événement.
 
 function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: () => void }) {
-  const [creerAval, setCreerAval] = useState(true);
+  // Décochée par défaut (demande exploitant) : la création d'office ne
+  // concerne que les sites aveugles - le NOC l'active en connaissance de cause.
+  const [creerAval, setCreerAval] = useState(false);
   const [creerIncident, setCreerIncident] = useState(false);
   const [resultat, setResultat] = useState<{
     racineSiteNom: string; estRacine: boolean; heriteesReclassees: number; heriteesCreees: number; priseEnChargePar: string;
