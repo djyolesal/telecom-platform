@@ -228,7 +228,7 @@ export default function SiteDetailPage() {
           <p className="text-sm text-gray-500">Aucun lot rattaché - utilisez « Modifier » pour l&apos;affecter à un lot.</p>
         ) : (
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
-            <div><span className="text-gray-500">Lot : </span><b className="text-gray-800">{site.lot.code}</b> - {site.lot.nom}</div>
+            <div><span className="text-gray-500">Lot passif/actif : </span><b className="text-gray-800">{site.lot.code}</b> - {site.lot.nom}</div>
             {site.lot.assignments?.length ? (
               site.lot.assignments.map((a: { id: string; scope: string; prestataire?: { nom: string } }) => (
                 <div key={a.id} className="flex items-center gap-1.5">
@@ -241,17 +241,28 @@ export default function SiteDetailPage() {
             )}
           </div>
         )}
+        {/* Lot SOLAIRE (découpage contractuel distinct) : même format que le
+            passif, pastille jaune - absent = pas de contrat solaire, silence. */}
+        {site.lotSolaire && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+            <div><span className="text-gray-500">Lot solaire : </span><b className="text-gray-800">{site.lotSolaire.code}</b> - {site.lotSolaire.nom}</div>
+            {site.lotSolaire.assignments?.length ? (
+              site.lotSolaire.assignments.map((a: { id: string; prestataire?: { nom: string } }) => (
+                <div key={a.id} className="flex items-center gap-1.5">
+                  <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-800">Solaire</span>
+                  <span className="text-gray-800">{a.prestataire?.nom ?? '—'}</span>
+                </div>
+              ))
+            ) : (
+              <span className="text-gray-400">Aucun prestataire attribué à ce lot solaire.</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Infrastructure</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-          <InfoRow label="Lot solaire" value={
-            site.lotSolaire
-              ? `${site.lotSolaire.code ?? ''} ${site.lotSolaire.nom ?? ''}`.trim() +
-                (site.lotSolaire.assignments?.[0]?.prestataire?.nom ? ` — ${site.lotSolaire.assignments[0].prestataire.nom}` : ' — (non attribué)')
-              : '—'
-          } />
           <InfoRow label="Type de pylône" value={pyloneOptions.find((t) => t.value === site.typePylone)?.label ?? site.typePylone ?? '—'} />
           <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
