@@ -20,12 +20,11 @@ const chargerRebouclage = () =>
  *   - connected    → clôture de la coupure OSS ouverte, datée du rétablissement
  *     (la colonne date d'une ligne connected EST l'heure de reconnexion).
  *
- * ARMEMENT AUTOMATIQUE (fin du mode observation, décidé avec l'exploitant le
- * 27/08/2026) : une racine encore ouverte après le délai anti-rebond
- * (oss.armementDelaiMin, 10 min par défaut) est adoptée et déclenche le
- * terrain (incident critique, SMS passifs, push) sans attendre le NOC — qui
- * garde la qualification (alarme, classement). Avant ce délai, la détection
- * reste au sas : les rebonds courts ne notifient jamais.
+ * ADOPTION AU NOC (décision exploitant du 27/08/2026) : les détections
+ * restent au sas jusqu'à la prise en charge humaine — qui, elle, déclenche le
+ * terrain systématiquement (incident, SMS passifs, push). Un armement
+ * automatique existe mais est DÉSACTIVÉ par défaut (oss.armementDelaiMin = 0 ;
+ * > 0 = racines armées après ce délai anti-rebond, sans attendre le NOC).
  *
  * Auth : jeton MACHINE dédié (env OSS_SYNC_TOKEN) — pas un compte utilisateur.
  * L'auto-clôture ne touche JAMAIS une coupure saisie par un humain.
@@ -197,7 +196,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
             priseEnChargeLe: entrainee && racineAmont!.priseEnChargePar ? new Date() : undefined,
             observations: entrainee
               ? `Détection automatique OSS - héritée de la panne amont (${siteParId.get(racineAmont!.siteId)?.nom ?? 'site amont'}).`
-              : 'Détection automatique OSS - armement (incident + terrain) après le délai anti-rebond si la panne persiste.',
+              : 'Détection automatique OSS - en attente de prise en charge NOC.',
           },
           select: {
             id: true, siteId: true, dateDebut: true, origine: true,

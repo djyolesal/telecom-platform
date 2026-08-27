@@ -536,7 +536,9 @@ export async function declencherTerrainRacine(
  * Appelé à la fin de chaque passage du collecteur.
  */
 export async function armerDetectionsMures(): Promise<number> {
-  const delaiMin = getNum('oss.armementDelaiMin', 10);
+  // DÉSACTIVÉ par défaut (décision exploitant : l'adoption reste au NOC).
+  // Le mécanisme demeure prêt : régler oss.armementDelaiMin > 0 pour l'armer.
+  const delaiMin = getNum('oss.armementDelaiMin', 0);
   if (delaiMin <= 0) return 0;
   const limite = new Date(Date.now() - delaiMin * 60_000);
   const mures = await prisma.coupureReseau.findMany({
