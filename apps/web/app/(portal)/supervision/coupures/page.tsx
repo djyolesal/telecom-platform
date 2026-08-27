@@ -603,7 +603,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
       {siteEntier && nbAval > 0 && (
         <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
           <input type="checkbox" checked={propagerAval} onChange={(e) => setPropagerAval(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-amber-300" />
-          <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) - <b>propager la coupure</b> à tout l'aval (coupures « héritées », clôturées en cascade avec celle-ci).</span>
+          <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) - <b>propager la coupure</b> : l&apos;aval déjà détecté coupé est rattaché, les sites <b>sans NodeID</b> (invisibles OSS) reçoivent une héritée ; un site visible encore émetteur (batteries) se rattachera de lui-même à sa chute réelle.</span>
         </label>
       )}
       {errMsg && (

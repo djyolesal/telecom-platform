@@ -655,7 +655,14 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
             data: { origine: 'HERITEE', coupureOrigineId: racineId },
           });
         }
-        const aCreer = aval.filter((s) => !couverts.has(s.id));
+        // Même règle qu'à la prise en charge : on ne crée que pour les sites
+        // AVEUGLES — un aval visible encore debout (batteries) se rattachera
+        // de lui-même à sa chute réelle, à la bonne heure.
+        const nodeIdParSite = new Map(
+          (await prisma.site.findMany({ where: { id: { in: aval.map((s) => s.id) } }, select: { id: true, nodeId: true } }))
+            .map((s) => [s.id, s.nodeId])
+        );
+        const aCreer = aval.filter((s) => !couverts.has(s.id) && !nodeIdParSite.get(s.id)?.trim());
         if (aCreer.length) {
           await prisma.coupureReseau.createMany({
             data: aCreer.map((s) => ({
@@ -1436,7 +1443,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
 
     const sites = await prisma.site.findMany({
       where: { isActive: true },
-      select: { id: true, nom: true, parentTransmissionId: true },
+      select: { id: true, nom: true, parentTransmissionId: true, nodeId: true },
     });
     const parId = new Map(sites.map((s) => [s.id, s]));
 
@@ -1517,8 +1524,12 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       data: { priseEnChargePar: nom, priseEnChargeLe: quand },
     });
 
-    // Héritées MANQUANTES : sites aval sans coupure ouverte (pas de nodeId →
-    // l'OSS ne les voit pas) — leur indisponibilité doit exister et compter.
+    // Héritées MANQUANTES : UNIQUEMENT les sites aval AVEUGLES (sans nodeId,
+    // invisibles de l'OSS) sans coupure ouverte — leur indisponibilité doit
+    // exister et compter. Les sites VISIBLES encore debout (batteries) n'ont
+    // rien à recevoir : leur détection réelle arrivera à leur chute, avec la
+    // bonne heure, et héritera de l'adoption — créer ici les datait du début
+    // racine (indispo surévaluée) et absorbait leur vraie détection en doublon.
     let heriteesCreees = 0;
     if (creerAvalManquant && avalIds.length) {
       const couverts = new Set(
@@ -1527,7 +1538,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
           select: { siteId: true },
         })).map((c) => c.siteId)
       );
-      const manquants = avalIds.filter((id) => !couverts.has(id));
+      const manquants = avalIds.filter((id) => !couverts.has(id) && !parId.get(id)?.nodeId?.trim());
       if (manquants.length) {
         const crees = await prisma.coupureReseau.createMany({
           data: manquants.map((siteId) => ({
