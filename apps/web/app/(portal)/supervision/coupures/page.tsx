@@ -813,7 +813,9 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
   // Décochée par défaut (demande exploitant) : la création d'office ne
   // concerne que les sites aveugles - le NOC l'active en connaissance de cause.
   const [creerAval, setCreerAval] = useState(false);
-  const [creerIncident, setCreerIncident] = useState(false);
+  // Cochée par défaut (demande exploitant) : adopter une détection déclenche
+  // le terrain — incident + SMS/push aux passifs — sauf décision contraire.
+  const [creerIncident, setCreerIncident] = useState(true);
   const [resultat, setResultat] = useState<{
     racineSiteNom: string; estRacine: boolean; heriteesReclassees: number; heriteesCreees: number; priseEnChargePar: string;
     incident?: { id: string; reference: string | null; reutilise: boolean } | null;
