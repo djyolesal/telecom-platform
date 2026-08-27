@@ -40,7 +40,16 @@ class ConfigCuve {
     if (j['baremage'] is List) {
       for (final p in j['baremage'] as List) {
         if (p is Map) {
-          final h = dn(p['hauteurCm']);
+          // Une hauteur de 0 cm est un point de barème VALIDE (volume résiduel
+          // à cuve vide sur un certificat de jaugeage) : on la garde avec un
+          // test >= 0, à l'identique des moteurs api/web. `dn()` (> 0) reste
+          // réservé aux dimensions géométriques, qui, elles, doivent être > 0.
+          final hn = p['hauteurCm'] == null
+              ? null
+              : (p['hauteurCm'] is num
+                  ? (p['hauteurCm'] as num).toDouble()
+                  : double.tryParse(p['hauteurCm'].toString()));
+          final h = (hn != null && hn.isFinite && hn >= 0) ? hn : null;
           final l = p['litres'] == null
               ? null
               : (p['litres'] is num

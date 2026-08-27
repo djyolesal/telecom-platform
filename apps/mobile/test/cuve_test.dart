@@ -74,4 +74,23 @@ void main() {
     });
     expect(cfg.litresPourHauteur(60), 1100); // barème prioritaire, interpolé
   });
+
+  // Parité avec les moteurs api/web (filtre hauteurCm >= 0) : un point de
+  // barème à hauteur 0 cm (volume résiduel à cuve vide sur un certificat de
+  // jaugeage) est VALIDE et doit être retenu. Le mobile le rejetait (> 0),
+  // ce qui changeait l'interpolation ou rendait la cuve « non calculable ».
+  test('fromJson conserve un point de barème à hauteur 0', () {
+    final cfg = ConfigCuve.fromJson({
+      'formeCuve': 'RECTANGULAIRE',
+      'cuveLongueurCm': 200, 'cuveLargeurCm': 100, 'cuveHauteurCm': 100,
+      'baremage': [
+        {'hauteurCm': 0, 'litres': 50}, // résiduel à cuve vide
+        {'hauteurCm': 100, 'litres': 1050},
+      ],
+    });
+    expect(cfg.calculable, isTrue);
+    // 2 points retenus → interpolation linéaire 50 → 1050 sur 0..100 cm.
+    expect(cfg.litresPourHauteur(0), 50);
+    expect(cfg.litresPourHauteur(50), 550);
+  });
 }
