@@ -20,10 +20,12 @@ const chargerRebouclage = () =>
  *   - connected    → clôture de la coupure OSS ouverte, datée du rétablissement
  *     (la colonne date d'une ligne connected EST l'heure de reconnexion).
  *
- * MODE OBSERVATION (arrêté avec l'exploitant) : pas d'incident, pas de SMS,
- * pas de propagation aval — les coupures OSS s'affichent (listes, carte NOC)
- * mais restent silencieuses jusqu'à validation du rapprochement. L'armement
- * des notifications sera un second temps, avec anti-rebond.
+ * ARMEMENT AUTOMATIQUE (fin du mode observation, décidé avec l'exploitant le
+ * 27/08/2026) : une racine encore ouverte après le délai anti-rebond
+ * (oss.armementDelaiMin, 10 min par défaut) est adoptée et déclenche le
+ * terrain (incident critique, SMS passifs, push) sans attendre le NOC — qui
+ * garde la qualification (alarme, classement). Avant ce délai, la détection
+ * reste au sas : les rebonds courts ne notifient jamais.
  *
  * Auth : jeton MACHINE dédié (env OSS_SYNC_TOKEN) — pas un compte utilisateur.
  * L'auto-clôture ne touche JAMAIS une coupure saisie par un humain.
@@ -195,7 +197,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
             priseEnChargeLe: entrainee && racineAmont!.priseEnChargePar ? new Date() : undefined,
             observations: entrainee
               ? `Détection automatique OSS - héritée de la panne amont (${siteParId.get(racineAmont!.siteId)?.nom ?? 'site amont'}).`
-              : 'Détection automatique OSS (mode observation - pas de notification).',
+              : 'Détection automatique OSS - armement (incident + terrain) après le délai anti-rebond si la panne persiste.',
           },
           select: {
             id: true, siteId: true, dateDebut: true, origine: true,
@@ -303,8 +305,19 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       }
     }
 
+    // FIN DU MODE OBSERVATION : les racines encore ouvertes après le délai
+    // anti-rebond sont ARMÉES (adoption + incident + SMS/push terrain) sans
+    // attendre le NOC — qui garde la qualification (alarme, classement).
+    let detectionsArmees = 0;
+    try {
+      detectionsArmees = await chargerRebouclage().armerDetectionsMures();
+    } catch (e) {
+      logger.warn('[sync-oss] armement automatique échoué:', e);
+    }
+
     const bilan = {
       lignesAnalysees: lignes.length,
+      detectionsArmees,
       sitesRapproches: lignes.length - nonRapproches.length,
       rapprochementsAdoptes: adoptes,
       coupuresCreees: creees,

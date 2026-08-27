@@ -77,6 +77,7 @@ export function settingsCatalog(): SettingMeta[] {
     // Fenêtre d'entraînement amont/aval de la détection OSS : un aval tombé
     // jusqu'à N minutes AVANT sa racine est classé hérité (batteries inégales).
     { key: 'oss.fenetreEntrainementMin', label: 'Fenêtre entraînement amont/aval (OSS)', groupe: 'Supervision', unite: 'min', defaut: 60 },
+    { key: 'oss.armementDelaiMin', label: 'Armement auto des détections (anti-rebond, 0 = désactivé)', groupe: 'Supervision', unite: 'min', defaut: 10 },
     // Interrupteur du planning automatique : 1 = les préventives contractuelles
     // sont générées le 1er du mois ; 0 = planification manuelle uniquement
     // (utile pendant une renégociation de contrats ou une reprise de données).

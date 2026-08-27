@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
+import { getNum } from '../services/settings.service';
 import { triListe } from '../utils/triListe';
 import { auditLog } from '../services/audit.service';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre } from '../utils/perimetre';
@@ -437,6 +438,133 @@ export async function resoudreIncidentSiPlusDeCoupure(
     },
   });
   return true;
+}
+
+/**
+ * Déclenche le TERRAIN pour une coupure racine SITE ouverte : incident critique
+ * (ou incident ouvert du site réutilisé — pas de double SMS) ouvert au début
+ * RÉEL de la panne, SMS aux contacts passifs du lot + push aux techniciens.
+ * Utilisé par la prise en charge NOC et par l'armement automatique.
+ */
+export async function declencherTerrainRacine(
+  racineId: string,
+  opts: { nom: string; declarePar: string | null }
+): Promise<{ id: string; reference: string | null; reutilise: boolean } | null> {
+  const racineFull = await prisma.coupureReseau.findUnique({
+    where: { id: racineId },
+    select: { siteId: true, dateDebut: true, dateFin: true, technologie: true, site: { select: { nom: true } } },
+  });
+  if (!racineFull || racineFull.dateFin || racineFull.technologie !== 'SITE') return null;
+  const { incident, cree } = await avecRattrapageReferenceInc(() => prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + racineFull.siteId})::bigint)`;
+    const existant = await tx.incident.findFirst({
+      where: { siteId: racineFull.siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: { dateFin: null } } },
+      select: { id: true, reference: true },
+    });
+    if (existant) {
+      await tx.coupureReseau.update({ where: { id: racineId }, data: { incidentId: existant.id } });
+      return { incident: existant, cree: false };
+    }
+    const nouveau = await tx.incident.create({
+      data: {
+        reference: await genererReference(tx, 'INC', new Date()),
+        siteId: racineFull.siteId,
+        type: 'COUPURE_TOTALE',
+        severite: 'CRITIQUE',
+        description: opts.declarePar
+          ? `Site entier hors service - détection OSS prise en charge par ${opts.nom}.`
+          : `Site entier hors service - détection OSS armée automatiquement (panne confirmée dans la durée).`,
+        declarePar: opts.declarePar,
+        // L'incident s'ouvre au début RÉEL de la panne (la détection peut
+        // précéder l'armement) — MTTR honnête, résolution ≥ ouverture.
+        dateOuverture: new Date(Math.min(racineFull.dateDebut.getTime(), Date.now())),
+      },
+      select: { id: true, reference: true },
+    });
+    await tx.coupureReseau.update({ where: { id: racineId }, data: { incidentId: nouveau.id } });
+    return { incident: nouveau, cree: true };
+  }));
+  if (cree) {
+    io.of('/supervision').emit('incident:created', { id: incident.id, siteId: racineFull.siteId });
+    // SITES distincts, pas lignes : un site à deux coupures ouvertes
+    // (OSS + rapport) comptait double dans le SMS.
+    const nbAval = (await prisma.coupureReseau.findMany({
+      where: { coupureOrigineId: racineId, dateFin: null },
+      select: { siteId: true }, distinct: ['siteId'],
+    })).length;
+    const s = nbAval > 1 ? 's' : '';
+    await notifierIncidentCoupure(
+      racineFull.siteId,
+      rendreTemplate('sms.tpl.siteHorsService', {
+        site: racineFull.site.nom,
+        reference: incident.reference ?? '',
+        impactes: nbAval ? ` (+${nbAval} site${s} aval impacté${s})` : '',
+      }),
+      'INCIDENT_COUPURE_NOC',
+      'PASSIVE'
+    );
+    // Push gratuit aux techniciens passifs du lot, comme l'import NOC.
+    try {
+      const lot = await prisma.site.findUnique({
+        where: { id: racineFull.siteId },
+        select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
+      });
+      const prestas = (lot?.lot?.assignments ?? []).filter((a) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX').map((a) => a.prestataireId);
+      if (prestas.length) {
+        const techs = await prisma.user.findMany({
+          where: { role: 'TECHNICIEN', isActive: true, prestataireId: { in: prestas } },
+          select: { id: true },
+        });
+        await Promise.all(techs.map((t) => notificationService.sendToUser(t.id, {
+          title: `🔴 ${racineFull.site.nom} hors service`,
+          body: `Incident ${incident.reference ?? ''} - intervention terrain requise.`,
+          data: { incidentId: incident.id, type: 'incident' },
+        })));
+      }
+    } catch (e) { logger.warn('[coupures] push technicien (terrain) échoué:', e); }
+  }
+  return { ...incident, reutilise: !cree };
+}
+
+/**
+ * FIN DU MODE OBSERVATION — armement automatique des détections MÛRES :
+ * toute racine OSS SITE encore ouverte après le délai anti-rebond
+ * (oss.armementDelaiMin, 10 min par défaut, 0 = désactivé) est armée sans
+ * attendre le NOC : adoptée (elle entre au rapport officiel, héritées
+ * comprises) + terrain déclenché (incident, SMS passifs, push). Le NOC garde
+ * la QUALIFICATION (alarme, classement) via l'onglet « à qualifier ».
+ * Appelé à la fin de chaque passage du collecteur.
+ */
+export async function armerDetectionsMures(): Promise<number> {
+  const delaiMin = getNum('oss.armementDelaiMin', 10);
+  if (delaiMin <= 0) return 0;
+  const limite = new Date(Date.now() - delaiMin * 60_000);
+  const mures = await prisma.coupureReseau.findMany({
+    where: {
+      source: 'OSS', origine: 'LOCALE', technologie: 'SITE',
+      dateFin: null, priseEnChargePar: null, incidentId: null,
+      dateDebut: { lte: limite },
+    },
+    select: { id: true },
+  });
+  let armees = 0;
+  for (const c of mures) {
+    try {
+      const quand = new Date();
+      // Adoption automatique : la racine ET ses héritées ouvertes entrent au
+      // rapport NOC — même estampille que la prise en charge manuelle.
+      await prisma.coupureReseau.updateMany({
+        where: { OR: [{ id: c.id }, { coupureOrigineId: c.id, dateFin: null }], priseEnChargePar: null },
+        data: { priseEnChargePar: 'AUTO-OSS', priseEnChargeLe: quand },
+      });
+      await declencherTerrainRacine(c.id, { nom: 'AUTO-OSS', declarePar: null });
+      armees++;
+    } catch (e) {
+      logger.warn('[coupures] armement automatique échoué pour', c.id, e);
+    }
+  }
+  if (armees) emettreCoupuresChangees({ action: 'armement' });
+  return armees;
 }
 
 /** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
@@ -1574,80 +1702,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
     // réutilisation d'un incident encore ouvert). Site entier uniquement.
     let incidentInfo: { id: string; reference: string | null; reutilise: boolean } | null = null;
     if (creerIncident) {
-      const racineFull = await prisma.coupureReseau.findUnique({
-        where: { id: racine.id },
-        select: { siteId: true, dateDebut: true, dateFin: true, technologie: true, site: { select: { nom: true } } },
-      });
-      if (racineFull && !racineFull.dateFin && racineFull.technologie === 'SITE') {
-        const { incident, cree } = await avecRattrapageReferenceInc(() => prisma.$transaction(async (tx) => {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + racineFull.siteId})::bigint)`;
-          const existant = await tx.incident.findFirst({
-            where: { siteId: racineFull.siteId, statut: { in: ['OUVERT', 'EN_COURS'] }, coupures: { some: { dateFin: null } } },
-            select: { id: true, reference: true },
-          });
-          if (existant) {
-            await tx.coupureReseau.update({ where: { id: racine.id }, data: { incidentId: existant.id } });
-            return { incident: existant, cree: false };
-          }
-          const nouveau = await tx.incident.create({
-            data: {
-              reference: await genererReference(tx, 'INC', new Date()),
-              siteId: racineFull.siteId,
-              type: 'COUPURE_TOTALE',
-              severite: 'CRITIQUE',
-              description: `Site entier hors service - détection OSS prise en charge par ${nom}.`,
-              declarePar: req.user!.id,
-              // Même règle qu'à la saisie NOC : l'incident s'ouvre au début
-              // réel de la panne (la détection OSS peut précéder l'adoption
-              // de plusieurs heures) — MTTR honnête, résolution ≥ ouverture.
-              dateOuverture: new Date(Math.min(racineFull.dateDebut.getTime(), Date.now())),
-            },
-            select: { id: true, reference: true },
-          });
-          await tx.coupureReseau.update({ where: { id: racine.id }, data: { incidentId: nouveau.id } });
-          return { incident: nouveau, cree: true };
-        }));
-        incidentInfo = { ...incident, reutilise: !cree };
-        if (cree) {
-          io.of('/supervision').emit('incident:created', { id: incident.id, siteId: racineFull.siteId });
-          // SITES distincts, pas lignes : un site à deux coupures ouvertes
-          // (OSS + rapport) comptait double dans le SMS.
-          const nbAval = (await prisma.coupureReseau.findMany({
-            where: { coupureOrigineId: racine.id, dateFin: null },
-            select: { siteId: true }, distinct: ['siteId'],
-          })).length;
-          const s = nbAval > 1 ? 's' : '';
-          await notifierIncidentCoupure(
-            racineFull.siteId,
-            rendreTemplate('sms.tpl.siteHorsService', {
-              site: racineFull.site.nom,
-              reference: incident.reference ?? '',
-              impactes: nbAval ? ` (+${nbAval} site${s} aval impacté${s})` : '',
-            }),
-            'INCIDENT_COUPURE_NOC',
-            'PASSIVE'
-          );
-          // Push gratuit aux techniciens passifs du lot, comme l'import NOC.
-          try {
-            const lot = await prisma.site.findUnique({
-              where: { id: racineFull.siteId },
-              select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
-            });
-            const prestas = (lot?.lot?.assignments ?? []).filter((a) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX').map((a) => a.prestataireId);
-            if (prestas.length) {
-              const techs = await prisma.user.findMany({
-                where: { role: 'TECHNICIEN', isActive: true, prestataireId: { in: prestas } },
-                select: { id: true },
-              });
-              await Promise.all(techs.map((t) => notificationService.sendToUser(t.id, {
-                title: `🔴 ${racineFull.site.nom} hors service`,
-                body: `Incident ${incident.reference ?? ''} créé à la prise en charge NOC - intervention terrain requise.`,
-                data: { incidentId: incident.id, type: 'incident' },
-              })));
-            }
-          } catch (e) { logger.warn('[coupures] push technicien (prise en charge) échoué:', e); }
-        }
-      }
+      incidentInfo = await declencherTerrainRacine(racine.id, { nom, declarePar: req.user!.id });
     }
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', racine.id, {
