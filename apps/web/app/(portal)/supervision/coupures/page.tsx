@@ -810,9 +810,6 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 // (dont celle-ci) sont reclassées héritées et la liste retombe à un événement.
 
 function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: () => void }) {
-  // Décochée par défaut (demande exploitant) : la création d'office ne
-  // concerne que les sites aveugles - le NOC l'active en connaissance de cause.
-  const [creerAval, setCreerAval] = useState(false);
   // Cochée par défaut (demande exploitant) : adopter une détection déclenche
   // le terrain — incident + SMS/push aux passifs — sauf décision contraire.
   const [creerIncident, setCreerIncident] = useState(true);
@@ -821,7 +818,11 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
     incident?: { id: string; reference: string | null; reutilise: boolean } | null;
   } | null>(null);
   const mutation = useMutation({
-    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`, { creerAvalManquant: creerAval, creerIncident }).then((r) => r.data.data),
+    // creerAvalManquant toujours vrai : depuis la règle « aveugles uniquement »
+    // côté serveur, c'est l'action juste dans tous les cas (rien si le parc est
+    // 100 % NodeID, exactement ce qu'il faut si un site aveugle apparaît) — ce
+    // n'est plus une décision humaine, la case a été retirée du modal.
+    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`, { creerAvalManquant: true, creerIncident }).then((r) => r.data.data),
     onSuccess: (d) => { setResultat(d); onDone(); },
   });
   const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
@@ -845,14 +846,10 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
       ) : (
         <>
           <p className="mb-2">
-            Détection automatique OSS <b>non prise en charge</b>. La prise en charge analyse la
-            topologie : si un site <b>amont</b> est aussi coupé, il devient la racine de l&apos;événement
-            et les coupures de l&apos;aval passent en héritées (une seule panne, une seule ligne).
+            Détection automatique OSS <b>non prise en charge</b>. La prise en charge fait entrer
+            l&apos;événement au rapport NOC et analyse la topologie : racine amont, aval reclassé en
+            héritées — une seule panne, une seule ligne.
           </p>
-          <label className="mb-2 flex cursor-pointer items-start gap-2 text-xs">
-            <input type="checkbox" checked={creerAval} onChange={(e) => setCreerAval(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 rounded" />
-            <span>Créer les héritées pour les sites aval <b>sans détection OSS propre</b> (pas de NodeID) - leur indisponibilité comptera dans le rapport.</span>
-          </label>
           <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-md bg-red-50 p-2 text-xs text-red-800">
             <input type="checkbox" checked={creerIncident} onChange={(e) => setCreerIncident(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 rounded border-red-300" />
             <span>
