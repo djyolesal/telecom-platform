@@ -124,6 +124,8 @@ class MaintenanceRepository {
     String? actifType,
     String? actifId,
     String? siteSourceId,
+    String? equipementCode,
+    String? precision,
   }) {
     return _sync.submit(
       endpoint: '/maintenances',
@@ -137,6 +139,10 @@ class MaintenanceRepository {
           'tachePreventiveKey': tachePreventiveKey,
         if (natureTravaux != null && natureTravaux != 'ENTRETIEN')
           'natureTravaux': natureTravaux,
+        // Dépannage : le serveur résout catégorie + libellé depuis le
+        // référentiel (categorie/equipement ci-dessus ne servent qu'au repli).
+        if (equipementCode != null) 'equipementCode': equipementCode,
+        if (precision != null && precision.isNotEmpty) 'precision': precision,
         if (actifType != null) 'actifType': actifType,
         if (actifId != null) 'actifId': actifId,
         if (siteSourceId != null) 'siteSourceId': siteSourceId,

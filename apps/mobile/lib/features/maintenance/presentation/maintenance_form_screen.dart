@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/utils/formatters.dart';
@@ -13,7 +14,7 @@ import '../../../core/theme/app_theme.dart';
 
 const _natureOptions = [
   ('ENTRETIEN', 'Entretien (tâche contractuelle)'),
-  ('CURATIVE', 'Dépannage / curative (GE en panne)'),
+  ('CURATIVE', 'Dépannage / curative (équipement en panne)'),
   ('INSTALLATION', 'Installation d\'un actif'),
   ('DESINSTALLATION', 'Désinstallation d\'un actif'),
   ('DEPLACEMENT', 'Déplacement d\'un actif'),
@@ -41,7 +42,10 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   ActifLite? _actif;
   bool _loadingActifs = false;
 
-  // Dépannage curatif : GE du site sélectionné (imputation de la panne à un GE).
+  // Dépannage curatif : équipement en panne (référentiel serveur) + précision
+  // libre ; si l'équipement est un GE, imputation de la panne à un GE du site.
+  String? _equipementCode;
+  final _precision = TextEditingController();
   List<ActifLite> _gesDuSite = [];
   ActifLite? _geEnPanne;
   bool _loadingGes = false;
@@ -67,6 +71,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   @override
   void dispose() {
     _description.dispose();
+    _precision.dispose();
     super.dispose();
   }
 
@@ -126,6 +131,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       _siteId = null;
       _taches = [];
       _actifs = [];
+      _equipementCode = null;
       _gesDuSite = [];
       _geEnPanne = null;
     });
@@ -213,18 +219,33 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
             const SnackBar(content: Text('Sélectionnez un site')));
         return;
       }
-      final ge = _geEnPanne;
-      if (ge == null) {
-        messenger.showSnackBar(
-            const SnackBar(content: Text('Sélectionnez le GE en panne')));
+      final code = _equipementCode;
+      if (code == null) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Sélectionnez l\'équipement en panne')));
         return;
+      }
+      ActifLite? ge;
+      if (code == 'GE') {
+        ge = _geEnPanne;
+        if (ge == null) {
+          messenger.showSnackBar(
+              const SnackBar(content: Text('Sélectionnez le GE en panne')));
+          return;
+        }
       }
       payloadSiteId = _siteId;
       type = 'CURATIVE';
-      categorie = 'GE';
-      equipement = 'Dépannage - ${ge.libelle ?? 'GE'}';
-      actifType = 'GE';
-      actifId = ge.id; // rattachement pour la fiabilité par marque
+      // Repli hors-ligne : le serveur fait foi et re-résout catégorie +
+      // libellé depuis le référentiel grâce à equipementCode.
+      final ref =
+          AppConfig.equipements.where((e) => e['code'] == code).firstOrNull;
+      categorie = ref?['categorie'] ?? 'AUTRE';
+      equipement = ref?['libelle'] ?? code;
+      if (ge != null) {
+        actifType = 'GE';
+        actifId = ge.id; // rattachement pour la fiabilité par marque
+      }
     } else {
       final actif = _actif;
       if (actif == null) {
@@ -270,6 +291,8 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         actifType: actifType,
         actifId: actifId,
         siteSourceId: siteSourceId,
+        equipementCode: _isCurative ? _equipementCode : null,
+        precision: _isCurative ? _precision.text.trim() : null,
         description: _description.text.trim(),
         datePlanifiee: datePlanifiee,
         latitude: pos?.lat,
@@ -348,37 +371,67 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
               SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
-                initialValue: _geEnPanne?.id,
+                initialValue: _equipementCode,
                 isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: 'GE en panne *',
-                  hintText: _siteId == null
-                      ? 'Choisissez d\'abord un site'
-                      : (_gesDuSite.isEmpty && !_loadingGes
-                          ? 'Aucun GE sur ce site'
-                          : null),
-                  suffixIcon: _loadingGes
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                              height: 16,
-                              width: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2)))
-                      : null,
-                ),
-                items: _gesDuSite
-                    .map((g) => DropdownMenuItem(
-                        value: g.id,
-                        child: Text(g.libelle ?? 'GE',
+                decoration: const InputDecoration(
+                    labelText: 'Équipement en panne *',
+                    hintText: 'ATS, TGBT, GE, compteur CEET…'),
+                items: AppConfig.equipements
+                    .map((e) => DropdownMenuItem(
+                        value: e['code'],
+                        child: Text(e['libelle'] ?? e['code'] ?? '',
                             overflow: TextOverflow.ellipsis)))
                     .toList(),
-                onChanged: _siteId == null
-                    ? null
-                    : (v) => setState(() => _geEnPanne =
-                        _gesDuSite.where((g) => g.id == v).firstOrNull),
+                onChanged: (v) => setState(() {
+                  _equipementCode = v;
+                  _geEnPanne = null;
+                }),
                 validator: (v) =>
                     _isCurative && (v == null || v.isEmpty) ? 'Requis' : null,
               ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _precision,
+                decoration: const InputDecoration(
+                    labelText: 'Précision (optionnel)',
+                    hintText: 'ex. ATS 2, contacteur amont'),
+              ),
+              if (_equipementCode == 'GE') ...[
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: _geEnPanne?.id,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'GE en panne *',
+                    hintText: _siteId == null
+                        ? 'Choisissez d\'abord un site'
+                        : (_gesDuSite.isEmpty && !_loadingGes
+                            ? 'Aucun GE sur ce site'
+                            : null),
+                    suffixIcon: _loadingGes
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                                height: 16,
+                                width: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)))
+                        : null,
+                  ),
+                  items: _gesDuSite
+                      .map((g) => DropdownMenuItem(
+                          value: g.id,
+                          child: Text(g.libelle ?? 'GE',
+                              overflow: TextOverflow.ellipsis)))
+                      .toList(),
+                  onChanged: _siteId == null
+                      ? null
+                      : (v) => setState(() => _geEnPanne =
+                          _gesDuSite.where((g) => g.id == v).firstOrNull),
+                  validator: (v) =>
+                      _isCurative && (v == null || v.isEmpty) ? 'Requis' : null,
+                ),
+              ],
             ] else ...[
               DropdownButtonFormField<String>(
                 initialValue: _actif?.id,
