@@ -810,9 +810,6 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 // (dont celle-ci) sont reclassées héritées et la liste retombe à un événement.
 
 function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: () => void }) {
-  // Cochée par défaut (demande exploitant) : adopter une détection déclenche
-  // le terrain — incident + SMS/push aux passifs — sauf décision contraire.
-  const [creerIncident, setCreerIncident] = useState(true);
   const [resultat, setResultat] = useState<{
     racineSiteNom: string; estRacine: boolean; heriteesReclassees: number; heriteesCreees: number; priseEnChargePar: string;
     incident?: { id: string; reference: string | null; reutilise: boolean } | null;
@@ -822,7 +819,12 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
     // côté serveur, c'est l'action juste dans tous les cas (rien si le parc est
     // 100 % NodeID, exactement ce qu'il faut si un site aveugle apparaît) — ce
     // n'est plus une décision humaine, la case a été retirée du modal.
-    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`, { creerAvalManquant: true, creerIncident }).then((r) => r.data.data),
+    // Terrain déclenché SYSTÉMATIQUEMENT (demande exploitant) : la prise en
+    // charge EST la confirmation humaine — si le NOC adopte, la panne est
+    // réelle. Incident réutilisé s'il en existe un (pas de double SMS), et la
+    // résolution automatique prévient les techniciens si le site se rétablit
+    // seul. L'API accepte toujours creerIncident:false pour d'autres usages.
+    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`, { creerAvalManquant: true, creerIncident: true }).then((r) => r.data.data),
     onSuccess: (d) => { setResultat(d); onDone(); },
   });
   const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
@@ -850,14 +852,11 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
             l&apos;événement au rapport NOC et analyse la topologie : racine amont, aval reclassé en
             héritées — une seule panne, une seule ligne.
           </p>
-          <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-md bg-red-50 p-2 text-xs text-red-800">
-            <input type="checkbox" checked={creerIncident} onChange={(e) => setCreerIncident(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 rounded border-red-300" />
-            <span>
-              <b>Déclencher le terrain</b> : créer l&apos;incident CRITIQUE sur la racine -
-              <b> SMS RÉELS aux contacts passifs du lot</b> + notification aux techniciens.
-              (Si un incident est déjà ouvert sur ce site, la coupure y est rattachée sans nouveau SMS.)
-            </span>
-          </label>
+          <p className="mb-2 rounded-md bg-red-50 p-2 text-xs text-red-800">
+            <b>Le terrain sera déclenché</b> : incident CRITIQUE sur la racine,
+            <b> SMS réels aux contacts passifs du lot</b> + notification aux techniciens.
+            Incident déjà ouvert sur ce site : la coupure y est rattachée, sans nouveau SMS.
+          </p>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             {mutation.isPending ? 'Analyse de la topologie…' : 'Prendre en charge (analyse amont/aval)'}
           </Button>
