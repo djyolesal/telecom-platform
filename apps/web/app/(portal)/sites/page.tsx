@@ -42,19 +42,38 @@ export default function SitesPage() {
   const [region, setRegion] = useState('');
   const [statutGe, setStatutGe] = useState('');
   const [powerConfig, setPowerConfig] = useState('');
+  const [prestataireId, setPrestataireId] = useState('');
   const [showImport, setShowImport] = useState(false);
   // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
   // réordonnerait que la page affichée). null = tri par nom.
   const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const debouncedSearch = useDebounce(search);
 
+  // Filtre prestataire : INTERNES uniquement — un utilisateur rattaché à un
+  // prestataire ne voit déjà que ses sites, le filtre serait du bruit.
+  const role = (session?.user as { role?: string })?.role ?? '';
+  const { data: maSociete } = useQuery({
+    queryKey: ['ma-societe'],
+    queryFn: () => api.get('/ma-societe').then((r) => r.data.data as { nom: string } | null),
+    enabled: role === 'SUPERVISEUR',
+    staleTime: 60_000,
+  });
+  const filtrePrestataire = ['MANAGER', 'ADMIN', 'DIRECTION', 'NOC'].includes(role)
+    || (role === 'SUPERVISEUR' && !maSociete);
+  const { data: prestataires } = useQuery({
+    queryKey: ['prestataires-select'],
+    queryFn: () => api.get('/prestataires', { params: { is_active: true, limit: 200 } }).then((r) => r.data.data as { id: string; nom: string }[]),
+    enabled: filtrePrestataire,
+  });
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sites', { page, debouncedSearch, region, statutGe, powerConfig, tri }],
+    queryKey: ['sites', { page, debouncedSearch, region, statutGe, powerConfig, prestataireId, tri }],
     queryFn: () =>
       api
         .get('/sites', {
           params: {
             page, limit: 20, search: debouncedSearch || undefined, region: region || undefined, statut_ge: statutGe || undefined, power_config: powerConfig || undefined,
+            prestataire_id: prestataireId || undefined,
             tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
           },
         })
@@ -110,6 +129,11 @@ export default function SitesPage() {
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
           { key: 'statut', label: 'Tous statuts GE', value: statutGe, options: STATUTS_GE, onChange: (v) => { setStatutGe(v); setPage(1); } },
           { key: 'power', label: 'Toutes configs énergie', value: powerConfig, options: POWER_CONFIGS, onChange: (v) => { setPowerConfig(v); setPage(1); } },
+          ...(filtrePrestataire ? [{
+            key: 'prestataire', label: 'Tous prestataires', value: prestataireId,
+            options: (prestataires ?? []).map((p) => ({ value: p.id, label: p.nom })),
+            onChange: (v: string) => { setPrestataireId(v); setPage(1); },
+          }] : []),
         ]}
       />
 

@@ -16,6 +16,8 @@ export interface SiteOptionnel {
   latitude?: number | string | null;
   longitude?: number | string | null;
   groupes?: { numero: number; marque?: string | null }[];
+  lot?: { code?: string; assignments?: { scope: string; prestataire?: { nom?: string } }[] } | null;
+  lotSolaire?: { code?: string; assignments?: { prestataire?: { nom?: string } }[] } | null;
   hasGardien?: boolean | null;
   societeGardiennage?: string | null;
   telephoneSite?: string | null;
@@ -73,6 +75,26 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
       ) : ('—'),
   },
   { key: 'typePylone', header: 'Type de pylône', description: 'Référentiel des types de pylône', render: (s: SiteOptionnel) => s.typePylone ?? '—' },
+  {
+    key: 'prestataires', header: 'Prestataires',
+    description: 'Titulaires des contrats du site (passif/actif et solaire)',
+    // Deux relations multiples : pas de tri serveur possible.
+    sortable: false,
+    render: (s: SiteOptionnel) => {
+      const passifs = (s.lot?.assignments ?? [])
+        .map((a) => `${a.prestataire?.nom ?? '?'}${a.scope === 'ACTIVE' ? ' (actif)' : a.scope === 'LES_DEUX' ? ' (p+a)' : ''}`);
+      const solaire = s.lotSolaire?.assignments?.[0]?.prestataire?.nom;
+      if (!passifs.length && !solaire) return <span className="text-gray-300">—</span>;
+      return (
+        <span className="flex flex-wrap gap-1">
+          {passifs.map((nom, i) => (
+            <span key={i} className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700">{nom}</span>
+          ))}
+          {solaire && <span className="rounded-full bg-yellow-100 px-1.5 py-0.5 text-[11px] font-medium text-yellow-800">{solaire} · solaire</span>}
+        </span>
+      );
+    },
+  },
   {
     key: 'cuveVolumeLitres', header: 'Cuve (L)', description: 'Capacité de la cuve à gasoil', align: 'right',
     render: (s: SiteOptionnel) => (s.cuveVolumeLitres != null ? fmtNumber(Number(s.cuveVolumeLitres)) : '—'),

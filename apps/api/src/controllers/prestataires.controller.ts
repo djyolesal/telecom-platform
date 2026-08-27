@@ -46,6 +46,11 @@ export async function getPrestataires(req: Request, res: Response, next: NextFun
       { nom: { contains: search, mode: 'insensitive' } },
       { email: { contains: search, mode: 'insensitive' } },
     ];
+    // Un utilisateur rattaché à un prestataire ne liste que SA société — la
+    // route est ouverte aux superviseurs pour les filtres des listes, sans
+    // exposer l'annuaire des concurrents (contacts, RCCM/NIF…).
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    if (me?.prestataireId) where.id = me.prestataireId;
 
     const { data, meta } = await paginate(
       prisma.prestataire,

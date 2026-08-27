@@ -113,6 +113,7 @@ const NOC_ALLOW: RegExp[] = [
   /^\/rapports\/(dashboard|disponibilite-reseau|incidents)$/,
   /^\/rapports\/disponibilite-reseau\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
+  /^\/prestataires$/,                  // liste seule : options du filtre prestataire (page Sites)
 ];
 router.use((req, _res, next) => {
   if (req.user?.role !== 'NOC') return next();
@@ -243,7 +244,9 @@ router.get('/rapports/disponibilite-reseau/export/:format', rbac(['NOC','SUPERVI
 router.get('/ma-societe', prestatairesCtrl.getMaSociete);
 router.put('/ma-societe', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN']), prestatairesCtrl.updateMaSociete);
 
-router.get('/prestataires', rbac(['MANAGER','ADMIN']), prestatairesCtrl.getPrestataires);
+// Lecture élargie aux internes (filtres des listes) ; un utilisateur rattaché
+// à un prestataire n'y voit que SA société (garde dans le contrôleur).
+router.get('/prestataires', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC']), prestatairesCtrl.getPrestataires);
 router.post('/prestataires', rbac(['MANAGER', 'ADMIN']), prestatairesCtrl.createPrestataire);
 
 // ── Contacts à notifier (SMS) — gestion admin ──

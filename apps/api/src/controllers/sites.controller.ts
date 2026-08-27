@@ -100,12 +100,22 @@ const HEADER_ALIASES: Record<string, string> = {
  */
 export async function getSites(req: Request, res: Response, next: NextFunction) {
   try {
-    const { region, statut_ge, power_config, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
+    const { region, statut_ge, power_config, prestataire_id, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
 
     const where: Record<string, unknown> = { isActive: true };
     if (region) where.region = region;
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
+    // Filtre prestataire TOUS CONTRATS : sites dont il tient le lot passif OU
+    // le lot solaire (dans AND — le OR de la recherche vit à côté).
+    if (prestataire_id) {
+      where.AND = [{
+        OR: [
+          { lot: { assignments: { some: { prestataireId: prestataire_id } } } },
+          { lotSolaire: { assignments: { some: { prestataireId: prestataire_id } } } },
+        ],
+      }];
+    }
     // Le code du site n'est plus exposé dans l'interface : la recherche porte
     // sur le nom et la localisation, jamais sur le code.
     if (search) where.OR = [
@@ -155,8 +165,13 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
         where,
         orderBy: triExplicite ?? { nom: 'asc' },
         // La marque GE vit sur les groupes (pas sur le site) : nécessaire à la
-        // colonne optionnelle « Marque GE » de la liste web.
-        include: { groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, marque: true } } },
+        // colonne optionnelle « Marque GE ». Les titulaires des deux contrats
+        // alimentent la colonne optionnelle « Prestataires ».
+        include: {
+          groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, marque: true } },
+          lot: { select: { code: true, assignments: { select: { scope: true, prestataire: { select: { nom: true } } }, orderBy: { scope: 'asc' as const } } } },
+          lotSolaire: { select: { code: true, assignments: { where: { scope: 'SOLAIRE' as const }, select: { prestataire: { select: { nom: true } } } } } },
+        },
       },
       { page: parseInt(page), limit: parseInt(limit) }
     );
