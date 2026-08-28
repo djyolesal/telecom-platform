@@ -709,14 +709,14 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <AnnulationPriseEnChargeBloc coupureId={coupure.id} priseEnChargePar={coupure.priseEnChargePar} onDone={onDone} />
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Début (corrigeable - l'audit garde l'ancien)">
+        <Field label="Début">
           <Input type="datetime-local" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
         </Field>
-        <Field label="Rétablissement (vide = en cours)">
+        <Field label="Rétablissement">
           <Input type="datetime-local" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
         </Field>
       </div>
-      <Field label="Technologie (qualification NOC)">
+      <Field label="Technologie">
         <div className="flex flex-wrap gap-2">
           {TECHNOS.map((t) => (
             <button key={t.value} type="button" onClick={() => toggleTechno(t.value)}
