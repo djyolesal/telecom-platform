@@ -96,7 +96,10 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     // Incidents récents
     const incidentsRecents = await prisma.incident.findMany({
       where: { site: siteScope },
-      orderBy: { dateOuverture: 'desc' },
+      // Actifs d'abord (statut asc = ordre de l'enum OUVERT < EN_COURS < RESOLU
+      // < CLOS), puis les plus récents : un incident résolu ne coiffe plus un
+      // incident encore ouvert dans le widget du tableau de bord.
+      orderBy: [{ statut: 'asc' }, { dateOuverture: 'desc' }],
       take: 8,
       include: { site: { select: { code: true, nom: true } } },
     });
