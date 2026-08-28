@@ -153,6 +153,22 @@ export default function CartePage() {
     return out;
   }, [modeTopo, all, liens, region, colorationTopo, typesLiaisonParCode, etatReseauParSite]);
 
+  // Rôle topologique de chaque site sans parent : RACINE (tête de chaîne, il a
+  // de l'aval) vs ISOLÉ (aucun aval → topologie souvent non renseignée).
+  const { rolesTopo, nbRacines, nbIsoles } = useMemo(() => {
+    if (!modeTopo) return { rolesTopo: undefined as Record<string, 'racine' | 'isole'> | undefined, nbRacines: 0, nbIsoles: 0 };
+    const aDeLaval = new Set<string>();
+    for (const s of liens ?? []) if (s.parentTransmissionId) aDeLaval.add(s.parentTransmissionId);
+    const roles: Record<string, 'racine' | 'isole'> = {};
+    let racines = 0, isoles = 0;
+    for (const s of liens ?? []) {
+      if (s.parentTransmissionId) continue; // a un amont → ni racine ni isolé
+      if (aDeLaval.has(s.id)) { roles[s.id] = 'racine'; racines++; }
+      else { roles[s.id] = 'isole'; isoles++; }
+    }
+    return { rolesTopo: roles, nbRacines: racines, nbIsoles: isoles };
+  }, [modeTopo, liens]);
+
   // Une couleur STABLE par camion (ordre alphabétique des plaques) : la même
   // plaque garde sa couleur d'un chargement à l'autre tant que la flotte en
   // tournée ne change pas - le chauffeur mémorise « mon camion = vert ».
@@ -200,7 +216,7 @@ export default function CartePage() {
         subtitle={vueLivraison
           ? `${all.length} site(s) à livrer selon vos plans en cours`
           : modeTopo
-            ? `${liaisons?.length ?? 0} liaison(s) tracée(s)${liaisons ? ` · ${liaisons.filter((l) => l.pointille).length} en FH` : ''}`
+            ? `${liaisons?.length ?? 0} liaison(s) · ${nbRacines} racine(s) · ${nbIsoles} isolé(s) (topologie à compléter)`
             : modeReseau
             ? `${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'DOWN').length} coupé(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'PARTIEL').length} partiel(s) · ${Object.values(etatReseauParSite ?? {}).filter((e) => e.etat === 'IMPACTE').length} aval menacé(s) · temps réel`
             : `${features.length} / ${all.length} sites · temps réel`}
@@ -280,12 +296,18 @@ export default function CartePage() {
                   <span className="h-0.5 w-4 rounded" style={{ background: couleurLiaison(t.code), borderTop: t.famille === 'FH' ? '2px dashed' : undefined, borderColor: couleurLiaison(t.code) }} /> {t.libelle}
                 </span>
               ))}
-              <span className="text-gray-400">FH en pointillé · marqueurs = état du site</span>
+              <span className="text-gray-400">FH en pointillé</span>
+              <span className="mx-1 h-3 w-px bg-gray-200" />
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-[#1B3F6B]" /> Racine (tête de chaîne)</span>
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-dashed border-gray-400" /> Isolé (à rattacher)</span>
             </>) : (<>
               <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#C0392B]" /> Coupé</span>
               <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#E67E22]" /> Partiel</span>
               <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#8E44AD]" /> Aval menacé</span>
               <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#0E7C6B]" /> En service</span>
+              <span className="mx-1 h-3 w-px bg-gray-200" />
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-[#1B3F6B]" /> Racine</span>
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-dashed border-gray-400" /> Isolé</span>
             </>)
           ) : modeReseau ? (<>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#C0392B]" /> Site entièrement coupé</span>
@@ -309,6 +331,7 @@ export default function CartePage() {
             couleurParCamion={vueLivraison ? couleurParCamion : undefined}
             etatReseauParSite={etatReseauParSite}
             liaisons={liaisons}
+            rolesTopo={rolesTopo}
             masquerStock={role === 'NOC'}
           />
         )}

@@ -1,7 +1,7 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import { useState, useRef, useEffect } from 'react';
+import { Fragment, useState, useRef, useEffect } from 'react';
 import L from 'leaflet';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, Tooltip, useMap } from 'react-leaflet';
 import { Search, X } from 'lucide-react';
@@ -154,13 +154,15 @@ export interface Liaison {
   pointille?: boolean; // FH en pointillé (lien radio, plus fragile)
 }
 
-export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaisons, masquerStock }: {
+export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaisons, rolesTopo, masquerStock }: {
   features: SiteFeature[];
   couleurParCamion?: Record<string, string>;
   /** Présent = mode réseau : rouge (en coupure) / ambre (aval) / vert (en service). */
   etatReseauParSite?: Record<string, EtatReseau>;
   /** Présent = mode topologie : liaisons de transmission tracées sur la carte. */
   liaisons?: Liaison[];
+  /** Mode topologie : sites sans amont — RACINE (tête de chaîne) ou ISOLÉ (à rattacher). */
+  rolesTopo?: Record<string, 'racine' | 'isole'>;
   /** true (vue NOC) = aucune information de stock dans les popups. */
   masquerStock?: boolean;
 }) {
@@ -226,9 +228,23 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
           : n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
           : n === 'FAIBLE' ? '#F59E0B'
           : (STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF');
+        // Mode topologie : un site SANS amont porte un anneau — plein bleu
+        // marine pour une RACINE (tête de chaîne légitime), gris pointillé pour
+        // un ISOLÉ (aucun aval : topologie à compléter).
+        const role = rolesTopo?.[f.properties.id];
         return (
+          <Fragment key={f.properties.id}>
+          {role && (
+            <CircleMarker
+              center={[lat, lng]}
+              radius={11}
+              interactive={false}
+              pathOptions={role === 'racine'
+                ? { color: '#1B3F6B', weight: 3, fillOpacity: 0 }
+                : { color: '#9CA3AF', weight: 2, fillOpacity: 0, dashArray: '3 3' }}
+            />
+          )}
           <CircleMarker
-            key={f.properties.id}
             center={[lat, lng]}
             radius={6}
             pathOptions={{ color, fillColor: color, fillOpacity: 0.8, weight: 1 }}
@@ -311,6 +327,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
               </div>
             </Popup>
           </CircleMarker>
+          </Fragment>
         );
       })}
     </MapContainer>
