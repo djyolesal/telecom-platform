@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
+import { estConfigSolaire } from './sites.controller';
 
 const SCOPES = ['PASSIVE', 'ACTIVE', 'LES_DEUX', 'SOLAIRE'];
 
@@ -140,21 +141,48 @@ export async function assignSites(req: Request, res: Response, next: NextFunctio
     const lot = await prisma.lot.findUnique({ where: { id: req.params.id } });
     if (!lot) throw new AppError('Lot introuvable', 404);
 
+    // Un lot SOLAIRE rattache par lotSolaireId (découpage distinct du passif),
+    // pas par lotId : sans ça, affecter des sites à un lot solaire les posait
+    // en rattachement passif. De plus, seuls les sites hybrides ou solaires
+    // sont éligibles — un site sans panneaux est refusé.
+    const estLotSolaire = lot.contrat === 'SOLAIRE';
+    if (estLotSolaire) {
+      const cibles = await prisma.site.findMany({
+        where: { id: { in: siteIds } },
+        select: { id: true, code: true, powerConfig: true },
+      });
+      const inelig = cibles.filter((s) => !estConfigSolaire(s.powerConfig));
+      if (inelig.length) {
+        throw new AppError(
+          `Sites non éligibles au contrat solaire (ni hybrides ni solaires) : ${inelig.map((s) => s.code).join(', ')}.`,
+          422,
+        );
+      }
+    }
     const result = await prisma.site.updateMany({
       where: { id: { in: siteIds } },
-      data: { lotId: req.params.id },
+      data: estLotSolaire ? { lotSolaireId: req.params.id } : { lotId: req.params.id },
     });
-    await auditLog(req.user!.id, 'UPDATE', 'lots', lot.id, { sitesAffectes: result.count }, req);
+    await auditLog(req.user!.id, 'UPDATE', 'lots', lot.id, { sitesAffectes: result.count, solaire: estLotSolaire }, req);
     res.json({ success: true, data: { affectes: result.count } });
   } catch (err) { next(err); }
 }
 
 export async function removeSite(req: Request, res: Response, next: NextFunction) {
   try {
-    const site = await prisma.site.findUnique({ where: { id: req.params.siteId } });
-    if (!site || site.lotId !== req.params.id) throw new AppError('Site non rattaché à ce lot', 404);
-    await prisma.site.update({ where: { id: req.params.siteId }, data: { lotId: null } });
-    await auditLog(req.user!.id, 'UPDATE', 'lots', req.params.id, { siteRetire: req.params.siteId }, req);
+    // Retrait symétrique de l'affectation : on détache la bonne colonne selon
+    // le contrat du lot (solaire → lotSolaireId, sinon lotId).
+    const lot = await prisma.lot.findUnique({ where: { id: req.params.id }, select: { contrat: true } });
+    if (!lot) throw new AppError('Lot introuvable', 404);
+    const estLotSolaire = lot.contrat === 'SOLAIRE';
+    const site = await prisma.site.findUnique({ where: { id: req.params.siteId }, select: { lotId: true, lotSolaireId: true } });
+    const rattache = estLotSolaire ? site?.lotSolaireId : site?.lotId;
+    if (!site || rattache !== req.params.id) throw new AppError('Site non rattaché à ce lot', 404);
+    await prisma.site.update({
+      where: { id: req.params.siteId },
+      data: estLotSolaire ? { lotSolaireId: null } : { lotId: null },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'lots', req.params.id, { siteRetire: req.params.siteId, solaire: estLotSolaire }, req);
     res.json({ success: true, message: 'Site retiré du lot' });
   } catch (err) { next(err); }
 }

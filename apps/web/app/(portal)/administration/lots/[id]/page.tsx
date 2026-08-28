@@ -15,7 +15,7 @@ import { SCOPES_MAINTENANCE, SCOPE_COLORS } from '@/lib/constants';
 
 interface Assignment { id: string; scope: string; prestataire: { id: string; nom: string } }
 interface SiteLite { id: string; code: string; nom: string; region: string }
-interface Lot { id: string; code: string; nom: string; region?: string; assignments: Assignment[]; sites: SiteLite[] }
+interface Lot { id: string; code: string; nom: string; region?: string; contrat?: string; assignments: Assignment[]; sites: SiteLite[]; sitesSolaires?: SiteLite[] }
 
 const scopeLabel = (s: string) => SCOPES_MAINTENANCE.find((o) => o.value === s)?.label ?? s;
 
@@ -54,6 +54,10 @@ export default function LotDetailPage() {
   if (isError || !lot) return <ErrorState message="Lot introuvable" />;
 
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
+  // Un lot solaire rattache par lotSolaireId : sa liste de sites et l'affectation
+  // portent sur sitesSolaires (contrat distinct du passif).
+  const estSolaire = lot.contrat === 'SOLAIRE';
+  const sitesDuLot = estSolaire ? (lot.sitesSolaires ?? []) : lot.sites;
 
   return (
     <div>
@@ -90,11 +94,12 @@ export default function LotDetailPage() {
         {/* ── Sites du lot ── */}
         <section className="bg-white rounded-xl border border-gray-100 p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-700 text-sm">Sites du lot ({lot.sites.length})</h3>
+            <h3 className="font-semibold text-gray-700 text-sm">Sites du lot ({sitesDuLot.length})</h3>
+            {estSolaire && <Badge className="bg-yellow-100 text-yellow-800">Solaire · sites hybrides/solaires</Badge>}
           </div>
           <div className="space-y-1.5 max-h-72 overflow-y-auto mb-4">
-            {lot.sites.length === 0 && <EmptyState title="Aucun site" hint="Affectez des sites à ce lot ci-dessous." />}
-            {lot.sites.map((s) => (
+            {sitesDuLot.length === 0 && <EmptyState title="Aucun site" hint="Affectez des sites à ce lot ci-dessous." />}
+            {sitesDuLot.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-lg border border-gray-50 px-3 py-1.5 text-sm">
                 <span><span className="font-medium text-gray-800">{s.nom}</span> <span className="text-gray-500">· {s.region}</span></span>
                 <button onClick={() => removeSite.mutate(s.id)} className="p-1 rounded hover:bg-red-50" title="Retirer du lot">
@@ -103,7 +108,7 @@ export default function LotDetailPage() {
               </div>
             ))}
           </div>
-          <AddSites lotId={id} onDone={refresh} existingIds={new Set(lot.sites.map((s) => s.id))} />
+          <AddSites lotId={id} onDone={refresh} existingIds={new Set(sitesDuLot.map((s) => s.id))} solaire={estSolaire} />
         </section>
       </div>
     </div>
@@ -111,7 +116,7 @@ export default function LotDetailPage() {
 }
 
 // ── Recherche + affectation de sites au lot ──────────────────
-function AddSites({ lotId, onDone, existingIds }: { lotId: string; onDone: () => void; existingIds: Set<string> }) {
+function AddSites({ lotId, onDone, existingIds, solaire }: { lotId: string; onDone: () => void; existingIds: Set<string>; solaire: boolean }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const debounced = useDebounce(search);
@@ -126,6 +131,7 @@ function AddSites({ lotId, onDone, existingIds }: { lotId: string; onDone: () =>
     mutationFn: () => api.post(`/lots/${lotId}/sites`, { siteIds: Array.from(selected) }),
     onSuccess: () => { setSelected(new Set()); setSearch(''); onDone(); },
   });
+  const assignErr = (assign.error as { response?: { data?: { error?: string } } })?.response?.data?.error;
 
   const results = (data ?? []).filter((s) => !existingIds.has(s.id));
   const toggle = (sid: string) => setSelected((prev) => {
@@ -145,6 +151,7 @@ function AddSites({ lotId, onDone, existingIds }: { lotId: string; onDone: () =>
           className="w-full rounded-lg border border-gray-200 pl-9 pr-3 py-2 text-sm focus:border-[#2471A3] outline-none"
         />
       </div>
+      {solaire && <p className="mb-2 text-xs text-gray-500">Contrat solaire : seuls les sites hybrides ou solaires sont éligibles.</p>}
       {debounced.length >= 2 && (
         <div className="space-y-1 max-h-48 overflow-y-auto mb-2">
           {isFetching && <p className="text-xs text-gray-400 py-2">Recherche…</p>}
@@ -161,6 +168,7 @@ function AddSites({ lotId, onDone, existingIds }: { lotId: string; onDone: () =>
       <Button icon={Plus} disabled={selected.size === 0} loading={assign.isPending} onClick={() => assign.mutate()}>
         Affecter {selected.size > 0 ? `(${selected.size})` : ''}
       </Button>
+      {assign.isError && <p className="mt-2 text-xs text-red-500">{assignErr || 'Échec de l’affectation.'}</p>}
     </div>
   );
 }

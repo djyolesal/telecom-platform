@@ -126,6 +126,16 @@ export default function ModifierSitePage() {
   }, [site]);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  // Éligibilité solaire : seuls les sites hybrides ou solaires (config avec
+  // panneaux) peuvent porter un lot solaire. Miroir de la règle serveur.
+  const solaireEligible = ['HYBRIDE_GE', 'HYBRIDE_CEET_GE', 'SOLAIRE_UNIQUEMENT'].includes(form.powerConfig);
+  // Changer la config vers une valeur sans panneaux retire d'office le lot
+  // solaire (le serveur refuserait sinon la sauvegarde).
+  const onPowerConfigChange = (v: string) => setForm((f) => ({
+    ...f,
+    powerConfig: v,
+    ...(['HYBRIDE_GE', 'HYBRIDE_CEET_GE', 'SOLAIRE_UNIQUEMENT'].includes(v) ? {} : { lotSolaireId: '' }),
+  }));
 
   // Points de barème valides (lignes vides ignorées) pour l'API et l'aperçu.
   const pointsBareme = () => bareme
@@ -239,7 +249,7 @@ export default function ModifierSitePage() {
             <Input value={form.ville} onChange={(e) => set('ville', e.target.value)} />
           </Field>
           <Field label="Configuration énergie" required>
-            <Select value={form.powerConfig} onChange={(e) => set('powerConfig', e.target.value)} options={POWER_CONFIGS} />
+            <Select value={form.powerConfig} onChange={(e) => onPowerConfigChange(e.target.value)} options={POWER_CONFIGS} />
           </Field>
           <Field label="Statut GE n°1" required>
             <Select value={form.statutGE} onChange={(e) => set('statutGE', e.target.value)} options={STATUTS_GE} />
@@ -251,7 +261,8 @@ export default function ModifierSitePage() {
             <Select value={form.lotId} onChange={(e) => set('lotId', e.target.value)} options={lotOptions} placeholder="Aucun lot" />
           </Field>
           <Field label="Lot solaire (contrat solaire, découpage distinct)">
-            <Select value={form.lotSolaireId} onChange={(e) => set('lotSolaireId', e.target.value)} options={lotSolaireOptions} placeholder="Aucun (site sans contrat solaire)" />
+            <Select value={form.lotSolaireId} onChange={(e) => set('lotSolaireId', e.target.value)} options={lotSolaireOptions} placeholder="Aucun (site sans contrat solaire)" disabled={!solaireEligible} />
+            {!solaireEligible && <p className="mt-1 text-xs text-gray-500">Réservé aux sites hybrides ou solaires.</p>}
           </Field>
           <Field label="Adresse">
             <Input value={form.adresse} onChange={(e) => set('adresse', e.target.value)} />

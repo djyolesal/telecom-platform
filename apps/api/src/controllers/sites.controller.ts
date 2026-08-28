@@ -19,6 +19,16 @@ import { descendantsTransmission, assertSansCycle } from '../utils/transmission'
 import { ConfigCuve, cuveCalculable, hauteurMaxCm, volumeMaxLitres } from '../utils/cuve';
 import { publicFileUrl } from '../services/storage.service';
 
+/**
+ * Configurations énergie éligibles au contrat SOLAIRE : celles qui embarquent
+ * un champ photovoltaïque (hybrides ou solaire pur). Un site sans panneaux
+ * (CEET/GE seuls) ne peut donc pas être rattaché à un lot solaire. Source de
+ * vérité de la règle « seuls les sites hybrides ou solaires sont éligibles ».
+ */
+export const CONFIGS_SOLAIRES: readonly PowerConfig[] = ['HYBRIDE_GE', 'HYBRIDE_CEET_GE', 'SOLAIRE_UNIQUEMENT'];
+export const estConfigSolaire = (c: PowerConfig | string | null | undefined): boolean =>
+  !!c && (CONFIGS_SOLAIRES as readonly string[]).includes(c);
+
 // Colonnes du modèle d'import / export (en-têtes normalisés → champ).
 const IMPORT_COLUMNS = [
   { key: 'code', header: 'code' },
@@ -498,6 +508,12 @@ export async function createSite(req: Request, res: Response, next: NextFunction
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
       throw new AppError('Nom, code, région, configuration énergie et statut GE sont requis.', 400);
     }
+    // Éligibilité solaire : un lot solaire ne peut porter qu'un site hybride
+    // ou solaire (config avec panneaux). Le rattachement passif (lotId) reste
+    // libre — un site peut être dans les deux à la fois.
+    if (data.lotSolaireId && !estConfigSolaire(data.powerConfig as PowerConfig)) {
+      throw new AppError('Seuls les sites hybrides ou solaires sont éligibles au contrat solaire.', 422);
+    }
     const site = await prisma.site.create({ data: data as Prisma.SiteUncheckedCreateInput });
     // Crée automatiquement le GE n°1 si le site a un GE (cohérence avec la table dédiée).
     if (site.statutGE !== 'PAS_DE_GE') {
@@ -527,6 +543,20 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
+    // Éligibilité solaire (voir createSite) : on juge sur l'état APRÈS mise à
+    // jour — le lot solaire et la config peuvent changer dans la même requête.
+    // Vaut aussi quand on retire le photovoltaïque d'un site déjà solaire :
+    // il faut d'abord le détacher du lot solaire.
+    const configApres = (data.powerConfig as PowerConfig | undefined) ?? site.powerConfig;
+    const lotSolaireApres = 'lotSolaireId' in data ? data.lotSolaireId : site.lotSolaireId;
+    if (lotSolaireApres && !estConfigSolaire(configApres)) {
+      throw new AppError(
+        'lotSolaireId' in data
+          ? 'Seuls les sites hybrides ou solaires sont éligibles au contrat solaire.'
+          : 'Ce site est rattaché à un lot solaire : détachez-le avant de retirer sa configuration solaire.',
+        422,
+      );
+    }
     // Topologie : un parent de transmission ne doit jamais créer de cycle.
     if (typeof data.parentTransmissionId === 'string' && data.parentTransmissionId) {
       await assertSansCycle(site.id, data.parentTransmissionId);
