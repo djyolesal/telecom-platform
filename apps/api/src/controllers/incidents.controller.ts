@@ -41,7 +41,8 @@ export async function getIncidents(req: Request, res: Response, next: NextFuncti
     if (isRestreint(perimetre)) where.site = { ...(where.site as object ?? {}), ...perimetre };
     if (region) where.site = { ...(where.site as object ?? {}), region };
 
-    // Tri d'en-tête délégué (liste blanche) ; défaut : sévérité puis récence.
+    // Tri d'en-tête délégué (liste blanche) ; défaut : incidents actifs
+    // (OUVERT, EN_COURS) avant les résolus/clos, puis sévérité, puis récence.
     const triExplicite = triListe(req.query, {
       reference: (s) => ({ reference: s }),
       site: (s) => ({ site: { nom: s } }),
@@ -56,7 +57,9 @@ export async function getIncidents(req: Request, res: Response, next: NextFuncti
       prisma.incident,
       {
         where,
-        orderBy: triExplicite ?? [{ severite: 'asc' }, { dateOuverture: 'desc' }],
+        // statut asc = ordre de l'enum (OUVERT < EN_COURS < RESOLU < CLOS) :
+        // les incidents encore actifs remontent au-dessus des résolus.
+        orderBy: triExplicite ?? [{ statut: 'asc' }, { severite: 'asc' }, { dateOuverture: 'desc' }],
         include: {
           site: { select: { nom: true, code: true, region: true } },
           technicien: { select: { nom: true, prenom: true } },
