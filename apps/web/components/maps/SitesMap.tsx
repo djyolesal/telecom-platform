@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css';
 import { useState, useRef, useEffect } from 'react';
 import L from 'leaflet';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, Tooltip, useMap } from 'react-leaflet';
 import { Search, X } from 'lucide-react';
 import { COULEUR_MULTI_CAMIONS } from './couleursCamions';
 
@@ -140,11 +140,27 @@ const COULEUR_RESEAU: Record<EtatReseau['etat'], string> = {
   IMPACTE: '#8E44AD', // violet : menace héritée de l'amont
 };
 
-export function SitesMap({ features, couleurParCamion, etatReseauParSite, masquerStock }: {
+/** Mode TOPOLOGIE : une liaison de transmission enfant → parent, tracée
+ *  géographiquement. La couleur est calculée en amont (par type ou par état). */
+export interface Liaison {
+  id: string;
+  from: [number, number]; // [lat, lng] enfant
+  to: [number, number];   // [lat, lng] parent (amont)
+  couleur: string;
+  enfant: string;
+  parent: string;
+  typeLabel: string;
+  etatLabel?: string;
+  pointille?: boolean; // FH en pointillé (lien radio, plus fragile)
+}
+
+export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaisons, masquerStock }: {
   features: SiteFeature[];
   couleurParCamion?: Record<string, string>;
   /** Présent = mode réseau : rouge (en coupure) / ambre (aval) / vert (en service). */
   etatReseauParSite?: Record<string, EtatReseau>;
+  /** Présent = mode topologie : liaisons de transmission tracées sur la carte. */
+  liaisons?: Liaison[];
   /** true (vue NOC) = aucune information de stock dans les popups. */
   masquerStock?: boolean;
 }) {
@@ -175,6 +191,22 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, masque
         attribution='&copy; OpenStreetMap'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      {/* Liaisons de transmission (mode topologie) — tracées SOUS les marqueurs
+          pour que les sites restent cliquables au-dessus. */}
+      {(liaisons ?? []).map((l) => (
+        <Polyline
+          key={l.id}
+          positions={[l.from, l.to]}
+          pathOptions={{ color: l.couleur, weight: 2.5, opacity: 0.8, ...(l.pointille ? { dashArray: '5 5' } : {}) }}
+        >
+          <Tooltip sticky>
+            <span className="text-xs">
+              <b>{l.enfant}</b> ← {l.parent}<br />
+              {l.typeLabel}{l.etatLabel ? ` · ${l.etatLabel}` : ''}
+            </span>
+          </Tooltip>
+        </Polyline>
+      ))}
       {features.map((f) => {
         const [lng, lat] = f.geometry.coordinates;
         const n = f.properties.niveauStock;
