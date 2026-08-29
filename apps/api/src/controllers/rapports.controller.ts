@@ -18,6 +18,7 @@ import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 import { sitePerimetre, isRestreint, estPrestataire } from '../utils/perimetre';
 import { stockCourantParSite } from '../services/stockCourant.service';
+import { bucketsHoraires, compterParHeure, niveauAgitation } from '../utils/pouls';
 
 /**
  * Stock par site — délégué à la SOURCE UNIQUE (relevé + dépotages postérieurs).
@@ -121,6 +122,56 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
         incidentsRecents: incidentsRecents.map((i) => ({
           id: i.id, siteCode: i.site?.code, siteNom: i.site?.nom, type: i.type, severite: i.severite, statut: i.statut,
         })),
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+// ── Ligne de vie : le pouls des dernières 24 h ───────────────
+/**
+ * Alimente la « ligne de vie » (en-tête mobile, tableau de bord NOC) avec de
+ * la VRAIE donnée : incidents ouverts et coupures LOCALE démarrées, par heure,
+ * sur les 24 dernières heures — plus un niveau d'agitation qui pilote la
+ * couleur du tracé. Même périmètre prestataire que le dashboard.
+ */
+export async function getPouls24h(req: Request, res: Response, next: NextFunction) {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
+    const siteScope = me?.prestataireId
+      ? { lot: { assignments: { some: { prestataireId: me.prestataireId } } } }
+      : {};
+
+    const now = new Date();
+    const buckets = bucketsHoraires(now);
+    const depuis = buckets[0];
+
+    const [incidents, coupures, coupuresSiteEntierEnCours, coupuresEnCours, incidentsCritiquesEnCours, incidentsEnCours] = await Promise.all([
+      prisma.incident.findMany({
+        where: { dateOuverture: { gte: depuis }, site: siteScope },
+        select: { dateOuverture: true },
+      }),
+      prisma.coupureReseau.findMany({
+        where: { dateDebut: { gte: depuis }, origine: 'LOCALE', site: siteScope },
+        select: { dateDebut: true },
+      }),
+      prisma.coupureReseau.count({ where: { dateFin: null, origine: 'LOCALE', technologie: 'SITE', site: siteScope } }),
+      prisma.coupureReseau.count({ where: { dateFin: null, origine: 'LOCALE', site: siteScope } }),
+      prisma.incident.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, severite: 'CRITIQUE', site: siteScope } }),
+      prisma.incident.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, site: siteScope } }),
+    ]);
+
+    const parHeureIncidents = compterParHeure(incidents.map((i) => i.dateOuverture), buckets);
+    const parHeureCoupures = compterParHeure(coupures.map((c) => c.dateDebut), buckets);
+
+    res.json({
+      success: true,
+      data: {
+        points: buckets.map((h, i) => ({
+          heure: h.toISOString(),
+          incidents: parHeureIncidents[i],
+          coupures: parHeureCoupures[i],
+        })),
+        agitation: niveauAgitation({ coupuresSiteEntierEnCours, incidentsCritiquesEnCours, coupuresEnCours, incidentsEnCours }),
       },
     });
   } catch (err) { next(err); }

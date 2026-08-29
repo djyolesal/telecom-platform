@@ -65,47 +65,87 @@ class _EcrouSignalPainter extends CustomPainter {
 
 /// « Ligne de vie » : battement de supervision terminé par un point de
 /// géolocalisation - même tracé que les en-têtes PDF et le motif du logo.
+///
+/// Sans [points], le tracé décoratif historique (un battement fixe). Avec
+/// [points] (24 seaux horaires d'événements, du plus ancien au plus récent),
+/// la ligne devient un INSTRUMENT : un battement par heure active, d'amplitude
+/// proportionnelle - ligne plate = parc calme, et c'est une information.
 class LigneDeVie extends StatelessWidget {
   final double height;
   final Color pulse;
   final Color dot;
-  const LigneDeVie({super.key, this.height = 22, this.pulse = const Color(0xFFF59E0B), this.dot = const Color(0xFF3BC9AF)});
+  final List<int>? points;
+  const LigneDeVie({
+    super.key,
+    this.height = 22,
+    this.pulse = const Color(0xFFF59E0B),
+    this.dot = const Color(0xFF3BC9AF),
+    this.points,
+  });
 
   @override
   Widget build(BuildContext context) =>
-      SizedBox(height: height, width: double.infinity, child: CustomPaint(painter: _LvPainter(pulse, dot)));
+      SizedBox(height: height, width: double.infinity, child: CustomPaint(painter: _LvPainter(pulse, dot, points)));
 }
 
 class _LvPainter extends CustomPainter {
   final Color pulse;
   final Color dot;
-  _LvPainter(this.pulse, this.dot);
+  final List<int>? points;
+  _LvPainter(this.pulse, this.dot, this.points);
 
   @override
   void paint(Canvas canvas, Size size) {
     final y = size.height * 0.62;
-    final spikeX = size.width - 96;
-    final p = Path()
-      ..moveTo(4, y)
-      ..lineTo(spikeX, y)
-      ..relativeLineTo(7, -11)
-      ..relativeLineTo(9, 18)
-      ..relativeLineTo(7, -8)
-      ..lineTo(size.width - 18, y);
-    canvas.drawPath(
-      p,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.4
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..color = pulse,
-    );
+    final trait = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = pulse;
+
+    final pts = points;
+    if (pts == null || pts.isEmpty) {
+      // Tracé décoratif historique (aucune donnée : hors-ligne, chargement).
+      final spikeX = size.width - 96;
+      final p = Path()
+        ..moveTo(4, y)
+        ..lineTo(spikeX, y)
+        ..relativeLineTo(7, -11)
+        ..relativeLineTo(9, 18)
+        ..relativeLineTo(7, -8)
+        ..lineTo(size.width - 18, y);
+      canvas.drawPath(p, trait);
+    } else {
+      // Un battement par seau horaire actif, amplitude ∝ nombre d'événements.
+      final fin = size.width - 18;
+      final pas = (fin - 4) / pts.length;
+      var max = 1;
+      for (final v in pts) {
+        if (v > max) max = v;
+      }
+      final amp = size.height * 0.52;
+      final p = Path()..moveTo(4, y);
+      for (var i = 0; i < pts.length; i++) {
+        final v = pts[i];
+        if (v <= 0) continue;
+        final x = 4 + pas * i + pas / 2;
+        final h = amp * v / max;
+        p
+          ..lineTo(x - 5, y)
+          ..lineTo(x - 1.5, y - h)
+          ..lineTo(x + 2, y + (h * 0.35).clamp(0, 6))
+          ..lineTo(x + 5, y);
+      }
+      p.lineTo(fin, y);
+      canvas.drawPath(p, trait);
+    }
     canvas.drawCircle(Offset(size.width - 8, y), 3.5, Paint()..color = dot);
   }
 
   @override
-  bool shouldRepaint(covariant _LvPainter old) => old.pulse != pulse || old.dot != dot;
+  bool shouldRepaint(covariant _LvPainter old) =>
+      old.pulse != pulse || old.dot != dot || old.points != points;
 }
 
 /// Nom de l'app « E&M OpS » avec le « OpS » en teal.

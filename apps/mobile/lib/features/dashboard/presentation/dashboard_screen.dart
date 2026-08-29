@@ -22,6 +22,9 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   late Future<Map<String, dynamic>?> _future;
   late Future<int?> _nbPlanifiees;
+  // Ligne de vie : 24 seaux horaires d'événements + niveau d'agitation.
+  List<int>? _pouls;
+  String _agitation = 'CALME';
 
   @override
   void initState() {
@@ -43,6 +46,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
     _future = context.read<DashboardRepository>().getDashboard();
+    // La ligne de vie se met à jour sans bloquer le reste de l'écran ;
+    // hors-ligne, elle retombe sur le tracé décoratif (pouls null).
+    context.read<DashboardRepository>().getPouls().then((p) {
+      if (!mounted) return;
+      setState(() {
+        _pouls = p?.points;
+        _agitation = p?.agitation ?? 'CALME';
+      });
+    });
     _nbPlanifiees = context
         .read<MaintenanceRepository>()
         .getMaintenances(statut: 'PLANIFIEE')
@@ -231,9 +243,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text(user?.role ?? '',
                           style: const TextStyle(
                               color: Color(0xFF9FB3C8), fontSize: 12)),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8, right: 8),
-                        child: LigneDeVie(),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, right: 8),
+                        child: LigneDeVie(
+                          points: _pouls,
+                          pulse: switch (_agitation) {
+                            'CRITIQUE' => const Color(0xFFFF6B5E),
+                            'ACTIF' => const Color(0xFFFF9A3C),
+                            _ => const Color(0xFFFFB020),
+                          },
+                        ),
                       ),
                       const SizedBox(height: 6),
                     ],

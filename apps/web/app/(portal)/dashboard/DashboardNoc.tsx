@@ -47,6 +47,58 @@ function Tuile({ titre, valeur, detail, accent }: { titre: string; valeur: strin
   );
 }
 
+interface Pouls {
+  points: { heure: string; incidents: number; coupures: number }[];
+  agitation: 'CALME' | 'ACTIF' | 'CRITIQUE';
+}
+
+const AGITATION_STYLE: Record<Pouls['agitation'], { trace: string; libelle: string; badge: string }> = {
+  CALME:    { trace: '#F59E0B', libelle: 'Parc calme',        badge: 'bg-amber-50 text-amber-700' },
+  ACTIF:    { trace: '#E67E22', libelle: 'Activité en cours', badge: 'bg-orange-50 text-orange-700' },
+  CRITIQUE: { trace: '#C0392B', libelle: 'Situation critique', badge: 'bg-red-50 text-red-700' },
+};
+
+/** Tracé ECG des 24 seaux horaires : ligne de base plate, un battement par
+ *  heure active, d'amplitude proportionnelle au nombre d'événements. */
+function LigneDeVie24h({ pouls }: { pouls: Pouls }) {
+  const W = 960, H = 56, BASE = 38, AMP = 26;
+  const totaux = pouls.points.map((p) => p.incidents + p.coupures);
+  const max = Math.max(1, ...totaux);
+  const pas = W / totaux.length;
+  let d = `M 0 ${BASE}`;
+  totaux.forEach((t, i) => {
+    const x = Math.round(i * pas + pas / 2);
+    if (t > 0) {
+      const h = (t / max) * AMP;
+      d += ` L ${x - 7} ${BASE} L ${x - 2} ${BASE - h} L ${x + 3} ${BASE + Math.min(8, h * 0.4)} L ${x + 7} ${BASE}`;
+    }
+  });
+  d += ` L ${W - 12} ${BASE}`;
+  const style = AGITATION_STYLE[pouls.agitation];
+  const totalInc = pouls.points.reduce((s, p) => s + p.incidents, 0);
+  const totalCoup = pouls.points.reduce((s, p) => s + p.coupures, 0);
+  return (
+    <div className="mb-6 rounded-xl border border-gray-100 bg-white px-5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-gray-700">Ligne de vie — 24 dernières heures</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">{totalCoup} coupure(s) · {totalInc} incident(s)</span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${style.badge}`}>{style.libelle}</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="mt-1 block h-14 w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d={d} stroke={style.trace} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" fill="none"
+          style={{ filter: `drop-shadow(0 0 5px ${style.trace}66)` }} />
+        <circle cx={W - 8} cy={BASE} r="4" fill="#0E7C6B" />
+      </svg>
+      <div className="flex justify-between text-[10px] font-medium text-gray-400">
+        <span>il y a 24 h</span>
+        <span>maintenant</span>
+      </div>
+    </div>
+  );
+}
+
 const ACCES = [
   { href: '/supervision/coupures', icon: WifiOff, label: 'Coupures réseau' },
   { href: '/supervision/carte', icon: MapPin, label: 'Carte réseau' },
@@ -71,6 +123,14 @@ export function DashboardNoc() {
     refetchInterval: 300_000,
   });
   const racines = stats ? Math.max(0, stats.enCours - stats.enCoursHeritees) : null;
+
+  // Ligne de vie : le pouls RÉEL des 24 dernières heures (incidents + coupures
+  // par heure) — le tracé ECG décoratif devient un instrument.
+  const { data: pouls } = useQuery({
+    queryKey: ['pouls-24h'],
+    queryFn: () => api.get('/rapports/pouls-24h').then((r) => r.data.data as Pouls),
+    refetchInterval: 60_000,
+  });
 
   return (
     <div>
@@ -99,6 +159,8 @@ export function DashboardNoc() {
           ) : <p className="mt-0.5 text-sm font-bold text-emerald-600">aucune</p>}
         </div>
       </div>
+
+      {pouls && <LigneDeVie24h pouls={pouls} />}
 
       <div className="mb-6 rounded-xl border border-gray-100 bg-white">
         <div className="flex items-center justify-between border-b border-gray-50 px-5 py-3">

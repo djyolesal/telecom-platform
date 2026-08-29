@@ -110,7 +110,7 @@ const NOC_ALLOW: RegExp[] = [
   /^\/coupures-reseau(\/|$)/,
   /^\/incidents(\/|$)/,                // suivi et déclaration ; la clôture reste terrain
   // Le stock carburant est HORS périmètre NOC (logistique, pas supervision).
-  /^\/rapports\/(dashboard|disponibilite-reseau|incidents)$/,
+  /^\/rapports\/(dashboard|disponibilite-reseau|incidents|pouls-24h)$/,
   /^\/rapports\/disponibilite-reseau\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
   /^\/types-incident$/,               // libellés des types (déclaration/lecture)
@@ -396,6 +396,8 @@ router.post('/incidents/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','
 
 // ── Rapports ──────────────────────────────────────────────────
 router.get('/rapports/dashboard', rapportsCtrl.getDashboard);
+// Ligne de vie (24 h) : tous rôles connectés — le périmètre est appliqué dedans.
+router.get('/rapports/pouls-24h', rapportsCtrl.getPouls24h);
 router.get('/rapports/stock-carburant', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getStockCarburant);
 router.get('/rapports/parc-prestataires', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getParcPrestataires);
 // Bilan carburant sur période : stock aux bornes + conso par conservation + courbe 12 mois.
