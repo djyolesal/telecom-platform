@@ -78,6 +78,9 @@ export function settingsCatalog(): SettingMeta[] {
     // jusqu'à N minutes AVANT sa racine est classé hérité (batteries inégales).
     { key: 'oss.fenetreEntrainementMin', label: 'Fenêtre entraînement amont/aval (OSS)', groupe: 'Supervision', unite: 'min', defaut: 60 },
     { key: 'oss.armementDelaiMin', label: 'Armement auto des détections (0 = désactivé, l\'adoption reste au NOC)', groupe: 'Supervision', unite: 'min', defaut: 0 },
+    // Durée minimale pour VALIDER a posteriori une détection auto déjà rétablie
+    // (la faire entrer dans la disponibilité) — filtre les micro-battements OSS.
+    { key: 'oss.dureeMinValidationCloturee', label: 'Durée min. pour valider une détection auto-clôturée (dispo)', groupe: 'Supervision', unite: 'min', defaut: 5 },
     // Interrupteur du planning automatique : 1 = les préventives contractuelles
     // sont générées le 1er du mois ; 0 = planification manuelle uniquement
     // (utile pendant une renégociation de contrats ou une reprise de données).

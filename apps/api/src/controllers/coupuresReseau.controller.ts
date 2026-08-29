@@ -1578,14 +1578,94 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
  *   3. la racine est marquée prise en charge (qui / quand).
  * Les coupures déjà liées à un incident ne sont pas touchées.
  */
+/**
+ * VALIDATION A POSTERIORI d'une détection automatique DÉJÀ CLÔTURÉE : la fait
+ * entrer dans le rapport de disponibilité sans rien déclencher sur le terrain.
+ *   - réservée aux détections OSS non encore adoptées (une saisie manuelle
+ *     compte déjà ; un événement déjà pris en charge aussi) ;
+ *   - garde-fou de durée minimale (oss.dureeMinValidationCloturee) contre les
+ *     micro-battements OSS de quelques secondes ;
+ *   - estampille SILENCIEUSE de tout l'arbre clôturé (racine + héritées) :
+ *     aucun incident, aucun SMS.
+ */
+async function validerEvenementCloture(
+  req: Request,
+  res: Response,
+  coupure: { id: string; source: string; priseEnChargePar: string | null; coupureOrigineId: string | null; dateDebut: Date; dateFin: Date | null; downtimeMinutes: number | null },
+) {
+  if (coupure.priseEnChargePar) throw new AppError('Événement déjà pris en charge — déjà compté dans la disponibilité.', 422);
+
+  // Remonte à la racine de l'arbre clôturé via le lien stocké coupureOrigineId.
+  let rootId = coupure.id;
+  let cur = coupure.coupureOrigineId;
+  for (let i = 0; cur && i < 30; i++) {
+    const parent = await prisma.coupureReseau.findUnique({ where: { id: cur }, select: { id: true, coupureOrigineId: true } });
+    if (!parent) break;
+    rootId = parent.id; cur = parent.coupureOrigineId;
+  }
+  const root = await prisma.coupureReseau.findUnique({
+    where: { id: rootId },
+    select: { id: true, siteId: true, dateDebut: true, dateFin: true, downtimeMinutes: true, source: true },
+  });
+  if (!root) throw new AppError('Coupure introuvable', 404);
+  if (root.source !== 'OSS') {
+    throw new AppError('Seule une détection automatique clôturée se valide a posteriori (une saisie manuelle compte déjà).', 422);
+  }
+  // Durée de l'ÉVÉNEMENT (racine) vs seuil configurable.
+  const seuil = getNum('oss.dureeMinValidationCloturee', 5);
+  const duree = root.downtimeMinutes ?? (root.dateFin ? minutesEntre(root.dateDebut, root.dateFin) : 0);
+  if (duree < seuil) {
+    throw new AppError(`Coupure trop courte (${duree} min < ${seuil} min) pour être comptée dans la disponibilité.`, 422);
+  }
+  // Collecte l'arbre clôturé : racine + toutes ses descendantes (coupureOrigineId).
+  const ids = new Set<string>([root.id]);
+  let frontier = [root.id];
+  for (let depth = 0; depth < 50 && frontier.length; depth++) {
+    const kids = await prisma.coupureReseau.findMany({ where: { coupureOrigineId: { in: frontier } }, select: { id: true } });
+    frontier = [];
+    for (const k of kids) if (!ids.has(k.id)) { ids.add(k.id); frontier.push(k.id); }
+  }
+
+  const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+  const nom = [moi?.prenom, moi?.nom].filter(Boolean).join(' ') || 'NOC';
+  const quand = new Date();
+  // Estampille SILENCIEUSE — seulement les lignes non encore adoptées.
+  const maj = await prisma.coupureReseau.updateMany({
+    where: { id: { in: [...ids] }, priseEnChargePar: null },
+    data: { priseEnChargePar: nom, priseEnChargeLe: quand, nocEngineer: nom },
+  });
+  if (maj.count === 0) throw new AppError('Rien à valider : cet événement est déjà compté.', 422);
+
+  await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', root.id, {
+    validationCloturee: true, depuisCoupure: coupure.id, lignesValidees: maj.count, dureeMin: duree,
+  }, req);
+  emettreCoupuresChangees({ action: 'priseEnCharge', racineId: root.id });
+  res.json({
+    success: true,
+    data: {
+      racineId: root.id,
+      valideeCloturee: true,
+      lignesValidees: maj.count,
+      dureeMin: duree,
+      priseEnChargePar: nom,
+      incident: null,
+    },
+  });
+}
+
 export async function prendreEnChargeCoupure(req: Request, res: Response, next: NextFunction) {
   try {
     const coupure = await prisma.coupureReseau.findUnique({
       where: { id: req.params.id },
-      select: { id: true, siteId: true, dateFin: true, technologie: true, dateDebut: true },
+      select: { id: true, siteId: true, dateFin: true, technologie: true, dateDebut: true, source: true, priseEnChargePar: true, coupureOrigineId: true, downtimeMinutes: true },
     });
     if (!coupure) throw new AppError('Coupure introuvable', 404);
-    if (coupure.dateFin) throw new AppError('Coupure déjà rétablie - rien à prendre en charge', 422);
+    // Événement DÉJÀ CLÔTURÉ (auto-rétabli) : on ne peut plus envoyer personne
+    // sur le terrain, mais la prise en charge sert AUSSI à valider l'événement
+    // pour la disponibilité (règle « AUTO comptée seulement si prise en
+    // charge »). On bascule alors en VALIDATION SILENCIEUSE — aucun incident,
+    // aucun SMS, on estampille seulement l'arbre clôturé pour qu'il compte.
+    if (coupure.dateFin) return await validerEvenementCloture(req, res, coupure);
     // Créer les héritées pour l'aval SANS détection propre (sites non
     // rapprochés OSS) : activé par défaut — c'est ce qui rend la dispo juste.
     const creerAvalManquant = (req.body as { creerAvalManquant?: boolean })?.creerAvalManquant !== false;
@@ -1608,7 +1688,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       const coupAmont = await prisma.coupureReseau.findFirst({
         where: { siteId: cursor, technologie: 'SITE', dateFin: null },
         orderBy: { dateDebut: 'asc' },
-        select: { id: true, siteId: true, dateFin: true, technologie: true, dateDebut: true },
+        select: { id: true, siteId: true, dateFin: true, technologie: true, dateDebut: true, source: true, priseEnChargePar: true, coupureOrigineId: true, downtimeMinutes: true },
       });
       if (coupAmont) racine = coupAmont;
       cursor = parId.get(cursor)?.parentTransmissionId ?? null;

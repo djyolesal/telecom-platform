@@ -705,6 +705,12 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       {coupure.source === 'OSS' && !coupure.priseEnChargePar && !coupure.dateFin && siteEntier && (
         <PriseEnChargeBloc coupureId={coupure.id} onDone={onDone} />
       )}
+      {/* Détection auto DÉJÀ RÉTABLIE, jamais adoptée : plus rien à envoyer sur
+          le terrain, mais on peut la VALIDER a posteriori pour qu'elle compte
+          dans la disponibilité (silencieux : aucun incident, aucun SMS). */}
+      {coupure.source === 'OSS' && !coupure.priseEnChargePar && !!coupure.dateFin && (
+        <ValidationClotureeBloc coupureId={coupure.id} onDone={onDone} />
+      )}
       {coupure.priseEnChargePar && (
         <AnnulationPriseEnChargeBloc coupureId={coupure.id} priseEnChargePar={coupure.priseEnChargePar} onDone={onDone} />
       )}
@@ -859,6 +865,43 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
           </p>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             {mutation.isPending ? 'Analyse de la topologie…' : 'Prendre en charge (analyse amont/aval)'}
+          </Button>
+          {errMsg && <p className="mt-2 text-xs text-red-600">{errMsg}</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Validation a posteriori d'une détection auto déjà rétablie ──────────────
+// Silencieuse : fait entrer l'événement clôturé au rapport de disponibilité
+// sans rien déclencher (pas d'incident, pas de SMS). Le serveur refuse en
+// dessous d'une durée minimale (anti micro-battement OSS).
+function ValidationClotureeBloc({ coupureId, onDone }: { coupureId: string; onDone: () => void }) {
+  const [resultat, setResultat] = useState<{ lignesValidees: number; dureeMin: number; priseEnChargePar: string } | null>(null);
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/prise-en-charge`, {}).then((r) => r.data.data),
+    onSuccess: (d) => { setResultat(d); onDone(); },
+  });
+  const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+
+  return (
+    <div className="mb-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-800">
+      {resultat ? (
+        <p>
+          <CheckCircle2 size={14} className="mr-1 inline text-emerald-600" />
+          Validée pour la disponibilité par <b>{resultat.priseEnChargePar}</b> · durée <b>{resultat.dureeMin} min</b>
+          {resultat.lignesValidees > 1 && <> · <b>{resultat.lignesValidees}</b> ligne(s) comptée(s)</>}
+        </p>
+      ) : (
+        <>
+          <p className="mb-2">
+            Détection automatique <b>déjà rétablie</b> et <b>non prise en charge</b> : elle n&apos;entre pas
+            dans la disponibilité. La valider la fait <b>compter a posteriori</b> — sans rien déclencher
+            (aucun incident, aucun SMS, c&apos;est terminé).
+          </p>
+          <Button variant="secondary" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Validation…' : 'Valider (compter dans la disponibilité)'}
           </Button>
           {errMsg && <p className="mt-2 text-xs text-red-600">{errMsg}</p>}
         </>
