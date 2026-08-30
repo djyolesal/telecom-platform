@@ -317,11 +317,12 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             observations: result['observations'] as String?,
             signatureLocalPath: signaturePath,
             nomAgentSecurite: result['nomAgentSecurite'] as String?,
-            signatureAgentLocalPath: result['signatureAgentLocalPath'] as String?,
+            signatureAgentLocalPath:
+                result['signatureAgentLocalPath'] as String?,
             energie: result['energie'] as Map<String, dynamic>?,
-            checklist: (result['checklist'] as List?)
-                    ?.cast<Map<String, dynamic>>() ??
-                const [],
+            checklist:
+                (result['checklist'] as List?)?.cast<Map<String, dynamic>>() ??
+                    const [],
             photoPaths: photoPaths,
             latitude: check.lat,
             longitude: check.lng,
@@ -985,15 +986,14 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   Future<void> _submit() async {
     final m = widget.maintenance;
-    final sources =
-        m.requiresEnergie
-            ? (m.categorie == 'SOLAIRE'
-                // Contrat solaire : les relevés GE/gasoil et CEET sont hors
-                // périmètre — seule la puissance solaire est relevée (même
-                // règle que le serveur, HYBRIDE_CEET_GE compris).
-                ? const ['SOLAIRE']
-                : sourcesForConfig(m.sitePowerConfig))
-            : <String>[];
+    final sources = m.requiresEnergie
+        ? (m.categorie == 'SOLAIRE'
+            // Contrat solaire : les relevés GE/gasoil et CEET sont hors
+            // périmètre — seule la puissance solaire est relevée (même
+            // règle que le serveur, HYBRIDE_CEET_GE compris).
+            ? const ['SOLAIRE']
+            : sourcesForConfig(m.sitePowerConfig))
+        : <String>[];
     final energie = <String, dynamic>{};
 
     // Photos obligatoires pour une maintenance préventive
@@ -1009,6 +1009,14 @@ class _CloseSheetState extends State<_CloseSheet> {
         _photos.length < AppConfig.minPhotosMouvement) {
       setState(() => _error =
           'Au moins ${AppConfig.minPhotosMouvement} photos sont requises pour ce mouvement d\'actif (${_photos.length} prise(s)).');
+      return;
+    }
+    // Preuve obligatoire pour un dépannage curatif (équipement en panne réparé).
+    if (m.type == 'CURATIVE' &&
+        m.natureTravaux == 'ENTRETIEN' &&
+        _photos.length < AppConfig.minPhotosCurative) {
+      setState(() => _error =
+          'Au moins ${AppConfig.minPhotosCurative} photos sont requises pour clôturer un dépannage (${_photos.length} prise(s)).');
       return;
     }
 
@@ -1069,8 +1077,8 @@ class _CloseSheetState extends State<_CloseSheet> {
       return;
     }
     if (_agentPresent == true && _sigAgent == null) {
-      setState(() =>
-          _error = 'L\'agent est présent : faites-le signer avant de clôturer.');
+      setState(() => _error =
+          'L\'agent est présent : faites-le signer avant de clôturer.');
       return;
     }
 
@@ -1205,19 +1213,23 @@ class _CloseSheetState extends State<_CloseSheet> {
   @override
   Widget build(BuildContext context) {
     final m = widget.maintenance;
-    final sources =
-        m.requiresEnergie
-            ? (m.categorie == 'SOLAIRE'
-                // Contrat solaire : les relevés GE/gasoil et CEET sont hors
-                // périmètre — seule la puissance solaire est relevée (même
-                // règle que le serveur, HYBRIDE_CEET_GE compris).
-                ? const ['SOLAIRE']
-                : sourcesForConfig(m.sitePowerConfig))
-            : <String>[];
-    // Photos requises : 6 pour une préventive, 2 pour un travail de cycle de vie.
+    final sources = m.requiresEnergie
+        ? (m.categorie == 'SOLAIRE'
+            // Contrat solaire : les relevés GE/gasoil et CEET sont hors
+            // périmètre — seule la puissance solaire est relevée (même
+            // règle que le serveur, HYBRIDE_CEET_GE compris).
+            ? const ['SOLAIRE']
+            : sourcesForConfig(m.sitePowerConfig))
+        : <String>[];
+    // Photos requises : 6 pour une préventive, 2 pour un mouvement d'actif,
+    // 2 pour un dépannage curatif (équipement en panne).
     final minPhotos = m.type == 'PREVENTIVE'
         ? AppConfig.minPhotosPreventive
-        : (m.natureTravaux != 'ENTRETIEN' ? AppConfig.minPhotosMouvement : 0);
+        : m.natureTravaux != 'ENTRETIEN'
+            ? AppConfig.minPhotosMouvement
+            : m.type == 'CURATIVE'
+                ? AppConfig.minPhotosCurative
+                : 0;
     const numKb = TextInputType.numberWithOptions(decimal: true);
 
     // Le bouton de validation est ÉPINGLÉ sous la zone défilante (et sous une

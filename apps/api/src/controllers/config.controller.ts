@@ -16,6 +16,7 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
       geofenceRadiusM: getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M),
       minPhotosPreventive: 6,
       minPhotosMouvement: getNum('maintenance.minPhotosMouvement', 2),
+      minPhotosCurative: getNum('maintenance.minPhotosCurative', 2),
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       // Référentiel des types de liaison de transmission (badges topologie, fiche site).
       typesLiaison: typesLiaison(),

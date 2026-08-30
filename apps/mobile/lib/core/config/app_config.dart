@@ -7,6 +7,7 @@ class AppConfig {
   static double geofenceRadiusM = 20;
   static int minPhotosPreventive = 6;
   static int minPhotosMouvement = 2;
+  static int minPhotosCurative = 2;
   static int intervalleVidangeHeures = 250;
 
   /// Référentiel des types d'incident (code → libellé), éditable en admin et
@@ -84,6 +85,9 @@ class ConfigService {
             AppConfig.minPhotosMouvement =
                 (d['minPhotosMouvement'] as num?)?.toInt() ??
                     AppConfig.minPhotosMouvement;
+            AppConfig.minPhotosCurative =
+                (d['minPhotosCurative'] as num?)?.toInt() ??
+                    AppConfig.minPhotosCurative;
             AppConfig.intervalleVidangeHeures =
                 (d['intervalleVidangeHeures'] as num?)?.toInt() ??
                     AppConfig.intervalleVidangeHeures;

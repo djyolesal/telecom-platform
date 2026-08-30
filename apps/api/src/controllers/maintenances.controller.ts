@@ -829,6 +829,19 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       }
     }
 
+    // Dépannage curatif (équipement en panne, sans mouvement d'actif) → preuve
+    // photo obligatoire : sans ça une panne pouvait être clôturée sans aucune
+    // photo. Minimum réglable (défaut 2 : équipement en panne + équipement
+    // réparé). Le mouvement d'actif garde sa propre règle ci-dessous.
+    if (existing.type === 'CURATIVE' && existing.natureTravaux === 'ENTRETIEN') {
+      const minPhotos = getNum('maintenance.minPhotosCurative', 2);
+      const dejaPresentes = await prisma.photo.count({ where: { entityType: 'maintenance', entityId: existing.id } });
+      const totalPhotos = dejaPresentes + (photos?.length ?? 0);
+      if (totalPhotos < minPhotos) {
+        throw new AppError(`Au moins ${minPhotos} photos sont requises pour clôturer un dépannage (${totalPhotos} fournie(s)).`, 422);
+      }
+    }
+
     // Travail de cycle de vie (pose/dépose/déplacement) → preuve obligatoire : photos + signature.
     if (existing.natureTravaux !== 'ENTRETIEN') {
       const minPhotos = getNum('maintenance.minPhotosMouvement', 2);
