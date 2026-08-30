@@ -77,9 +77,10 @@ export default function NouvelleMaintenancePage() {
   const geOptions = (gesDuSite ?? []).map((g) => ({ value: g.id, label: g.libelle ?? 'GE' }));
 
   const siteOptions = (sites ?? []).map((s: { id: string; code: string; nom: string }) => ({ value: s.id, label: `${s.code} - ${s.nom}` }));
+  const L_SCOPE: Record<string, string> = { PASSIVE: 'passif', ACTIVE: 'actif', LES_DEUX: 'passif + actif', SOLAIRE: 'solaire' };
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string; societe: string; scopes: string[] }) => ({
     value: t.id,
-    label: `${t.prenom} ${t.nom} - ${t.societe}${t.scopes.length ? ` (${t.scopes.join('/')})` : ''}`,
+    label: `${t.prenom} ${t.nom} - ${t.societe}${t.scopes.length ? ` (${t.scopes.map((x) => L_SCOPE[x] ?? x).join(' / ')})` : ''}`,
   }));
   const tacheOptions = (taches ?? []).map((t) => ({ value: t.key, label: t.libelle }));
   const actifOptions = (actifs ?? []).map((a) => ({ value: `${a.actifType}:${a.id}`, label: `${a.libelle ?? a.categorie}${a.site ? ` - ${a.site.nom}` : ' - Dépôt'}` }));
@@ -146,7 +147,7 @@ export default function NouvelleMaintenancePage() {
       queryClient.invalidateQueries({ queryKey: ['maintenances'] });
       router.push(`/maintenance/${r.data.data.id}`);
     },
-    onError: (e: { response?: { data?: { error?: string } }; message?: string }) => setError(e.response?.data?.error || e.message || 'Erreur lors de la création'),
+    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Création impossible - vérifiez votre connexion et réessayez.'),
   });
 
   return (

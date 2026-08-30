@@ -143,7 +143,7 @@ export function DashboardNoc() {
         <Tuile titre="Coupures en cours" valeur={racines ?? '…'}
           detail={stats && stats.enCoursSiteEntier > 0 ? `dont ${stats.enCoursSiteEntier} site(s) entier(s)` : 'racines (aval hérité non compté)'}
           accent={stats && stats.enCoursSiteEntier > 0 ? 'text-red-600' : undefined} />
-        <Tuile titre="AUTO à traiter" valeur={stats?.enCoursAuto ?? '…'} detail="détections OSS non prises en charge"
+        <Tuile titre="AUTO à traiter" valeur={stats?.enCoursAuto ?? '…'} detail="détections automatiques non prises en charge"
           accent={stats && stats.enCoursAuto > 0 ? 'text-indigo-600' : undefined} />
         <Tuile titre="À qualifier" valeur={stats?.aQualifier ?? '…'} detail="alarme ou classement manquant"
           accent={stats && stats.aQualifier > 0 ? 'text-[#1B3F6B]' : undefined} />

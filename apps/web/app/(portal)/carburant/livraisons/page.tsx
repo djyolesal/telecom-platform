@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { L_STATUT_BL } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
@@ -49,7 +50,7 @@ export default function BonsLivraisonPage() {
     { key: 'volume', header: 'Volume (L)', align: 'right', render: (b) => fmtNumber(Number(b.volumeChargeLitres)) },
     { key: 'sites', header: 'Sites', align: 'center', render: (b) => b._count?.lignes ?? 0 },
     { key: 'date', header: 'Chargement', render: (b) => fmtDate(b.dateChargement) },
-    { key: 'statut', header: 'Statut', render: (b) => <Badge className={BL_COLORS[b.statut] || ''}>{b.statut}</Badge> },
+    { key: 'statut', header: 'Statut', render: (b) => <Badge className={BL_COLORS[b.statut] || ''}>{L_STATUT_BL[b.statut] ?? b.statut}</Badge> },
   ];
 
   return (

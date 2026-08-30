@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { L_STATUT_BC } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -84,7 +85,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
         const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
         setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) - PDF joint, saisie manuelle.`]);
         setAnalyse('sans');
-      } catch { setError('Échec de l’upload du PDF.'); }
+      } catch { setError('L’envoi du PDF a échoué. Réessayez ou choisissez un autre fichier.'); }
     } finally { setUploading(false); }
   };
 
@@ -124,7 +125,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center gap-3">
               <input type="file" accept="application/pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) analyserPdf(f); }} className="text-xs" />
               {uploading && <span className="text-xs text-gray-500">Analyse en cours…</span>}
-              {!uploading && analyse === 'ocr' && <span className="text-xs font-medium text-emerald-700">Scan lu par OCR ✓ - vérifiez les valeurs</span>}
+              {!uploading && analyse === 'ocr' && <span className="text-xs font-medium text-emerald-700">Document scanné lu automatiquement ✓ - vérifiez les valeurs - vérifiez les valeurs</span>}
               {!uploading && analyse === 'texte' && <span className="text-xs font-medium text-emerald-700">PDF lu ✓ - vérifiez les valeurs</span>}
               {!uploading && analyse === 'sans' && bcPdfPath && <span className="text-xs text-amber-700">PDF joint (sans analyse)</span>}
               {!uploading && !bcPdfPath && <span className="text-xs text-amber-600">requis</span>}
@@ -194,7 +195,7 @@ export default function BonsCommandePage() {
     { key: 'client', header: 'Client', render: (b) => b.numeroClient ?? '—' },
     { key: 'volume', header: 'Volume prévu (L)', align: 'right', render: (b) => fmtNumber(b.volumesMensuels.reduce((s, v) => s + Number(v.volumePrevuLitres), 0)) },
     { key: 'bl', header: 'Livraisons', align: 'center', render: (b) => b._count?.bonsLivraison ?? 0 },
-    { key: 'statut', header: 'Statut', render: (b) => <Badge className={STATUT_COLORS[b.statut] || ''}>{b.statut}</Badge> },
+    { key: 'statut', header: 'Statut', render: (b) => <Badge className={STATUT_COLORS[b.statut] || ''}>{L_STATUT_BC[b.statut] ?? b.statut}</Badge> },
   ];
 
   return (

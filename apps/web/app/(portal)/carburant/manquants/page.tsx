@@ -15,7 +15,7 @@ import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Select } from '@/components/shared/Form';
 import { SearchSelect } from '@/components/shared/SearchSelect';
-import { regionOptions } from '@/lib/constants';
+import { regionOptions, L_STATUT_LIGNE } from '@/lib/constants';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -101,7 +101,7 @@ function SiteDrillModal({ site, bcId, mois, onClose }: { site: ParSite; bcId: st
                   <td className="text-right">{fmtNumber(l.prevu)}</td>
                   <td className="text-right">{l.livre > 0 ? fmtNumber(l.livre) : '—'}</td>
                   <td className="text-right">{mq(l.manquant)}</td>
-                  <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{l.statut}</Badge></td>
+                  <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{L_STATUT_LIGNE[l.statut] ?? l.statut}</Badge></td>
                 </tr>
               ))}
             </tbody>

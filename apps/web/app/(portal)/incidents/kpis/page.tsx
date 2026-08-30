@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTypesIncident } from '@/lib/typesIncident';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Timer, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -20,6 +21,7 @@ function mins(m: number) {
 }
 
 export default function IncidentKpisPage() {
+  const { labelDe } = useTypesIncident();
   const [periode, setPeriode] = useState('30');
   const [region, setRegion] = useState('');
 
@@ -30,8 +32,10 @@ export default function IncidentKpisPage() {
 
   if (isLoading) return <Loading />;
   const d = data ?? {};
-  const parType = Object.entries(d.parType ?? {}).map(([name, value]) => ({ name, value: value as number }));
-  const parSeverite = Object.entries(d.parSeverite ?? {}).map(([name, value]) => ({ name, value: value as number }));
+  // Libellés métier sur les axes/légendes : jamais COUPURE_TOTALE ou MAJEUR bruts.
+  const L_SEV: Record<string, string> = { CRITIQUE: 'Critique', MAJEUR: 'Majeur', MINEUR: 'Mineur', INFORMATIF: 'Informatif' };
+  const parType = Object.entries(d.parType ?? {}).map(([name, value]) => ({ name: labelDe(name), value: value as number }));
+  const parSeverite = Object.entries(d.parSeverite ?? {}).map(([name, value]) => ({ name: L_SEV[name] ?? name, value: value as number }));
 
   return (
     <div>

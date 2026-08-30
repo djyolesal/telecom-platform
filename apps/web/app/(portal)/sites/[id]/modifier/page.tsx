@@ -394,9 +394,9 @@ export default function ModifierSitePage() {
               placeholder="(non renseigné)"
             />
           </Field>
-          <Field label="NodeID OSS (615-03-Macro-…)">
+          <Field label="Identifiant réseau du site (615-03-Macro-…)">
             <Input value={form.nodeId} onChange={(e) => set('nodeId', e.target.value)} placeholder="ex. 2848" />
-            <p className="mt-1 text-xs text-gray-400">Identifiant eNodeB - clé de la détection automatique des coupures depuis l&apos;OSS.</p>
+            <p className="mt-1 text-xs text-gray-400">Fourni par l&apos;équipe réseau - sans lui, les coupures de ce site ne sont pas détectées automatiquement.</p>
           </Field>
 
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">

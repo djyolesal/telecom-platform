@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { L_STATUT_BL } from '@/lib/constants';
 import { useQuery } from '@tanstack/react-query';
 import { Truck, Droplets, PackageCheck, Clock } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -128,7 +129,7 @@ export function TransporteurDashboard() {
                     </td>
                     <td className="px-4 py-2 text-gray-600">{fmtDate(b.dateChargement)}</td>
                     <td className="px-4 py-2">
-                      <Badge className={STATUT_COULEURS[b.statut] ?? 'bg-gray-100 text-gray-600'}>{b.statut}</Badge>
+                      <Badge className={STATUT_COULEURS[b.statut] ?? 'bg-gray-100 text-gray-600'}>{L_STATUT_BL[b.statut] ?? b.statut}</Badge>
                     </td>
                   </tr>
                 ))}

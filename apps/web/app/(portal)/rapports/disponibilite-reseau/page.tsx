@@ -13,7 +13,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { fmtNumber } from '@/lib/utils';
 
-interface SiteRow { nom: string; region: string; coupures: number; enCours: number; downtimeHeures: number; dispoPct: number }
+interface SiteRow { nom: string; region: string; coupures: number; enCours: number; indisponibilitéHeures: number; dispoPct: number }
 
 const TECHNOS = ['SITE', '2G', '3G', '4G', '5G'];
 const ALARMES = ['AE', 'GE', 'EN', 'FO', 'TX', 'RA', 'MI', 'MD', 'NA'];
@@ -21,10 +21,10 @@ const basculer = (set: React.Dispatch<React.SetStateAction<Set<string>>>, v: str
   set((prev) => { const n = new Set(prev); if (n.has(v)) n.delete(v); else n.add(v); return n; });
 const puce = (actif: boolean) =>
   `rounded-full border px-2.5 py-0.5 text-xs font-medium ${actif ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`;
-interface AlarmeRow { type: string; coupures: number; downtimeHeures: number }
+interface AlarmeRow { type: string; coupures: number; indisponibilitéHeures: number }
 interface PrestaRow {
   nom: string; nbSites: number; coupures: number; enCours: number; sitesTouches: number;
-  downtimeHeures: number; downtimeActifHeures: number; downtimePassifHeures: number; downtimeNonClasseHeures: number;
+  indisponibilitéHeures: number; indisponibilitéActifHeures: number; indisponibilitéPassifHeures: number; indisponibilitéNonClasseHeures: number;
   dispoPct: number;
 }
 
@@ -64,8 +64,8 @@ export default function DisponibiliteReseauPage() {
       <PageHeader
         title="Disponibilité réseau"
         subtitle={data?.perimetreRestreint
-          ? 'Votre périmètre : downtime, sites touchés et répartition actif/passif de vos lots'
-          : "Coupures radio (supervision NOC) : downtime, sites touchés, répartition actif/passif et évaluation par prestataire"}
+          ? 'Votre périmètre : indisponibilité, sites touchés et répartition actif/passif de vos lots'
+          : "Coupures radio (supervision NOC) : indisponibilité, sites touchés, répartition actif/passif et évaluation par prestataire"}
         backHref="/rapports"
         actions={pret
           ? <ExportButtons base="/rapports/disponibilite-reseau/export"
@@ -114,13 +114,13 @@ export default function DisponibiliteReseauPage() {
             </button>
           ))}
           {alarmes.size > 0 && (
-            <span className="text-xs text-amber-600" title="Les coupures sans type d'alarme renseigné - dont les détections AUTO OSS - sont exclues par ce filtre.">
+            <span className="text-xs text-amber-600" title="Les coupures sans type d'alarme renseigné - dont les détections détections automatiques - sont exclues par ce filtre.">
               (sans type exclues)
             </span>
           )}
         </div>
         <span className="text-xs text-gray-400" title="Le sas des détections brutes reste visible sur la liste des coupures et la carte NOC, sans peser sur la disponibilité publiée.">
-          Les détections AUTO (OSS) ne comptent qu&apos;une fois prises en charge par le NOC.
+          Les détections détections automatiques ne comptent qu&apos;une fois prises en charge par le NOC.
         </span>
         {isFetching && !isLoading && (
           <span className="animate-pulse text-xs text-gray-400">recalcul…</span>
@@ -135,12 +135,12 @@ export default function DisponibiliteReseauPage() {
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <StatCard title="Coupures" value={fmtNumber(k.coupures)} subtitle={`${k.sitesTouches}/${k.nbSites} sites touchés`} icon={WifiOff} color="bg-[#1B3F6B]" />
         <StatCard title="En cours" value={fmtNumber(k.enCours)} subtitle="non rétablies" icon={Activity} color="bg-[#C0392B]" />
-        <StatCard title="Downtime cumulé" value={`${fmtNumber(k.downtimeHeures)} h`} subtitle={data.periodeLibelle ?? `sur ${data.periodeMois} mois`} icon={RadioTower} color="bg-[#E67E22]" />
+        <StatCard title="Indisponibilité cumulée" value={`${fmtNumber(k.indisponibilitéHeures)} h`} subtitle={data.periodeLibelle ?? `sur ${data.periodeMois} mois`} icon={RadioTower} color="bg-[#E67E22]" />
         <StatCard title="Part énergie" value={`${k.partEnergiePct}%`} subtitle="alarmes AE / GE / EN" icon={Zap} color="bg-[#0E7C6B]" />
         <StatCard
           title="Part passif"
           value={`${k.partPassifPct ?? 0}%`}
-          subtitle={`actif ${fmtNumber(k.downtimeActifHeures ?? 0)} h · passif ${fmtNumber(k.downtimePassifHeures ?? 0)} h · n.c. ${fmtNumber(k.downtimeNonClasseHeures ?? 0)} h`}
+          subtitle={`actif ${fmtNumber(k.indisponibilitéActifHeures ?? 0)} h · passif ${fmtNumber(k.indisponibilitéPassifHeures ?? 0)} h · n.c. ${fmtNumber(k.indisponibilitéNonClasseHeures ?? 0)} h`}
           icon={Zap}
           color="bg-[#7D3C98]"
         />
@@ -148,14 +148,14 @@ export default function DisponibiliteReseauPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-gray-100 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-gray-700">Top sites par downtime</h3>
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Sites les plus longtemps coupés</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-gray-100 text-left text-xs text-gray-500">
                 <th className="py-2 pr-4 font-medium">Site</th>
                 <th className="px-3 py-2 font-medium">Région</th>
                 <th className="px-3 py-2 text-right font-medium">Coupures</th>
-                <th className="px-3 py-2 text-right font-medium">Downtime</th>
+                <th className="px-3 py-2 text-right font-medium">Indispo.</th>
                 <th className="px-3 py-2 text-right font-medium">Dispo</th>
               </tr></thead>
               <tbody>
@@ -167,7 +167,7 @@ export default function DisponibiliteReseauPage() {
                     </td>
                     <td className="px-3 py-2 text-gray-600">{s.region}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{s.coupures}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtNumber(s.downtimeHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtNumber(s.indisponibilitéHeures)} h</td>
                     <td className={`px-3 py-2 text-right tabular-nums font-semibold ${s.dispoPct < 95 ? 'text-red-600' : s.dispoPct < 99 ? 'text-amber-600' : 'text-emerald-600'}`}>{s.dispoPct}%</td>
                   </tr>
                 ))}
@@ -178,14 +178,14 @@ export default function DisponibiliteReseauPage() {
         </div>
 
         <div className="rounded-xl border border-gray-100 bg-white p-5">
-          <h3 className="mb-4 text-sm font-semibold text-gray-700">Downtime par type d'alarme (heures)</h3>
+          <h3 className="mb-4 text-sm font-semibold text-gray-700">Indisponibilité par type d'alarme (heures)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.parTypeAlarme} layout="vertical" margin={{ left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="type" width={46} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number, name) => name === 'downtimeHeures' ? [`${fmtNumber(v)} h`, 'Downtime'] : [v, name]} />
-              <Bar dataKey="downtimeHeures" name="Downtime (h)" fill="#1B3F6B" radius={[0, 4, 4, 0]} />
+              <Tooltip formatter={(v: number, name) => name === 'indisponibilitéHeures' ? [`${fmtNumber(v)} h`, 'Indispo.'] : [v, name]} />
+              <Bar dataKey="indisponibilitéHeures" name="Indispo. (h)" fill="#1B3F6B" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <p className="mt-2 text-xs text-gray-400">AE / GE / EN = causes énergie · FO = fibre · TX = transmission · RA = radio (référentiel NOC).</p>
@@ -193,12 +193,12 @@ export default function DisponibiliteReseauPage() {
       </div>
 
       {/* Vue interne : évaluation de chaque prestataire sur le périmètre de ses lots.
-          Le downtime PASSIF (énergie/environnement) est sa responsabilité O&M directe. */}
+          Le indisponibilité PASSIF (énergie/environnement) est sa responsabilité O&M directe. */}
       {(data.parPrestataire?.length ?? 0) > 0 && (
         <div className="mt-6 rounded-xl border border-gray-100 bg-white p-5">
           <h3 className="mb-1 text-sm font-semibold text-gray-700">Évaluation par prestataire</h3>
           <p className="mb-3 text-xs text-gray-400">
-            Downtime des sites de leurs lots sur la période - le <b>passif</b> (énergie/environnement) relève de leur responsabilité O&M,
+            Indispo. des sites de leurs lots sur la période - le <b>passif</b> (énergie/environnement) relève de leur responsabilité O&M,
             l'<b>actif</b> (radio/transmission) des équipes réseau.
           </p>
           <div className="overflow-x-auto">
@@ -208,7 +208,7 @@ export default function DisponibiliteReseauPage() {
                 <th className="px-3 py-2 text-right font-medium">Sites</th>
                 <th className="px-3 py-2 text-right font-medium">Coupures</th>
                 <th className="px-3 py-2 text-right font-medium">Sites touchés</th>
-                <th className="px-3 py-2 text-right font-medium">Downtime</th>
+                <th className="px-3 py-2 text-right font-medium">Indispo.</th>
                 <th className="px-3 py-2 text-right font-medium">Passif</th>
                 <th className="px-3 py-2 text-right font-medium">Actif</th>
                 <th className="px-3 py-2 text-right font-medium">Non classé</th>
@@ -223,10 +223,10 @@ export default function DisponibiliteReseauPage() {
                     <td className="px-3 py-2 text-right tabular-nums">{p.nbSites}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{p.coupures}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{p.sitesTouches}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtNumber(p.downtimeHeures)} h</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#7D3C98]">{fmtNumber(p.downtimePassifHeures)} h</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[#2471A3]">{fmtNumber(p.downtimeActifHeures)} h</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-gray-500">{fmtNumber(p.downtimeNonClasseHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtNumber(p.indisponibilitéHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#7D3C98]">{fmtNumber(p.indisponibilitéPassifHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[#2471A3]">{fmtNumber(p.indisponibilitéActifHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-gray-500">{fmtNumber(p.indisponibilitéNonClasseHeures)} h</td>
                     <td className={`px-3 py-2 text-right tabular-nums font-semibold ${p.dispoPct < 95 ? 'text-red-600' : p.dispoPct < 99 ? 'text-amber-600' : 'text-emerald-600'}`}>{p.dispoPct}%</td>
                   </tr>
                 ))}

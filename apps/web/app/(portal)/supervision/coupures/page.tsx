@@ -261,7 +261,7 @@ export default function CoupuresReseauPage() {
             <span className={`ml-1.5 rounded px-1 py-px text-[10px] font-bold ${c.priseEnChargePar ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-600'}`}
               title={c.priseEnChargePar
                 ? `Détection automatique prise en charge par ${c.priseEnChargePar}`
-                : 'Détectée automatiquement par la synchronisation OSS (état eNodeB) - à prendre en charge'}>
+                : 'Détectée par la supervision réseau automatique - à prendre en charge'}>
               {c.priseEnChargePar ? '✓ AUTO' : 'AUTO'}
             </span>
           )}
@@ -287,7 +287,7 @@ export default function CoupuresReseauPage() {
         );
       },
     },
-    { key: 'downtimeMinutes', header: 'Downtime', align: 'right', render: (c) => fmtDowntime(c.downtimeMinutes) },
+    { key: 'downtimeMinutes', header: 'Indispo.', align: 'right', render: (c) => fmtDowntime(c.downtimeMinutes) },
     { key: 'typeAlarme', header: 'Alarme', align: 'center', render: (c) => (!c.typeAlarme || c.typeAlarme === 'NA') ? 'N/A' : c.typeAlarme },
     { key: 'cause', header: 'Cause', render: (c) => <span className="text-gray-600">{c.cause ?? '—'}</span> },
     // Colonnes complémentaires : masquées par défaut pour garder le tableau
@@ -310,7 +310,7 @@ export default function CoupuresReseauPage() {
     {
       key: 'source', header: 'Source', defaultHidden: true,
       render: (c) => c.source === 'OSS'
-        ? (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (OSS)')
+        ? (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (détection réseau)')
         : 'Manuelle',
     },
   ];
@@ -603,7 +603,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
       {siteEntier && nbAval > 0 && (
         <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
           <input type="checkbox" checked={propagerAval} onChange={(e) => setPropagerAval(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-amber-300" />
-          <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) - <b>propager la coupure</b> : l&apos;aval déjà détecté coupé est rattaché, les sites <b>sans NodeID</b> (invisibles OSS) reçoivent une héritée ; un site visible encore émetteur (batteries) se rattachera de lui-même à sa chute réelle.</span>
+          <span>Ce site alimente <b>{nbAval} site(s)</b> en transmission ({transmission!.aval.slice(0, 5).map((s) => s.nom).join(', ')}{nbAval > 5 ? '…' : ''}) - <b>propager la coupure</b> : l&apos;aval déjà détecté coupé est rattaché, les sites <b>sans identifiant réseau</b> (invisibles de la détection automatique) reçoivent une héritée ; un site visible encore émetteur (batteries) se rattachera de lui-même à sa chute réelle.</span>
         </label>
       )}
       {errMsg && (
@@ -847,19 +847,19 @@ function PriseEnChargeBloc({ coupureId, onDone }: { coupureId: string; onDone: (
           {resultat.incident && (
             <span className="text-red-700">
               {' '}· incident <b>{resultat.incident.reference ?? resultat.incident.id.slice(0, 8)}</b>
-              {resultat.incident.reutilise ? ' rattaché (déjà ouvert sur ce site)' : ' créé - SMS et dispatch terrain envoyés'}
+              {resultat.incident.reutilise ? ' rattaché (déjà ouvert sur ce site)' : ' créé - SMS envoyés et intervention terrain déclenchée'}
             </span>
           )}
         </p>
       ) : (
         <>
           <p className="mb-2">
-            Détection automatique OSS <b>non prise en charge</b>. La prise en charge fait entrer
+            Détection automatique <b>non prise en charge</b>. La prise en charge fait entrer
             l&apos;événement au rapport NOC et analyse la topologie : racine amont, aval reclassé en
             héritées — une seule panne, une seule ligne.
           </p>
           <p className="mb-2 rounded-md bg-red-50 p-2 text-xs text-red-800">
-            <b>Le terrain sera déclenché</b> : incident CRITIQUE sur la racine,
+            <b>Le terrain sera déclenché</b> : incident de sévérité critique sur la racine,
             <b> SMS réels aux contacts passifs du lot</b> + notification aux techniciens.
             Incident déjà ouvert sur ce site : la coupure y est rattachée, sans nouveau SMS.
           </p>
@@ -977,7 +977,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   return (
     <Modal titre="Importer le rapport de supervision" onClose={onClose}>
       <p className="mb-3 text-sm text-gray-600">
-        Fichier <b>.xlsx</b> du NOC - seule la feuille <code className="text-xs">Events</code> est importée.
+        Fichier <b>.xlsx</b> du NOC - seul l&apos;onglet des événements est repris.
         Ré-importer le même rapport ne crée pas de doublons.
       </p>
       <input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -1003,7 +1003,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             <p className="mt-1 text-purple-700">{result.heriteesDetectees} coupure(s) reclassée(s) « héritée(s) » via la topologie (impact d&apos;une panne amont - pas d&apos;incident ni d&apos;imputation aval).</p>
           )}
           {(result.incidentsCrees ?? 0) > 0 && (
-            <p className="mt-1 text-[#1B3F6B]">{result.incidentsCrees} incident(s) terrain créé(s) et dispatché(s) pour les sites entiers encore hors service.</p>
+            <p className="mt-1 text-[#1B3F6B]">{result.incidentsCrees} incident(s) terrain créé(s) et transmis aux équipes terrain pour les sites entiers encore hors service.</p>
           )}
           {result.sitesNonApparies.length > 0 && (
             <div className="mt-2 text-amber-700">

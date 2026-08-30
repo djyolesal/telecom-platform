@@ -137,3 +137,16 @@ export function energySourcesForConfig(powerConfig?: string): string[] {
       return [];
   }
 }
+
+// ── Libellés des statuts logistiques carburant ────────────────
+// Jamais le code brut (CHARGE, PREVU…) à l'écran : « CHARGE » se lit
+// « chargé » alors qu'il signifie « en livraison ».
+export const L_STATUT_BC: Record<string, string> = {
+  OUVERT: 'Ouvert', CLOTURE: 'Clôturé', ANNULE: 'Annulé',
+};
+export const L_STATUT_BL: Record<string, string> = {
+  PLANIFIE: 'Planifié', CHARGE: 'En livraison', LIVRE: 'Livré', ANNULE: 'Annulé',
+};
+export const L_STATUT_LIGNE: Record<string, string> = {
+  PREVU: 'Prévu', PARTIEL: 'Partiellement livré', LIVRE: 'Livré', ANNULE: 'Annulé',
+};

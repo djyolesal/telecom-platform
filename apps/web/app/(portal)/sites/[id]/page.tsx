@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTypesIncident } from '@/lib/typesIncident';
 
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -13,7 +14,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { DataTable } from '@/components/shared/DataTable';
-import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge } from '@/components/shared/Badge';
+import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge, SeveriteBadge } from '@/components/shared/Badge';
 import { litresPourHauteur, hauteurMaxCm, type ConfigCuve } from '@/lib/cuve';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
 import { POWER_CONFIGS, STATUTS_GE, TYPES_PYLONE, FORMES_CUVE } from '@/lib/constants';
@@ -30,6 +31,7 @@ const SCOPE_LABELS: Record<string, string> = {
 };
 
 export default function SiteDetailPage() {
+  const { labelDe } = useTypesIncident();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -360,11 +362,11 @@ export default function SiteDetailPage() {
           {!maint?.length ? (
             <EmptyState title="Aucune maintenance" />
           ) : (
-            <DataTable<{ statut: string; datePlanifiee: string }>
+            <DataTable<{ statut: string; datePlanifiee: string; type?: string }>
               toolbar={false}
               columns={[
                 { key: 'equipement', header: 'Équipement' },
-                { key: 'type', header: 'Type' },
+                { key: 'type', header: 'Type', render: (m) => (m.type === 'PREVENTIVE' ? 'Préventive' : m.type === 'CURATIVE' ? 'Curative' : m.type ?? '—') },
                 { key: 'statut', header: 'Statut', render: (m) => <StatutMaintBadge value={m.statut} /> },
                 { key: 'datePlanifiee', header: 'Date', render: (m) => fmtDateTime(m.datePlanifiee) },
               ]}
@@ -378,11 +380,11 @@ export default function SiteDetailPage() {
           {!incidents?.length ? (
             <EmptyState title="Aucun incident" />
           ) : (
-            <DataTable<{ statut: string; dateOuverture: string }>
+            <DataTable<{ statut: string; dateOuverture: string; type?: string; severite?: string }>
               toolbar={false}
               columns={[
-                { key: 'type', header: 'Type' },
-                { key: 'severite', header: 'Sévérité' },
+                { key: 'type', header: 'Type', render: (i) => labelDe(i.type ?? '') },
+                { key: 'severite', header: 'Sévérité', render: (i) => <SeveriteBadge value={i.severite ?? ''} /> },
                 { key: 'statut', header: 'Statut', render: (i) => <StatutIncidentBadge value={i.statut} /> },
                 { key: 'dateOuverture', header: 'Ouverture', render: (i) => fmtDateTime(i.dateOuverture) },
               ]}

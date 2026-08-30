@@ -35,7 +35,7 @@ export default function NouvelIncidentPage() {
       queryClient.invalidateQueries({ queryKey: ['incidents'] });
       router.push(`/incidents/${r.data.data.id}`);
     },
-    onError: (e: { response?: { data?: { error?: string } }; message?: string }) => setError(e.response?.data?.error || e.message || 'Erreur lors de la déclaration'),
+    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Déclaration impossible - vérifiez votre connexion et réessayez.'),
   });
 
   return (

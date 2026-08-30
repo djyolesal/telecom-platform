@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import { CATEGORIES_EQUIPEMENT } from '@/lib/constants';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
@@ -72,8 +73,8 @@ export default function ActifDetailPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={a.libelle ?? a.categorie}
-        subtitle={a.numeroSerie ? `N° série ${a.numeroSerie}` : a.categorie}
+        title={a.libelle ?? (CATEGORIES_EQUIPEMENT.find((x) => x.value === a.categorie)?.label ?? a.categorie)}
+        subtitle={a.numeroSerie ? `N° série ${a.numeroSerie}` : (CATEGORIES_EQUIPEMENT.find((x) => x.value === a.categorie)?.label ?? a.categorie)}
         backHref="/actifs"
         actions={isAdmin ? (
           <Button
@@ -90,7 +91,7 @@ export default function ActifDetailPage() {
       />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
-        <Row label="Type" value={a.categorie} />
+        <Row label="Type" value={CATEGORIES_EQUIPEMENT.find((x) => x.value === a.categorie)?.label ?? a.categorie} />
         <Row label="N° série" value={a.numeroSerie} />
         <Row label="Caractéristique" value={a.caracteristique} />
         <Row label="Statut" value={<Badge className={STATUT_COLOR[a.statutActif] || 'bg-gray-100 text-gray-600'}>{STATUT_LABEL[a.statutActif] ?? a.statutActif}</Badge>} />

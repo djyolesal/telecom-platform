@@ -269,7 +269,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
                   </div>
                 )}
                 {!vueLivraison && (
-                  <p className="mt-1">GE : {f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
+                  <p className="mt-1">GE : {({ GE_PERMANENT: 'permanent', GE_SECOURS: 'secours', PAS_DE_GE: 'aucun' } as Record<string, string>)[f.properties.statutGE] ?? f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
                 )}
                 {etatReseauParSite && (
                   <p className="mt-1 font-semibold" style={{ color: reseau ? COULEUR_RESEAU[reseau.etat] : '#0E7C6B' }}>

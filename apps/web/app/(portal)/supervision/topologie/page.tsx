@@ -236,10 +236,10 @@ export default function TopologiePage() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard title="Chaînes" value={arbres.length} subtitle="arbres de transmission" icon={Network} color="bg-[#1B3F6B]" />
+        <StatCard title="Chaînes" value={arbres.length} subtitle="chaînes de transmission" icon={Network} color="bg-[#1B3F6B]" />
         <StatCard title="Liaisons déclarées" value={nbLiaisons} subtitle={`${nbDirectsSansAval} sites directs sans aval`} icon={Radio} color="bg-[#0E7C6B]" />
         <StatCard title="Sites en coupure" value={sitesDown.size} subtitle="coupures en cours" icon={WifiOff} color="bg-[#C0392B]" />
-        <StatCard title="Aval sous menace" value={sitesImpactes.size} subtitle="dépendants d'un site down" icon={WifiOff} color="bg-[#E67E22]" />
+        <StatCard title="Aval sous menace" value={sitesImpactes.size} subtitle="dépendants d'un site coupé" icon={WifiOff} color="bg-[#E67E22]" />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -275,7 +275,7 @@ export default function TopologiePage() {
         <ExportButtons base="/sites/topologie/export" name="topologie" />
         <div className="ml-auto flex items-center gap-x-4 gap-y-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#C0392B]" /> En coupure</span>
-          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#E67E22]" /> Aval d'un site down</span>
+          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#E67E22]" /> Aval d'un site coupé</span>
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> En service</span>
         </div>
       </div>
@@ -431,7 +431,7 @@ function ImportTopologieModal({ onClose, onDone }: { onClose: () => void; onDone
         <p className="mb-3 text-sm text-gray-600">
           Fichier <b>.xlsx</b> avec les colonnes <code className="text-xs">site</code>, <code className="text-xs">parent</code> et{' '}
           <code className="text-xs">type</code> (FIBER, TN, ML, RTN…). Ré-importer met à jour les liaisons existantes,
-          les cycles sont refusés ligne par ligne.
+          les rattachements circulaires sont refusés ligne par ligne.
         </p>
         <input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="mb-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1B3F6B] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#16345a]" />
@@ -450,12 +450,12 @@ function ImportTopologieModal({ onClose, onDone }: { onClose: () => void; onDone
             )}
             {result.parentsIntrouvables.length > 0 && (
               <div className="mt-2 text-amber-700">
-                <p className="flex items-center gap-1.5 font-medium"><AlertTriangle size={14} /> Parents non reconnus ({result.parentsIntrouvables.length}) :</p>
+                <p className="flex items-center gap-1.5 font-medium"><AlertTriangle size={14} /> Sites amont non reconnus ({result.parentsIntrouvables.length}) :</p>
                 <p className="mt-1 text-xs">{result.parentsIntrouvables.slice(0, 12).join(' · ')}{result.parentsIntrouvables.length > 12 ? ' …' : ''}</p>
               </div>
             )}
             {result.cyclesIgnores.length > 0 && (
-              <p className="mt-2 text-xs text-red-600">Cycles refusés : {result.cyclesIgnores.join(', ')}</p>
+              <p className="mt-2 text-xs text-red-600">Rattachements circulaires refusés : {result.cyclesIgnores.join(', ')}</p>
             )}
           </div>
         )}

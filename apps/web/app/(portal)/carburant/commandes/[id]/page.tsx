@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { L_STATUT_BC, L_STATUT_BL } from '@/lib/constants';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -115,7 +116,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
         setBlPdfPath(key);
         const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
         setAvertissements([`Analyse impossible (${msg ?? 'erreur'}) - PDF joint, saisie manuelle.`]);
-      } catch { setError('Échec de l’upload du PDF.'); }
+      } catch { setError('L’envoi du PDF a échoué. Réessayez ou choisissez un autre fichier.'); }
     } finally { setAnalysing(false); }
   };
 
@@ -139,7 +140,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
     try {
       const key = await uploadPdf(file);
       setBordereauPdfPath(key);
-    } catch { setError('Échec de l’upload du PDF.'); }
+    } catch { setError('L’envoi du PDF a échoué. Réessayez ou choisissez un autre fichier.'); }
     finally { setUploading(''); }
   };
 
@@ -303,7 +304,7 @@ export default function BonCommandeDetailPage() {
         backHref="/carburant/commandes"
         actions={
           <div className="flex items-center gap-2">
-            <Badge className={BC_COLORS[data.statut] || ''}>{data.statut}</Badge>
+            <Badge className={BC_COLORS[data.statut] || ''}>{L_STATUT_BC[data.statut] ?? data.statut}</Badge>
             <Button variant="secondary" icon={Scale} onClick={() => router.push(`/carburant/commandes/${id}/rapprochement`)}>Rapprochement</Button>
             {isManager && data.statut !== 'ANNULE' && (
               <Button variant="secondary" loading={statutMut.isPending}
@@ -399,7 +400,7 @@ export default function BonCommandeDetailPage() {
                   <td className="text-right">{fmtNumber(Number(bl.volumeChargeLitres))}</td>
                   <td className="text-center">{bl._count?.lignes ?? 0}</td>
                   <td>{fmtDate(bl.dateChargement)}</td>
-                  <td><Badge className={BL_COLORS[bl.statut] || ''}>{bl.statut}</Badge></td>
+                  <td><Badge className={BL_COLORS[bl.statut] || ''}>{L_STATUT_BL[bl.statut] ?? bl.statut}</Badge></td>
                 </tr>
               ))}
             </tbody>

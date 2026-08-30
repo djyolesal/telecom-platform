@@ -13,7 +13,7 @@ import { Loading, ErrorState } from '@/components/shared/states';
 import { StatutMaintBadge } from '@/components/shared/Badge';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
 import { SignatureBlock } from '@/components/shared/SignatureBlock';
-import { TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT, PASSIVE_CATEGORIES } from '@/lib/constants';
+import { TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT, PASSIVE_CATEGORIES, SOURCES_ENERGIE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -126,7 +126,7 @@ export default function MaintenanceDetailPage() {
             type LigneCk = { cle: string; resultat: string; valeur?: string | null; commentaire?: string | null };
             const lignes: LigneCk[] = m.checklist;
             const attendue: { cle: string; libelle: string }[] = m.checklistAttendue ?? [];
-            const libelleDe = (cle: string) => attendue.find((i) => i.cle === cle)?.libelle ?? cle;
+            const libelleDe = (cle: string) => attendue.find((i) => i.cle === cle)?.libelle ?? 'Point de contrôle retiré du contrat';
             const badge = (r: string) => r === 'CONFORME'
               ? 'bg-green-100 text-green-700'
               : r === 'NON_CONFORME' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500';
@@ -192,7 +192,7 @@ export default function MaintenanceDetailPage() {
                   )}
                   {autres.map((r) => (
                     <li key={r.id} className="flex justify-between gap-4">
-                      <span className="font-medium text-gray-700">{r.source}</span>
+                      <span className="font-medium text-gray-700">{SOURCES_ENERGIE.find((x) => x.value === r.source)?.label ?? r.source}</span>
                       <span className="text-gray-500 text-right">
                         {r.source === 'CEET' && (
                           <>

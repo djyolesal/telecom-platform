@@ -1,4 +1,5 @@
 import type { Column } from '@/components/shared/DataTable';
+import { TYPES_PYLONE } from '@/lib/constants';
 import { fmtDate, fmtNumber, fmtFCFA } from '@/lib/utils';
 
 /**
@@ -74,7 +75,7 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
         <a href={`tel:${s.telephoneSite}`} onClick={(e) => e.stopPropagation()} className="text-[#2471A3] hover:underline">{s.telephoneSite}</a>
       ) : ('—'),
   },
-  { key: 'typePylone', header: 'Type de pylône', description: 'Référentiel des types de pylône', render: (s: SiteOptionnel) => s.typePylone ?? '—' },
+  { key: 'typePylone', header: 'Type de pylône', description: 'Référentiel des types de pylône', render: (s: SiteOptionnel) => (s.typePylone ? (TYPES_PYLONE.find((t) => t.value === s.typePylone)?.label ?? s.typePylone) : '—') },
   {
     key: 'prestataires', header: 'Prestataires',
     description: 'Titulaires des contrats du site (passif/actif et solaire)',
@@ -82,7 +83,7 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
     sortable: false,
     render: (s: SiteOptionnel) => {
       const passifs = (s.lot?.assignments ?? [])
-        .map((a) => `${a.prestataire?.nom ?? '?'}${a.scope === 'ACTIVE' ? ' (actif)' : a.scope === 'LES_DEUX' ? ' (p+a)' : ''}`);
+        .map((a) => `${a.prestataire?.nom ?? '?'}${a.scope === 'ACTIVE' ? ' (actif)' : a.scope === 'LES_DEUX' ? ' (passif + actif)' : ''}`);
       const solaire = s.lotSolaire?.assignments?.[0]?.prestataire?.nom;
       if (!passifs.length && !solaire) return <span className="text-gray-300">—</span>;
       return (

@@ -192,7 +192,7 @@ export function DashboardInterne() {
                 <span className={`h-2 w-2 flex-shrink-0 rounded-full ${inc.severite === 'CRITIQUE' ? 'bg-red-500' : inc.severite === 'MAJEUR' ? 'bg-orange-500' : 'bg-yellow-400'}`} />
                 <span className="flex-1 truncate font-medium text-gray-700">{inc.siteNom} - {labelDe(inc.type)}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${inc.statut === 'OUVERT' ? 'bg-red-100 text-red-700' : inc.statut === 'EN_COURS' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                  {inc.statut}
+                  {({ OUVERT: 'Ouvert', EN_COURS: 'En cours', RESOLU: 'Résolu', CLOS: 'Clos' } as Record<string, string>)[inc.statut] ?? inc.statut}
                 </span>
               </div>
             ))}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import { SOURCES_ENERGIE, TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT } from '@/lib/constants';
 import { useQuery } from '@tanstack/react-query';
 import { Wrench } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -51,7 +52,7 @@ export default function ReleveDetailPage() {
         <Row label="Site" value={r.site?.nom ?? '—'} />
         <Row label="Date" value={fmtDateTime(r.dateReleve)} />
         {r.provenance && <Row label="Provenance" value={r.provenance} />}
-        <Row label="Source" value={<Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{r.source}</Badge>} />
+        <Row label="Source" value={<Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{SOURCES_ENERGIE.find((x) => x.value === r.source)?.label ?? r.source}</Badge>} />
         {r.indexCompteur != null && <Row label="Index compteur" value={fmtNumber(Number(r.indexCompteur))} />}
         {r.consommationKwh != null && <Row label="Consommation" value={`${fmtNumber(Number(r.consommationKwh))} kWh`} />}
         {r.volumeGasoilLitres != null && <Row label="Niveau cuve" value={`${fmtNumber(Number(r.volumeGasoilLitres))} L${r.hauteurCuveCm != null ? ` (${Number(r.hauteurCuveCm)} cm mesurés)` : ''}`} />}
@@ -67,8 +68,8 @@ export default function ReleveDetailPage() {
       {m && (
         <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Maintenance d’origine</h3>
-          <Row label="Type" value={m.type} />
-          <Row label="Catégorie" value={m.categorie} />
+          <Row label="Type" value={TYPES_MAINTENANCE.find((x) => x.value === m.type)?.label ?? m.type} />
+          <Row label="Catégorie" value={CATEGORIES_EQUIPEMENT.find((x) => x.value === m.categorie)?.label ?? m.categorie} />
           <Row label="Équipement" value={m.equipement} />
           <Row label="Clôturée le" value={m.dateFin ? fmtDateTime(m.dateFin) : '—'} />
         </div>

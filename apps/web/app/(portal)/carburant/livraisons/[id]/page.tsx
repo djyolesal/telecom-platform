@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { L_STATUT_BL, L_STATUT_LIGNE } from '@/lib/constants';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -212,7 +213,7 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
             <Input list="chauffeurs-connus-bl" value={form.nomChauffeur} onChange={(e) => set('nomChauffeur', e.target.value)} placeholder="Nom et prénom" />
             <datalist id="chauffeurs-connus-bl">{chauffeurs.map((c) => <option key={c.id} value={c.nom} />)}</datalist>
           </Field>
-          <Field label="Statut"><Select value={form.statut} onChange={(e) => set('statut', e.target.value)} options={['PLANIFIE', 'CHARGE', 'LIVRE', 'ANNULE'].map((s) => ({ value: s, label: s }))} /></Field>
+          <Field label="Statut"><Select value={form.statut} onChange={(e) => set('statut', e.target.value)} options={['PLANIFIE', 'CHARGE', 'LIVRE', 'ANNULE'].map((s) => ({ value: s, label: L_STATUT_BL[s] ?? s }))} /></Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
             <Button type="submit" loading={mutation.isPending}>Enregistrer</Button>
@@ -268,7 +269,7 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
         <td className={`text-right font-medium ${Math.abs(l.ecart) <= 0.5 ? 'text-gray-400' : l.ecart > 0 ? 'text-blue-600' : 'text-amber-600'}`}>
           {l.volumeLivreReel > 0 ? `${l.ecart > 0 ? '+' : ''}${fmtNumber(l.ecart)}` : '—'}
         </td>
-        <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{l.statut}</Badge></td>
+        <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{L_STATUT_LIGNE[l.statut] ?? l.statut}</Badge></td>
       </tr>
       {ouvert && nbDepotages > 0 && (
         <tr className="bg-gray-50/60">

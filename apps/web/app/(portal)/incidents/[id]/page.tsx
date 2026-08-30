@@ -62,9 +62,10 @@ export default function IncidentDetailPage() {
   if (isLoading) return <Loading />;
   if (isError || !inc) return <ErrorState message="Incident introuvable" />;
 
+  const L_SCOPE: Record<string, string> = { PASSIVE: 'passif', ACTIVE: 'actif', LES_DEUX: 'passif + actif', SOLAIRE: 'solaire' };
   const techOptions = (techs ?? []).map((t: { id: string; nom: string; prenom: string; societe: string; scopes: string[] }) => ({
     value: t.id,
-    label: `${t.prenom} ${t.nom} - ${t.societe}${t.scopes.length ? ` (${t.scopes.join('/')})` : ''}`,
+    label: `${t.prenom} ${t.nom} - ${t.societe}${t.scopes.length ? ` (${t.scopes.map((x) => L_SCOPE[x] ?? x).join(' / ')})` : ''}`,
   }));
   const resolu = inc.statut === 'RESOLU' || inc.statut === 'CLOS';
 
