@@ -79,6 +79,8 @@ class IncidentRepository {
     required String id,
     required DateTime dateResolution,
     required bool agentPresent,
+    // Signature du TECHNICIEN qui clôture (obligatoire, comme la maintenance).
+    String? signatureLocalPath,
     // Agent de gardiennage PRÉSENT ⇒ il signe (exigé par le serveur).
     String? nomAgentSecurite,
     String? signatureAgentLocalPath,
@@ -112,6 +114,12 @@ class IncidentRepository {
       },
       attachments: [
         for (final p in photoPaths) {'path': p, 'kind': 'photo'},
+        if (signatureLocalPath != null)
+          {
+            'path': signatureLocalPath,
+            'kind': 'signature',
+            'field': 'signaturePath',
+          },
         if (signatureAgentLocalPath != null)
           {
             'path': signatureAgentLocalPath,

@@ -256,14 +256,16 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     // uniquement - hors-ligne le technicien saisit les litres comme avant.
     try {
       final cuve = await repo.getConfigCuve(siteId);
-      if (mounted) setState(() => _cuve = (cuve?.calculable ?? false) ? cuve : null);
+      if (mounted)
+        setState(() => _cuve = (cuve?.calculable ?? false) ? cuve : null);
     } catch (_) {
       if (mounted) setState(() => _cuve = null);
     }
   }
 
   /// Hauteur mesuree -> stock en litres auto-rempli (meme moteur que le serveur).
-  void _appliquerHauteur(TextEditingController hauteur, TextEditingController stock) {
+  void _appliquerHauteur(
+      TextEditingController hauteur, TextEditingController stock) {
     final cuve = _cuve;
     final h = _num(hauteur);
     if (cuve == null || h == null) return;
@@ -280,7 +282,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       return 'Au-dela de la hauteur de cuve (${max.toStringAsFixed(0)} cm) - volume plafonne.';
     }
     final l = h != null ? cuve.litresPourHauteur(h) : null;
-    return l != null ? '= ${l.toStringAsFixed(0)} L (calcule automatiquement)' : null;
+    return l != null
+        ? '= ${l.toStringAsFixed(0)} L (calcule automatiquement)'
+        : null;
   }
 
   /// Volume prévu au plan pour la ligne rattachée - affiché en repère, jamais
@@ -410,6 +414,14 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     }
     final messenger = ScaffoldMessenger.of(context);
     // Validation tripartite obligatoire (chauffeur + technicien ; agent optionnel).
+    // Le nom du chauffeur est requis avec sa signature (une signature sans nom
+    // ne vaut rien en litige — le serveur l'exige aussi).
+    if (_nomChauffeur.text.trim().isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Le nom du chauffeur est requis'),
+          backgroundColor: Colors.red));
+      return;
+    }
     if (_sigChauffeur == null) {
       messenger.showSnackBar(const SnackBar(
           content: Text('Signature du chauffeur requise'),
@@ -581,8 +593,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                 controller: _hauteurAvant,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) =>
-                    setState(() => _appliquerHauteur(_hauteurAvant, _stockAvant)),
+                onChanged: (_) => setState(
+                    () => _appliquerHauteur(_hauteurAvant, _stockAvant)),
                 decoration: InputDecoration(
                   labelText: 'Hauteur AVANT dépotage (cm)',
                   helperText: _hintHauteur(_hauteurAvant),
@@ -607,8 +619,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
                 controller: _hauteurApres,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) =>
-                    setState(() => _appliquerHauteur(_hauteurApres, _stockApres)),
+                onChanged: (_) => setState(
+                    () => _appliquerHauteur(_hauteurApres, _stockApres)),
                 decoration: InputDecoration(
                   labelText: 'Hauteur APRÈS dépotage (cm)',
                   helperText: _hintHauteur(_hauteurApres),

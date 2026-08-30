@@ -138,6 +138,21 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     );
     if (result == null || !mounted) return;
 
+    // 3. Signature du TECHNICIEN — obligatoire pour clôturer (comme la
+    // maintenance) ; le serveur la refuse aussi sans elle.
+    final navigator = Navigator.of(context);
+    final sigBytes = await navigator.push<dynamic>(
+      MaterialPageRoute(builder: (_) => const SignaturePadScreen()),
+    );
+    if (!mounted) return;
+    if (sigBytes == null) {
+      _snack('La signature du technicien est requise pour clôturer.');
+      return;
+    }
+    final signaturePath = await AttachmentStore.persistBytes(
+        sigBytes as Uint8List, 'signature-incident-${widget.id}.png');
+    if (!mounted) return;
+
     setState(() => _busy = true);
     try {
       // Photos (caméra) → stockage persistant ; upload différé au moteur de sync.
@@ -150,6 +165,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
 
       final res = await repo.close(
         id: widget.id,
+        signatureLocalPath: signaturePath,
         dateResolution: DateTime.now(),
         causeProbable: result['causeProbable'] as String?,
         actionCorrective: result['actionCorrective'] as String?,
@@ -375,8 +391,8 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
       return;
     }
     if (_agentPresent == true && _sigAgent == null) {
-      setState(() =>
-          _error = 'L\'agent est présent : faites-le signer avant de clôturer.');
+      setState(() => _error =
+          'L\'agent est présent : faites-le signer avant de clôturer.');
       return;
     }
     Navigator.pop(context, {

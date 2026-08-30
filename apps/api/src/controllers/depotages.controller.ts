@@ -379,6 +379,15 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     if (agentPresent === true && !b.signatureAgentSecuritePath) {
       throw new AppError("L'agent est déclaré présent : sa signature est requise.", 422);
     }
+    // Technicien : sa signature valide le dépotage (comme la clôture de maintenance).
+    if (!b.signatureTechnicienPath) {
+      throw new AppError('La signature du technicien est requise pour valider le dépotage.', 422);
+    }
+    // Chauffeur : signature ET nom obligatoires — une signature sans savoir QUI
+    // signe ne vaut rien en litige, on exige donc les deux.
+    if (!b.signatureChauffeurPath || !b.nomChauffeur || !String(b.nomChauffeur).trim()) {
+      throw new AppError('La signature et le nom du chauffeur sont requis pour valider le dépotage.', 422);
+    }
 
     // Preuve obligatoire : un écart de livraison anormal (jauge vs annoncé)
     // exige au moins une photo. Vérifié AVANT toute écriture → rien n'est créé

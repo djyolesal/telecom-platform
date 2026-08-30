@@ -294,11 +294,13 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
 
 export async function closeIncident(req: Request, res: Response, next: NextFunction) {
   try {
-    const { dateIntervention, dateResolution, causeProbable, actionCorrective, causeCategorie, creerMaintenance, latitude, longitude, photos, agentPresent, nomAgentSecurite, signatureAgentSecuritePath } = req.body as {
+    const { dateIntervention, dateResolution, causeProbable, actionCorrective, causeCategorie, creerMaintenance, latitude, longitude, photos, agentPresent, nomAgentSecurite, signatureAgentSecuritePath, signaturePath } = req.body as {
       dateIntervention?: string;
       agentPresent?: boolean;
       nomAgentSecurite?: string;
       signatureAgentSecuritePath?: string;
+      /** Signature du technicien qui clôture (obligatoire, comme la maintenance). */
+      signaturePath?: string;
       dateResolution?: string;
       causeProbable?: string;
       actionCorrective?: string;
@@ -329,6 +331,11 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
     // Tout incident doit être CLÔTURÉ sur le site.
     assertOnSite(incident.site, latitude, longitude, 'la clôture');
 
+    // Signature du TECHNICIEN obligatoire pour clôturer (comme la maintenance
+    // et le dépotage) — sauf incident déjà signé lors d'un rejeu offline.
+    if (!signaturePath && !incident.signaturePath) {
+      throw new AppError('La signature du technicien est requise pour clôturer.', 422);
+    }
     // Agent de gardiennage PRÉSENT ⇒ il signe (même règle que le dépotage et
     // la clôture de maintenance) : la déclaration devient une preuve.
     if (agentPresent === true && !signatureAgentSecuritePath) {
@@ -377,6 +384,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
         dureeCoupureMinutes: duree > 0 ? duree : 0,
         causeProbable,
         actionCorrective,
+        ...(signaturePath ? { signaturePath: String(signaturePath) } : {}),
         ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}),
         ...(nomAgentSecurite ? { nomAgentSecurite: String(nomAgentSecurite).slice(0, 100) } : {}),
         ...(signatureAgentSecuritePath ? { signatureAgentSecuritePath: String(signatureAgentSecuritePath) } : {}),
