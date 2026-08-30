@@ -1160,13 +1160,12 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // Rapport PDF : généré HORS transaction (I/O MinIO). Best-effort — la clôture est
     // déjà validée, un échec PDF ne doit pas l'annuler.
     try {
-      const full = await prisma.maintenance.findUnique({
-        where: { id: req.params.id },
-        include: { site: true, technicien: { select: { nom: true, prenom: true } }, pieces: true },
-      });
-      if (full) {
-        const pdf = await generateMaintenancePdf(full);
-        const stored = await uploadBuffer(pdf, `maintenance-${full.id}.pdf`, 'application/pdf', 'rapports');
+      // Rapport COMPLET (photos + relevés + signatures) — même contenu que le
+      // téléchargement à la demande. Avant, la version stockée passait le
+      // record brut : ni photos, ni relevés, ni signatures.
+      const pdf = await genererPdfMaintenanceComplet(req.params.id);
+      if (pdf) {
+        const stored = await uploadBuffer(pdf, `maintenance-${req.params.id}.pdf`, 'application/pdf', 'rapports');
         updated = await prisma.maintenance.update({ where: { id: req.params.id }, data: { rapportPdfPath: stored.key } });
       }
     } catch { /* PDF non bloquant : la clôture reste valide */ }
@@ -1185,70 +1184,82 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
 }
 
 /** Retourne (ou génère à la volée) le PDF d'une maintenance. */
+/**
+ * Assemble le PDF COMPLET d'une maintenance : mêmes données pour le rapport
+ * généré à la clôture (stocké) que pour le téléchargement à la demande —
+ * photos avant/après, relevés énergie et LES DEUX signatures (technicien +
+ * agent de sécurité). Chaque fichier MinIO est best-effort. Renvoie null si la
+ * maintenance est introuvable.
+ */
+export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer | null> {
+  const maintenance = await prisma.maintenance.findUnique({
+    where: { id },
+    include: {
+      site: true,
+      technicien: { select: { nom: true, prenom: true } },
+      prestataire: { select: { nom: true } },
+      pieces: true,
+      releves: { include: { groupe: { select: { numero: true } } }, orderBy: { source: 'asc' } },
+    },
+  });
+  if (!maintenance) return null;
+
+  const photos = await prisma.photo.findMany({
+    where: { entityType: 'maintenance', entityId: maintenance.id },
+    orderBy: { createdAt: 'asc' },
+    select: { minioKey: true, phase: true },
+  });
+  const charger = async (key?: string | null): Promise<Buffer | null> => {
+    if (!key) return null;
+    try { return await getObjectBuffer(key); } catch { return null; }
+  };
+  const bufsPhase = async (phase: string) => {
+    const liste = photos.filter((p) => p.phase === phase);
+    const bufs = (await Promise.all(liste.slice(0, 4).map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
+    return { bufs, total: liste.length };
+  };
+  const [avant, apres, signatureTechnicien, signatureAgent] = await Promise.all([
+    bufsPhase('AVANT'),
+    bufsPhase('APRES'),
+    charger(maintenance.signaturePath),
+    charger(maintenance.signatureAgentSecuritePath),
+  ]);
+
+  return generateMaintenancePdf({
+    ...maintenance,
+    dureeSuspendueMinutes: maintenance.dureeSuspendueMinutes,
+    releves: maintenance.releves.map((r) => ({
+      source: r.source,
+      groupeNumero: r.groupe?.numero ?? null,
+      indexHeuresGE: r.indexHeuresGE != null ? Number(r.indexHeuresGE) : null,
+      heuresFonctGE: r.heuresFonctGE != null ? Number(r.heuresFonctGE) : null,
+      volumeGasoilLitres: r.volumeGasoilLitres != null ? Number(r.volumeGasoilLitres) : null,
+      gasoilConsommeLitres: r.gasoilConsommeLitres != null ? Number(r.gasoilConsommeLitres) : null,
+      indexCompteur: r.indexCompteur != null ? Number(r.indexCompteur) : null,
+      consommationKwh: r.consommationKwh != null ? Number(r.consommationKwh) : null,
+      puissanceKva: r.puissanceKva != null ? Number(r.puissanceKva) : null,
+    })),
+    photosAvant: avant.bufs,
+    totalPhotosAvant: avant.total,
+    photosApres: apres.bufs,
+    totalPhotosApres: apres.total,
+    signatureTechnicien,
+    signatureAgent,
+  });
+}
+
 export async function getMaintenancePdf(req: Request, res: Response, next: NextFunction) {
   try {
-    const maintenance = await prisma.maintenance.findUnique({
-      where: { id: req.params.id },
-      include: {
-        site: true,
-        technicien: { select: { nom: true, prenom: true } },
-        prestataire: { select: { nom: true } },
-        pieces: true,
-        releves: { include: { groupe: { select: { numero: true } } }, orderBy: { source: 'asc' } },
-      },
-    });
-    if (!maintenance) throw new AppError('Maintenance introuvable', 404);
+    const cible = await prisma.maintenance.findUnique({ where: { id: req.params.id }, select: { siteId: true } });
+    if (!cible) throw new AppError('Maintenance introuvable', 404);
     // Cloisonnement : ce PDF (rapport d'intervention complet) était accessible
     // par id sans contrôle de périmètre, contrairement à getMaintenanceById.
-    await assertSiteInPerimetre(req.user!.id, maintenance.siteId);
+    await assertSiteInPerimetre(req.user!.id, cible.siteId);
 
-    // Fiche ENRICHIE : photos avant/après (4 max par phase, le reste est
-    // signalé), relevés énergie et signatures - chaque fichier MinIO est
-    // best-effort : un objet manquant ne bloque jamais la génération.
-    const photos = await prisma.photo.findMany({
-      where: { entityType: 'maintenance', entityId: maintenance.id },
-      orderBy: { createdAt: 'asc' },
-      select: { minioKey: true, phase: true },
-    });
-    const charger = async (key?: string | null): Promise<Buffer | null> => {
-      if (!key) return null;
-      try { return await getObjectBuffer(key); } catch { return null; }
-    };
-    const bufsPhase = async (phase: string) => {
-      const liste = photos.filter((p) => p.phase === phase);
-      const bufs = (await Promise.all(liste.slice(0, 4).map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
-      return { bufs, total: liste.length };
-    };
-    const [avant, apres, signatureTechnicien, signatureAgent] = await Promise.all([
-      bufsPhase('AVANT'),
-      bufsPhase('APRES'),
-      charger(maintenance.signaturePath),
-      charger(maintenance.signatureAgentSecuritePath),
-    ]);
-
-    const pdf = await generateMaintenancePdf({
-      ...maintenance,
-      dureeSuspendueMinutes: maintenance.dureeSuspendueMinutes,
-      releves: maintenance.releves.map((r) => ({
-        source: r.source,
-        groupeNumero: r.groupe?.numero ?? null,
-        indexHeuresGE: r.indexHeuresGE != null ? Number(r.indexHeuresGE) : null,
-        heuresFonctGE: r.heuresFonctGE != null ? Number(r.heuresFonctGE) : null,
-        volumeGasoilLitres: r.volumeGasoilLitres != null ? Number(r.volumeGasoilLitres) : null,
-        gasoilConsommeLitres: r.gasoilConsommeLitres != null ? Number(r.gasoilConsommeLitres) : null,
-        indexCompteur: r.indexCompteur != null ? Number(r.indexCompteur) : null,
-        consommationKwh: r.consommationKwh != null ? Number(r.consommationKwh) : null,
-        puissanceKva: r.puissanceKva != null ? Number(r.puissanceKva) : null,
-      })),
-      photosAvant: avant.bufs,
-      totalPhotosAvant: avant.total,
-      photosApres: apres.bufs,
-      totalPhotosApres: apres.total,
-      signatureTechnicien,
-      signatureAgent,
-    });
+    const pdf = await genererPdfMaintenanceComplet(req.params.id);
+    if (!pdf) throw new AppError('Maintenance introuvable', 404);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="maintenance-${maintenance.id.slice(0, 8)}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="maintenance-${req.params.id.slice(0, 8)}.pdf"`);
     res.send(pdf);
   } catch (err) { next(err); }
 }

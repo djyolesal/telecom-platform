@@ -56,10 +56,54 @@ function row(doc: PDFKit.PDFDocument, label: string, value: string) {
 }
 
 function sectionTitle(doc: PDFKit.PDFDocument, text: string) {
-  doc.moveDown(0.6);
-  doc.fontSize(12).fillColor(ACCENT).text(text);
-  doc.moveTo(50, doc.y + 2).lineTo(doc.page.width - 50, doc.y + 2).strokeColor('#e0e0e0').stroke();
-  doc.moveDown(0.6).fillColor('black');
+  doc.moveDown(0.5);
+  // Un titre de section ne doit jamais rester orphelin en bas de page.
+  if (doc.y > doc.page.height - 110) doc.addPage();
+  const x = 50, w = doc.page.width - 100, h = 20, y = doc.y;
+  doc.roundedRect(x, y, w, h, 3).fill('#EEF3F8');
+  doc.rect(x, y, 3.5, h).fill(ACCENT); // onglet d'accent à gauche
+  doc.font('Helvetica-Bold').fontSize(10.5).fillColor(BRAND).text(text, x + 12, y + 5.5, { characterSpacing: 0.3 });
+  doc.font('Helvetica').fillColor('black');
+  doc.y = y + h + 8;
+}
+
+/**
+ * Bloc de signatures : jusqu'à deux emplacements côte à côte, dans des cadres.
+ * Un saut de page est forcé si le bloc ne tient pas — sans ça les signatures
+ * étaient tronquées en bas de page après une grille de photos. Un emplacement
+ * sans image reste VISIBLE (« Signature manquante ») pour que l'absence soit
+ * explicite au lieu de disparaître.
+ */
+function signatureSlots(
+  doc: PDFKit.PDFDocument,
+  slots: Array<{ label: string; nom?: string | null; image: Buffer | null }>,
+) {
+  const items = slots.slice(0, 2);
+  if (!items.length) return;
+  const boxW = 232, boxH = 78, footer = 34, gap = 26;
+  if (doc.y + 30 + boxH + footer > doc.page.height - 55) doc.addPage();
+  sectionTitle(doc, 'Signatures');
+  const y = doc.y;
+  const xs = [50, 50 + boxW + gap];
+  items.forEach((s, i) => {
+    const x = xs[i];
+    doc.roundedRect(x, y, boxW, boxH, 4).lineWidth(0.8).strokeColor('#cfd8e3').stroke();
+    if (s.image) {
+      try {
+        doc.image(s.image, x + 8, y + 8, { fit: [boxW - 16, boxH - 16], align: 'center', valign: 'center' });
+      } catch {
+        doc.fontSize(8).fillColor('#bbb').text('(signature illisible)', x, y + boxH / 2 - 5, { width: boxW, align: 'center' });
+      }
+    } else {
+      doc.moveTo(x + 18, y + boxH - 22).lineTo(x + boxW - 18, y + boxH - 22)
+        .lineWidth(0.6).dash(2, { space: 2 }).strokeColor('#cfd8e3').stroke().undash();
+      doc.fontSize(7.5).fillColor('#b4b4b4').text('Signature manquante', x, y + boxH - 16, { width: boxW, align: 'center' });
+    }
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#333').text(s.label, x + 2, y + boxH + 7, { width: boxW });
+    doc.font('Helvetica').fontSize(9).fillColor('#666').text(s.nom || '—', x + 2, y + boxH + 19, { width: boxW });
+  });
+  doc.font('Helvetica').fillColor('black');
+  doc.y = y + boxH + footer + 4;
 }
 
 const fmtDate = (d?: Date | string | null) =>
@@ -199,26 +243,16 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
     grillePhotos(doc, 'Photos avant travaux', m.photosAvant ?? [], m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0));
     grillePhotos(doc, 'Photos après travaux', m.photosApres ?? [], m.totalPhotosApres ?? (m.photosApres?.length ?? 0));
 
-    // Signatures côte à côte (technicien / agent de sécurité).
-    if (m.signatureTechnicien || m.signatureAgent) {
-      sectionTitle(doc, 'Signatures');
-      const y = doc.y;
-      if (m.signatureTechnicien) {
-        try {
-          doc.image(m.signatureTechnicien, 50, y, { fit: [180, 70] });
-          doc.fontSize(9).fillColor('#666').text(
-            `Technicien : ${m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : ''}`, 50, y + 74);
-        } catch { /* signature illisible */ }
-      }
-      if (m.signatureAgent) {
-        try {
-          doc.image(m.signatureAgent, 300, y, { fit: [180, 70] });
-          doc.fontSize(9).fillColor('#666').text(`Agent de sécurité : ${m.nomAgentSecurite ?? ''}`, 300, y + 74);
-        } catch { /* signature illisible */ }
-      }
-      doc.y = y + 92;
-      doc.fillColor('black');
-    }
+    // Signatures : le technicien signe toujours (obligatoire à la clôture) ;
+    // l'agent de sécurité n'apparaît que si un agent a été enregistré sur
+    // l'intervention. Le bloc gère lui-même le saut de page et rend visible
+    // une signature attendue mais manquante.
+    signatureSlots(doc, [
+      { label: 'Technicien', nom: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : null, image: m.signatureTechnicien ?? null },
+      ...(m.nomAgentSecurite || m.signatureAgent
+        ? [{ label: 'Agent de sécurité', nom: m.nomAgentSecurite ?? null, image: m.signatureAgent ?? null }]
+        : []),
+    ]);
 
     doc.moveDown(2);
     doc.fontSize(8).fillColor('#999').text(
