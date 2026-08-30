@@ -29,6 +29,14 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     variables: ['site', 'reference', 'impactes'],
   },
   {
+    key: 'sms.tpl.siteRetabli',
+    label: 'Site rétabli de lui-même (fin d\'alerte, avant intervention terrain)',
+    // Symétrique du SMS « hors service » : mêmes destinataires, envoyé quand la
+    // détection automatique voit le site remonter AVANT toute intervention.
+    defaut: '[E&M OpS] NOC : site {site} rétabli après {duree} de coupure. Incident {reference} résolu - intervention terrain plus nécessaire.',
+    variables: ['site', 'reference', 'duree'],
+  },
+  {
     key: 'sms.tpl.coupurePartielle',
     label: 'Coupure partielle (équipes actives)',
     defaut: '[E&M OpS] NOC : coupure {technos} sur {site} (site alimenté) - à traiter côté actif (radio/transmission).',

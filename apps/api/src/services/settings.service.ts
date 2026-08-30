@@ -127,6 +127,9 @@ export function settingsCatalog(): SettingMeta[] {
     // SMS au technicien quand on lui affecte un incident ou une maintenance
     // (en plus de l'in-app et du push). 0 = couper ce canal.
     { key: 'sms.affectations', label: 'SMS au technicien affecté (incident/maintenance)', groupe: 'Notifications', unite: '0/1', defaut: 1 },
+    // SMS « site rétabli » (fin d'alerte) : seuil anti-rebond — pas de SMS si
+    // la coupure a duré moins de N minutes (site qui « clignote »). 0 = coupé.
+    { key: 'sms.retabliMinMinutes', label: 'SMS site rétabli : durée min. de coupure (0 = désactivé)', groupe: 'Notifications', unite: 'min', defaut: 15 },
     // Vraisemblance des saisies terrain (avertissements à confirmer, pas des blocages)
     { key: 'vraisemblance.margeCuvePct', label: 'Tolérance au-dessus de la capacité cuve', groupe: 'Vraisemblance saisies', unite: '%', defaut: 2 },
     { key: 'vraisemblance.maxHeuresGEParJour', label: 'Marche GE max par jour écoulé', groupe: 'Vraisemblance saisies', unite: 'h/j', defaut: 24 },

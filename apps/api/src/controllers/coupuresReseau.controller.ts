@@ -376,12 +376,34 @@ export async function notifierResolutionAutomatique(incidentId: string | null): 
     const inc = await prisma.incident.findUnique({
       where: { id: incidentId },
       select: {
-        id: true, reference: true, dateIntervention: true,
+        id: true, reference: true, dateIntervention: true, siteId: true, dureeCoupureMinutes: true,
         site: { select: { nom: true, lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } } },
       },
     });
     // Une vraie intervention a eu lieu : la clôture terrain suit son cours.
     if (!inc || inc.dateIntervention) return;
+
+    // SMS « site rétabli » — SYMÉTRIQUE du SMS d'alerte : mêmes destinataires
+    // (contacts passifs du lot), envoyé UNE fois à la résolution automatique.
+    // Garde anti-rebond : pas de SMS sous le seuil (site qui « clignote »),
+    // réglable sans redéploiement ; 0 = fonction coupée.
+    const seuilMin = getNum('sms.retabliMinMinutes', 15);
+    const duree = inc.dureeCoupureMinutes ?? 0;
+    if (seuilMin > 0 && duree >= seuilMin) {
+      const dureeTxt = duree < 60
+        ? `${duree} min`
+        : `${Math.floor(duree / 60)} h${duree % 60 ? ` ${duree % 60} min` : ''}`;
+      void notifierIncidentCoupure(
+        inc.siteId,
+        rendreTemplate('sms.tpl.siteRetabli', {
+          site: inc.site.nom,
+          reference: inc.reference ?? '',
+          duree: dureeTxt,
+        }),
+        'INCIDENT_COUPURE_RETABLI',
+        'PASSIVE'
+      );
+    }
     const prestas = (inc.site.lot?.assignments ?? [])
       .filter((a) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
       .map((a) => a.prestataireId);
