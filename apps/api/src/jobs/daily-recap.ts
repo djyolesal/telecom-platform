@@ -199,7 +199,7 @@ export function rendreEmail(d: RecapData, jour: Date, perimetreLabel: string): s
         ${ligne('Dépotages (mois)', `${d.depotages.nombre}${d.depotages.aujourdhui ? ` <span style="color:#1C6B49;">(+${d.depotages.aujourdhui} aujourd'hui)</span>` : ''}`)}
         ${ligne('Volume livré', `${d.depotages.litres.toLocaleString('fr-FR')} L`, true)}
       </table>` : ''}
-      <p style="margin:16px 0 0;font-size:11px;color:#8a94a0;">Récap automatique quotidien (23h GMT) — détail dans l'application. Réglage « recap.actif » pour le désactiver.</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#8a94a0;">Email automatique quotidien — merci de ne pas y répondre. Le détail des activités est dans l'application E&M OpS.</p>
     </div>
   </div>`;
 }
