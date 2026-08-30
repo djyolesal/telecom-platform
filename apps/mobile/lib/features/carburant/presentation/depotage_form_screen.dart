@@ -256,8 +256,9 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     // uniquement - hors-ligne le technicien saisit les litres comme avant.
     try {
       final cuve = await repo.getConfigCuve(siteId);
-      if (mounted)
+      if (mounted) {
         setState(() => _cuve = (cuve?.calculable ?? false) ? cuve : null);
+      }
     } catch (_) {
       if (mounted) setState(() => _cuve = null);
     }
@@ -533,7 +534,10 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(
-            content: Text('Erreur : $e'), backgroundColor: Colors.red));
+            content: Text(messageMetier(e,
+                parDefaut:
+                    'Enregistrement impossible - votre saisie est conservée, réessayez.')),
+            backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/errors/exceptions.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/utils/formatters.dart';
@@ -307,7 +308,10 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(
-            content: Text('Erreur : $e'), backgroundColor: Colors.red));
+            content: Text(messageMetier(e,
+                parDefaut:
+                    'Enregistrement impossible - votre saisie est conservée, réessayez.')),
+            backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

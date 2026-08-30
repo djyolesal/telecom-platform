@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/errors/exceptions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/enums.dart';
@@ -64,7 +65,10 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(
-            content: Text('Erreur : $e'), backgroundColor: Colors.red));
+            content: Text(messageMetier(e,
+                parDefaut:
+                    'Enregistrement impossible - votre saisie est conservée, réessayez.')),
+            backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

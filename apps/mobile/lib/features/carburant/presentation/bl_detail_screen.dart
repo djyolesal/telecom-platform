@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/maps_launcher.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/depotage_model.dart';
@@ -287,7 +288,8 @@ class _CarteLigneState extends State<_CarteLigne> {
                   decoration: BoxDecoration(
                       color: couleur.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20)),
-                  child: Text(ligne.statut,
+                  child: Text(
+                      kStatutLigneLivraison[ligne.statut] ?? ligne.statut,
                       style: TextStyle(
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,

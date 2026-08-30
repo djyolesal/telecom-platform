@@ -370,7 +370,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     if (e is NetworkException) {
       return 'Connexion indisponible - réessayez une fois en ligne.';
     }
-    return 'Erreur : $e';
+    // Jamais l'exception brute : repli métier partagé.
+    return messageMetier(e,
+        parDefaut:
+            'Opération impossible - réessayez, puis signalez à votre superviseur.');
   }
 
   @override

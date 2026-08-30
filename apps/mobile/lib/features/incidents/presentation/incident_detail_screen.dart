@@ -56,7 +56,10 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     if (e is NetworkException) {
       return 'Connexion indisponible - réessayez une fois en ligne.';
     }
-    return 'Erreur : $e';
+    // Jamais l'exception brute : repli métier partagé.
+    return messageMetier(e,
+        parDefaut:
+            'Opération impossible - réessayez, puis signalez à votre superviseur.');
   }
 
   /// Vérifie la présence physique sur le site (affinage GPS ~5 m, feuille avec

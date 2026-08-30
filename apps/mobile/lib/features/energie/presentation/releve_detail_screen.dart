@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/releve_model.dart';
 import '../data/releve_repository.dart';
@@ -83,9 +84,10 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
                   child: ListTile(
                     leading: const Icon(Icons.build),
                     title: const Text('Maintenance d\'origine'),
-                    subtitle: Text([r.maintenanceType, r.maintenanceEquipement]
-                        .where((e) => e != null && e.isNotEmpty)
-                        .join(' · ')),
+                    subtitle: Text([
+                      kTypeMaintenance[r.maintenanceType] ?? r.maintenanceType,
+                      r.maintenanceEquipement
+                    ].where((e) => e != null && e.isNotEmpty).join(' · ')),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () =>
                         context.push('/maintenance/${r.maintenanceId}'),

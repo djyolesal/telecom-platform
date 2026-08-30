@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/bloc/list_cubit.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/barre_recherche.dart';
 import '../../../core/widgets/filtre_statuts.dart';
@@ -189,7 +190,7 @@ class _CarteBl extends StatelessWidget {
           decoration: BoxDecoration(
               color: couleur.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20)),
-          child: Text(bl.statut,
+          child: Text(kStatutBl[bl.statut] ?? bl.statut,
               style: TextStyle(
                   fontSize: 10.5, fontWeight: FontWeight.w700, color: couleur)),
         ),

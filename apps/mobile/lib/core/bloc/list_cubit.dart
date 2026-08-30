@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../errors/exceptions.dart';
 
 enum ResourceStatus { initial, loading, success, failure }
 
@@ -11,10 +12,17 @@ class ListState<T> extends Equatable {
   final List<T> items;
   final String? error;
 
-  const ListState({this.status = ResourceStatus.initial, this.items = const [], this.error});
+  const ListState(
+      {this.status = ResourceStatus.initial,
+      this.items = const [],
+      this.error});
 
-  ListState<T> copyWith({ResourceStatus? status, List<T>? items, String? error}) =>
-      ListState<T>(status: status ?? this.status, items: items ?? this.items, error: error);
+  ListState<T> copyWith(
+          {ResourceStatus? status, List<T>? items, String? error}) =>
+      ListState<T>(
+          status: status ?? this.status,
+          items: items ?? this.items,
+          error: error);
 
   @override
   List<Object?> get props => [status, items, error];
@@ -30,7 +38,14 @@ class ListCubit<T> extends Cubit<ListState<T>> {
       final items = await loader();
       emit(state.copyWith(status: ResourceStatus.success, items: items));
     } catch (e) {
-      emit(state.copyWith(status: ResourceStatus.failure, error: e.toString()));
+      // Message MÉTIER, jamais l'exception brute : ce texte s'affiche en plein
+      // écran sur les 6 listes de l'app (le cas « pas de réseau » est courant
+      // sur le terrain, il doit rester lisible).
+      emit(state.copyWith(
+          status: ResourceStatus.failure,
+          error: messageMetier(e,
+              parDefaut:
+                  'Impossible d\'afficher la liste - réessayez, puis prévenez votre superviseur si cela persiste.')));
     }
   }
 }

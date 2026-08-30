@@ -241,7 +241,10 @@ class _BlFormScreenState extends State<BlFormScreen> {
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(
-            content: Text('Erreur : $e'), backgroundColor: Colors.red));
+            content: Text(messageMetier(e,
+                parDefaut:
+                    'Enregistrement impossible - votre saisie est conservée, réessayez.')),
+            backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/sync/sync_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_logo.dart';
@@ -89,7 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: Theme.of(ctx).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-                'Le serveur a signalé des valeurs inhabituelles. Vérifiez : confirmez si elles sont exactes, sinon abandonnez la saisie.',
+                'Des valeurs inhabituelles ont été détectées. Vérifiez : confirmez si elles sont exactes, sinon abandonnez la saisie.',
                 style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
             const SizedBox(height: 12),
             for (final e in entries)
@@ -155,10 +156,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return 'Dépotage carburant';
       case 'maintenance':
         return 'Clôture de maintenance';
+      case 'maintenance_close':
+        return 'Clôture de maintenance';
+      case 'maintenance_start':
+        return 'Démarrage de maintenance';
+      case 'maintenance_suspend':
+        return 'Suspension d\'intervention';
+      case 'maintenance_resume':
+        return 'Reprise d\'intervention';
+      case 'maintenance_photos':
+        return 'Photos de maintenance';
+      case 'incident':
+        return 'Incident';
+      case 'incident_start':
+        return 'Démarrage d\'incident';
+      case 'incident_close':
+        return 'Clôture d\'incident';
+      case 'bon_livraison':
+        return 'Bon de livraison';
       case 'releve':
         return 'Relevé énergie';
       default:
-        return type;
+        // Jamais le code technique de file de synchronisation à l'écran.
+        return 'Saisie enregistrée';
     }
   }
 
@@ -240,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               color: Colors.white,
                               fontSize: 19,
                               fontWeight: FontWeight.w800)),
-                      Text(user?.role ?? '',
+                      Text(kRoles[user?.role] ?? user?.role ?? '',
                           style: const TextStyle(
                               color: Color(0xFF9FB3C8), fontSize: 12)),
                       Padding(

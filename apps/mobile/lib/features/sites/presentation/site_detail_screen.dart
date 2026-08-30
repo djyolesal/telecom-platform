@@ -59,7 +59,9 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) => Padding(
           padding: EdgeInsets.only(
-              left: 16, right: 16, top: 16,
+              left: 16,
+              right: 16,
+              top: 16,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -74,7 +76,8 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: forme,
-                decoration: const InputDecoration(labelText: 'Forme de la cuve'),
+                decoration:
+                    const InputDecoration(labelText: 'Forme de la cuve'),
                 items: const [
                   DropdownMenuItem(
                       value: 'CYLINDRE_COUCHE', child: Text('Cylindre couche')),
@@ -195,8 +198,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(erreurPhotos!,
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.red)),
+                      style: const TextStyle(fontSize: 12, color: Colors.red)),
                 ),
               const SizedBox(height: 14),
               // Le thème impose minimumSize Size.fromHeight(50) aux
@@ -252,8 +254,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       for (final ph in photos) {
         try {
           final up = await uploader.uploadImage(
-              await ph.readAsBytes(),
-              'cuve_${s.id}_${envoyees.length}.jpg',
+              await ph.readAsBytes(), 'cuve_${s.id}_${envoyees.length}.jpg',
               folder: 'cuves');
           if (up != null) envoyees.add(up.toJson());
         } catch (_) {/* photo perdue - la mesure part quand meme */}
@@ -265,7 +266,8 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       await context.read<SiteRepository>().majCuve(s.id, data);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Cuve enregistree - conversion hauteur -> litres active.')));
+          content:
+              Text('Cuve enregistree - conversion hauteur -> litres active.')));
       setState(() =>
           _siteFuture = context.read<SiteRepository>().getSite(widget.siteId));
     } catch (_) {
@@ -341,8 +343,9 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     children: [
-                      _row('Configuration', s.powerConfig),
-                      _row('Statut GE', s.statutGe),
+                      _row('Configuration',
+                          kPowerConfig[s.powerConfig] ?? s.powerConfig),
+                      _row('Statut GE', kStatutGe[s.statutGe] ?? s.statutGe),
                       _row('Puissance GE',
                           '${s.puissanceGeKva.toStringAsFixed(0)} kVA'),
                       if (s.latitude != null)
@@ -414,7 +417,8 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                                       TextStyle(fontWeight: FontWeight.w600)),
                               const Spacer(),
                               StatusChip(
-                                  label: stock.niveauAlerte,
+                                  label: kNiveauStock[stock.niveauAlerte] ??
+                                      stock.niveauAlerte,
                                   color: _stockColor(stock.niveauAlerte)),
                             ],
                           ),

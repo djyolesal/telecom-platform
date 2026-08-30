@@ -1,4 +1,5 @@
 import '../../../core/utils/cuve.dart';
+import '../../../core/constants/enums.dart';
 
 /// Item de la checklist contractuelle attendue à la clôture (référentiel
 /// SERVEUR : le formulaire se dessine depuis cette liste — une évolution du
@@ -17,7 +18,9 @@ class ItemChecklistAttendue {
           ItemChecklistAttendue(
             e['cle']?.toString() ?? '',
             e['libelle']?.toString() ?? '',
-            e['mesure'] is Map ? (e['mesure']['placeholder']?.toString()) : null,
+            e['mesure'] is Map
+                ? (e['mesure']['placeholder']?.toString())
+                : null,
           ),
     ];
   }
@@ -172,7 +175,8 @@ class Maintenance {
       requiresEnergie: (j['requiresEnergieReleve'] as bool?) ??
           ((j['natureTravaux'] as String? ?? 'ENTRETIEN') == 'ENTRETIEN' &&
               passiveCategories.contains(j['categorie'] as String)),
-      checklistAttendue: ItemChecklistAttendue.listeFromJson(j['checklistAttendue']),
+      checklistAttendue:
+          ItemChecklistAttendue.listeFromJson(j['checklistAttendue']),
       contexteSaisie: j['contexteSaisie'] is Map<String, dynamic>
           ? ContexteSaisie.fromJson(j['contexteSaisie'] as Map<String, dynamic>)
           : null,
@@ -280,5 +284,7 @@ class ActifLite {
   }
 
   String get display =>
-      '${libelle ?? categorie}${siteId != null ? '' : ' - Dépôt'}';
+      // Jamais le code de catégorie brut dans le sélecteur : libellé traduit
+      // en repli quand l'API ne fournit pas de libellé d'actif.
+      '${libelle ?? kCategorieEquipement[categorie] ?? categorie}${siteId != null ? '' : ' - Dépôt'}';
 }

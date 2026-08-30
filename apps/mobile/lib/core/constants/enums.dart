@@ -2,7 +2,13 @@
 // On les manipule comme des String côté mobile pour rester souple,
 // ces listes servent aux sélecteurs et aux libellés.
 
-const List<String> kRegions = ['Maritime', 'Plateaux', 'Centrale', 'Kara', 'Savanes'];
+const List<String> kRegions = [
+  'Maritime',
+  'Plateaux',
+  'Centrale',
+  'Kara',
+  'Savanes'
+];
 
 const Map<String, String> kTypeMaintenance = {
   'PREVENTIVE': 'Préventive',
@@ -62,4 +68,55 @@ const Map<String, String> kStatutIncident = {
   'EN_COURS': 'En cours',
   'RESOLU': 'Résolu',
   'CLOS': 'Clos',
+};
+
+// Rôle utilisateur : jamais le code brut à l'écran (accueil).
+const Map<String, String> kRoles = {
+  'TECHNICIEN': 'Technicien',
+  'SUPERVISEUR': 'Superviseur',
+  'MANAGER': 'Chef de parc',
+  'ADMIN': 'Administrateur',
+  'DIRECTION': 'Direction',
+  'TRANSPORTEUR': 'Transporteur',
+  'NOC': 'Supervision réseau',
+};
+
+// Configuration électrique du site (fiche site).
+const Map<String, String> kPowerConfig = {
+  'CEET_GE': 'CEET + groupe de secours',
+  'CEET_UNIQUEMENT': 'CEET seule',
+  'GE_UNIQUEMENT': 'Groupe seul',
+  'HYBRIDE_GE': 'Hybride avec groupe',
+  'SOLAIRE_UNIQUEMENT': 'Solaire seul',
+  'HYBRIDE_CEET_GE': 'Hybride CEET + groupe',
+};
+
+const Map<String, String> kStatutGe = {
+  'GE_PERMANENT': 'Groupe permanent',
+  'GE_SECOURS': 'Groupe de secours',
+  'PAS_DE_GE': 'Pas de groupe',
+};
+
+// Niveau d'alerte du stock carburant (fiche site).
+const Map<String, String> kNiveauStock = {
+  'VIDE': 'Cuve vide',
+  'CRITIQUE': 'Critique',
+  'FAIBLE': 'Faible',
+  'OK': 'Suffisant',
+  'NA': 'Non évalué',
+};
+
+// Statuts logistiques (bons de livraison et lignes du plan).
+const Map<String, String> kStatutBl = {
+  'PLANIFIE': 'Planifié',
+  'CHARGE': 'En livraison',
+  'LIVRE': 'Livré',
+  'ANNULE': 'Annulé',
+};
+
+const Map<String, String> kStatutLigneLivraison = {
+  'PREVU': 'Prévu',
+  'PARTIEL': 'Partiel',
+  'LIVRE': 'Livré',
+  'ANNULE': 'Annulé',
 };

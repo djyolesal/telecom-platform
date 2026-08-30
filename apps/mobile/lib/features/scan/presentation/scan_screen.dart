@@ -91,7 +91,8 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
         context.pushReplacement('/sites/$siteId');
         return;
       }
-      _rejeter('Type d’étiquette inconnu : $type');
+      _rejeter(
+          'Cette étiquette n’est pas reconnue - vérifiez qu’il s’agit bien d’un QR E&M OpS.');
     } catch (_) {
       _rejeter('Équipement introuvable ou hors-ligne.');
     }
