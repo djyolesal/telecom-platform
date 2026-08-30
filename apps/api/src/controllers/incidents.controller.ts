@@ -96,6 +96,25 @@ export async function getIncidentById(req: Request, res: Response, next: NextFun
       data: {
         ...incident,
         photos: photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
+        // Signatures visibles sur la fiche une fois l'incident résolu/clos
+        // (même logique que le PDF de maintenance : un emplacement attendu
+        // mais non signé sort avec url null → « Signature manquante »).
+        signatures: ['RESOLU', 'CLOS'].includes(incident.statut) || incident.signaturePath
+          ? [
+              {
+                label: 'Technicien',
+                nom: incident.technicien ? `${incident.technicien.prenom} ${incident.technicien.nom}` : null,
+                url: incident.signaturePath ? publicFileUrl(incident.signaturePath) : null,
+              },
+              ...(incident.nomAgentSecurite || incident.signatureAgentSecuritePath
+                ? [{
+                    label: 'Agent de sécurité',
+                    nom: incident.nomAgentSecurite ?? null,
+                    url: incident.signatureAgentSecuritePath ? publicFileUrl(incident.signatureAgentSecuritePath) : null,
+                  }]
+                : []),
+            ]
+          : [],
       },
     });
   } catch (err) { next(err); }

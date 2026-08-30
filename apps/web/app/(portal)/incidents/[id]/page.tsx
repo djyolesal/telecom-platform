@@ -11,6 +11,7 @@ import { Button } from '@/components/shared/Button';
 import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
+import { SignatureBlock } from '@/components/shared/SignatureBlock';
 import { useTypesIncident } from '@/lib/typesIncident';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -104,6 +105,8 @@ export default function IncidentDetailPage() {
           )}
 
           <PhotoGallery photos={inc.photos ?? []} />
+
+          <SignatureBlock signatures={inc.signatures} />
 
           {!resolu && (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 flex items-start gap-3">

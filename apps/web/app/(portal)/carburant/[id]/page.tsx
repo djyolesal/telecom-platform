@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { fmtNumber, fmtDateTime } from '@/lib/utils';
+import { SignatureBlock } from '@/components/shared/SignatureBlock';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -168,6 +169,10 @@ export default function DepotageDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="max-w-2xl">
+        <SignatureBlock signatures={d.signatures} />
+      </div>
 
       {lightbox !== null && photos[lightbox] && (
         <Lightbox photos={photos} index={lightbox} onClose={() => setLightbox(null)} onNav={setLightbox} />

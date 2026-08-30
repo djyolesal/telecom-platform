@@ -265,6 +265,27 @@ export async function getDepotageById(req: Request, res: Response, next: NextFun
     const data = {
       ...depotage,
       photos: photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
+      // Validation tripartite visible sur la fiche (même logique que le PDF) :
+      // chaque emplacement attendu sort, signé ou non (url null → « manquante »).
+      signatures: [
+        {
+          label: 'Chauffeur',
+          nom: depotage.nomChauffeur ?? null,
+          url: depotage.signatureChauffeurPath ? publicFileUrl(depotage.signatureChauffeurPath) : null,
+        },
+        ...(depotage.agentPresent === true || depotage.nomAgentSecurite || depotage.signatureAgentSecuritePath
+          ? [{
+              label: 'Agent de sécurité',
+              nom: depotage.nomAgentSecurite ?? null,
+              url: depotage.signatureAgentSecuritePath ? publicFileUrl(depotage.signatureAgentSecuritePath) : null,
+            }]
+          : []),
+        {
+          label: 'Technicien',
+          nom: depotage.technicien ? `${depotage.technicien.prenom} ${depotage.technicien.nom}` : null,
+          url: depotage.signatureTechnicienPath ? publicFileUrl(depotage.signatureTechnicienPath) : null,
+        },
+      ],
     };
     res.json({ success: true, data });
   } catch (err) { next(err); }

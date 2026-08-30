@@ -355,6 +355,26 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
         ? (CHECKLIST_SOLAIRE[maintenance.tachePreventiveKey] ?? null)
         : null,
       photos: maintenance.photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
+      // Signatures visibles sur la fiche (même logique que le PDF) : un
+      // emplacement attendu mais non signé sort avec url null — le web
+      // l'affiche « Signature manquante » au lieu de le cacher. Uniquement
+      // une fois l'intervention TERMINÉE (avant, tout serait « manquant »).
+      signatures: maintenance.statut === 'TERMINEE' || maintenance.signaturePath
+        ? [
+            {
+              label: 'Technicien',
+              nom: maintenance.technicien ? `${maintenance.technicien.prenom} ${maintenance.technicien.nom}` : null,
+              url: maintenance.signaturePath ? publicFileUrl(maintenance.signaturePath) : null,
+            },
+            ...(maintenance.nomAgentSecurite || maintenance.signatureAgentSecuritePath
+              ? [{
+                  label: 'Agent de sécurité',
+                  nom: maintenance.nomAgentSecurite ?? null,
+                  url: maintenance.signatureAgentSecuritePath ? publicFileUrl(maintenance.signatureAgentSecuritePath) : null,
+                }]
+              : []),
+          ]
+        : [],
     };
     res.json({ success: true, data });
   } catch (err) { next(err); }

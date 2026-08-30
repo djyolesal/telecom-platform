@@ -12,6 +12,7 @@ import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { StatutMaintBadge } from '@/components/shared/Badge';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
+import { SignatureBlock } from '@/components/shared/SignatureBlock';
 import { TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT, PASSIVE_CATEGORIES } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 
@@ -222,6 +223,8 @@ export default function MaintenanceDetailPage() {
               </>
             );
           })()}
+
+          <SignatureBlock signatures={m.signatures} />
 
           {m.pieces?.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 p-5">
