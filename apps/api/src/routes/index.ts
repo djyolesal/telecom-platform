@@ -110,8 +110,8 @@ const NOC_ALLOW: RegExp[] = [
   /^\/coupures-reseau(\/|$)/,
   /^\/incidents(\/|$)/,                // suivi et déclaration ; la clôture reste terrain
   // Le stock carburant est HORS périmètre NOC (logistique, pas supervision).
-  /^\/rapports\/(dashboard|disponibilite-reseau|incidents|pouls-24h)$/,
-  /^\/rapports\/disponibilite-reseau\/export\/(xlsx|pdf)$/,
+  /^\/rapports\/(dashboard|disponibilite-reseau|incidents|pouls-24h|conformite-arcep)$/,
+  /^\/rapports\/(disponibilite-reseau|conformite-arcep)\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
   /^\/types-incident$/,               // libellés des types (déclaration/lecture)
   /^\/prestataires$/,                  // liste seule : options du filtre prestataire (page Sites)
@@ -239,6 +239,10 @@ router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl
 router.delete('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.deleteCoupure);
 router.get('/rapports/disponibilite-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getDisponibiliteReseau);
 router.get('/rapports/disponibilite-reseau/export/:format', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.exportDisponibiliteReseau);
+// Conformité réglementaire ARCEP (DR1/DR2, arrêté n°005/MENTD/CAB) : mêmes
+// rôles que la disponibilité — un prestataire ne voit que SES sites.
+router.get('/rapports/conformite-arcep', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getConformiteArcep);
+router.get('/rapports/conformite-arcep/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.exportConformiteArcep);
 
 // ── Prestataires ──────────────────────────────────────────────
 // « Ma société » : le superviseur d'un prestataire complète la fiche de SA société.

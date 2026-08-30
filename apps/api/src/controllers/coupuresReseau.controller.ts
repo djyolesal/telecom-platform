@@ -2210,3 +2210,149 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
     }], `${rows.length} coupure(s) · ${periodeTexte}`);
   } catch (err) { next(err); }
 }
+
+// ── Conformité réglementaire ARCEP (arrêté n°005/MENTD/CAB du 12/08/2022) ───
+/**
+ * DR1 : nombre de fois qu'une même station de base est restée indisponible
+ *       ≥ 1 heure pendant les 30 derniers jours — seuil réglementaire ≤ 2.
+ * DR2 : délai d'indisponibilité PAR JOUR d'une même station — seuil ≤ 3 h.
+ *
+ * Station indisponible = coupure SITE ENTIER (racine comme héritée : un site
+ * aval entraîné est bien indisponible). Règle officielle partagée avec le
+ * rapport de disponibilité : une détection AUTO ne compte qu'une fois PRISE
+ * EN CHARGE. Les lignes d'un même site sont fusionnées en ÉPISODES (union
+ * d'intervalles) avant tout comptage — une panne = un épisode.
+ */
+async function calculerConformiteArcep(req: Request) {
+  const jours = Math.max(7, Math.min(90, parseInt(String(req.query.jours ?? '30'), 10) || 30));
+  const maintenant = new Date();
+  const depuis = new Date(maintenant.getTime() - jours * 86_400_000);
+
+  const perimetre = await sitePerimetre(req.user!.id);
+  const restreint = isRestreint(perimetre);
+
+  const [coupures, sites] = await Promise.all([
+    prisma.coupureReseau.findMany({
+      where: {
+        technologie: 'SITE',
+        OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
+        dateDebut: { lte: maintenant },
+        AND: [{ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] }],
+        ...(restreint ? { site: perimetre } : {}),
+      },
+      select: { siteId: true, dateDebut: true, dateFin: true },
+    }),
+    prisma.site.findMany({
+      where: { isActive: true, ...(restreint ? perimetre : {}) },
+      select: { id: true, code: true, nom: true, region: true },
+    }),
+  ]);
+
+  // Fusion en épisodes par site (durée RÉELLE conservée : un épisode entamé
+  // avant la fenêtre garde son vrai début pour le critère « ≥ 1 h »).
+  const parSite = new Map<string, { debut: number; fin: number }[]>();
+  for (const c of coupures) {
+    const fin = (c.dateFin ?? maintenant).getTime();
+    const l = parSite.get(c.siteId) ?? [];
+    l.push({ debut: c.dateDebut.getTime(), fin });
+    parSite.set(c.siteId, l);
+  }
+  const episodesDe = (l: { debut: number; fin: number }[]) => {
+    const tri = [...l].sort((a, b) => a.debut - b.debut);
+    const out: { debut: number; fin: number }[] = [];
+    for (const iv of tri) {
+      const dernier = out[out.length - 1];
+      if (dernier && iv.debut <= dernier.fin) dernier.fin = Math.max(dernier.fin, iv.fin);
+      else out.push({ ...iv });
+    }
+    return out;
+  };
+
+  const jourUTC = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const SEUIL_DR1 = 2;          // épisodes ≥ 1 h autorisés sur 30 j
+  const SEUIL_DR2_MIN = 180;    // 3 h par jour calendaire
+  const borneDebut = depuis.getTime();
+  const borneFin = maintenant.getTime();
+
+  const lignes = sites.map((s) => {
+    const episodes = episodesDe(parSite.get(s.id) ?? []);
+    // DR1 : épisodes d'au moins 60 min dont une partie tombe dans la fenêtre.
+    const dr1 = episodes.filter((e) => e.fin > borneDebut && (e.fin - e.debut) >= 3_600_000).length;
+    // DR2 : minutes d'indisponibilité par jour calendaire (UTC, comme les
+    // heures NOC), épisodes découpés aux frontières de jour et à la fenêtre.
+    const parJour = new Map<string, number>();
+    for (const e of episodes) {
+      let cur = Math.max(e.debut, borneDebut);
+      const fin = Math.min(e.fin, borneFin);
+      while (cur < fin) {
+        const finJour = new Date(cur); finJour.setUTCHours(24, 0, 0, 0);
+        const morceau = Math.min(fin, finJour.getTime());
+        const cle = jourUTC(cur);
+        parJour.set(cle, (parJour.get(cle) ?? 0) + Math.round((morceau - cur) / 60_000));
+        cur = morceau;
+      }
+    }
+    let pireJour: string | null = null; let pireMin = 0; let joursDepassement = 0; let totalMin = 0;
+    for (const [j, min] of parJour) {
+      totalMin += min;
+      if (min > SEUIL_DR2_MIN) joursDepassement++;
+      if (min > pireMin) { pireMin = min; pireJour = j; }
+    }
+    return {
+      siteId: s.id, code: s.code, nom: s.nom, region: s.region,
+      dr1, dr1Conforme: dr1 <= SEUIL_DR1,
+      joursDepassement, dr2Conforme: joursDepassement === 0,
+      pireJour, pireJourMinutes: pireMin, totalMinutes: totalMin,
+      conforme: dr1 <= SEUIL_DR1 && joursDepassement === 0,
+    };
+  });
+
+  // Non conformes d'abord, puis les plus touchés.
+  lignes.sort((a, b) => Number(a.conforme) - Number(b.conforme) || b.totalMinutes - a.totalMinutes);
+
+  return {
+    fenetreJours: jours,
+    du: depuis, au: maintenant,
+    seuils: { dr1Max: SEUIL_DR1, dr2MaxMinutesParJour: SEUIL_DR2_MIN },
+    sitesAnalyses: lignes.length,
+    nonConformesDr1: lignes.filter((l) => !l.dr1Conforme).length,
+    nonConformesDr2: lignes.filter((l) => !l.dr2Conforme).length,
+    nonConformes: lignes.filter((l) => !l.conforme).length,
+    lignes,
+  };
+}
+
+export async function getConformiteArcep(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ success: true, data: await calculerConformiteArcep(req) });
+  } catch (err) { next(err); }
+}
+
+export async function exportConformiteArcep(req: Request, res: Response, next: NextFunction) {
+  try {
+    const d = await calculerConformiteArcep(req);
+    await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { rapport: 'conformite-arcep', jours: d.fenetreJours }, req);
+    const fmtMin = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ''}`.trim());
+    await sendTabular(res, req.params.format as 'xlsx' | 'pdf', 'conformite-arcep', 'Conformité ARCEP (DR1/DR2)', [{
+      name: 'Conformité',
+      columns: [
+        { header: 'Site', key: 'site', width: 26 },
+        { header: 'Code', key: 'code', width: 12 },
+        { header: 'Région', key: 'region', width: 12 },
+        { header: `DR1 (épisodes ≥ 1 h / ${d.fenetreJours} j, seuil ≤ 2)`, key: 'dr1', width: 26 },
+        { header: 'Jours > 3 h (DR2)', key: 'jours', width: 16 },
+        { header: 'Pire jour', key: 'pireJour', width: 14 },
+        { header: 'Indispo. du pire jour', key: 'pireMin', width: 18 },
+        { header: 'Indispo. totale', key: 'total', width: 16 },
+        { header: 'Verdict', key: 'verdict', width: 16 },
+      ],
+      rows: d.lignes.map((l) => ({
+        site: l.nom, code: l.code, region: l.region,
+        dr1: l.dr1, jours: l.joursDepassement,
+        pireJour: l.pireJour ?? '—', pireMin: l.pireJourMinutes ? fmtMin(l.pireJourMinutes) : '—',
+        total: l.totalMinutes ? fmtMin(l.totalMinutes) : '—',
+        verdict: l.conforme ? 'Conforme' : 'NON CONFORME',
+      })),
+    }], `Fenêtre ${d.fenetreJours} jours · arrêté n°005/MENTD/CAB du 12/08/2022 · AUTO comptées une fois prises en charge`);
+  } catch (err) { next(err); }
+}
