@@ -78,13 +78,16 @@ function signatureSlots(
   doc: PDFKit.PDFDocument,
   slots: Array<{ label: string; nom?: string | null; image: Buffer | null }>,
 ) {
-  const items = slots.slice(0, 2);
+  const items = slots.slice(0, 3);
   if (!items.length) return;
-  const boxW = 232, boxH = 78, footer = 34, gap = 26;
+  const boxH = 78, footer = 34, gap = items.length >= 3 ? 16 : 26;
+  // Colonnes adaptées au nombre de signatures (2 ou 3 côte à côte).
+  const usable = doc.page.width - 100;
+  const boxW = (usable - gap * (items.length - 1)) / items.length;
   if (doc.y + 30 + boxH + footer > doc.page.height - 55) doc.addPage();
   sectionTitle(doc, 'Signatures');
   const y = doc.y;
-  const xs = [50, 50 + boxW + gap];
+  const xs = items.map((_, i) => 50 + i * (boxW + gap));
   items.forEach((s, i) => {
     const x = xs[i];
     doc.roundedRect(x, y, boxW, boxH, 4).lineWidth(0.8).strokeColor('#cfd8e3').stroke();
@@ -466,22 +469,11 @@ export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
       doc.fontSize(10).fillColor('#111').text(d.observations, { align: 'justify' });
     }
 
-    const sigs = (d.signatures ?? []).filter((s) => s.image);
-    if (sigs.length) {
-      sectionTitle(doc, 'Signatures');
-      if (doc.y > doc.page.height - 160) doc.addPage();
-      const startY = doc.y;
-      const colW = (doc.page.width - 100) / 3;
-      sigs.slice(0, 3).forEach((s, i) => {
-        const x = 50 + i * colW;
-        try {
-          doc.image(s.image as Buffer, x, startY, { fit: [colW - 10, 60], align: 'center' });
-        } catch {
-          /* signature illisible → on saute l'image */
-        }
-        doc.fontSize(8).fillColor('#666').text(`${s.label}${s.nom ? ` - ${s.nom}` : ''}`, x, startY + 64, { width: colW - 10 });
-      });
-      doc.y = startY + 90;
+    // Validation tripartite : on montre TOUS les emplacements attendus
+    // (chauffeur / agent / technicien), signés ou non — un emplacement non
+    // signé reste visible au lieu d'être silencieusement retiré.
+    if (d.signatures?.length) {
+      signatureSlots(doc, d.signatures);
     }
 
     const photos = d.photos ?? [];
@@ -577,28 +569,15 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
       doc.fontSize(10).fillColor('#111').text(d.observations, { align: 'justify' });
     }
 
-    const sigs = (d.signatures ?? []).filter((s) => s.image);
-    // On réserve toujours deux emplacements de signature (technicien / réceptionnaire),
-    // même sans image capturée — ils peuvent être signés à la main sur l'impression.
-    sectionTitle(doc, 'Signatures');
-    if (doc.y > doc.page.height - 170) doc.addPage();
-    const startY = doc.y;
-    const emplacements = [
-      { label: 'Technicien', nom: d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : null },
-      { label: 'Réceptionnaire / responsable site', nom: null },
-    ];
-    const colW = (doc.page.width - 100) / 2;
-    emplacements.forEach((e, i) => {
-      const x = 50 + i * colW;
-      const sig = sigs.find((s) => s.label.toLowerCase().includes(e.label.toLowerCase().split(' ')[0]));
-      if (sig?.image) {
-        try { doc.image(sig.image, x, startY, { fit: [colW - 20, 55], align: 'center' }); } catch { /* illisible */ }
-      } else {
-        doc.moveTo(x, startY + 55).lineTo(x + colW - 20, startY + 55).strokeColor('#bbb').stroke();
-      }
-      doc.fontSize(8.5).fillColor('#666').text(`${e.label}${e.nom ? ` - ${e.nom}` : ''}`, x, startY + 62, { width: colW - 10 });
-    });
-    doc.y = startY + 90;
+    // Deux emplacements TOUJOURS présents (technicien / réceptionnaire), signés
+    // ou non — l'emplacement non signé reste visible pour signature manuscrite
+    // sur l'impression.
+    const sigs = d.signatures ?? [];
+    const trouver = (mot: string) => sigs.find((s) => s.label.toLowerCase().includes(mot))?.image ?? null;
+    signatureSlots(doc, [
+      { label: 'Technicien', nom: d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : null, image: trouver('technicien') },
+      { label: 'Réceptionnaire / responsable site', nom: null, image: trouver('récept') },
+    ]);
 
     doc.fontSize(8).fillColor('#999').text(
       `Généré le ${fmtDate(new Date())} - E&M OpS`,
