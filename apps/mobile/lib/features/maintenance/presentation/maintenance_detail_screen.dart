@@ -293,8 +293,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         photoPaths.add(await AttachmentStore.persistFile(f.path));
       }
 
-      // Signature → persistée localement (uploadée par la sync). Obligatoire pour
-      // un travail de cycle de vie (preuve du mouvement d'actif), sinon optionnelle.
+      // Signature du technicien → persistée localement (uploadée par la sync).
+      // OBLIGATOIRE pour toute clôture (préventive, curative, mouvement) : c'est
+      // l'attestation du travail fait. Le serveur la refuse aussi sans elle.
       String? signaturePath;
       final bytes = await navigator.push<dynamic>(
         MaterialPageRoute(builder: (_) => const SignaturePadScreen()),
@@ -303,9 +304,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         signaturePath = await AttachmentStore.persistBytes(
             bytes as Uint8List, 'signature-${widget.id}.png');
       }
-      if (m.natureTravaux != 'ENTRETIEN' && signaturePath == null) {
+      if (signaturePath == null) {
         if (mounted) {
-          _snack('Signature requise pour valider ce mouvement d\'actif');
+          _snack('La signature du technicien est requise pour clôturer.');
           setState(() => _busy = false);
         }
         return;

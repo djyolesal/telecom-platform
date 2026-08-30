@@ -808,6 +808,14 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // Tout ticket doit être CLÔTURÉ sur le site.
     assertOnSite(existing.site, latitude, longitude, 'la clôture');
 
+    // Signature du TECHNICIEN obligatoire pour TOUTE clôture (préventive,
+    // curative, mouvement) : c'est l'attestation du travail fait. Elle n'était
+    // exigée que pour les mouvements d'actif — une préventive pouvait donc être
+    // clôturée sans, et le rapport sortait sans signature technicien.
+    if (!signaturePath && !existing.signaturePath) {
+      throw new AppError('La signature du technicien est requise pour clôturer.', 422);
+    }
+
     // Agent de gardiennage PRÉSENT ⇒ il signe (même règle que le dépotage) :
     // sa déclaration nourrit le rapport gardiennage — sans signature, elle ne
     // repose que sur la parole du technicien.
@@ -850,9 +858,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       if (totalPhotos < minPhotos) {
         throw new AppError(`Au moins ${minPhotos} photos sont requises pour valider ce mouvement d'actif (${totalPhotos} fournie(s)).`, 422);
       }
-      if (!signaturePath && !existing.signaturePath) {
-        throw new AppError("La signature du technicien est requise pour valider ce mouvement d'actif.", 422);
-      }
+      // La signature technicien est déjà exigée en amont pour toute clôture.
     }
 
     // Relevés énergie obligatoires selon la config du site, sauf tâches d'exclusion
