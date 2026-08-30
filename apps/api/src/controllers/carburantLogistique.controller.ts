@@ -1,4 +1,5 @@
 import { publicFileUrl, uploadBuffer, cleMinioValide } from '../services/storage.service';
+import { L_STATUT_BC, L_STATUT_LIGNE_LIVRAISON, libelle } from '../utils/libelles';
 import { analyserBonCommandePdf as analyserBcPdf } from '../services/bcPdf.service';
 import { analyserBonLivraisonDocument as analyserBlDoc } from '../services/blPdf.service';
 import { syncStatutBonLivraison, syncLigneLivraison, statutLigneAttendu } from './depotages.controller';
@@ -524,7 +525,7 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     // et modifiait rétroactivement le manquant du trimestre.
     if (bc.statut !== 'OUVERT') {
       throw new AppError(
-        `Le bon de commande ${bc.numero} est ${bc.statut.toLowerCase()} : il n'accepte plus de chargement.`,
+        `Le bon de commande ${bc.numero} est ${libelle(L_STATUT_BC, bc.statut)} : il n'accepte plus de chargement.`,
         409
       );
     }
@@ -754,7 +755,7 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
       if (data.isBrouillon === false) bloquants.push('finalisation');
       if (bloquants.length) {
         throw new AppError(
-          `Le bon de commande ${bcParent.numero} est ${bcParent.statut.toLowerCase()} : ` +
+          `Le bon de commande ${bcParent.numero} est ${libelle(L_STATUT_BC, bcParent.statut)} : ` +
           `les volumes et le plan de ce chargement ne peuvent plus être modifiés.`,
           409
         );
@@ -1436,7 +1437,7 @@ export async function createBrouillonLivraison(req: Request, res: Response, next
     // et modifiait rétroactivement le manquant du trimestre.
     if (bc.statut !== 'OUVERT') {
       throw new AppError(
-        `Le bon de commande ${bc.numero} est ${bc.statut.toLowerCase()} : il n'accepte plus de chargement.`,
+        `Le bon de commande ${bc.numero} est ${libelle(L_STATUT_BC, bc.statut)} : il n'accepte plus de chargement.`,
         409
       );
     }
@@ -1531,7 +1532,7 @@ export async function exportBonsCommande(req: Request, res: Response, next: Next
         client: b.numeroClient,
         volume: b.volumesMensuels.reduce((s, v) => s + n(v.volumePrevuLitres), 0),
         bl: b._count.bonsLivraison,
-        statut: b.statut,
+        statut: b.statut === 'OUVERT' ? 'Ouvert' : b.statut === 'CLOTURE' ? 'Clôturé' : 'Annulé',
       })),
     }]);
   } catch (err) { next(err); }
@@ -1577,7 +1578,7 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
           region: l.site.region,
           prevu: n(l.volumePrevuLitres),
           livre: l.volumeLivreLitres != null ? n(l.volumeLivreLitres) : '',
-          statut: l.statut,
+          statut: libelle(L_STATUT_LIGNE_LIVRAISON, l.statut),
         });
       }
     }

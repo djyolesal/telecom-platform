@@ -26,13 +26,13 @@ declare global {
 export async function authMiddleware(req: Request, _res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) throw new AppError('Token manquant', 401);
+    if (!authHeader?.startsWith('Bearer ')) throw new AppError('Session requise - reconnectez-vous.', 401);
 
     const token = authHeader.split(' ')[1];
 
     // Vérifier blacklist Redis
     const blacklisted = await redisClient.get(`blacklist:${token}`);
-    if (blacklisted) throw new AppError('Token révoqué', 401);
+    if (blacklisted) throw new AppError('Session fermée - reconnectez-vous.', 401);
 
     const payload = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
 
@@ -48,8 +48,8 @@ export async function authMiddleware(req: Request, _res: Response, next: NextFun
     req.user = { id: payload.sub, role: payload.role };
     next();
   } catch (err) {
-    if (err instanceof jwt.TokenExpiredError) return next(new AppError('Token expiré', 401));
-    if (err instanceof jwt.JsonWebTokenError) return next(new AppError('Token invalide', 401));
+    if (err instanceof jwt.TokenExpiredError) return next(new AppError('Session expirée, reconnectez-vous.', 401));
+    if (err instanceof jwt.JsonWebTokenError) return next(new AppError('Session invalide - reconnectez-vous.', 401));
     next(err);
   }
 }

@@ -270,7 +270,7 @@ export async function createActif(req: Request, res: Response, next: NextFunctio
         },
       });
     } else {
-      throw new AppError('Type d\'actif non géré (GE, BATTERIE ou CLIMATISEUR).', 422);
+      throw new AppError('Type d\'actif non géré (groupe électrogène, batterie ou climatiseur).', 422);
     }
 
     await auditLog(req.user!.id, 'CREATE', 'actifs', created.id, { actifType }, req);

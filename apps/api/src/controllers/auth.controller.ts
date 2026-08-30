@@ -165,19 +165,19 @@ export async function logout(req: Request, res: Response, next: NextFunction) {
 export async function refreshToken(req: Request, res: Response, next: NextFunction) {
   try {
     const { refreshToken: token } = req.body;
-    if (!token) throw new AppError('Refresh token manquant', 400);
+    if (!token) throw new AppError('Session expirée, reconnectez-vous', 400);
 
     let payload: { sub: string; sid?: string; plt?: Plateforme };
     try {
       payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as { sub: string; sid?: string; plt?: Plateforme };
     } catch {
-      throw new AppError('Refresh token invalide ou expiré', 401);
+      throw new AppError('Session expirée, reconnectez-vous', 401);
     }
     // Jetons d'avant la session unique (sans sid/plt) : reconnexion requise.
     if (!payload.sid || !payload.plt) throw new AppError('Session expirée, reconnectez-vous', 401);
 
     const stored = await redisClient.get(`refresh:${payload.plt}:${payload.sub}`);
-    if (stored !== token) throw new AppError('Refresh token révoqué', 401);
+    if (stored !== token) throw new AppError('Session fermée sur un autre appareil', 401);
     // Session remplacée par un login plus récent sur la même plateforme ?
     if (!(await sessionValide(payload.sub, payload.plt, payload.sid))) {
       throw new AppError('Session ouverte sur un autre appareil', 401);

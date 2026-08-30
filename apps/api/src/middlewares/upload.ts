@@ -19,7 +19,7 @@ export const uploadMiddleware = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
-    cb(new AppError(`Type de fichier non autorisé : ${file.mimetype}`, 415));
+    cb(new AppError('Format de fichier non accepté : envoyez une photo (JPEG ou PNG) ou un PDF.', 415));
   },
 });
 
@@ -39,7 +39,7 @@ export const uploadSpreadsheet = multer({
   fileFilter: (_req, file, cb) => {
     const ok = SPREADSHEET_MIME.has(file.mimetype) || /\.(xlsx|xls|csv)$/i.test(file.originalname);
     if (ok) return cb(null, true);
-    cb(new AppError(`Format non autorisé : importez un fichier .xlsx (${file.mimetype})`, 415));
+    cb(new AppError('Format non accepté : importez un fichier Excel (.xlsx).', 415));
   },
 });
 
@@ -75,7 +75,7 @@ export function verifierSignature(req: Request, _res: Response, next: NextFuncti
   for (const f of fichiers) {
     const reel = typeReel(f.buffer);
     if (!reel) return next(new AppError(`Contenu de fichier non reconnu : ${f.originalname}`, 415));
-    if (!ALLOWED_MIME.has(reel)) return next(new AppError(`Type de fichier non autorisé : ${reel}`, 415));
+    if (!ALLOWED_MIME.has(reel)) return next(new AppError('Format de fichier non accepté : envoyez une photo (JPEG ou PNG) ou un PDF.', 415));
     // Le mimetype servi plus tard est celui des octets, pas celui déclaré.
     f.mimetype = reel;
   }

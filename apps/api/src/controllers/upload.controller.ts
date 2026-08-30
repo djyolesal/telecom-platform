@@ -28,9 +28,9 @@ export async function uploadImage(req: Request, res: Response, next: NextFunctio
 
     if (entityType || entityId) {
       const resolver = ENTITES_PHOTO[entityType];
-      if (!resolver || !entityId) throw new AppError('Rattachement de photo invalide.', 400);
+      if (!resolver || !entityId) throw new AppError('Cette photo n\'est rattachée à aucune intervention.', 400);
       const exists = await resolver().findUnique({ where: { id: entityId } });
-      if (!exists) throw new AppError('Entité cible introuvable pour la photo.', 404);
+      if (!exists) throw new AppError('L\'intervention associée à cette photo est introuvable.', 404);
     }
 
     const stored = await uploadBuffer(

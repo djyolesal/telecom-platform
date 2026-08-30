@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { L_TYPE_MAINTENANCE, L_STATUT_MAINTENANCE, L_CATEGORIE_EQUIPEMENT, libelle } from '../utils/libelles';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables } from '../utils/perimetre';
 import { notificationService } from '../services/notifications.service';
 
@@ -495,7 +496,7 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
 export async function getTechniciensAssignablesSite(req: Request, res: Response, next: NextFunction) {
   try {
     const siteId = String(req.query.site_id ?? '');
-    if (!siteId) throw new AppError('site_id requis', 400);
+    if (!siteId) throw new AppError('Site requis.', 400);
     await assertSiteInPerimetre(req.user!.id, siteId);
     res.json({ success: true, data: await techniciensAssignables(req.user!.id, siteId) });
   } catch (err) { next(err); }
@@ -698,7 +699,7 @@ export async function suspendMaintenance(req: Request, res: Response, next: Next
     if (res1.count === 0) {
       const fresh = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
       if (fresh?.statut === 'SUSPENDUE') return res.json({ success: true, data: fresh, idempotent: true });
-      throw new AppError(`Seule une maintenance en cours peut être suspendue (statut : ${fresh?.statut}).`, 409);
+      throw new AppError(`Seule une maintenance en cours peut être suspendue (statut actuel : ${libelle(L_STATUT_MAINTENANCE, fresh?.statut)}).`, 409);
     }
     const updated = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, { action: 'suspension', motif: motif.trim() }, req);
@@ -724,7 +725,7 @@ export async function resumeMaintenance(req: Request, res: Response, next: NextF
       return res.json({ success: true, data: existing, idempotent: true }); // rejeu outbox
     }
     if (existing.statut !== 'SUSPENDUE') {
-      throw new AppError(`Seule une maintenance suspendue peut être reprise (statut : ${existing.statut}).`, 409);
+      throw new AppError(`Seule une maintenance suspendue peut être reprise (statut actuel : ${libelle(L_STATUT_MAINTENANCE, existing.statut)}).`, 409);
     }
 
     const technicienId = existing.technicienId ?? req.user!.id;
@@ -763,7 +764,7 @@ export async function resumeMaintenance(req: Request, res: Response, next: NextF
     if (res2.count === 0) {
       const fresh = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
       if (fresh?.statut === 'EN_COURS') return res.json({ success: true, data: fresh, idempotent: true });
-      throw new AppError(`Seule une maintenance suspendue peut être reprise (statut : ${fresh?.statut}).`, 409);
+      throw new AppError(`Seule une maintenance suspendue peut être reprise (statut actuel : ${libelle(L_STATUT_MAINTENANCE, fresh?.statut)}).`, 409);
     }
     const updated = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, { action: 'reprise', pauseMinutes: pauseMin }, req);
@@ -808,7 +809,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     }
     // Seule une maintenance EN COURS peut être clôturée.
     if (existing.statut !== 'EN_COURS') {
-      throw new AppError(`Cette maintenance ne peut pas être clôturée (statut : ${existing.statut}).`, 409);
+      throw new AppError(`Cette maintenance ne peut pas être clôturée (statut actuel : ${libelle(L_STATUT_MAINTENANCE, existing.statut)}).`, 409);
     }
 
     // Une maintenance doit avoir été démarrée et durer au moins 1h avant clôture.
@@ -1349,10 +1350,10 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
       ],
       rows: rows.map((m) => ({
         site: m.site?.code ?? '',
-        type: m.type,
-        categorie: m.categorie,
+        type: libelle(L_TYPE_MAINTENANCE, m.type),
+        categorie: libelle(L_CATEGORIE_EQUIPEMENT, m.categorie),
         equipement: m.equipement,
-        statut: m.statut,
+        statut: libelle(L_STATUT_MAINTENANCE, m.statut),
         technicien: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '',
         datePlanifiee: m.datePlanifiee.toLocaleString('fr-FR'),
         duree: m.dureeMinutes ?? '',

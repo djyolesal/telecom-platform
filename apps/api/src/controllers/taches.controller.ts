@@ -245,7 +245,7 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
 export async function getFicheValidation(req: Request, res: Response, next: NextFunction) {
   try {
     const { prestataire_id, annee, mois, client, lot_id, contrat } = req.query as Record<string, string>;
-    if (!prestataire_id) throw new AppError('prestataire_id requis.', 400);
+    if (!prestataire_id) throw new AppError('Sélectionnez un prestataire.', 400);
     const an = parseInt(annee) || new Date().getFullYear();
     const mo = parseInt(mois);
     if (!(mo >= 1 && mo <= 12)) throw new AppError('Mois invalide (1-12).', 422);

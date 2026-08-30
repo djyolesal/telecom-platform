@@ -12,7 +12,7 @@ const NAVY = 'FF1B3F6B', TEAL = 'FF0E7C6B', AMBER = 'FFE67E22', RED = 'FFC0392B'
       PURPLE = 'FF7D3C98', ZEBRA = 'FFF7F9FB', GRIS = 'FF6B7280',
       ROUGE_PALE = 'FFFDECEA', VIOLET_PALE = 'FFF4ECF7', VERT_PALE = 'FFE8F6F3';
 
-const LIBELLES_ALARME: Record<string, string> = {
+export const LIBELLES_ALARME: Record<string, string> = {
   AE: 'AE - énergie', GE: 'GE - groupe électrogène', EN: 'EN - énergie',
   TX: 'TX - transmission', FO: 'FO - fibre optique', RA: 'RA - radio',
   MI: 'MI - micro-ondes', MD: 'MD - divers', NA: 'NA - non attribué',
@@ -200,7 +200,7 @@ export function construireClasseurCoupures(opts: {
       debut: fmtDh(l.dateDebut),
       fin: l.dateFin ? fmtDh(l.dateFin) : 'EN COURS',
       downtime: l.dateFin ? fmtDuree(l.downtimeMinutes) : '—',
-      alarme: l.typeAlarme ?? '',
+      alarme: l.typeAlarme ? (LIBELLES_ALARME[l.typeAlarme] ?? l.typeAlarme) : '',
       categorie: l.causeCategorie ?? '',
       origine: heritee ? `← ${l.origineSiteNom ?? 'amont'}` : 'Locale',
       source: l.source === 'OSS'

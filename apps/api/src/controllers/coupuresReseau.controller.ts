@@ -55,7 +55,7 @@ import { notifierIncidentCoupure, rendreTemplate } from '../services/sms.service
 import { notificationService } from '../services/notifications.service';
 import { sendTabular, EXPORT_MAX, TabularSheet } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
-import { construireClasseurCoupures, COLONNES_DETAIL } from '../services/coupuresExport.service';
+import { construireClasseurCoupures, COLONNES_DETAIL, LIBELLES_ALARME } from '../services/coupuresExport.service';
 import { logger } from '../utils/logger';
 import { Intervalle, minutesUnion, minutesUnionParCle, pousser } from '../utils/intervals';
 import { io } from '../server';
@@ -163,7 +163,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           siteId,
           type: 'COUPURE_TOTALE',
           severite: 'CRITIQUE',
-          description: `Site entier hors service (coupure ${technos.join('/')}) signalé par le NOC${coupures[0].typeAlarme ? ` - alarme ${coupures[0].typeAlarme}` : ''}.`,
+          description: `Site entier hors service (coupure ${technos.join('/')}) signalé par le NOC${coupures[0].typeAlarme ? ` - alarme ${LIBELLES_ALARME[coupures[0].typeAlarme] ?? coupures[0].typeAlarme}` : ''}.`,
           declarePar: userId,
           // L'incident s'ouvre au DÉBUT réel de la panne, pas au moment de la
           // saisie : le NOC insère souvent APRÈS coup (début rétroactif) —
@@ -845,13 +845,14 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     // Classement de l'indisponibilité (corrigeable par le NOC) : ACTIF ou PASSIF.
     if ('causeCategorie' in b) {
       const cc = b.causeCategorie == null || b.causeCategorie === '' ? null : String(b.causeCategorie).toUpperCase();
-      if (cc != null && !['ACTIF', 'PASSIF'].includes(cc)) throw new AppError('causeCategorie invalide (ACTIF ou PASSIF)', 400);
+      if (cc != null && !['ACTIF', 'PASSIF'].includes(cc)) throw new AppError('Catégorie de cause invalide (actif ou passif).', 400);
       data.causeCategorie = cc;
     }
+    const NOMS_CHAMPS: Record<string, string> = { heureContact: 'Heure de contact', dateArriveeSite: 'Date d\'arrivée sur site', dateFin: 'Date de rétablissement' };
     for (const k of ['heureContact', 'dateArriveeSite', 'dateFin'] as const) {
       if (k in b) {
         const d = b[k] ? new Date(String(b[k])) : null;
-        if (d && Number.isNaN(d.getTime())) throw new AppError(`${k} invalide`, 400);
+        if (d && Number.isNaN(d.getTime())) throw new AppError(`${NOMS_CHAMPS[k]} invalide.`, 400);
         data[k] = d;
       }
     }
@@ -860,7 +861,7 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     // pas de mise à null : une coupure a toujours un début.
     if ('dateDebut' in b && b.dateDebut) {
       const debut = new Date(String(b.dateDebut));
-      if (Number.isNaN(debut.getTime())) throw new AppError('dateDebut invalide', 400);
+      if (Number.isNaN(debut.getTime())) throw new AppError('Date de début invalide.', 400);
       if (debut > new Date()) throw new AppError('Le début ne peut pas être dans le futur', 400);
       data.dateDebut = debut;
     }
@@ -883,7 +884,7 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     if (technosDemandees) {
       const uniques = [...new Set(technosDemandees)];
       if (uniques.some((t) => !['SITE', '2G', '3G', '4G', '5G'].includes(t))) {
-        throw new AppError('technologie invalide', 400);
+        throw new AppError('Technologie invalide (2G, 3G, 4G, 5G ou site entier).', 400);
       }
       if (uniques.includes('SITE') && uniques.length > 1) {
         throw new AppError('« Site entier » couvre déjà toutes les technologies', 400);
@@ -1240,7 +1241,7 @@ export async function importCoupures(req: Request, res: Response, next: NextFunc
         const detail = e instanceof Error ? e.message.split('\n').pop() : String(e);
         logger.error(`[coupures] import rejeté par la base (lignes ${i + 1}–${i + 500}):`, e);
         throw new AppError(
-          `Import refusé par les contraintes d'intégrité (lignes ${i + 1}–${Math.min(i + 500, lots.length)} du lot préparé) : ${detail}`,
+          `Import refusé : les lignes ${i + 1}–${Math.min(i + 500, lots.length)} du fichier contiennent des données incompatibles (dates, site ou technologie). Corrigez ces lignes et réimportez.`,
           422
         );
       }

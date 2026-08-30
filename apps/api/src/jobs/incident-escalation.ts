@@ -1,4 +1,5 @@
 import { differenceInMinutes } from 'date-fns';
+import { L_SEVERITE, libelle } from '../utils/libelles';
 import { prisma } from '../config/database';
 import { notificationService } from '../services/notifications.service';
 import { logger } from '../utils/logger';
@@ -30,7 +31,7 @@ export async function incidentEscalationJob(): Promise<void> {
 
     await notificationService.sendToRoleInRegion('MANAGER', inc.site.region, {
       type: 'INCIDENT_ESCALATION',
-      title: `⚠️ Escalade incident ${inc.severite} - ${inc.site.nom}`,
+      title: `⚠️ Escalade incident ${libelle(L_SEVERITE, inc.severite)} - ${inc.site.nom}`,
       body: `Incident ouvert depuis ${Math.round(age / 60)}h sans prise en charge : ${inc.description.slice(0, 120)}`,
       data: { kind: 'incident_escalation', incidentId: inc.id },
     });

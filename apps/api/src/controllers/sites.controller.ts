@@ -303,7 +303,7 @@ export async function updateCuveSite(req: Request, res: Response, next: NextFunc
     const data: Prisma.SiteUncheckedUpdateInput = {};
     if ('formeCuve' in b) {
       const f = b.formeCuve ? String(b.formeCuve).toUpperCase() : null;
-      if (f && !['RECTANGULAIRE', 'CYLINDRE_COUCHE'].includes(f)) throw new AppError('formeCuve invalide', 400);
+      if (f && !['RECTANGULAIRE', 'CYLINDRE_COUCHE'].includes(f)) throw new AppError('Forme de cuve invalide (rectangulaire ou cylindre couché).', 400);
       data.formeCuve = f as FormeCuve | null;
     }
     for (const k of ['cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'cuveVolumeLitres'] as const) {
@@ -344,12 +344,12 @@ export async function replaceBaremage(req: Request, res: Response, next: NextFun
     if (!site) throw new AppError('Site introuvable', 404);
 
     const brut = (req.body as { points?: unknown }).points;
-    if (!Array.isArray(brut) || brut.length > 500) throw new AppError('points : tableau attendu (500 max)', 400);
+    if (!Array.isArray(brut) || brut.length > 500) throw new AppError('Barème invalide : 500 points maximum.', 400);
     const points = brut.map((p, i) => {
       const hauteurCm = Number((p as { hauteurCm?: unknown }).hauteurCm);
       const litres = Number((p as { litres?: unknown }).litres);
       if (!Number.isFinite(hauteurCm) || hauteurCm < 0 || !Number.isFinite(litres) || litres < 0) {
-        throw new AppError(`Point ${i + 1} invalide : hauteurCm et litres numériques positifs requis`, 400);
+        throw new AppError(`Point n°${i + 1} invalide : la hauteur (cm) et le volume (litres) doivent être des nombres positifs.`, 400);
       }
       return { hauteurCm: Math.round(hauteurCm * 10) / 10, litres: Math.round(litres * 10) / 10 };
     }).sort((a, b) => a.hauteurCm - b.hauteurCm);
@@ -663,7 +663,7 @@ export async function sitesImportTemplate(_req: Request, res: Response, next: Ne
  */
 export async function importSites(req: Request, res: Response, next: NextFunction) {
   try {
-    if (!req.file) throw new AppError('Aucun fichier reçu (champ "file").', 400);
+    if (!req.file) throw new AppError('Aucun fichier reçu : sélectionnez un fichier à importer.', 400);
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer, {
@@ -728,16 +728,16 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
       if (!code && !cellText(row, 'nom')) continue;
       results.total++;
       try {
-        if (!code) throw new Error('code manquant');
+        if (!code) throw new Error('Colonne « Code » vide');
         const nom = cellText(row, 'nom');
         const region = cellText(row, 'region');
-        if (!nom) throw new Error('nom manquant');
-        if (!region) throw new Error('region manquante');
+        if (!nom) throw new Error('Colonne « Nom » vide');
+        if (!region) throw new Error('Colonne « Région » vide');
 
         const powerConfig = cellText(row, 'powerConfig') || 'CEET_GE';
-        if (!POWER.includes(powerConfig)) throw new Error(`powerConfig invalide « ${powerConfig} » (attendu : ${POWER.join(', ')})`);
+        if (!POWER.includes(powerConfig)) throw new Error(`Configuration énergie inconnue « ${powerConfig} » (valeurs acceptées : ${POWER.join(', ')})`);
         const statutGE = cellText(row, 'statutGE') || 'GE_SECOURS';
-        if (!STATUT.includes(statutGE)) throw new Error(`statutGE invalide « ${statutGE} » (attendu : ${STATUT.join(', ')})`);
+        if (!STATUT.includes(statutGE)) throw new Error(`Statut GE inconnu « ${statutGE} » (valeurs acceptées : ${STATUT.join(', ')})`);
 
         // Rattachement au lot (optionnel). Colonne vide → lotId inchangé (préservé en update).
         let lotId: string | undefined;
@@ -1188,7 +1188,7 @@ export async function getEtiquettesQr(req: Request, res: Response, next: NextFun
  */
 export async function importTopologie(req: Request, res: Response, next: NextFunction) {
   try {
-    if (!req.file) throw new AppError('Aucun fichier reçu (champ "file").', 400);
+    if (!req.file) throw new AppError('Aucun fichier reçu : sélectionnez un fichier à importer.', 400);
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(req.file.buffer as unknown as ArrayBuffer, {

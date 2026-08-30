@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { L_TYPE_MAINTENANCE, L_STATUT_MAINTENANCE, L_CATEGORIE_EQUIPEMENT, libelle } from '../utils/libelles';
 import QRCode from 'qrcode';
 
 const BRAND = '#1B3F6B';
@@ -194,10 +195,10 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
     row(doc, 'Région', m.site?.region ?? '—');
 
     sectionTitle(doc, 'Intervention');
-    row(doc, 'Type', m.type);
-    row(doc, 'Catégorie', m.categorie);
+    row(doc, 'Type', libelle(L_TYPE_MAINTENANCE, m.type));
+    row(doc, 'Catégorie', libelle(L_CATEGORIE_EQUIPEMENT, m.categorie));
     row(doc, 'Équipement', m.equipement);
-    row(doc, 'Statut', m.statut);
+    row(doc, 'Statut', libelle(L_STATUT_MAINTENANCE, m.statut));
     row(doc, 'Technicien', m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—');
     row(doc, 'Prestataire', m.prestataire?.nom ?? 'Interne');
     if (m.nomAgentSecurite) row(doc, 'Agent de sécurité', m.nomAgentSecurite);
@@ -223,7 +224,7 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
       for (const r of m.releves.filter((x) => x.source !== 'GE')) {
         if (r.source === 'CEET') row(doc, 'CEET', `${fmtN(r.consommationKwh, ' kWh')} · index ${fmtN(r.indexCompteur)}`);
         else if (r.source === 'SOLAIRE') row(doc, 'Solaire', fmtN(r.puissanceKva, ' kVA'));
-        else row(doc, r.source, '—');
+        else row(doc, 'Autre source', '—');
       }
     }
 
@@ -544,7 +545,7 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
     row(doc, 'Date', fmtDate(d.dateMouvement));
 
     sectionTitle(doc, 'Actif');
-    row(doc, 'Type', d.actif.type);
+    row(doc, 'Type', libelle(L_CATEGORIE_EQUIPEMENT, d.actif.type));
     row(doc, 'Désignation', d.actif.designation);
     row(doc, 'N° de série', d.actif.numeroSerie ?? '—');
     row(doc, 'Marque', d.actif.marque ?? '—');

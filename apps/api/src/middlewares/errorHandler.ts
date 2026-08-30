@@ -31,22 +31,21 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     if (err.code === 'P2002') {
       return res.status(409).json({
         success: false,
-        error: `Conflit : valeur déjà existante (${(err.meta?.target as string[])?.join(', ') ?? 'champ unique'})`,
+        error: 'Cette valeur existe déjà pour un autre enregistrement.',
       });
     }
     if (err.code === 'P2025') {
       return res.status(404).json({ success: false, error: 'Ressource introuvable' });
     }
     if (err.code === 'P2003') {
-      return res.status(400).json({ success: false, error: 'Référence invalide (clé étrangère)' });
+      return res.status(400).json({ success: false, error: 'Un élément lié à cette opération n\'existe plus. Rechargez la page et réessayez.' });
     }
     // P2000 = valeur trop longue (dépassement VarChar) ; P2011 = contrainte
     // NOT NULL ; P2012 = champ requis manquant. Une entrée cliente fautive doit
     // répondre 4xx, pas 500. `err.meta` ne contient que des noms de colonnes
     // (jamais de chemin source), donc on peut nommer le champ concerné.
     if (err.code === 'P2000') {
-      const col = err.meta?.column_name as string | undefined;
-      return res.status(400).json({ success: false, error: col ? `Valeur trop longue pour le champ « ${col} ».` : 'Valeur trop longue pour un champ.' });
+      return res.status(400).json({ success: false, error: 'Un des champs saisis dépasse la longueur autorisée.' });
     }
     if (err.code === 'P2011' || err.code === 'P2012') {
       return res.status(400).json({ success: false, error: 'Champ obligatoire manquant.' });

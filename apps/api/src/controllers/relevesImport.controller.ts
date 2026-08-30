@@ -50,7 +50,7 @@ type DepotRow = Prisma.DepotageCreateManyInput;
  */
 export async function importReleves(req: Request, res: Response, next: NextFunction) {
   try {
-    if (!req.file) throw new AppError('Aucun fichier reçu (champ "file").', 400);
+    if (!req.file) throw new AppError('Aucun fichier reçu : sélectionnez un fichier à importer.', 400);
     const dryRun = String(req.query.dryRun ?? '') === 'true';
     const purge = String(req.query.purge ?? '') === 'true';
 
@@ -70,7 +70,7 @@ export async function importReleves(req: Request, res: Response, next: NextFunct
       if (field) colByField[field] = col;
     });
     if (colByField.code == null || (colByField.dateFin == null && colByField.dateDebut == null)) {
-      throw new AppError('Colonnes "Code" et "dateFin/dateDebut" requises (export tickets).', 422);
+      throw new AppError('Colonnes « Code » et « Date de début / Date de fin » introuvables dans le fichier.', 422);
     }
 
     // Sites (code → id + groupes triés par numéro) pour rattacher les lignes.

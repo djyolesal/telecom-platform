@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { L_SEVERITE, L_STATUT_INCIDENT, libelle } from '../utils/libelles';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre, techniciensAssignables } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
@@ -173,7 +174,7 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
     // Push notifications si critique
     if (incident.severite === 'CRITIQUE' || incident.severite === 'MAJEUR') {
       await notificationService.sendToRole('SUPERVISEUR', {
-        title: `🔴 Incident ${incident.severite} - ${incident.site.nom}`,
+        title: `🔴 Incident ${libelle(L_SEVERITE, incident.severite)} - ${incident.site.nom}`,
         body: incident.description.substring(0, 100),
         data: { incidentId: incident.id, type: 'incident' },
       });
@@ -259,7 +260,7 @@ export async function assignIncident(req: Request, res: Response, next: NextFunc
       rendreTemplate('sms.tpl.affectationIncident', {
         site: incident.site.nom,
         reference: incident.reference ?? incident.id.slice(0, 8),
-        severite: incident.severite,
+        severite: libelle(L_SEVERITE, incident.severite),
       }),
       'INCIDENT_AFFECTATION'
     );
@@ -500,6 +501,11 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
     const perimetreExp = await sitePerimetre(req.user!.id);
     if (isRestreint(perimetreExp)) where.site = { ...(where.site as object ?? {}), ...perimetreExp };
 
+    // Libellés du référentiel types d'incident : jamais COUPURE_TOTALE brut
+    // dans un fichier qui circule ensuite par mail.
+    const typesRef = new Map(
+      (await prisma.typeIncidentRef.findMany({ select: { code: true, libelle: true } })).map((t) => [t.code, t.libelle]),
+    );
     const rows = await prisma.incident.findMany({
       where,
       take: EXPORT_MAX,
@@ -525,9 +531,9 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
       rows: rows.map((i) => ({
         site: i.site?.code ?? '',
         region: i.site?.region ?? '',
-        type: i.type,
-        severite: i.severite,
-        statut: i.statut,
+        type: typesRef.get(i.type) ?? i.type,
+        severite: libelle(L_SEVERITE, i.severite),
+        statut: libelle(L_STATUT_INCIDENT, i.statut),
         ouverture: i.dateOuverture.toLocaleString('fr-FR'),
         resolution: i.dateResolution ? i.dateResolution.toLocaleString('fr-FR') : '',
         mtti: i.delaiInterventionMinutes ?? '',

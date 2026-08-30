@@ -92,7 +92,7 @@ export async function addAssignment(req: Request, res: Response, next: NextFunct
   try {
     const { prestataireId, scope, dateDebut, dateFin } = req.body;
     if (!prestataireId || !SCOPES.includes(scope)) {
-      throw new AppError('prestataireId et scope (PASSIVE|ACTIVE|LES_DEUX|SOLAIRE) requis', 400);
+      throw new AppError('Sélectionnez un prestataire et un périmètre de contrat (passif, actif, les deux, ou solaire).', 400);
     }
     // Cohérence contrat ↔ scope : une attribution SOLAIRE ne se pose que sur
     // un lot SOLAIRE, et réciproquement — sinon l'imputation des visites et
