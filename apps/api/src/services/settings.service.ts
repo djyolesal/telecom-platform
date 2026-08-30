@@ -82,6 +82,8 @@ export function settingsCatalog(): SettingMeta[] {
     // Durée minimale pour VALIDER a posteriori une détection auto déjà rétablie
     // (la faire entrer dans la disponibilité) — filtre les micro-battements OSS.
     { key: 'oss.dureeMinValidationCloturee', label: 'Durée min. pour valider une détection auto-clôturée (dispo)', groupe: 'Supervision', unite: 'min', defaut: 5 },
+    // Récap journalier email (23h GMT) : 1 = actif, 0 = coupé.
+    { key: 'recap.actif', label: 'Récap journalier email (23h, 1=actif 0=coupé)', groupe: 'Supervision', unite: '', defaut: 1 },
     // Interrupteur du planning automatique : 1 = les préventives contractuelles
     // sont générées le 1er du mois ; 0 = planification manuelle uniquement
     // (utile pendant une renégociation de contrats ou une reprise de données).

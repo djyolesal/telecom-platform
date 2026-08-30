@@ -10,6 +10,7 @@ import { manquantAlertJob } from './manquant-alert';
 import { vidangeAlertJob } from './vidange-alert';
 import { situationPeriodiqueJob } from './situation-periodique';
 import { purgeOrphelinsJob } from './purge-orphelins';
+import { dailyRecapJob } from './daily-recap';
 
 /**
  * Verrou Postgres par job : `node-cron` n'attend pas la fin d'un callback async
@@ -101,11 +102,19 @@ export function setupCronJobs() {
     try { await avecVerrou('vidangeAlert', vidangeAlertJob); } catch (e) { logger.error('[CRON] vidangeAlert error:', e); }
   }, { timezone: 'Africa/Lome' });
 
+  // ── Récap journalier par email — tous les jours à 23h (Lomé = GMT) :
+  //    activités du 1er du mois au jour J, superviseurs (leur périmètre) +
+  //    internes (parc), sections par contrat. Désactivable : recap.actif=0.
+  cron.schedule('0 23 * * *', async () => {
+    logger.info('[CRON] Démarrage récap journalier email');
+    try { await avecVerrou('dailyRecap', dailyRecapJob); } catch (e) { logger.error('[CRON] dailyRecap error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
   // ── Situation périodique incidents/coupures — vérifiée tous les quarts d'heure,
   //    émise seulement quand l'intervalle paramétré (défaut 3 h) est écoulé.
   cron.schedule('*/15 * * * *', async () => {
     try { await avecVerrou('situationPeriodique', situationPeriodiqueJob); } catch (e) { logger.error('[CRON] situationPeriodique error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 9 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
+  logger.info('✅ 10 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
 }
