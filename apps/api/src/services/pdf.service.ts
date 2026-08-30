@@ -157,22 +157,26 @@ export interface MaintenancePdfData {
 const fmtN = (v: number | null | undefined, suffixe = '') =>
   v == null ? '—' : `${Number(v).toLocaleString('fr-FR')}${suffixe}`;
 
-/** Grille de photos 3 par ligne, saut de page automatique. */
+/** Grille de photos 3 par ligne occupant TOUTE la largeur, saut de page auto. */
 function grillePhotos(doc: PDFKit.PDFDocument, titre: string, photos: Buffer[], total: number) {
   if (!photos.length) return;
   sectionTitle(doc, `${titre} (${total})`);
-  const larg = 158; const haut = 118; const gap = 12; const x0 = 50;
-  let x = x0; let y = doc.y;
+  const cols = 3, gap = 10, x0 = 50;
+  const usable = doc.page.width - 100;          // pleine largeur utile (~495)
+  const cellW = (usable - gap * (cols - 1)) / cols; // ~158 par cellule
+  const cellH = 150;                            // cellules plus hautes = meilleure lisibilité
+  let col = 0, y = doc.y;
   for (const p of photos) {
-    if (y + haut > doc.page.height - 70) { doc.addPage(); y = 50; x = x0; }
+    if (col === 0 && y + cellH > doc.page.height - 70) { doc.addPage(); y = 50; }
+    const x = x0 + col * (cellW + gap);
+    doc.roundedRect(x, y, cellW, cellH, 3).lineWidth(0.5).strokeColor('#d8dee6').stroke();
     try {
-      doc.image(p, x, y, { fit: [larg, haut], align: 'center', valign: 'center' });
-      doc.rect(x, y, larg, haut).lineWidth(0.5).strokeColor('#dddddd').stroke();
-    } catch { /* image illisible : on passe */ }
-    x += larg + gap;
-    if (x + larg > doc.page.width - 50) { x = x0; y += haut + gap; }
+      doc.image(p, x + 2, y + 2, { fit: [cellW - 4, cellH - 4], align: 'center', valign: 'center' });
+    } catch { /* image illisible : le cadre reste */ }
+    col++;
+    if (col === cols) { col = 0; y += cellH + gap; }
   }
-  doc.y = (x === x0 ? y : y + haut + gap);
+  doc.y = (col === 0 ? y : y + cellH + gap);
   if (total > photos.length) {
     doc.fontSize(8).fillColor('#888').text(`+ ${total - photos.length} photo(s) supplémentaire(s) consultable(s) dans l'application.`, x0, doc.y);
     doc.moveDown(0.4);

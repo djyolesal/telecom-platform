@@ -1215,7 +1215,9 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
   };
   const bufsPhase = async (phase: string) => {
     const liste = photos.filter((p) => p.phase === phase);
-    const bufs = (await Promise.all(liste.slice(0, 4).map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
+    // Jusqu'à 6 photos par phase dans le PDF (grille 3 par ligne) ; le reste
+    // est signalé et reste consultable dans l'application.
+    const bufs = (await Promise.all(liste.slice(0, 6).map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
     return { bufs, total: liste.length };
   };
   const [avant, apres, signatureTechnicien, signatureAgent] = await Promise.all([
