@@ -33,8 +33,10 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     label: 'Site rétabli de lui-même (fin d\'alerte, avant intervention terrain)',
     // Symétrique du SMS « hors service » : mêmes destinataires, envoyé quand la
     // détection automatique voit le site remonter AVANT toute intervention.
-    defaut: '[E&M OpS] NOC : site {site} rétabli après {duree} de coupure. Incident {reference} résolu - intervention terrain plus nécessaire.',
-    variables: ['site', 'reference', 'duree'],
+    // {impactes} arrive PRÉ-FORMATÉ (« (+3 sites aval également rétablis) »)
+    // ou vide - même convention que le gabarit d'alerte.
+    defaut: '[E&M OpS] NOC : site {site} rétabli après {duree} de coupure{impactes}. Incident {reference} résolu - intervention terrain plus nécessaire.',
+    variables: ['site', 'reference', 'duree', 'impactes'],
   },
   {
     key: 'sms.tpl.coupurePartielle',

@@ -393,12 +393,27 @@ export async function notifierResolutionAutomatique(incidentId: string | null): 
       const dureeTxt = duree < 60
         ? `${duree} min`
         : `${Math.floor(duree / 60)} h${duree % 60 ? ` ${duree % 60} min` : ''}`;
+      // Aval rétabli avec la racine : SITES distincts rattachés à la racine de
+      // l'incident (fermés par la même cascade) — miroir du « +N impactés »
+      // du SMS d'alerte, pour que la fin d'alerte couvre tout l'événement.
+      const racine = await prisma.coupureReseau.findFirst({
+        where: { incidentId: inc.id },
+        select: { id: true },
+      });
+      const nbAval = racine
+        ? (await prisma.coupureReseau.findMany({
+            where: { coupureOrigineId: racine.id },
+            select: { siteId: true }, distinct: ['siteId'],
+          })).length
+        : 0;
+      const s = nbAval > 1 ? 's' : '';
       void notifierIncidentCoupure(
         inc.siteId,
         rendreTemplate('sms.tpl.siteRetabli', {
           site: inc.site.nom,
           reference: inc.reference ?? '',
           duree: dureeTxt,
+          impactes: nbAval ? ` (+${nbAval} site${s} aval également rétabli${s})` : '',
         }),
         'INCIDENT_COUPURE_RETABLI',
         'PASSIVE'
