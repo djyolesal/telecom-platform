@@ -12,10 +12,11 @@ const NAVY = 'FF1B3F6B', TEAL = 'FF0E7C6B', AMBER = 'FFE67E22', RED = 'FFC0392B'
       PURPLE = 'FF7D3C98', ZEBRA = 'FFF7F9FB', GRIS = 'FF6B7280',
       ROUGE_PALE = 'FFFDECEA', VIOLET_PALE = 'FFF4ECF7', VERT_PALE = 'FFE8F6F3';
 
+// Référentiel NOC des types d'alarme (libellés donnés par l'exploitant).
 export const LIBELLES_ALARME: Record<string, string> = {
-  AE: 'AE - énergie', GE: 'GE - groupe électrogène', EN: 'EN - énergie',
+  AE: 'AE - atelier d\'énergie', GE: 'GE - groupe électrogène', EN: 'EN - environnement',
   TX: 'TX - transmission', FO: 'FO - fibre optique', RA: 'RA - radio',
-  MI: 'MI - maintenance', MD: 'MD - divers', NA: 'NA - non attribué',
+  MI: 'MI - maintenance', MD: 'MD - mise hors service sur demande', NA: 'NA - non attribué',
 };
 
 export interface LigneCoupureExport {
