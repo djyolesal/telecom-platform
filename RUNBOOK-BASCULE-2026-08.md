@@ -126,6 +126,13 @@ La recette (phase 3) peut se faire en parallèle de la distribution, pas avant.
 **D'abord la recette AUTOMATISÉE** (couvre l'auth, la stabilité de session, l'aiguillage
 transporteur et les pages de synthèse — en lecture seule, aucun SMS déclenché) :
 
+> **Où l'exécuter : depuis TA machine, jamais sur le serveur.** La suite pilote un Chromium
+> local qui attaque `https://emops.uk` comme un vrai utilisateur — elle traverse donc nginx,
+> TLS et le rate-limit, ce qu'un `localhost` sur le VPS ne testerait pas. Installer Playwright
+> sur le serveur consommerait en plus la RAM dont l'API a besoin. Seul prérequis : ta machine
+> doit joindre `https://emops.uk`, et tu saisis les identifiants toi-même en variables
+> d'environnement (jamais dans un fichier).
+
 ```bash
 cd apps/web
 npx playwright install chromium          # une fois par machine
