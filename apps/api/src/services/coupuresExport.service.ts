@@ -15,7 +15,7 @@ const NAVY = 'FF1B3F6B', TEAL = 'FF0E7C6B', AMBER = 'FFE67E22', RED = 'FFC0392B'
 export const LIBELLES_ALARME: Record<string, string> = {
   AE: 'AE - énergie', GE: 'GE - groupe électrogène', EN: 'EN - énergie',
   TX: 'TX - transmission', FO: 'FO - fibre optique', RA: 'RA - radio',
-  MI: 'MI - micro-ondes', MD: 'MD - divers', NA: 'NA - non attribué',
+  MI: 'MI - maintenance', MD: 'MD - divers', NA: 'NA - non attribué',
 };
 
 export interface LigneCoupureExport {

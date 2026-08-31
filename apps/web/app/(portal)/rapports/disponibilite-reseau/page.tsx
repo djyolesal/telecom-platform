@@ -188,7 +188,7 @@ export default function DisponibiliteReseauPage() {
               <Bar dataKey="indisponibilitéHeures" name="Indispo. (h)" fill="#1B3F6B" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
-          <p className="mt-2 text-xs text-gray-400">AE / GE / EN = causes énergie · FO = fibre · TX = transmission · RA = radio (référentiel NOC).</p>
+          <p className="mt-2 text-xs text-gray-400">AE / GE / EN = causes énergie · FO = fibre · TX = transmission · RA = radio · MI = maintenance · MD = divers (référentiel NOC).</p>
         </div>
       </div>
 

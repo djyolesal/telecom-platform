@@ -163,7 +163,13 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           siteId,
           type: 'COUPURE_TOTALE',
           severite: 'CRITIQUE',
-          description: `Site entier hors service (coupure ${technos.join('/')}) signalé par le NOC${coupures[0].typeAlarme ? ` - alarme ${LIBELLES_ALARME[coupures[0].typeAlarme] ?? coupures[0].typeAlarme}` : ''}.`,
+          // « Site entier » dit déjà que tout est coupé : on n'énumère les
+          // technologies QUE lorsque le site entier est déduit des quatre
+          // technos tombées (sinon on écrivait « coupure SITE », voire
+          // « coupure 3G/SITE » quand une ligne partielle coexistait).
+          description: `Site entier hors service${
+            technos.includes('SITE') ? '' : ` (coupure ${technos.join('/')})`
+          } signalé par le NOC${coupures[0].typeAlarme ? ` - alarme ${LIBELLES_ALARME[coupures[0].typeAlarme] ?? coupures[0].typeAlarme}` : ''}.`,
           declarePar: userId,
           // L'incident s'ouvre au DÉBUT réel de la panne, pas au moment de la
           // saisie : le NOC insère souvent APRÈS coup (début rétroactif) —
