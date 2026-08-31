@@ -142,15 +142,15 @@ E2E_TRANSPORTEUR_EMAIL=... E2E_TRANSPORTEUR_PASSWORD=... \
 npm run e2e
 ```
 
-- [ ] Les tests passent (10 tests sur 4 fichiers ; rapport HTML dans `playwright-report/`
-      en cas d'échec).
+- [ ] Les tests passent : **12 passed** (2 setups de session + 10 tests sur 4 fichiers ;
+      rapport HTML dans `playwright-report/` en cas d'échec).
       Identifiants saisis par l'opérateur, jamais écrits dans un fichier.
 
 > **⚠️ Piège : « 2 passed, 10 skipped » n'est PAS une recette réussie.** Sans les variables
 > d'environnement, les deux setups écrivent une session vide et « passent » en ~200 ms, puis
 > les 10 vrais tests se sautent (`E2E_ADMIN_EMAIL/PASSWORD non fournis`). Un passage valide
-> affiche **10 passed** (ou 7 si seul le compte admin est fourni — les 3 specs transporteur
-> se sautent alors) et dure **~1 minute**. Et sans `E2E_BASE_URL`, la suite vise
+> affiche **12 passed** (ou 9 si seul le compte admin est fourni — les 3 specs transporteur
+> se sautent alors) et dure **~1 minute** (validé 12/12 en 1,1 min le 31/08/2026). Et sans `E2E_BASE_URL`, la suite vise
 > `http://localhost:3000`, pas la production.
 
 **Règles d'exécution de la suite — apprises à la dure (validée 12/12 le 06/08) :**
@@ -355,7 +355,8 @@ Notes :
 - Exercice de restauration complet chronométré sur une machine vierge (mesurer le vrai RTO).
 - Supervision externe (ping + alerte) et traçage d'erreurs applicatif.
 - Version minimale d'APK exigée par l'API (éviter les APK zombies à la prochaine rupture).
-- Étendre la suite E2E (10 tests aujourd'hui : auth, session, transporteur, synthèses) aux
+- Étendre la suite E2E (10 tests aujourd'hui + 2 setups : auth, session, transporteur,
+  synthèses) aux
   parcours d'ÉCRITURE sur un environnement de test dédié (création BL, plan, clôture) — ils ne
   peuvent pas tourner contre la prod (SMS réels, données réelles).
 - **Durcir la validation d'entrée** : les contrôleurs métier n'ont pas de schémas zod en amont
