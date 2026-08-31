@@ -123,7 +123,7 @@ export default function ConformiteArcepPage() {
     <div>
       <PageHeader
         title="Conformité ARCEP (DR1 / DR2)"
-        subtitle={`Arrêté n°005/MENTD/CAB du 12/08/2022 · ${MOIS_OPTIONS.find((o) => o.value === data.mois)?.label ?? data.mois} · détections automatiques comptées une fois prises en charge`}
+        subtitle={`${MOIS_OPTIONS.find((o) => o.value === data.mois)?.label ?? data.mois} · détections automatiques comptées une fois prises en charge`}
         backHref="/rapports"
         actions={<ExportButtons base="/rapports/conformite-arcep/export" name="conformite-arcep" query={`mois=${mois}`} />}
       />

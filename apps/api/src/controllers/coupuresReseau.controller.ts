@@ -2416,6 +2416,6 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
         totalReel: l.reel.totalMinutes ? fmtMin(l.reel.totalMinutes) : '—',
         verdictReel: l.reel.conforme ? 'Conforme' : 'NON CONFORME',
       })),
-    }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · arrêté n°005/MENTD/CAB du 12/08/2022 · durées CONTINUES, sans cumul d'épisodes · colonnes officielles = détections AUTO comptées une fois prises en charge ; colonnes « réelles » = toutes les détections (${d.detectionsNonAdoptees} non adoptée(s) sur le mois)`);
+    }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · durées CONTINUES, sans cumul d'épisodes · colonnes officielles = détections AUTO comptées une fois prises en charge ; colonnes « réelles » = toutes les détections (${d.detectionsNonAdoptees} non adoptée(s) sur le mois)`);
   } catch (err) { next(err); }
 }
