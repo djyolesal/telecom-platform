@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { WifiOff, Activity, Zap, RadioTower } from 'lucide-react';
+import { WifiOff, Activity, Zap, RadioTower, Thermometer } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -132,11 +132,12 @@ export default function DisponibiliteReseauPage() {
         : isError || !data || !k ? <ErrorState message="Disponibilité réseau indisponible" />
         : <>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard title="Coupures" value={fmtNumber(k.coupures)} subtitle={`${k.sitesTouches}/${k.nbSites} sites touchés`} icon={WifiOff} color="bg-[#1B3F6B]" />
         <StatCard title="En cours" value={fmtNumber(k.enCours)} subtitle="non rétablies" icon={Activity} color="bg-[#C0392B]" />
         <StatCard title="Indisponibilité cumulée" value={`${fmtNumber(k.indisponibilitéHeures)} h`} subtitle={data.periodeLibelle ?? `sur ${data.periodeMois} mois`} icon={RadioTower} color="bg-[#E67E22]" />
-        <StatCard title="Part énergie" value={`${k.partEnergiePct}%`} subtitle="alarmes AE / GE / EN" icon={Zap} color="bg-[#0E7C6B]" />
+        <StatCard title="Part énergie" value={`${k.partEnergiePct}%`} subtitle="alarmes AE / GE" icon={Zap} color="bg-[#0E7C6B]" />
+        <StatCard title="Part environnement" value={`${k.partEnvironnementPct ?? 0}%`} subtitle="alarmes EN (clim., température…)" icon={Thermometer} color="bg-[#2471A3]" />
         <StatCard
           title="Part passif"
           value={`${k.partPassifPct ?? 0}%`}

@@ -64,9 +64,16 @@ export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
 
 const minutesEntre = (debut: Date, fin: Date) => Math.max(0, Math.round((fin.getTime() - debut.getTime()) / 60_000));
 
-// Alarmes « énergie » (AE/GE/EN) → indisponibilité pré-classée PASSIF
-// (environnement/énergie, responsabilité O&M) ; le technicien affine à la résolution.
-const ALARMES_ENERGIE = new Set(['AE', 'GE', 'EN']);
+// CLASSIFICATION : alarmes d'infrastructure (atelier d'énergie, groupe
+// électrogène, environnement) → indisponibilité pré-classée PASSIF
+// (responsabilité O&M) ; le technicien affine à la résolution.
+const ALARMES_PASSIVES = new Set(['AE', 'GE', 'EN']);
+
+// MESURE : l'ENVIRONNEMENT (EN : climatisation, température, intrusion…) est
+// une cause passive DISTINCTE de l'énergie — le compter dans « part énergie »
+// surévaluait celle-ci. Les deux parts sont donc mesurées séparément.
+export const ALARMES_ENERGIE = new Set(['AE', 'GE']);
+export const ALARMES_ENVIRONNEMENT = new Set(['EN']);
 
 /**
  * Aiguillage des coupures LOCALES encore en cours, site par site :
@@ -108,7 +115,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
     if (!siteEntier) {
       // Partiel → ACTIF par nature (le site est alimenté). Notification unique.
       await prisma.coupureReseau.updateMany({
-        where: { id: { in: coupures.map((c) => c.id) }, causeCategorie: null, typeAlarme: { notIn: [...ALARMES_ENERGIE] } },
+        where: { id: { in: coupures.map((c) => c.id) }, causeCategorie: null, typeAlarme: { notIn: [...ALARMES_PASSIVES] } },
         data: { causeCategorie: 'ACTIF' },
       });
       // Verrou + marquage AVANT l'envoi, dans une transaction : deux imports
@@ -235,7 +242,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       }
     }
     // Pré-classement : alarme énergie → PASSIF (affinable à la résolution).
-    const passives = coupures.filter((c) => c.typeAlarme && ALARMES_ENERGIE.has(c.typeAlarme));
+    const passives = coupures.filter((c) => c.typeAlarme && ALARMES_PASSIVES.has(c.typeAlarme));
     if (passives.length) {
       await prisma.coupureReseau.updateMany({
         where: { id: { in: passives.map((c) => c.id) }, causeCategorie: null },
@@ -1468,12 +1475,12 @@ async function calculerDisponibiliteReseau(req: Request) {
     // d'être sommées (sinon un site entier coupé 6 h comptait 24 h).
     const ivSite = new Map<string, Intervalle[]>();
     const ivEnergie = new Map<string, Intervalle[]>();
+    const ivEnvironnement = new Map<string, Intervalle[]>();
     const ivActif = new Map<string, Intervalle[]>();
     const ivPassif = new Map<string, Intervalle[]>();
     const ivAlarme = new Map<string, Intervalle[]>(); // clé « alarme|site »
     const parSite = new Map<string, { nom: string; region: string; downtime: number; coupures: number; enCours: number }>();
     const parAlarme = new Map<string, { type: string; coupures: number; downtime: number }>();
-    const ENERGIE = new Set(['AE', 'GE', 'EN']);
     let enCours = 0;
 
     // Évaluation par prestataire (vue interne) : agrégats sur les sites de ses lots.
@@ -1508,7 +1515,8 @@ async function calculerDisponibiliteReseau(req: Request) {
       const iv: Intervalle = { debut, fin };
       if (!c.dateFin) enCours++;
       pousser(ivSite, c.siteId, iv);
-      if (c.typeAlarme && ENERGIE.has(c.typeAlarme)) pousser(ivEnergie, c.siteId, iv);
+      if (c.typeAlarme && ALARMES_ENERGIE.has(c.typeAlarme)) pousser(ivEnergie, c.siteId, iv);
+      if (c.typeAlarme && ALARMES_ENVIRONNEMENT.has(c.typeAlarme)) pousser(ivEnvironnement, c.siteId, iv);
       if (c.causeCategorie === 'ACTIF') pousser(ivActif, c.siteId, iv);
       else if (c.causeCategorie === 'PASSIF') pousser(ivPassif, c.siteId, iv);
 
@@ -1543,6 +1551,7 @@ async function calculerDisponibiliteReseau(req: Request) {
     // qu'une fois.
     const downtimeTotal = minutesUnionParCle(ivSite);
     const downtimeEnergie = minutesUnionParCle(ivEnergie);
+    const downtimeEnvironnement = minutesUnionParCle(ivEnvironnement);
     const downtimeActif = minutesUnionParCle(ivActif);
     const downtimePassif = minutesUnionParCle(ivPassif);
     for (const [siteId, ps] of parSite) ps.downtime = minutesUnion(ivSite.get(siteId) ?? []);
@@ -1568,6 +1577,7 @@ async function calculerDisponibiliteReseau(req: Request) {
           enCours,
           downtimeHeures: Math.round(downtimeTotal / 60),
           partEnergiePct: downtimeTotal > 0 ? Math.round((downtimeEnergie / downtimeTotal) * 100) : 0,
+          partEnvironnementPct: downtimeTotal > 0 ? Math.round((downtimeEnvironnement / downtimeTotal) * 100) : 0,
           // Split par responsabilité : ACTIF (radio/transmission), PASSIF (énergie/environnement).
           downtimeActifHeures: Math.round(downtimeActif / 60),
           downtimePassifHeures: Math.round(downtimePassif / 60),

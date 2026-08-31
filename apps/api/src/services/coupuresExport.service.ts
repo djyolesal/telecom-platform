@@ -102,8 +102,12 @@ export function construireClasseurCoupures(opts: {
   const total = lignes.length;
   const enCours = lignes.filter((l) => !l.dateFin).length;
   const downtimeTotal = lignes.reduce((s, l) => s + dtMin(l), 0);
-  const ENERGIE = new Set(['AE', 'GE', 'EN']);
+  // Énergie STRICTE (atelier d'énergie + groupe électrogène) ; l'environnement
+  // (EN) est une cause passive distincte, mesurée à part.
+  const ENERGIE = new Set(['AE', 'GE']);
+  const ENVIRONNEMENT = new Set(['EN']);
   const dtEnergie = lignes.filter((l) => l.typeAlarme && ENERGIE.has(l.typeAlarme)).reduce((s, l) => s + dtMin(l), 0);
+  const dtEnvironnement = lignes.filter((l) => l.typeAlarme && ENVIRONNEMENT.has(l.typeAlarme)).reduce((s, l) => s + dtMin(l), 0);
   const dtPassif = lignes.filter((l) => l.causeCategorie === 'PASSIF').reduce((s, l) => s + dtMin(l), 0);
   const pct = (v: number) => (downtimeTotal > 0 ? `${Math.round((v / downtimeTotal) * 100)} %` : '0 %');
 
@@ -112,6 +116,7 @@ export function construireClasseurCoupures(opts: {
     ['En cours', enCours, RED],
     ['Downtime (h)', Math.round(downtimeTotal / 60), AMBER],
     ['Part énergie', pct(dtEnergie), TEAL],
+    ['Part environnement', pct(dtEnvironnement), TEAL],
     ['Part passif', pct(dtPassif), PURPLE],
   ];
   kpis.forEach(([label, val, coul], i) => {
