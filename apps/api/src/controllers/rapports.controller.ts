@@ -398,7 +398,7 @@ export async function buildMonthlyData(annee: number, mois: number, region?: str
       nbSites: manquants.totaux.nbSitesManquants,
       // Compteur camion seulement en national (non régionalisable).
       nbCamionsEcart: region ? undefined : manquants.totaux.nbCamionsEcart,
-      topSites: manquants.parSite.slice(0, 5).map((s) => ({ code: s.siteCode, manquant: s.manquant })),
+      topSites: manquants.parSite.slice(0, 5).map((s) => ({ code: s.siteCode, nom: s.siteNom, manquant: s.manquant })),
     },
   };
 }
@@ -829,8 +829,8 @@ export async function exportBilanCarburant(req: Request, res: Response, next: Ne
       {
         name: 'Par site',
         columns: [
-          { header: 'Site', key: 'code', width: 14 },
-          { header: 'Nom', key: 'nom', width: 24 },
+          { header: 'Site', key: 'nom', width: 24 },
+          { header: 'Code', key: 'code', width: 14 },
           { header: 'Région', key: 'region', width: 16 },
           { header: 'Stock début (L)', key: 'stockDebut', width: 15 },
           { header: 'Livré (L)', key: 'livre', width: 12 },
@@ -901,8 +901,8 @@ export async function exportBilanEnergie(req: Request, res: Response, next: Next
       {
         name: 'Par site',
         columns: [
-          { header: 'Site', key: 'code', width: 14 },
-          { header: 'Nom', key: 'nom', width: 24 },
+          { header: 'Site', key: 'nom', width: 24 },
+          { header: 'Code', key: 'code', width: 14 },
           { header: 'Région', key: 'region', width: 16 },
           { header: 'Index début (kWh)', key: 'indexDebut', width: 16 },
           { header: 'Index fin (kWh)', key: 'indexFin', width: 16 },

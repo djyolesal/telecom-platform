@@ -203,7 +203,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
       where,
       take: EXPORT_MAX,
       orderBy: { dateReleve: 'desc' },
-      include: { site: { select: { code: true } }, maintenance: { select: { type: true, tachePreventiveKey: true } } },
+      include: { site: { select: { nom: true } }, maintenance: { select: { type: true, tachePreventiveKey: true } } },
     });
 
     await auditLog(req.user!.id, 'EXPORT', 'releves', undefined, { count: rows.length }, req);
@@ -222,7 +222,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
         { header: 'Coût estimé', key: 'cout', width: 14 },
       ],
       rows: rows.map((r) => ({
-        site: r.site?.code ?? '',
+        site: r.site?.nom ?? '',
         date: r.dateReleve.toLocaleString('fr-FR'),
         provenance: provenanceReleve(r.maintenance),
         source: r.source,

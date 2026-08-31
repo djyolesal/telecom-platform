@@ -281,7 +281,7 @@ export interface MonthlyReportData {
   maintenances: { total: number; preventives: number; curatives: number };
   carburant: { volumeDepoteLitres: number; coutTotalFCFA: number; nbDepotages: number };
   energie: { consoTotaleKwh: number; coutEstimeFCFA: number };
-  manquants?: { totalLitres: number; nbSites: number; nbCamionsEcart?: number; topSites: Array<{ code: string; manquant: number }> };
+  manquants?: { totalLitres: number; nbSites: number; nbCamionsEcart?: number; topSites: Array<{ code: string; nom?: string; manquant: number }> };
 }
 
 const MOIS = [
@@ -327,7 +327,7 @@ export async function generateMonthlyReportPdf(r: MonthlyReportData): Promise<Bu
       // Compteur camions : national uniquement (un camion traverse plusieurs régions).
       if (r.manquants.nbCamionsEcart != null) row(doc, 'Camions avec écart', String(r.manquants.nbCamionsEcart));
       if (r.manquants.topSites.length) {
-        row(doc, 'Principaux sites', r.manquants.topSites.map((s) => `${s.code} (${s.manquant.toLocaleString('fr-FR')} L)`).join(', '));
+        row(doc, 'Principaux sites', r.manquants.topSites.map((s) => `${s.nom ?? s.code} (${s.manquant.toLocaleString('fr-FR')} L)`).join(', '));
       }
     }
 
@@ -552,8 +552,8 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
     if (d.actif.caracteristique) row(doc, 'Caractéristique', d.actif.caracteristique);
 
     sectionTitle(doc, 'Localisation');
-    const dep = d.siteOrigine ? `${d.siteOrigine.code} - ${d.siteOrigine.nom}` : 'Dépôt';
-    const arr = d.siteDestination ? `${d.siteDestination.code} - ${d.siteDestination.nom}` : 'Dépôt';
+    const dep = d.siteOrigine ? d.siteOrigine.nom : 'Dépôt';
+    const arr = d.siteDestination ? d.siteDestination.nom : 'Dépôt';
     if (d.nature === 'INSTALLATION') {
       row(doc, 'Provenance', 'Dépôt');
       row(doc, 'Site d’installation', arr);

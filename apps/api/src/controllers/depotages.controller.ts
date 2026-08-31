@@ -767,7 +767,7 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
       take: EXPORT_MAX,
       orderBy: { dateDepotage: 'desc' },
       include: {
-        site: { select: { code: true } },
+        site: { select: { nom: true } },
         // Chauffeur et camion : l'écart de livraison est structurellement
         // imputable au transport, il doit pouvoir se lire par chauffeur.
         chauffeur: { select: { nom: true } },
@@ -791,7 +791,7 @@ export async function exportDepotages(req: Request, res: Response, next: NextFun
         { header: 'Bon livraison', key: 'bl', width: 18 },
       ],
       rows: rows.map((d) => ({
-        site: d.site?.code ?? '',
+        site: d.site?.nom ?? '',
         date: d.dateDepotage.toLocaleString('fr-FR'),
         chauffeur: d.chauffeur?.nom ?? d.nomChauffeur ?? '',
         camion: d.ligneLivraison?.bonLivraison?.immatriculation ?? '',

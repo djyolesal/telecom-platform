@@ -48,13 +48,13 @@ export async function manquantAlertJob(): Promise<void> {
 
   const sections: string[] = [];
   if (critsLignes.length) {
-    sections.push('🔴 Critiques :\n' + critsLignes.slice(0, 5).map((l) => `${l.siteCode} - ${L(l.manquant)} (BL ${l.numeroBL})`).join('\n'));
+    sections.push('🔴 Critiques :\n' + critsLignes.slice(0, 5).map((l) => `${l.siteNom ?? l.siteCode} - ${L(l.manquant)} (BL ${l.numeroBL})`).join('\n'));
   }
   if (camionsTri.length) {
     sections.push('🚛 Camions (chargé non distribué) :\n' + camionsTri.slice(0, 5).map((c) => `${c.numeroBL} ${c.immatriculation} - ${L(c.manquant)}`).join('\n'));
   }
   if (retardLignes.length) {
-    sections.push('🟠 En retard :\n' + retardLignes.slice(0, 5).map((l) => `${l.siteCode} - ${L(l.manquant)} (${l.jours} j)`).join('\n'));
+    sections.push('🟠 En retard :\n' + retardLignes.slice(0, 5).map((l) => `${l.siteNom ?? l.siteCode} - ${L(l.manquant)} (${l.jours} j)`).join('\n'));
   }
   // Chargements en attente d'un geste du manager : sans ces deux lignes, un BL
   // parti du dépôt sans plan n'apparaissait dans aucune alerte.

@@ -1080,8 +1080,8 @@ export async function exportPlanLivraisonXlsx(req: Request, res: Response, next:
     const buffer = await buildXlsx(
       `Plan ${bl.numeroBL}`.slice(0, 28),
       [
-        { header: 'Site', key: 'site', width: 14 },
-        { header: 'Nom', key: 'nom', width: 26 },
+        { header: 'Site', key: 'nom', width: 26 },
+        { header: 'Code', key: 'site', width: 14 },
         { header: 'Région', key: 'region', width: 16 },
         { header: 'Volume prévu (L)', key: 'prevu', width: 16 },
       ],
@@ -1219,8 +1219,8 @@ export async function exportRapprochementBc(req: Request, res: Response, next: N
       {
         name: 'Conservation par site',
         columns: [
-          { header: 'Site', key: 'siteCode', width: 14 },
-          { header: 'Nom', key: 'siteNom', width: 24 },
+          { header: 'Site', key: 'siteNom', width: 24 },
+          { header: 'Code', key: 'siteCode', width: 14 },
           { header: 'Région', key: 'region', width: 16 },
           { header: 'Stock début (L)', key: 'stockDebut', width: 15 },
           { header: 'Livré (L)', key: 'livre', width: 12 },
@@ -1276,8 +1276,8 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
       {
         name: 'Par site',
         columns: [
-          { header: 'Site', key: 'siteCode', width: 14 },
-          { header: 'Nom', key: 'siteNom', width: 24 },
+          { header: 'Site', key: 'siteNom', width: 24 },
+          { header: 'Code', key: 'siteCode', width: 14 },
           { header: 'Région', key: 'region', width: 16 },
           { header: 'Prévu (L)', key: 'prevu', width: 12 },
           { header: 'Livré (L)', key: 'livre', width: 12 },
@@ -1574,7 +1574,7 @@ export async function exportBonsLivraison(req: Request, res: Response, next: Nex
           chauffeur: bl.chauffeur?.nom ?? '',
           transporteur: bl.transporteur?.nom ?? '',
           charge: n(bl.volumeChargeLitres),
-          site: l.site.code,
+          site: l.site.nom,
           region: l.site.region,
           prevu: n(l.volumePrevuLitres),
           livre: l.volumeLivreLitres != null ? n(l.volumeLivreLitres) : '',

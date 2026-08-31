@@ -66,7 +66,7 @@ async function blocMaintenances(
       where: { ...scope, ...cat, statut: { in: ['PLANIFIEE', 'EN_COURS', 'SUSPENDUE'] }, datePlanifiee: { lt: debutJour } },
       orderBy: { datePlanifiee: 'asc' },
       take: 5,
-      select: { equipement: true, datePlanifiee: true, statut: true, site: { select: { code: true } } },
+      select: { equipement: true, datePlanifiee: true, statut: true, site: { select: { nom: true } } },
     }),
   ]);
   return {
@@ -75,7 +75,7 @@ async function blocMaintenances(
     enCours,
     planifiees,
     enRetard: retard.map((m) => ({
-      site: m.site?.code ?? '—',
+      site: m.site?.nom ?? '—',
       equipement: `${m.equipement} (${LABEL_STATUT[m.statut] ?? m.statut.toLowerCase()})`,
       datePlanifiee: m.datePlanifiee,
     })),
@@ -122,12 +122,12 @@ async function calculerRecap(prestataireId: string | null, debutMois: Date, debu
           where: { ...scope, statut: { in: ['OUVERT', 'EN_COURS'] }, severite: 'CRITIQUE' },
           orderBy: { dateOuverture: 'asc' },
           take: 5,
-          select: { reference: true, dateOuverture: true, site: { select: { code: true } } },
+          select: { reference: true, dateOuverture: true, site: { select: { nom: true } } },
         }),
       ]);
       return {
         ouvertsPeriode, resolus, encoreOuverts, ouvertsAujourdhui,
-        critiquesOuverts: critiques.map((i) => ({ site: i.site?.code ?? '—', reference: i.reference, depuis: i.dateOuverture })),
+        critiquesOuverts: critiques.map((i) => ({ site: i.site?.nom ?? '—', reference: i.reference, depuis: i.dateOuverture })),
       };
     })(),
     (async () => {

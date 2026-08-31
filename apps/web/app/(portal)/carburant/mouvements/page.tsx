@@ -64,7 +64,7 @@ export default function MouvementsCarburantPage() {
     {
       key: 'ou', header: 'Site / commande',
       render: (m) => m.site
-        ? <span className="text-gray-800">{m.site.code}{m.contrepartie ? <span className="text-gray-500"> ↔ {m.contrepartie.code}</span> : null}</span>
+        ? <span className="text-gray-800">{m.site.nom ?? m.site.code}{m.contrepartie ? <span className="text-gray-500"> ↔ {m.contrepartie.nom ?? m.contrepartie.code}</span> : null}</span>
         : <span className="text-gray-800">BC {m.bonCommande?.numero ?? '—'}</span>,
     },
     {

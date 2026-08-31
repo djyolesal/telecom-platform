@@ -1349,7 +1349,7 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
         { header: 'Durée (min)', key: 'duree', width: 12 },
       ],
       rows: rows.map((m) => ({
-        site: m.site?.code ?? '',
+        site: m.site?.nom ?? '',
         type: libelle(L_TYPE_MAINTENANCE, m.type),
         categorie: libelle(L_CATEGORIE_EQUIPEMENT, m.categorie),
         equipement: m.equipement,

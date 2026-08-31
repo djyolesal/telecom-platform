@@ -187,7 +187,7 @@ export default function RapprochementPage() {
               {data.conservation.map((c) => (
                 <tr key={c.siteId} className={`border-b last:border-0 ${!c.mesure ? 'bg-gray-50/60' : ''}`}>
                   <td className="py-2 font-medium text-gray-800">
-                    {c.siteCode}
+                    {c.siteNom}
                     {!c.mesure && (
                       <span className="ml-1.5 inline-flex items-center gap-1 text-[11px] font-normal text-gray-400" title={c.motifNonMesure ?? ''}>
                         <HelpCircle size={12} /> non mesuré

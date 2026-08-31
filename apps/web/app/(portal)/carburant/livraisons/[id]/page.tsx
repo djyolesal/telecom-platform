@@ -242,7 +242,6 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
       <tr className="border-b last:border-0">
         <td className="py-2">
           <span className="font-medium text-gray-800">{l.site.nom}</span>
-          <span className="ml-1.5 text-xs text-gray-400">{l.site.code}</span>
           {aCoord && (
             <a
               href={`https://www.google.com/maps/dir/?api=1&destination=${l.site.latitude},${l.site.longitude}`}

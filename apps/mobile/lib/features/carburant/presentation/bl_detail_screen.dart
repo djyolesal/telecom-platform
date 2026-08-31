@@ -279,7 +279,7 @@ class _CarteLigneState extends State<_CarteLigne> {
             Row(
               children: [
                 Expanded(
-                  child: Text('${ligne.siteCode} - ${ligne.siteNom}',
+                  child: Text(ligne.siteNom,
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
                 Container(
