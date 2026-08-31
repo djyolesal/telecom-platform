@@ -19,7 +19,7 @@ interface LigneArcep {
   conforme: boolean;
 }
 interface DataArcep {
-  fenetreJours: number; du: string; au: string;
+  mois: string; moisEnCours: boolean; du: string; au: string;
   seuils: { dr1Max: number; dr2MaxMinutesParJour: number };
   sitesAnalyses: number; nonConformesDr1: number; nonConformesDr2: number; nonConformes: number;
   lignes: LigneArcep[];
@@ -33,13 +33,26 @@ const fmtMin = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m
  * d'indisponibilité par jour et par station). Anticipe les audits du
  * régulateur : mêmes règles officielles que le rapport de disponibilité.
  */
+// Douze derniers mois calendaires (le seuil DR1 est « par mois »).
+const MOIS_OPTIONS = (() => {
+  const out: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const value = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    out.push({ value, label: i === 0 ? `${label} (en cours)` : label });
+  }
+  return out;
+})();
+
 export default function ConformiteArcepPage() {
-  const [jours, setJours] = useState('30');
+  const [mois, setMois] = useState(MOIS_OPTIONS[0].value);
   const [seulNonConformes, setSeulNonConformes] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['conformite-arcep', jours],
-    queryFn: () => api.get('/rapports/conformite-arcep', { params: { jours } }).then((r) => r.data.data as DataArcep),
+    queryKey: ['conformite-arcep', mois],
+    queryFn: () => api.get('/rapports/conformite-arcep', { params: { mois } }).then((r) => r.data.data as DataArcep),
   });
 
   if (isLoading) return <Loading />;
@@ -83,22 +96,21 @@ export default function ConformiteArcepPage() {
     <div>
       <PageHeader
         title="Conformité ARCEP (DR1 / DR2)"
-        subtitle={`Arrêté n°005/MENTD/CAB du 12/08/2022 · fenêtre glissante de ${data.fenetreJours} jours · détections automatiques comptées une fois prises en charge`}
+        subtitle={`Arrêté n°005/MENTD/CAB du 12/08/2022 · ${MOIS_OPTIONS.find((o) => o.value === data.mois)?.label ?? data.mois} · détections automatiques comptées une fois prises en charge`}
         backHref="/rapports"
-        actions={<ExportButtons base="/rapports/conformite-arcep/export" name="conformite-arcep" query={`jours=${jours}`} />}
+        actions={<ExportButtons base="/rapports/conformite-arcep/export" name="conformite-arcep" query={`mois=${mois}`} />}
       />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard title="Sites analysés" value={String(data.sitesAnalyses)} subtitle="stations de base actives" icon={WifiOff} color="bg-[#1B3F6B]" />
-        <StatCard title="Hors seuil DR1" value={String(data.nonConformesDr1)} subtitle={`> ${data.seuils.dr1Max} épisodes ≥ 1 h / ${data.fenetreJours} j`} icon={ShieldAlert} color={data.nonConformesDr1 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
+        <StatCard title="Hors seuil DR1" value={String(data.nonConformesDr1)} subtitle={`> ${data.seuils.dr1Max} indisponibilités ≥ 1 h dans le mois`} icon={ShieldAlert} color={data.nonConformesDr1 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
         <StatCard title="Hors seuil DR2" value={String(data.nonConformesDr2)} subtitle="au moins 1 jour > 3 h d'indispo." icon={ShieldAlert} color={data.nonConformesDr2 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
         <StatCard title="Non conformes" value={String(data.nonConformes)} subtitle="exposés en cas d'audit" icon={CalendarRange} color={data.nonConformes ? 'bg-[#B26A00]' : 'bg-[#0E7C6B]'} />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <div className="w-44">
-          <Select value={jours} onChange={(e) => setJours(e.target.value)}
-            options={[{ value: '30', label: '30 jours (réglementaire)' }, { value: '7', label: '7 jours' }, { value: '90', label: '90 jours' }]} />
+        <div className="w-56">
+          <Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS_OPTIONS} />
         </div>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={seulNonConformes} onChange={(e) => setSeulNonConformes(e.target.checked)} />
@@ -113,7 +125,7 @@ export default function ConformiteArcepPage() {
       )}
 
       <p className="mt-4 max-w-3xl text-xs text-gray-400">
-        DR1 : nombre de fois qu&apos;une même station est restée indisponible au moins une heure sur la période (seuil ≤ 2).
+        DR1 : nombre de fois qu&apos;une même station est restée indisponible au moins une heure <b>au cours du mois</b> (seuil ≤ 2 par mois).
         DR2 : indisponibilité par jour calendaire d&apos;une même station (seuil ≤ 3 h). Station indisponible = site entièrement
         hors service (y compris entraîné par son site amont). Une même panne fusionnée en un seul épisode.
       </p>

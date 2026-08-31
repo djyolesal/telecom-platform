@@ -2224,9 +2224,19 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
  * d'intervalles) avant tout comptage — une panne = un épisode.
  */
 async function calculerConformiteArcep(req: Request) {
-  const jours = Math.max(7, Math.min(90, parseInt(String(req.query.jours ?? '30'), 10) || 30));
+  // MOIS CALENDAIRE (définition réglementaire : « au cours du mois », seuil
+  // DR1 « par mois ») — mois courant par défaut, mois passés consultables.
+  // Bornes en UTC, comme les heures du rapport NOC.
   const maintenant = new Date();
-  const depuis = new Date(maintenant.getTime() - jours * 86_400_000);
+  const moisQ = String(req.query.mois ?? '');
+  const m = /^(\d{4})-(\d{2})$/.exec(moisQ);
+  const annee = m ? parseInt(m[1], 10) : maintenant.getUTCFullYear();
+  const numMois = m ? parseInt(m[2], 10) : maintenant.getUTCMonth() + 1;
+  if (numMois < 1 || numMois > 12) throw new AppError('Mois invalide (format AAAA-MM).', 422);
+  const depuis = new Date(Date.UTC(annee, numMois - 1, 1));
+  if (depuis > maintenant) throw new AppError('Mois invalide : le mois demandé est dans le futur.', 422);
+  const finMois = new Date(Date.UTC(annee, numMois, 1));
+  const finFenetre = finMois < maintenant ? finMois : maintenant;
 
   const perimetre = await sitePerimetre(req.user!.id);
   const restreint = isRestreint(perimetre);
@@ -2236,7 +2246,7 @@ async function calculerConformiteArcep(req: Request) {
       where: {
         technologie: 'SITE',
         OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
-        dateDebut: { lte: maintenant },
+        dateDebut: { lte: finFenetre },
         AND: [{ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] }],
         ...(restreint ? { site: perimetre } : {}),
       },
@@ -2248,11 +2258,16 @@ async function calculerConformiteArcep(req: Request) {
     }),
   ]);
 
+  // Bornes du mois : les épisodes encore ouverts (ou débordant sur le mois
+  // suivant) sont coupés à la fin du mois analysé — un mois clos ne bouge plus.
+  const borneDebut = depuis.getTime();
+  const borneFin = finFenetre.getTime();
+
   // Fusion en épisodes par site (durée RÉELLE conservée : un épisode entamé
-  // avant la fenêtre garde son vrai début pour le critère « ≥ 1 h »).
+  // avant le mois garde son vrai début pour le critère « ≥ 1 h »).
   const parSite = new Map<string, { debut: number; fin: number }[]>();
   for (const c of coupures) {
-    const fin = (c.dateFin ?? maintenant).getTime();
+    const fin = Math.min((c.dateFin ?? maintenant).getTime(), borneFin);
     const l = parSite.get(c.siteId) ?? [];
     l.push({ debut: c.dateDebut.getTime(), fin });
     parSite.set(c.siteId, l);
@@ -2269,10 +2284,8 @@ async function calculerConformiteArcep(req: Request) {
   };
 
   const jourUTC = (t: number) => new Date(t).toISOString().slice(0, 10);
-  const SEUIL_DR1 = 2;          // épisodes ≥ 1 h autorisés sur 30 j
+  const SEUIL_DR1 = 2;          // épisodes ≥ 1 h autorisés PAR MOIS
   const SEUIL_DR2_MIN = 180;    // 3 h par jour calendaire
-  const borneDebut = depuis.getTime();
-  const borneFin = maintenant.getTime();
 
   const lignes = sites.map((s) => {
     const episodes = episodesDe(parSite.get(s.id) ?? []);
@@ -2311,8 +2324,9 @@ async function calculerConformiteArcep(req: Request) {
   lignes.sort((a, b) => Number(a.conforme) - Number(b.conforme) || b.totalMinutes - a.totalMinutes);
 
   return {
-    fenetreJours: jours,
-    du: depuis, au: maintenant,
+    mois: `${annee}-${String(numMois).padStart(2, '0')}`,
+    moisEnCours: finMois > maintenant,
+    du: depuis, au: finFenetre,
     seuils: { dr1Max: SEUIL_DR1, dr2MaxMinutesParJour: SEUIL_DR2_MIN },
     sitesAnalyses: lignes.length,
     nonConformesDr1: lignes.filter((l) => !l.dr1Conforme).length,
@@ -2331,7 +2345,7 @@ export async function getConformiteArcep(req: Request, res: Response, next: Next
 export async function exportConformiteArcep(req: Request, res: Response, next: NextFunction) {
   try {
     const d = await calculerConformiteArcep(req);
-    await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { rapport: 'conformite-arcep', jours: d.fenetreJours }, req);
+    await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { rapport: 'conformite-arcep', mois: d.mois }, req);
     const fmtMin = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ''}`.trim());
     await sendTabular(res, req.params.format as 'xlsx' | 'pdf', 'conformite-arcep', 'Conformité ARCEP (DR1/DR2)', [{
       name: 'Conformité',
@@ -2339,7 +2353,7 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
         { header: 'Site', key: 'site', width: 26 },
         { header: 'Code', key: 'code', width: 12 },
         { header: 'Région', key: 'region', width: 12 },
-        { header: `DR1 (épisodes ≥ 1 h / ${d.fenetreJours} j, seuil ≤ 2)`, key: 'dr1', width: 26 },
+        { header: 'DR1 (épisodes ≥ 1 h dans le mois, seuil ≤ 2)', key: 'dr1', width: 28 },
         { header: 'Jours > 3 h (DR2)', key: 'jours', width: 16 },
         { header: 'Pire jour', key: 'pireJour', width: 14 },
         { header: 'Indispo. du pire jour', key: 'pireMin', width: 18 },
@@ -2353,6 +2367,6 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
         total: l.totalMinutes ? fmtMin(l.totalMinutes) : '—',
         verdict: l.conforme ? 'Conforme' : 'NON CONFORME',
       })),
-    }], `Fenêtre ${d.fenetreJours} jours · arrêté n°005/MENTD/CAB du 12/08/2022 · AUTO comptées une fois prises en charge`);
+    }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · arrêté n°005/MENTD/CAB du 12/08/2022 · AUTO comptées une fois prises en charge`);
   } catch (err) { next(err); }
 }

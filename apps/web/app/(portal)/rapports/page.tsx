@@ -22,7 +22,7 @@ const RAPPORTS: Array<{
   { href: '/carburant/stock', icon: Fuel, title: 'Stock carburant', desc: 'État du stock et autonomie de chaque site.' },
   { href: '/energie/rapports', icon: Zap, title: 'Consommation énergie', desc: 'Tendances kWh et gasoil sur la période.' },
   { href: '/rapports/empreinte-carbone', icon: Leaf, title: 'Empreinte carbone', desc: 'Émissions de CO₂ (gasoil GE, réseau CEET) et émissions évitées par le solaire, par mois, région et site.', internesSeulement: true },
-  { href: '/rapports/arcep', icon: ShieldCheck, title: 'Conformité ARCEP (DR1/DR2)', desc: 'Seuils réglementaires de l\u2019arrêté n°005/MENTD/CAB : indisponibilités ≥ 1 h sur 30 jours et par jour, station par station.' },
+  { href: '/rapports/arcep', icon: ShieldCheck, title: 'Conformité ARCEP (DR1/DR2)', desc: 'Seuils réglementaires de l\u2019arrêté n°005/MENTD/CAB : indisponibilités ≥ 1 h par mois (DR1) et durée par jour (DR2), station par station.' },
   { href: '/rapports/disponibilite-reseau', icon: WifiOff, title: 'Disponibilité réseau', desc: 'Coupures radio (NOC) : downtime par site, coupures en cours, part imputable à l\u2019énergie.' },
   { href: '/maintenance', icon: Wrench, title: 'Maintenances', desc: 'Suivi des interventions préventives et curatives.' },
   { href: '/incidents/kpis', icon: AlertTriangle, title: 'KPIs incidents', desc: 'MTTR, MTTI et taux de résolution.' },
