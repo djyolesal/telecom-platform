@@ -146,6 +146,13 @@ npm run e2e
       en cas d'échec).
       Identifiants saisis par l'opérateur, jamais écrits dans un fichier.
 
+> **⚠️ Piège : « 2 passed, 10 skipped » n'est PAS une recette réussie.** Sans les variables
+> d'environnement, les deux setups écrivent une session vide et « passent » en ~200 ms, puis
+> les 10 vrais tests se sautent (`E2E_ADMIN_EMAIL/PASSWORD non fournis`). Un passage valide
+> affiche **10 passed** (ou 7 si seul le compte admin est fourni — les 3 specs transporteur
+> se sautent alors) et dure **~1 minute**. Et sans `E2E_BASE_URL`, la suite vise
+> `http://localhost:3000`, pas la production.
+
 **Règles d'exécution de la suite — apprises à la dure (validée 12/12 le 06/08) :**
 1. **Serveur au repos** : jamais pendant un `docker compose build` — le VPS ne
    sait pas compiler et servir les pages lourdes en même temps (faux négatifs
