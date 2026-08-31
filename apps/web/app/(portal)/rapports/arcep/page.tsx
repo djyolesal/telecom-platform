@@ -97,10 +97,10 @@ export default function ConformiteArcepPage() {
       },
     },
     {
-      key: 'pireJourMinutes', header: 'Pire jour', align: 'right',
+      key: 'pireJourMinutes', header: 'Plus longue coupure continue', align: 'right',
       render: (l) => (vue(l).pireJour ? <span className="text-gray-700">{fmtMin(vue(l).pireJourMinutes)} <span className="text-xs text-gray-400">({vue(l).pireJour})</span></span> : '—'),
     },
-    { key: 'totalMinutes', header: 'Indispo. totale', align: 'right', render: (l) => (vue(l).totalMinutes ? fmtMin(vue(l).totalMinutes) : '—') },
+    { key: 'totalMinutes', header: 'Cumul du mois', align: 'right', render: (l) => <span className="text-gray-500">{vue(l).totalMinutes ? fmtMin(vue(l).totalMinutes) : '—'}</span> },
     {
       key: 'conforme', header: 'Verdict', align: 'center',
       render: (l) => (
@@ -131,7 +131,7 @@ export default function ConformiteArcepPage() {
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard title="Sites analysés" value={String(data.sitesAnalyses)} subtitle="stations de base actives" icon={WifiOff} color="bg-[#1B3F6B]" />
         <StatCard title="Hors seuil DR1" value={String(data.nonConformesDr1)} subtitle={`> ${data.seuils.dr1Max} indisponibilités ≥ 1 h dans le mois`} icon={ShieldAlert} color={data.nonConformesDr1 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
-        <StatCard title="Hors seuil DR2" value={String(data.nonConformesDr2)} subtitle="au moins 1 jour > 3 h d'indispo." icon={ShieldAlert} color={data.nonConformesDr2 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
+        <StatCard title="Hors seuil DR2" value={String(data.nonConformesDr2)} subtitle="au moins 1 coupure continue > 3 h dans une journée" icon={ShieldAlert} color={data.nonConformesDr2 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
         <StatCard
           title={inclureNonAdoptees ? 'Non conformes (réel)' : 'Non conformes'}
           value={String(inclureNonAdoptees ? data.nonConformesReel : data.nonConformes)}
@@ -167,7 +167,9 @@ export default function ConformiteArcepPage() {
 
       <p className="mt-4 max-w-3xl text-xs text-gray-400">
         DR1 : nombre de fois qu&apos;une même station est restée indisponible au moins une heure <b>au cours du mois</b> (seuil ≤ 2 par mois).
-        DR2 : indisponibilité par jour calendaire d&apos;une même station (seuil ≤ 3 h). Station indisponible = site entièrement
+        DR2 : plus longue indisponibilité <b>continue</b> d&apos;une même station au cours d&apos;une journée (seuil ≤ 3 h) —
+        <b> pas de cumul d&apos;épisodes</b> : deux coupures distinctes de 2 h dans la journée ne font pas 4 h. Le cumul du mois
+        est affiché à titre indicatif. Station indisponible = site entièrement
         hors service (y compris entraîné par son site amont). Une même panne fusionnée en un seul épisode.
         Par défaut, une détection automatique n&apos;est comptée qu&apos;une fois prise en charge par le NOC (chiffre officiel) ;
         la case « inclure les détections non adoptées » montre l&apos;exposition réelle en cas d&apos;audit.

@@ -2302,9 +2302,14 @@ async function calculerConformiteArcep(req: Request) {
     const episodes = episodesDe(intervalles);
     // DR1 : épisodes d'au moins 60 min dont une partie tombe dans le mois.
     const dr1 = episodes.filter((e) => e.fin > borneDebut && (e.fin - e.debut) >= 3_600_000).length;
-    // DR2 : minutes d'indisponibilité par jour calendaire (UTC, comme les
-    // heures NOC), épisodes découpés aux frontières de jour et au mois.
-    const parJour = new Map<string, number>();
+    // DR2 : indisponibilité par jour calendaire (UTC, comme les heures NOC).
+    // Règle exploitant : la durée retenue est CONTINUE et il n'y a PAS de
+    // cumul d'épisodes — deux coupures distinctes de 2 h dans la journée ne
+    // font pas 4 h. On garde donc, par jour, la PLUS LONGUE indisponibilité
+    // continue (épisodes découpés aux frontières de jour et au mois).
+    // Le cumul reste calculé, mais seulement à titre indicatif.
+    const pireContinuParJour = new Map<string, number>();
+    const cumulParJour = new Map<string, number>();
     for (const e of episodes) {
       let cur = Math.max(e.debut, borneDebut);
       const fin = Math.min(e.fin, borneFin);
@@ -2312,19 +2317,24 @@ async function calculerConformiteArcep(req: Request) {
         const finJour = new Date(cur); finJour.setUTCHours(24, 0, 0, 0);
         const morceau = Math.min(fin, finJour.getTime());
         const cle = jourUTC(cur);
-        parJour.set(cle, (parJour.get(cle) ?? 0) + Math.round((morceau - cur) / 60_000));
+        const minutes = Math.round((morceau - cur) / 60_000);
+        pireContinuParJour.set(cle, Math.max(pireContinuParJour.get(cle) ?? 0, minutes));
+        cumulParJour.set(cle, (cumulParJour.get(cle) ?? 0) + minutes);
         cur = morceau;
       }
     }
     let pireJour: string | null = null; let pireMin = 0; let joursDepassement = 0; let totalMin = 0;
-    for (const [j, min] of parJour) {
-      totalMin += min;
+    for (const [j, min] of pireContinuParJour) {
+      // Seuil DR2 apprécié sur la plus longue coupure CONTINUE du jour.
       if (min > SEUIL_DR2_MIN) joursDepassement++;
       if (min > pireMin) { pireMin = min; pireJour = j; }
     }
+    for (const min of cumulParJour.values()) totalMin += min;
     return {
       dr1, dr1Conforme: dr1 <= SEUIL_DR1,
       joursDepassement, dr2Conforme: joursDepassement === 0,
+      // pireJourMinutes = plus longue indisponibilité CONTINUE de ce jour-là
+      // (base du verdict DR2) ; totalMinutes = cumul du mois, indicatif.
       pireJour, pireJourMinutes: pireMin, totalMinutes: totalMin,
       conforme: dr1 <= SEUIL_DR1 && joursDepassement === 0,
     };
@@ -2386,14 +2396,14 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
         { header: 'DR1 (épisodes ≥ 1 h dans le mois, seuil ≤ 2)', key: 'dr1', width: 28 },
         { header: 'Jours > 3 h (DR2)', key: 'jours', width: 16 },
         { header: 'Pire jour', key: 'pireJour', width: 14 },
-        { header: 'Indispo. du pire jour', key: 'pireMin', width: 18 },
-        { header: 'Indispo. totale', key: 'total', width: 16 },
+        { header: 'Plus longue coupure continue (pire jour)', key: 'pireMin', width: 30 },
+        { header: 'Cumul du mois (indicatif)', key: 'total', width: 22 },
         { header: 'Verdict', key: 'verdict', width: 16 },
         // Exposition réelle : détections automatiques NON adoptées incluses —
         // ce que l'ARCEP verrait, elle ne connaît pas le sas d'adoption.
         { header: 'DR1 réel', key: 'dr1Reel', width: 12 },
         { header: 'Jours > 3 h réels', key: 'joursReel', width: 16 },
-        { header: 'Indispo. totale réelle', key: 'totalReel', width: 20 },
+        { header: 'Cumul réel du mois (indicatif)', key: 'totalReel', width: 26 },
         { header: 'Verdict réel', key: 'verdictReel', width: 16 },
       ],
       rows: d.lignes.map((l) => ({
@@ -2406,6 +2416,6 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
         totalReel: l.reel.totalMinutes ? fmtMin(l.reel.totalMinutes) : '—',
         verdictReel: l.reel.conforme ? 'Conforme' : 'NON CONFORME',
       })),
-    }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · arrêté n°005/MENTD/CAB du 12/08/2022 · colonnes officielles = détections AUTO comptées une fois prises en charge ; colonnes « réelles » = toutes les détections (${d.detectionsNonAdoptees} non adoptée(s) sur le mois)`);
+    }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · arrêté n°005/MENTD/CAB du 12/08/2022 · durées CONTINUES, sans cumul d'épisodes · colonnes officielles = détections AUTO comptées une fois prises en charge ; colonnes « réelles » = toutes les détections (${d.detectionsNonAdoptees} non adoptée(s) sur le mois)`);
   } catch (err) { next(err); }
 }
