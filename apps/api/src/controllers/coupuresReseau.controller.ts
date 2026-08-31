@@ -2242,15 +2242,16 @@ async function calculerConformiteArcep(req: Request) {
   const restreint = isRestreint(perimetre);
 
   const [coupures, sites] = await Promise.all([
+    // Toutes les coupures SITE du mois : le filtre d'adoption n'est plus posé
+    // en base — on calcule DEUX séries (officielle / exposition réelle).
     prisma.coupureReseau.findMany({
       where: {
         technologie: 'SITE',
         OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
         dateDebut: { lte: finFenetre },
-        AND: [{ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] }],
         ...(restreint ? { site: perimetre } : {}),
       },
-      select: { siteId: true, dateDebut: true, dateFin: true },
+      select: { siteId: true, dateDebut: true, dateFin: true, source: true, priseEnChargePar: true },
     }),
     prisma.site.findMany({
       where: { isActive: true, ...(restreint ? perimetre : {}) },
@@ -2265,12 +2266,21 @@ async function calculerConformiteArcep(req: Request) {
 
   // Fusion en épisodes par site (durée RÉELLE conservée : un épisode entamé
   // avant le mois garde son vrai début pour le critère « ≥ 1 h »).
+  //  - parSite      : série OFFICIELLE — une détection AUTO ne compte qu'une
+  //    fois prise en charge par le NOC (doctrine du rapport de disponibilité) ;
+  //  - parSiteReel  : EXPOSITION RÉELLE — toutes les détections, adoptées ou
+  //    non : l'usager (et donc l'ARCEP en audit) a subi l'indisponibilité,
+  //    que le NOC l'ait qualifiée ou pas.
   const parSite = new Map<string, { debut: number; fin: number }[]>();
+  const parSiteReel = new Map<string, { debut: number; fin: number }[]>();
+  let detectionsNonAdoptees = 0;
   for (const c of coupures) {
     const fin = Math.min((c.dateFin ?? maintenant).getTime(), borneFin);
-    const l = parSite.get(c.siteId) ?? [];
-    l.push({ debut: c.dateDebut.getTime(), fin });
-    parSite.set(c.siteId, l);
+    const iv = { debut: c.dateDebut.getTime(), fin };
+    parSiteReel.set(c.siteId, [...(parSiteReel.get(c.siteId) ?? []), iv]);
+    const officielle = c.source !== 'OSS' || c.priseEnChargePar != null;
+    if (officielle) parSite.set(c.siteId, [...(parSite.get(c.siteId) ?? []), iv]);
+    else detectionsNonAdoptees++;
   }
   const episodesDe = (l: { debut: number; fin: number }[]) => {
     const tri = [...l].sort((a, b) => a.debut - b.debut);
@@ -2287,12 +2297,13 @@ async function calculerConformiteArcep(req: Request) {
   const SEUIL_DR1 = 2;          // épisodes ≥ 1 h autorisés PAR MOIS
   const SEUIL_DR2_MIN = 180;    // 3 h par jour calendaire
 
-  const lignes = sites.map((s) => {
-    const episodes = episodesDe(parSite.get(s.id) ?? []);
-    // DR1 : épisodes d'au moins 60 min dont une partie tombe dans la fenêtre.
+  /** DR1 + DR2 d'un site pour un jeu d'intervalles donné. */
+  const mesurer = (intervalles: { debut: number; fin: number }[]) => {
+    const episodes = episodesDe(intervalles);
+    // DR1 : épisodes d'au moins 60 min dont une partie tombe dans le mois.
     const dr1 = episodes.filter((e) => e.fin > borneDebut && (e.fin - e.debut) >= 3_600_000).length;
     // DR2 : minutes d'indisponibilité par jour calendaire (UTC, comme les
-    // heures NOC), épisodes découpés aux frontières de jour et à la fenêtre.
+    // heures NOC), épisodes découpés aux frontières de jour et au mois.
     const parJour = new Map<string, number>();
     for (const e of episodes) {
       let cur = Math.max(e.debut, borneDebut);
@@ -2312,16 +2323,31 @@ async function calculerConformiteArcep(req: Request) {
       if (min > pireMin) { pireMin = min; pireJour = j; }
     }
     return {
-      siteId: s.id, code: s.code, nom: s.nom, region: s.region,
       dr1, dr1Conforme: dr1 <= SEUIL_DR1,
       joursDepassement, dr2Conforme: joursDepassement === 0,
       pireJour, pireJourMinutes: pireMin, totalMinutes: totalMin,
       conforme: dr1 <= SEUIL_DR1 && joursDepassement === 0,
     };
+  };
+
+  const lignes = sites.map((s) => {
+    const officiel = mesurer(parSite.get(s.id) ?? []);
+    const reel = mesurer(parSiteReel.get(s.id) ?? []);
+    return {
+      siteId: s.id, code: s.code, nom: s.nom, region: s.region,
+      ...officiel,
+      // Exposition réelle : mêmes indicateurs, détections non adoptées incluses.
+      reel,
+      // Vrai seulement si l'écart change le verdict — c'est le risque d'audit.
+      ecartVerdict: officiel.conforme && !reel.conforme,
+    };
   });
 
   // Non conformes d'abord, puis les plus touchés.
-  lignes.sort((a, b) => Number(a.conforme) - Number(b.conforme) || b.totalMinutes - a.totalMinutes);
+  lignes.sort((a, b) =>
+    Number(a.conforme) - Number(b.conforme)
+    || Number(b.ecartVerdict) - Number(a.ecartVerdict)
+    || b.totalMinutes - a.totalMinutes);
 
   return {
     mois: `${annee}-${String(numMois).padStart(2, '0')}`,
@@ -2332,6 +2358,10 @@ async function calculerConformiteArcep(req: Request) {
     nonConformesDr1: lignes.filter((l) => !l.dr1Conforme).length,
     nonConformesDr2: lignes.filter((l) => !l.dr2Conforme).length,
     nonConformes: lignes.filter((l) => !l.conforme).length,
+    // Exposition réelle (détections automatiques non adoptées incluses).
+    detectionsNonAdoptees,
+    nonConformesReel: lignes.filter((l) => !l.reel.conforme).length,
+    sitesEcartVerdict: lignes.filter((l) => l.ecartVerdict).length,
     lignes,
   };
 }
@@ -2359,6 +2389,12 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
         { header: 'Indispo. du pire jour', key: 'pireMin', width: 18 },
         { header: 'Indispo. totale', key: 'total', width: 16 },
         { header: 'Verdict', key: 'verdict', width: 16 },
+        // Exposition réelle : détections automatiques NON adoptées incluses —
+        // ce que l'ARCEP verrait, elle ne connaît pas le sas d'adoption.
+        { header: 'DR1 réel', key: 'dr1Reel', width: 12 },
+        { header: 'Jours > 3 h réels', key: 'joursReel', width: 16 },
+        { header: 'Indispo. totale réelle', key: 'totalReel', width: 20 },
+        { header: 'Verdict réel', key: 'verdictReel', width: 16 },
       ],
       rows: d.lignes.map((l) => ({
         site: l.nom, code: l.code, region: l.region,
@@ -2366,7 +2402,10 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
         pireJour: l.pireJour ?? '—', pireMin: l.pireJourMinutes ? fmtMin(l.pireJourMinutes) : '—',
         total: l.totalMinutes ? fmtMin(l.totalMinutes) : '—',
         verdict: l.conforme ? 'Conforme' : 'NON CONFORME',
+        dr1Reel: l.reel.dr1, joursReel: l.reel.joursDepassement,
+        totalReel: l.reel.totalMinutes ? fmtMin(l.reel.totalMinutes) : '—',
+        verdictReel: l.reel.conforme ? 'Conforme' : 'NON CONFORME',
       })),
-    }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · arrêté n°005/MENTD/CAB du 12/08/2022 · AUTO comptées une fois prises en charge`);
+    }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · arrêté n°005/MENTD/CAB du 12/08/2022 · colonnes officielles = détections AUTO comptées une fois prises en charge ; colonnes « réelles » = toutes les détections (${d.detectionsNonAdoptees} non adoptée(s) sur le mois)`);
   } catch (err) { next(err); }
 }

@@ -11,17 +11,24 @@ import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { Select } from '@/components/shared/Form';
 import { StatCard } from '@/components/shared/StatCard';
 
-interface LigneArcep {
-  siteId: string; code: string; nom: string; region: string;
+interface MesureArcep {
   dr1: number; dr1Conforme: boolean;
   joursDepassement: number; dr2Conforme: boolean;
   pireJour: string | null; pireJourMinutes: number; totalMinutes: number;
   conforme: boolean;
 }
+interface LigneArcep extends MesureArcep {
+  siteId: string; code: string; nom: string; region: string;
+  /** Mêmes indicateurs, détections automatiques non adoptées incluses. */
+  reel: MesureArcep;
+  /** Conforme officiellement mais PAS en exposition réelle : risque d'audit. */
+  ecartVerdict: boolean;
+}
 interface DataArcep {
   mois: string; moisEnCours: boolean; du: string; au: string;
   seuils: { dr1Max: number; dr2MaxMinutesParJour: number };
   sitesAnalyses: number; nonConformesDr1: number; nonConformesDr2: number; nonConformes: number;
+  detectionsNonAdoptees: number; nonConformesReel: number; sitesEcartVerdict: number;
   lignes: LigneArcep[];
 }
 
@@ -49,6 +56,9 @@ const MOIS_OPTIONS = (() => {
 export default function ConformiteArcepPage() {
   const [mois, setMois] = useState(MOIS_OPTIONS[0].value);
   const [seulNonConformes, setSeulNonConformes] = useState(false);
+  // Détections automatiques non adoptées : exclues du chiffre officiel, mais
+  // bien subies par l'usager — l'ARCEP ne connaît pas le sas d'adoption.
+  const [inclureNonAdoptees, setInclureNonAdoptees] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['conformite-arcep', mois],
@@ -58,37 +68,54 @@ export default function ConformiteArcepPage() {
   if (isLoading) return <Loading />;
   if (isError || !data) return <ErrorState />;
 
-  const lignes = seulNonConformes ? data.lignes.filter((l) => !l.conforme) : data.lignes;
+  const vue = (l: LigneArcep): MesureArcep => (inclureNonAdoptees ? l.reel : l);
+  const lignes = seulNonConformes ? data.lignes.filter((l) => !vue(l).conforme) : data.lignes;
 
   const columns: Column<LigneArcep>[] = [
     { key: 'nom', header: 'Site', render: (l) => <span className="font-medium text-gray-800">{l.nom}</span> },
     { key: 'region', header: 'Région' },
     {
       key: 'dr1', header: `DR1 (seuil ≤ ${data.seuils.dr1Max})`, align: 'center',
-      render: (l) => (
-        <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${l.dr1Conforme ? (l.dr1 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700') : 'bg-red-100 text-red-700'}`}>
-          {l.dr1} épisode{l.dr1 > 1 ? 's' : ''} ≥ 1 h
-        </span>
-      ),
+      render: (l) => {
+        const v = vue(l);
+        return (
+          <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${v.dr1Conforme ? (v.dr1 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700') : 'bg-red-100 text-red-700'}`}>
+            {v.dr1} épisode{v.dr1 > 1 ? 's' : ''} ≥ 1 h
+          </span>
+        );
+      },
     },
     {
       key: 'joursDepassement', header: 'DR2 (jours > 3 h)', align: 'center',
-      render: (l) => (
-        <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${l.dr2Conforme ? 'bg-green-50 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {l.joursDepassement} jour{l.joursDepassement > 1 ? 's' : ''}
-        </span>
-      ),
+      render: (l) => {
+        const v = vue(l);
+        return (
+          <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${v.dr2Conforme ? 'bg-green-50 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {v.joursDepassement} jour{v.joursDepassement > 1 ? 's' : ''}
+          </span>
+        );
+      },
     },
     {
       key: 'pireJourMinutes', header: 'Pire jour', align: 'right',
-      render: (l) => (l.pireJour ? <span className="text-gray-700">{fmtMin(l.pireJourMinutes)} <span className="text-xs text-gray-400">({l.pireJour})</span></span> : '—'),
+      render: (l) => (vue(l).pireJour ? <span className="text-gray-700">{fmtMin(vue(l).pireJourMinutes)} <span className="text-xs text-gray-400">({vue(l).pireJour})</span></span> : '—'),
     },
-    { key: 'totalMinutes', header: 'Indispo. totale', align: 'right', render: (l) => (l.totalMinutes ? fmtMin(l.totalMinutes) : '—') },
+    { key: 'totalMinutes', header: 'Indispo. totale', align: 'right', render: (l) => (vue(l).totalMinutes ? fmtMin(vue(l).totalMinutes) : '—') },
     {
       key: 'conforme', header: 'Verdict', align: 'center',
-      render: (l) => l.conforme
-        ? <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700"><ShieldCheck size={12} /> Conforme</span>
-        : <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700"><ShieldAlert size={12} /> Non conforme</span>,
+      render: (l) => (
+        <div className="flex flex-col items-center gap-0.5">
+          {vue(l).conforme
+            ? <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700"><ShieldCheck size={12} /> Conforme</span>
+            : <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700"><ShieldAlert size={12} /> Non conforme</span>}
+          {/* Conforme sur le papier, exposé en audit : la nuance décide de l'action. */}
+          {!inclureNonAdoptees && l.ecartVerdict && (
+            <span className="text-[10px] font-medium text-amber-700" title="Deviendrait non conforme si les détections automatiques non prises en charge étaient comptées">
+              exposé en audit
+            </span>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -105,7 +132,13 @@ export default function ConformiteArcepPage() {
         <StatCard title="Sites analysés" value={String(data.sitesAnalyses)} subtitle="stations de base actives" icon={WifiOff} color="bg-[#1B3F6B]" />
         <StatCard title="Hors seuil DR1" value={String(data.nonConformesDr1)} subtitle={`> ${data.seuils.dr1Max} indisponibilités ≥ 1 h dans le mois`} icon={ShieldAlert} color={data.nonConformesDr1 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
         <StatCard title="Hors seuil DR2" value={String(data.nonConformesDr2)} subtitle="au moins 1 jour > 3 h d'indispo." icon={ShieldAlert} color={data.nonConformesDr2 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
-        <StatCard title="Non conformes" value={String(data.nonConformes)} subtitle="exposés en cas d'audit" icon={CalendarRange} color={data.nonConformes ? 'bg-[#B26A00]' : 'bg-[#0E7C6B]'} />
+        <StatCard
+          title={inclureNonAdoptees ? 'Non conformes (réel)' : 'Non conformes'}
+          value={String(inclureNonAdoptees ? data.nonConformesReel : data.nonConformes)}
+          subtitle={inclureNonAdoptees ? 'détections non adoptées incluses' : `${data.sitesEcartVerdict} de plus si non adoptées comptées`}
+          icon={CalendarRange}
+          color={(inclureNonAdoptees ? data.nonConformesReel : data.nonConformes) ? 'bg-[#B26A00]' : 'bg-[#0E7C6B]'}
+        />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -115,6 +148,14 @@ export default function ConformiteArcepPage() {
         <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={seulNonConformes} onChange={(e) => setSeulNonConformes(e.target.checked)} />
           Non conformes uniquement
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600"
+          title="Compte aussi les détections automatiques que le NOC n'a pas prises en charge : elles ne figurent pas dans le chiffre officiel, mais l'usager a subi la coupure.">
+          <input type="checkbox" checked={inclureNonAdoptees} onChange={(e) => setInclureNonAdoptees(e.target.checked)} />
+          Inclure les détections non adoptées
+          {data.detectionsNonAdoptees > 0 && (
+            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">{data.detectionsNonAdoptees}</span>
+          )}
         </label>
       </div>
 
@@ -128,6 +169,8 @@ export default function ConformiteArcepPage() {
         DR1 : nombre de fois qu&apos;une même station est restée indisponible au moins une heure <b>au cours du mois</b> (seuil ≤ 2 par mois).
         DR2 : indisponibilité par jour calendaire d&apos;une même station (seuil ≤ 3 h). Station indisponible = site entièrement
         hors service (y compris entraîné par son site amont). Une même panne fusionnée en un seul épisode.
+        Par défaut, une détection automatique n&apos;est comptée qu&apos;une fois prise en charge par le NOC (chiffre officiel) ;
+        la case « inclure les détections non adoptées » montre l&apos;exposition réelle en cas d&apos;audit.
       </p>
     </div>
   );
