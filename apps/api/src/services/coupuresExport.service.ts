@@ -44,7 +44,7 @@ export const COLONNES_DETAIL = [
   { key: 'technologie', header: 'Technologie', width: 12 },
   { key: 'debut', header: 'Début', width: 17 },
   { key: 'fin', header: 'Fin', width: 17 },
-  { key: 'downtime', header: 'Downtime', width: 11 },
+  { key: 'downtime', header: 'Downtime (min)', width: 14 },
   { key: 'alarme', header: 'Alarme', width: 8 },
   { key: 'categorie', header: 'Catégorie', width: 10 },
   { key: 'origine', header: 'Origine', width: 16 },
@@ -55,15 +55,17 @@ export const COLONNES_DETAIL = [
   { key: 'intervenants', header: 'Intervenant(s)', width: 22 },
 ] as const;
 
-const fmtDh = (d: Date) =>
-  d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' });
-
-const fmtDuree = (min: number | null) => {
+/** Durée lisible pour un document destiné à être LU (PDF) : « 2 h 30 », « 3 j 4 h ».
+ *  Le classeur xlsx, lui, garde des minutes brutes pour rester calculable. */
+export const fmtDuree = (min: number | null) => {
   if (min == null) return '—';
   if (min < 60) return `${min} min`;
   if (min < 60 * 48) return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
   return `${Math.floor(min / 1440)} j ${Math.floor((min % 1440) / 60)} h`;
 };
+
+const fmtDh = (d: Date) =>
+  d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' });
 
 export function construireClasseurCoupures(opts: {
   lignes: LigneCoupureExport[];
@@ -198,14 +200,18 @@ export function construireClasseurCoupures(opts: {
   const idx = new Map<string, number>(visibles.map((c, i) => [c.key, i + 1]));
   lignes.forEach((l, i) => {
     const heritee = l.origine === 'HERITEE';
-    const valeurs: Record<string, string> = {
+    const valeurs: Record<string, string | number | null> = {
       // Héritée : indentée sous sa racine (l'export regroupe déjà les lignes).
       site: heritee ? `    ↳ ${l.siteNom}` : l.siteNom,
       region: l.region,
       technologie: l.technologie === 'SITE' ? 'Site entier' : l.technologie,
       debut: fmtDh(l.dateDebut),
       fin: l.dateFin ? fmtDh(l.dateFin) : 'EN COURS',
-      downtime: l.dateFin ? fmtDuree(l.downtimeMinutes) : '—',
+      // NOMBRE brut de minutes (pas « 2 h 30 ») : la colonne doit rester
+      // sommable/filtrable dans Excel. Coupure en cours → cellule VIDE plutôt
+      // qu'un tiret, qui polluerait une colonne numérique (la colonne « Fin »
+      // porte déjà « EN COURS »).
+      downtime: l.dateFin ? (l.downtimeMinutes ?? 0) : null,
       alarme: l.typeAlarme ? (LIBELLES_ALARME[l.typeAlarme] ?? l.typeAlarme) : '',
       categorie: l.causeCategorie ?? '',
       origine: heritee ? `← ${l.origineSiteNom ?? 'amont'}` : 'Locale',
@@ -219,9 +225,12 @@ export function construireClasseurCoupures(opts: {
     };
     const row = dt.addRow(visibles.map((c) => valeurs[c.key]));
     row.height = 18;
-    row.eachCell((c) => {
+    const colDowntime = idx.get('downtime');
+    row.eachCell((c, colNum) => {
       c.font = { size: 10, color: { argb: heritee ? GRIS : 'FF2C3E50' } };
-      c.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      const estDowntime = colNum === colDowntime;
+      c.alignment = { vertical: 'middle', horizontal: estDowntime ? 'right' : 'left', indent: 1 };
+      if (estDowntime) c.numFmt = '0';
       if (i % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA } };
       c.border = { bottom: { style: 'hair', color: { argb: 'FFE5E8EB' } } };
     });

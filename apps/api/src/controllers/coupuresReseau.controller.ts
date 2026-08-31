@@ -55,7 +55,7 @@ import { notifierIncidentCoupure, rendreTemplate } from '../services/sms.service
 import { notificationService } from '../services/notifications.service';
 import { sendTabular, EXPORT_MAX, TabularSheet } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
-import { construireClasseurCoupures, COLONNES_DETAIL, LIBELLES_ALARME } from '../services/coupuresExport.service';
+import { construireClasseurCoupures, COLONNES_DETAIL, LIBELLES_ALARME, fmtDuree } from '../services/coupuresExport.service';
 import { logger } from '../utils/logger';
 import { Intervalle, minutesUnion, minutesUnionParCle, pousser } from '../utils/intervals';
 import { io } from '../server';
@@ -2194,7 +2194,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         { header: 'Technologie', key: 'technologie', width: 12 },
         { header: 'Début', key: 'debut', width: 18 },
         { header: 'Fin', key: 'fin', width: 18 },
-        { header: 'Downtime (min)', key: 'downtimeMin', width: 14 },
+        { header: 'Downtime', key: 'downtimeMin', width: 14 },
         { header: 'Alarme', key: 'alarme', width: 9 },
         { header: 'Catégorie', key: 'categorie', width: 10 },
         { header: 'Origine', key: 'origine', width: 20 },
@@ -2210,7 +2210,9 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         technologie: c.technologie === 'SITE' ? 'Site entier' : c.technologie,
         debut: fmtDh(c.dateDebut),
         fin: c.dateFin ? fmtDh(c.dateFin) : 'EN COURS',
-        downtimeMin: c.downtimeMinutes ?? '',
+        // PDF = document de lecture : durée lisible (« 2 h 30 »). Le xlsx
+        // garde des minutes brutes, calculables dans Excel.
+        downtimeMin: c.dateFin ? fmtDuree(c.downtimeMinutes) : 'EN COURS',
         alarme: c.typeAlarme ?? '',
         categorie: c.causeCategorie ?? '',
         // Héritée : le site AMONT responsable est nommé, comme dans le xlsx.
