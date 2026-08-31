@@ -138,9 +138,14 @@ export default function ModifierSitePage() {
   }));
 
   // Points de barème valides (lignes vides ignorées) pour l'API et l'aperçu.
+  // La hauteur 0 est un point LÉGITIME (« cuve vide → volume résiduel ») : le
+  // moteur de conversion et l'API l'acceptent, le formulaire aussi. Les lignes
+  // vides se filtrent donc sur la chaîne saisie et non sur la valeur, sinon
+  // Number('') === 0 les ferait passer pour un point à 0 cm.
   const pointsBareme = () => bareme
+    .filter((b) => b.hauteurCm.trim() !== '' && b.litres.trim() !== '')
     .map((b) => ({ hauteurCm: Number(b.hauteurCm), litres: Number(b.litres) }))
-    .filter((p) => Number.isFinite(p.hauteurCm) && Number.isFinite(p.litres) && p.hauteurCm > 0 && p.litres >= 0);
+    .filter((p) => Number.isFinite(p.hauteurCm) && Number.isFinite(p.litres) && p.hauteurCm >= 0 && p.litres >= 0);
 
   // Aperçu en direct : la config telle que saisie → volume théorique + écart
   // au volume nominal (même moteur que le serveur et le mobile).
