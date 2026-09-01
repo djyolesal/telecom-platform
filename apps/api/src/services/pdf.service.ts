@@ -350,7 +350,7 @@ export interface PlanLivraisonPdfData {
   numeroClient: string | null;
   volumeChargeLitres: number;
   dateChargement?: Date | null;
-  lignes: Array<{ siteCode: string; siteNom: string; region: string; volumePrevuLitres: number }>;
+  lignes: Array<{ siteCode: string; siteNom: string; region: string; volumePrevuLitres: number; pickup?: boolean }>;
 }
 
 export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise<Buffer> {
@@ -369,11 +369,12 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
     sectionTitle(doc, `Sites à approvisionner (${p.lignes.length})`);
 
     // En-tête du tableau
-    const cols = { site: 50, region: 250, vol: 460 };
+    const cols = { site: 50, region: 250, acces: 380, vol: 460 };
     const headerY = doc.y;
     doc.fontSize(9).fillColor('#666');
     doc.text('Site', cols.site, headerY);
     doc.text('Région', cols.region, headerY);
+    doc.text('Accès', cols.acces, headerY, { width: 75 });
     doc.text('Prévu (L)', cols.vol, headerY, { width: 90, align: 'right' });
     doc.moveTo(50, doc.y + 2).lineTo(doc.page.width - 50, doc.y + 2).strokeColor('#e0e0e0').stroke();
     doc.moveDown(0.5);
@@ -384,8 +385,12 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
       const y = doc.y;
       doc.fontSize(9).fillColor('#111');
       doc.text(`${l.siteCode} - ${l.siteNom}`, cols.site, y, { width: 190 });
-      doc.text(l.region, cols.region, y, { width: 190 });
-      doc.text(String(Math.round(l.volumePrevuLitres)), cols.vol, y, { width: 90, align: 'right' });
+      doc.text(l.region, cols.region, y, { width: 125 });
+      // Accès difficile : le camion citerne ne monte pas jusqu'au site, la
+      // livraison se termine en véhicule de transfert (pickup). Signalé au
+      // chauffeur AVANT le départ, d'où sa présence sur le plan papier.
+      if (l.pickup) doc.fillColor('#b45309').text('Pickup', cols.acces, y, { width: 75 });
+      doc.fillColor('#111').text(String(Math.round(l.volumePrevuLitres)), cols.vol, y, { width: 90, align: 'right' });
       doc.moveDown(0.5);
       if (doc.y > doc.page.height - 80) doc.addPage();
     });
@@ -396,6 +401,15 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
     doc.fontSize(10).fillColor(BRAND);
     doc.text('TOTAL', cols.region, ty);
     doc.text(`${Math.round(total)} L`, cols.vol, ty, { width: 90, align: 'right' });
+
+    const nbPickup = p.lignes.filter((l) => l.pickup).length;
+    if (nbPickup > 0) {
+      doc.moveDown(0.8);
+      doc.fontSize(8).fillColor('#b45309').text(
+        `Pickup : ${nbPickup} site(s) inaccessibles au camion citerne — prévoir un véhicule de transfert.`,
+        50, doc.y, { width: doc.page.width - 100 }
+      );
+    }
 
     doc.fontSize(8).fillColor('#999').text(
       `Généré le ${fmtDate(new Date())} - E&M OpS`,

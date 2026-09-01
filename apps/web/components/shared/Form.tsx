@@ -4,12 +4,15 @@ export function Field({
   label,
   required,
   error,
+  hint,
   children,
   className,
 }: {
   label: string;
   required?: boolean;
   error?: string;
+  /** Précision affichée sous le champ : sert à expliquer un choix métier peu évident. */
+  hint?: string;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -19,6 +22,7 @@ export function Field({
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
+      {hint && !error && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );

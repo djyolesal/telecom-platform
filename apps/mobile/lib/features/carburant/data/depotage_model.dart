@@ -305,6 +305,10 @@ class LignePlanBL {
   final double volumePrevuLitres;
   final double volumeLivreReel;
   final String statut;
+
+  /// Site inaccessible au camion citerne : la livraison se termine en véhicule
+  /// de transfert (pickup). Réglage du site, surchargeable pour ce plan.
+  final bool pickup;
   final List<ReceptionSite> receptions;
 
   const LignePlanBL({
@@ -316,6 +320,7 @@ class LignePlanBL {
     required this.volumePrevuLitres,
     required this.volumeLivreReel,
     required this.statut,
+    this.pickup = false,
     this.receptions = const [],
   });
 
@@ -336,6 +341,7 @@ class LignePlanBL {
       volumePrevuLitres: Depotage._d(j['volumePrevuLitres']),
       volumeLivreReel: Depotage._d(j['volumeLivreReel']),
       statut: j['statut'] as String? ?? 'PREVU',
+      pickup: (j['pickup'] as bool?) ?? (s?['accesPickup'] as bool?) ?? false,
       receptions: ((j['depotages'] as List?) ?? const [])
           .map((e) => ReceptionSite.fromJson(e as Map<String, dynamic>))
           .toList(),

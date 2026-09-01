@@ -10,7 +10,7 @@ import { FormCard, Field, Input, Select } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Loading, ErrorState } from '@/components/shared/states';
-import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON } from '@/lib/constants';
+import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON, ACCES_OPTIONS } from '@/lib/constants';
 import { useTypesLiaison } from '@/lib/liaisons';
 import { litresPourHauteur, volumeMaxLitres, type ConfigCuve } from '@/lib/cuve';
 
@@ -23,6 +23,7 @@ export default function ModifierSitePage() {
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
     latitude: '', longitude: '', lotId: '', lotSolaireId: '',
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
+    accesPickup: 'false',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '',
     hasGardien: 'false', gardiennageNuitSeulement: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
@@ -97,6 +98,7 @@ export default function ModifierSitePage() {
       lotId: site.lotId ?? '',
       lotSolaireId: site.lotSolaireId ?? '',
       hasClimatiseur: site.hasClimatiseur ? 'true' : 'false',
+      accesPickup: site.accesPickup ? 'true' : 'false',
       hasExtincteurs: site.hasExtincteurs ? 'true' : 'false',
       typePylone: site.typePylone ?? '',
       cuveVolumeLitres: site.cuveVolumeLitres != null ? String(site.cuveVolumeLitres) : '',
@@ -182,6 +184,7 @@ export default function ModifierSitePage() {
         lotId: form.lotId || null,
         lotSolaireId: form.lotSolaireId || null,
         hasClimatiseur: form.hasClimatiseur === 'true',
+        accesPickup: form.accesPickup === 'true',
         hasExtincteurs: form.hasExtincteurs === 'true',
         typePylone: form.typePylone || null,
         cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null,
@@ -288,6 +291,9 @@ export default function ModifierSitePage() {
           </Field>
           <Field label="Extincteurs sur le site">
             <Select value={form.hasExtincteurs} onChange={(e) => set('hasExtincteurs', e.target.value)} options={OUI_NON} />
+          </Field>
+          <Field label="Accès camion citerne" hint="« Livraison par pickup » : le camion citerne ne peut pas atteindre le site, un véhicule de transfert prend le relais.">
+            <Select value={form.accesPickup} onChange={(e) => set('accesPickup', e.target.value)} options={ACCES_OPTIONS} />
           </Field>
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Cuve gasoil - conversion hauteur → litres</div>
           <Field label="Volume nominal (L)">

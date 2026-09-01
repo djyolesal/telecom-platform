@@ -300,6 +300,28 @@ class _CarteLigneState extends State<_CarteLigne> {
             if (ligne.region.isNotEmpty)
               Text(ligne.region,
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            if (ligne.pickup)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      border: Border.all(color: Colors.orange.shade200),
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.local_shipping,
+                        size: 13, color: Colors.orange.shade800),
+                    const SizedBox(width: 4),
+                    Text('Pickup — camion citerne sans accès',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange.shade800)),
+                  ]),
+                ),
+              ),
             const SizedBox(height: 8),
             Row(
               children: [

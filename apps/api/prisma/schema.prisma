@@ -53,7 +53,7 @@ enum TypeMaintenance {
 enum StatutMaintenance {
   PLANIFIEE
   EN_COURS
-  SUSPENDUE  // interrompue (urgence ailleurs) — reprise exigée avant clôture
+  SUSPENDUE // interrompue (urgence ailleurs) — reprise exigée avant clôture
   TERMINEE
   ANNULEE
 }
@@ -77,10 +77,10 @@ enum SourceEnergie {
 
 // Cycle de vie d'un actif (GE, batterie, climatiseur) suivi par n° de série.
 enum StatutActif {
-  EN_SERVICE   // posé et en fonctionnement sur un site
-  EN_STOCK     // déposé, au dépôt
-  EN_TRANSIT   // en cours de déplacement
-  REFORME      // retiré du parc
+  EN_SERVICE // posé et en fonctionnement sur un site
+  EN_STOCK // déposé, au dépôt
+  EN_TRANSIT // en cours de déplacement
+  REFORME // retiré du parc
 }
 
 // Nature d'une intervention de maintenance (entretien vs cycle de vie d'un actif).
@@ -119,111 +119,114 @@ enum AuditAction {
 // ── Models ────────────────────────────────────────────────────
 
 model User {
-  id            String             @id @default(uuid())
-  nom           String             @db.VarChar(50)
-  prenom        String             @db.VarChar(50)
-  email         String             @unique @db.VarChar(100)
-  telephone     String?            @db.VarChar(20)
-  role          RoleUser
-  region        String?            @db.VarChar(50)
-  passwordHash  String             @map("password_hash")
+  id              String             @id @default(uuid())
+  nom             String             @db.VarChar(50)
+  prenom          String             @db.VarChar(50)
+  email           String             @unique @db.VarChar(100)
+  telephone       String?            @db.VarChar(20)
+  role            RoleUser
+  region          String?            @db.VarChar(50)
+  passwordHash    String             @map("password_hash")
   // Verrou d'appareil (terrain) : le compte se lie au PREMIER mobile connecté ;
   // tout autre appareil est refusé jusqu'à déliaison par un admin.
-  appareilId    String?            @map("appareil_id") @db.VarChar(100)
-  appareilLabel String?            @map("appareil_label") @db.VarChar(80)
-  appareilLieLe DateTime?          @map("appareil_lie_le")
-  fcmToken      String?            @map("fcm_token")
-  isActive      Boolean            @default(true) @map("is_active")
-  lastLoginAt   DateTime?          @map("last_login_at")
+  appareilId      String?            @map("appareil_id") @db.VarChar(100)
+  appareilLabel   String?            @map("appareil_label") @db.VarChar(80)
+  appareilLieLe   DateTime?          @map("appareil_lie_le")
+  fcmToken        String?            @map("fcm_token")
+  isActive        Boolean            @default(true) @map("is_active")
+  lastLoginAt     DateTime?          @map("last_login_at")
   // Session unique par plateforme : identifiant de la session en cours (embarqué
   // dans les JWT) — un nouveau login sur la même plateforme éjecte l'ancien.
-  sessionWebId    String? @map("session_web_id")
-  sessionMobileId String? @map("session_mobile_id")
-  prestataireId String?            @map("prestataire_id")
-  equipe        EquipeMaintenance?
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
+  sessionWebId    String?            @map("session_web_id")
+  sessionMobileId String?            @map("session_mobile_id")
+  prestataireId   String?            @map("prestataire_id")
+  equipe          EquipeMaintenance?
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
 
-  prestataire       Prestataire?    @relation(fields: [prestataireId], references: [id])
-  maintenances      Maintenance[]   @relation("TechnicienMaintenances")
-  depotages         Depotage[]      @relation("TechnicienDepotages")
-  bonsLivraisonClotures BonLivraison[] @relation("ClotureBonsLivraison")
+  prestataire           Prestataire?         @relation(fields: [prestataireId], references: [id])
+  maintenances          Maintenance[]        @relation("TechnicienMaintenances")
+  depotages             Depotage[]           @relation("TechnicienDepotages")
+  bonsLivraisonClotures BonLivraison[]       @relation("ClotureBonsLivraison")
   mouvementsCarburant   MouvementCarburant[]
-  releves           ReleveEnergie[]
-  incidents         Incident[]      @relation("TechnicienIncidents")
-  incidentsDeclares Incident[]      @relation("DeclarantIncidents")
-  auditLogs         AuditLog[]
-  notifications     Notification[]
+  releves               ReleveEnergie[]
+  incidents             Incident[]           @relation("TechnicienIncidents")
+  incidentsDeclares     Incident[]           @relation("DeclarantIncidents")
+  auditLogs             AuditLog[]
+  notifications         Notification[]
 
   @@index([prestataireId])
   @@map("users")
 }
 
 model Site {
-  id               String      @id @default(uuid())
-  nom              String      @db.VarChar(100)
-  code             String      @unique @db.VarChar(20)
-  region           String      @db.VarChar(50)
-  ville            String?     @db.VarChar(50)
-  adresse          String?
-  latitude         Decimal?    @db.Decimal(10, 8)
-  longitude        Decimal?    @db.Decimal(11, 8)
-  powerConfig      PowerConfig @map("power_config")
-  statutGE         StatutGE    @map("statut_ge")
-  puissanceGEkva   Decimal     @default(0) @map("puissance_ge_kva") @db.Decimal(6, 2)
+  id                       String      @id @default(uuid())
+  nom                      String      @db.VarChar(100)
+  code                     String      @unique @db.VarChar(20)
+  region                   String      @db.VarChar(50)
+  ville                    String?     @db.VarChar(50)
+  adresse                  String?
+  latitude                 Decimal?    @db.Decimal(10, 8)
+  longitude                Decimal?    @db.Decimal(11, 8)
+  powerConfig              PowerConfig @map("power_config")
+  statutGE                 StatutGE    @map("statut_ge")
+  puissanceGEkva           Decimal     @default(0) @map("puissance_ge_kva") @db.Decimal(6, 2)
   // Infrastructure du site
-  hasClimatiseur   Boolean     @default(false) @map("has_climatiseur")
-  hasExtincteurs   Boolean     @default(false) @map("has_extincteurs")
-  typePylone       String?     @map("type_pylone") @db.VarChar(40) // code du référentiel types_pylone
-  cuveVolumeLitres Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
-  formeCuve        FormeCuve?  @map("forme_cuve")
-  cuveDimensions   String?     @map("cuve_dimensions") @db.VarChar(100) // texte libre hérité (lecture seule)
+  hasClimatiseur           Boolean     @default(false) @map("has_climatiseur")
+  hasExtincteurs           Boolean     @default(false) @map("has_extincteurs")
+  typePylone               String?     @map("type_pylone") @db.VarChar(40) // code du référentiel types_pylone
+  cuveVolumeLitres         Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
+  formeCuve                FormeCuve?  @map("forme_cuve")
+  cuveDimensions           String?     @map("cuve_dimensions") @db.VarChar(100) // texte libre hérité (lecture seule)
   // Dimensions INTERNES en cm — la conversion hauteur mesurée → litres :
   // rectangulaire = longueur × largeur × hauteur ; cylindre couché = diamètre × longueur.
-  cuveLongueurCm   Decimal?    @map("cuve_longueur_cm") @db.Decimal(6, 1)
-  cuveLargeurCm    Decimal?    @map("cuve_largeur_cm") @db.Decimal(6, 1)
-  cuveHauteurCm    Decimal?    @map("cuve_hauteur_cm") @db.Decimal(6, 1)
-  cuveDiametreCm   Decimal?    @map("cuve_diametre_cm") @db.Decimal(6, 1)
+  cuveLongueurCm           Decimal?    @map("cuve_longueur_cm") @db.Decimal(6, 1)
+  cuveLargeurCm            Decimal?    @map("cuve_largeur_cm") @db.Decimal(6, 1)
+  cuveHauteurCm            Decimal?    @map("cuve_hauteur_cm") @db.Decimal(6, 1)
+  cuveDiametreCm           Decimal?    @map("cuve_diametre_cm") @db.Decimal(6, 1)
   // Gardiennage et contact local (préparation d'intervention, litiges manquants)
-  hasGardien         Boolean  @default(false) @map("has_gardien")
+  hasGardien               Boolean     @default(false) @map("has_gardien")
   // Poste tenu UNIQUEMENT la nuit (plage paramétrable, défaut 18h→6h GMT) :
   // une absence constatée en journée y est normale, pas une défaillance.
-  gardiennageNuitSeulement Boolean @default(false) @map("gardiennage_nuit_seulement")
+  gardiennageNuitSeulement Boolean     @default(false) @map("gardiennage_nuit_seulement")
   // Identifiant eNodeB côté OSS (suffixe de « 615-03-Macro-XXXX ») : la clé du
   // rapprochement pour la détection automatique des coupures.
-  nodeId             String?  @map("node_id") @db.VarChar(20)
-  societeGardiennage String?  @map("societe_gardiennage") @db.VarChar(100) // texte hérité (affiché tant que non rapproché)
+  nodeId                   String?     @map("node_id") @db.VarChar(20)
+  societeGardiennage       String?     @map("societe_gardiennage") @db.VarChar(100) // texte hérité (affiché tant que non rapproché)
   // Société de gardiennage NORMALISÉE : lien vers un prestataire isGardiennage.
-  gardiennagePrestataireId String? @map("gardiennage_prestataire_id")
-  telephoneSite      String?  @map("telephone_site") @db.VarChar(30)
-  isActive         Boolean     @default(true) @map("is_active")
-  lotId            String?     @map("lot_id")
+  gardiennagePrestataireId String?     @map("gardiennage_prestataire_id")
+  telephoneSite            String?     @map("telephone_site") @db.VarChar(30)
+  isActive                 Boolean     @default(true) @map("is_active")
+  lotId                    String?     @map("lot_id")
   // Rattachement au lot SOLAIRE (découpage distinct du lot passif/actif).
-  lotSolaireId     String?     @map("lot_solaire_id")
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
+  lotSolaireId             String?     @map("lot_solaire_id")
+  createdAt                DateTime    @default(now()) @map("created_at")
+  updatedAt                DateTime    @updatedAt @map("updated_at")
 
-  lot             Lot?                @relation(fields: [lotId], references: [id])
-  lotSolaire      Lot?                @relation("SitesSolaires", fields: [lotSolaireId], references: [id])
-  gardiennagePrestataire Prestataire? @relation("GardiennageSites", fields: [gardiennagePrestataireId], references: [id])
-  maintenances    Maintenance[]
-  depotages       Depotage[]
-  mouvementsCarburant   MouvementCarburant[] @relation("MouvementsSite")
+  lot                    Lot?                 @relation(fields: [lotId], references: [id])
+  lotSolaire             Lot?                 @relation("SitesSolaires", fields: [lotSolaireId], references: [id])
+  gardiennagePrestataire Prestataire?         @relation("GardiennageSites", fields: [gardiennagePrestataireId], references: [id])
+  maintenances           Maintenance[]
+  depotages              Depotage[]
+  mouvementsCarburant    MouvementCarburant[] @relation("MouvementsSite")
   mouvementsContrepartie MouvementCarburant[] @relation("MouvementsContrepartie")
-  releves         ReleveEnergie[]
-  incidents       Incident[]
-  groupes         GroupeElectrogene[]
-  baremage        BaremageCuve[]
-  coupuresReseau  CoupureReseau[]
+  releves                ReleveEnergie[]
+  incidents              Incident[]
+  groupes                GroupeElectrogene[]
+  baremage               BaremageCuve[]
+  coupuresReseau         CoupureReseau[]
   // Topologie de transmission : site AMONT dont dépend le lien de ce site.
-  parentTransmissionId String? @map("parent_transmission_id")
-  parentTransmission   Site?   @relation("TransmissionSite", fields: [parentTransmissionId], references: [id])
+  parentTransmissionId   String?              @map("parent_transmission_id")
+  parentTransmission     Site?                @relation("TransmissionSite", fields: [parentTransmissionId], references: [id])
   // Type de la liaison vers le site amont (FIBER, TN, ML, RTN…) — le référentiel
   // (famille fibre/FH, constructeur) est paramétrable dans SystemSettings.
-  typeLiaison          String? @map("type_liaison")
-  enfantsTransmission  Site[]  @relation("TransmissionSite")
-  equipementsActifs EquipementActif[]
-  lignesLivraison LigneLivraison[]
+  typeLiaison            String?              @map("type_liaison")
+  enfantsTransmission    Site[]               @relation("TransmissionSite")
+  equipementsActifs      EquipementActif[]
+  lignesLivraison        LigneLivraison[]
+  // Accès difficile : le camion citerne ne peut pas atteindre le site, la
+  // livraison se termine par un véhicule de transfert (« pickup »).
+  accesPickup            Boolean              @default(false) @map("acces_pickup")
 
   @@index([region])
   @@index([statutGE])
@@ -271,25 +274,25 @@ model BaremageCuve {
 
 // Chaque GE a son propre compteur horaire ; la cuve à gasoil est partagée au niveau du site.
 model GroupeElectrogene {
-  id           String      @id @default(uuid())
-  siteId       String?     @map("site_id")   // null = au dépôt (actif déposé)
-  numero       Int         // 1, 2, 3…
-  puissanceKva Decimal     @default(0) @map("puissance_kva") @db.Decimal(6, 2)
-  statut       StatutGE    @default(GE_SECOURS)        // rôle sur site (permanent/secours)
-  numeroSerie  String?     @unique @map("numero_serie") // identité physique de l'actif
-  marque       String?     @db.VarChar(60)              // constructeur (pièces, gammes d'entretien)
-  statutActif  StatutActif @default(EN_SERVICE) @map("statut_actif")
-  isActive     Boolean     @default(true) @map("is_active")
+  id                         String      @id @default(uuid())
+  siteId                     String?     @map("site_id") // null = au dépôt (actif déposé)
+  numero                     Int // 1, 2, 3…
+  puissanceKva               Decimal     @default(0) @map("puissance_kva") @db.Decimal(6, 2)
+  statut                     StatutGE    @default(GE_SECOURS) // rôle sur site (permanent/secours)
+  numeroSerie                String?     @unique @map("numero_serie") // identité physique de l'actif
+  marque                     String?     @db.VarChar(60) // constructeur (pièces, gammes d'entretien)
+  statutActif                StatutActif @default(EN_SERVICE) @map("statut_actif")
+  isActive                   Boolean     @default(true) @map("is_active")
   // Vidange conditionnée aux heures de marche : index horaire relevé à la
   // dernière vidange confirmée (ces champs suivent l'ACTIF, pas le site).
-  indexHeuresDerniereVidange Decimal?  @map("index_heures_derniere_vidange") @db.Decimal(10, 1)
-  dateDerniereVidange        DateTime? @map("date_derniere_vidange")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  indexHeuresDerniereVidange Decimal?    @map("index_heures_derniere_vidange") @db.Decimal(10, 1)
+  dateDerniereVidange        DateTime?   @map("date_derniere_vidange")
+  createdAt                  DateTime    @default(now()) @map("created_at")
+  updatedAt                  DateTime    @updatedAt @map("updated_at")
 
   // SetNull (et non Cascade) : supprimer un site ne détruit plus l'historique du GE.
-  site          Site?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  releves       ReleveEnergie[]
+  site           Site?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  releves        ReleveEnergie[]
   depotageHeures DepotageHeureGE[]
 
   @@unique([siteId, numero])
@@ -302,7 +305,7 @@ model EquipementActif {
   id          String              @id @default(uuid())
   categorie   CategorieEquipement // BATTERIE, CLIMATISEUR…
   numeroSerie String?             @unique @map("numero_serie")
-  libelle     String?             // ex. « Batterie 200 Ah », « Clim 12000 BTU »
+  libelle     String? // ex. « Batterie 200 Ah », « Clim 12000 BTU »
   valeur      Decimal?            @db.Decimal(10, 2) // caractéristique (Ah, BTU, kVA…)
   unite       String?             @db.VarChar(10)
   statutActif StatutActif         @default(EN_SERVICE) @map("statut_actif")
@@ -319,50 +322,50 @@ model EquipementActif {
 }
 
 model Maintenance {
-  id             String              @id @default(uuid())
-  reference      String?             @unique @db.VarChar(20) // MNT-2026-00481 (lisible, séquentiel par année)
-  siteId         String              @map("site_id")
-  incidentId     String?             @map("incident_id")
-  type           TypeMaintenance
-  categorie      CategorieEquipement
-  equipement     String              @db.VarChar(100)
+  id                         String              @id @default(uuid())
+  reference                  String?             @unique @db.VarChar(20) // MNT-2026-00481 (lisible, séquentiel par année)
+  siteId                     String              @map("site_id")
+  incidentId                 String?             @map("incident_id")
+  type                       TypeMaintenance
+  categorie                  CategorieEquipement
+  equipement                 String              @db.VarChar(100)
   // Code du référentiel equipements_ref (statistiques par équipement) — le
   // libellé lisible reste dans `equipement`.
-  equipementCode String?             @map("equipement_code") @db.VarChar(40)
-  description    String?
-  statut         StatutMaintenance   @default(PLANIFIEE)
-  datePlanifiee  DateTime            @map("date_planifiee")
-  dateDebut      DateTime?           @map("date_debut")
-  dateFin        DateTime?           @map("date_fin")
-  dureeMinutes   Int?                @map("duree_minutes")
+  equipementCode             String?             @map("equipement_code") @db.VarChar(40)
+  description                String?
+  statut                     StatutMaintenance   @default(PLANIFIEE)
+  datePlanifiee              DateTime            @map("date_planifiee")
+  dateDebut                  DateTime?           @map("date_debut")
+  dateFin                    DateTime?           @map("date_fin")
+  dureeMinutes               Int?                @map("duree_minutes")
   // Déclaration du technicien à la clôture : agent de gardiennage présent sur
   // site ? (null = clôturé avant la mise en place / ancien client)
-  agentPresent   Boolean?            @map("agent_present")
+  agentPresent               Boolean?            @map("agent_present")
   // Présent ⇒ il signe (même règle que le dépotage) : la déclaration devient une preuve.
-  nomAgentSecurite           String? @map("nom_agent_securite") @db.VarChar(100)
-  signatureAgentSecuritePath String? @map("signature_agent_securite_path")
+  nomAgentSecurite           String?             @map("nom_agent_securite") @db.VarChar(100)
+  signatureAgentSecuritePath String?             @map("signature_agent_securite_path")
   // Suspension (urgence sur un autre site) : le temps suspendu est décompté de
   // la durée travaillée ; dateSuspension non-null = pause en cours.
-  dureeSuspendueMinutes Int          @default(0) @map("duree_suspendue_minutes")
-  dateSuspension        DateTime?    @map("date_suspension")
-  motifSuspension       String?      @map("motif_suspension") @db.VarChar(200)
-  technicienId   String?             @map("technicien_id")
-  prestataireId  String?             @map("prestataire_id")
-  signaturePath  String?             @map("signature_path")
-  rapportPdfPath String?             @map("rapport_pdf_path")
-  observations   String?
-  analyseEnergie String?            @map("analyse_energie")
-  tachePreventiveKey String?         @map("tache_preventive_key") @db.VarChar(40)
+  dureeSuspendueMinutes      Int                 @default(0) @map("duree_suspendue_minutes")
+  dateSuspension             DateTime?           @map("date_suspension")
+  motifSuspension            String?             @map("motif_suspension") @db.VarChar(200)
+  technicienId               String?             @map("technicien_id")
+  prestataireId              String?             @map("prestataire_id")
+  signaturePath              String?             @map("signature_path")
+  rapportPdfPath             String?             @map("rapport_pdf_path")
+  observations               String?
+  analyseEnergie             String?             @map("analyse_energie")
+  tachePreventiveKey         String?             @map("tache_preventive_key") @db.VarChar(40)
   // Travaux de cycle de vie d'un actif (installation / désinstallation / déplacement).
-  natureTravaux  NatureTravaux       @default(ENTRETIEN) @map("nature_travaux")
-  actifType      String?             @map("actif_type") @db.VarChar(20) // 'GE'|'BATTERIE'|'CLIMATISEUR' (polymorphe)
-  actifId        String?             @map("actif_id")
-  siteSourceId   String?             @map("site_source_id") // déplacement : site d'origine (siteId = destination)
-  latitudeDebut  Decimal?            @map("latitude_debut") @db.Decimal(10, 8)
-  longitudeDebut Decimal?            @map("longitude_debut") @db.Decimal(11, 8)
-  isSynced       Boolean             @default(true) @map("is_synced")
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
+  natureTravaux              NatureTravaux       @default(ENTRETIEN) @map("nature_travaux")
+  actifType                  String?             @map("actif_type") @db.VarChar(20) // 'GE'|'BATTERIE'|'CLIMATISEUR' (polymorphe)
+  actifId                    String?             @map("actif_id")
+  siteSourceId               String?             @map("site_source_id") // déplacement : site d'origine (siteId = destination)
+  latitudeDebut              Decimal?            @map("latitude_debut") @db.Decimal(10, 8)
+  longitudeDebut             Decimal?            @map("longitude_debut") @db.Decimal(11, 8)
+  isSynced                   Boolean             @default(true) @map("is_synced")
+  createdAt                  DateTime            @default(now()) @map("created_at")
+  updatedAt                  DateTime            @updatedAt @map("updated_at")
 
   site        Site            @relation(fields: [siteId], references: [id])
   incident    Incident?       @relation(fields: [incidentId], references: [id])
@@ -372,7 +375,8 @@ model Maintenance {
   photos      Photo[]
   releves     ReleveEnergie[]
 
-  checklist      MaintenanceChecklist[]
+  checklist MaintenanceChecklist[]
+
   @@index([siteId])
   @@index([technicienId])
   @@index([prestataireId])
@@ -419,52 +423,52 @@ model Photo {
 }
 
 model Depotage {
-  id                 String   @id @default(uuid())
-  reference          String?  @unique @db.VarChar(20) // DEP-2026-01893
-  siteId             String   @map("site_id")
-  dateDepotage       DateTime @map("date_depotage")
-  volumeLitres       Decimal  @map("volume_litres") @db.Decimal(8, 2)
-  stockAvantLitres   Decimal? @map("stock_avant_litres") @db.Decimal(8, 2)
-  stockApresLitres   Decimal? @map("stock_apres_litres") @db.Decimal(8, 2)
+  id                         String   @id @default(uuid())
+  reference                  String?  @unique @db.VarChar(20) // DEP-2026-01893
+  siteId                     String   @map("site_id")
+  dateDepotage               DateTime @map("date_depotage")
+  volumeLitres               Decimal  @map("volume_litres") @db.Decimal(8, 2)
+  stockAvantLitres           Decimal? @map("stock_avant_litres") @db.Decimal(8, 2)
+  stockApresLitres           Decimal? @map("stock_apres_litres") @db.Decimal(8, 2)
   // Hauteurs mesurées (cm) avant/après dépotage — mesures brutes, les stocks
   // en litres en sont dérivés quand la cuve du site est calculable.
-  hauteurAvantCm     Decimal? @map("hauteur_avant_cm") @db.Decimal(6, 1)
-  hauteurApresCm     Decimal? @map("hauteur_apres_cm") @db.Decimal(6, 1)
-  fournisseur        String?  @db.VarChar(100)
-  numeroBonLivraison String?  @map("numero_bon_livraison") @db.VarChar(50)
-  prixLitre          Decimal? @map("prix_litre") @db.Decimal(6, 0)
-  coutTotal          Decimal? @map("cout_total") @db.Decimal(12, 0)
-  technicienId       String?  @map("technicien_id")
-  signaturePath      String?  @map("signature_path")
-  bonLivraisonPath   String?  @map("bon_livraison_path")
+  hauteurAvantCm             Decimal? @map("hauteur_avant_cm") @db.Decimal(6, 1)
+  hauteurApresCm             Decimal? @map("hauteur_apres_cm") @db.Decimal(6, 1)
+  fournisseur                String?  @db.VarChar(100)
+  numeroBonLivraison         String?  @map("numero_bon_livraison") @db.VarChar(50)
+  prixLitre                  Decimal? @map("prix_litre") @db.Decimal(6, 0)
+  coutTotal                  Decimal? @map("cout_total") @db.Decimal(12, 0)
+  technicienId               String?  @map("technicien_id")
+  signaturePath              String?  @map("signature_path")
+  bonLivraisonPath           String?  @map("bon_livraison_path")
   // Validation tripartite du dépotage (signatures sur site)
-  nomChauffeur                String? @map("nom_chauffeur") @db.VarChar(100)
+  nomChauffeur               String?  @map("nom_chauffeur") @db.VarChar(100)
   // Rattachement au référentiel quand le nom saisi correspond à un chauffeur
   // connu : c'est ce qui rend possible « ce chauffeur livre-t-il moins ? ».
-  chauffeurId                 String? @map("chauffeur_id")
-  signatureChauffeurPath      String? @map("signature_chauffeur_path")
-  nomAgentSecurite            String? @map("nom_agent_securite") @db.VarChar(100)
-  agentPresent                Boolean? @map("agent_present") // agent de gardiennage présent au dépotage ?
-  signatureAgentSecuritePath  String? @map("signature_agent_securite_path")
-  signatureTechnicienPath     String? @map("signature_technicien_path")
-  observations       String?
-  latitude           Decimal? @db.Decimal(10, 8)
-  longitude          Decimal? @db.Decimal(11, 8)
-  isSynced           Boolean  @default(true) @map("is_synced")
+  chauffeurId                String?  @map("chauffeur_id")
+  signatureChauffeurPath     String?  @map("signature_chauffeur_path")
+  nomAgentSecurite           String?  @map("nom_agent_securite") @db.VarChar(100)
+  agentPresent               Boolean? @map("agent_present") // agent de gardiennage présent au dépotage ?
+  signatureAgentSecuritePath String?  @map("signature_agent_securite_path")
+  signatureTechnicienPath    String?  @map("signature_technicien_path")
+  observations               String?
+  latitude                   Decimal? @db.Decimal(10, 8)
+  longitude                  Decimal? @db.Decimal(11, 8)
+  isSynced                   Boolean  @default(true) @map("is_synced")
   // Rattachement à la ligne du plan de livraison (chaîne BC → BL → plan → site)
-  ligneLivraisonId   String?  @map("ligne_livraison_id")
+  ligneLivraisonId           String?  @map("ligne_livraison_id")
   // Réconciliation carburant au dépotage
-  volumeAnnonceLitres  Decimal? @map("volume_annonce_litres") @db.Decimal(8, 2)  // déclaré au BL/bordereau
-  gasoilAttenduLitres  Decimal? @map("gasoil_attendu_litres") @db.Decimal(8, 2)  // conso attendue depuis le dépotage précédent
-  ecartConsoLitres     Decimal? @map("ecart_conso_litres") @db.Decimal(8, 2)     // baisse cuve réelle − attendue
-  ecartLivraisonLitres Decimal? @map("ecart_livraison_litres") @db.Decimal(8, 2) // volume jauge réel − annoncé
-  analyseDepotage      String?  @map("analyse_depotage")
-  createdAt          DateTime @default(now()) @map("created_at")
+  volumeAnnonceLitres        Decimal? @map("volume_annonce_litres") @db.Decimal(8, 2) // déclaré au BL/bordereau
+  gasoilAttenduLitres        Decimal? @map("gasoil_attendu_litres") @db.Decimal(8, 2) // conso attendue depuis le dépotage précédent
+  ecartConsoLitres           Decimal? @map("ecart_conso_litres") @db.Decimal(8, 2) // baisse cuve réelle − attendue
+  ecartLivraisonLitres       Decimal? @map("ecart_livraison_litres") @db.Decimal(8, 2) // volume jauge réel − annoncé
+  analyseDepotage            String?  @map("analyse_depotage")
+  createdAt                  DateTime @default(now()) @map("created_at")
 
-  site           Site               @relation(fields: [siteId], references: [id])
-  technicien     User?              @relation("TechnicienDepotages", fields: [technicienId], references: [id])
-  ligneLivraison LigneLivraison?    @relation(fields: [ligneLivraisonId], references: [id])
-  chauffeur      Chauffeur?         @relation(fields: [chauffeurId], references: [id], onDelete: SetNull)
+  site           Site              @relation(fields: [siteId], references: [id])
+  technicien     User?             @relation("TechnicienDepotages", fields: [technicienId], references: [id])
+  ligneLivraison LigneLivraison?   @relation(fields: [ligneLivraisonId], references: [id])
+  chauffeur      Chauffeur?        @relation(fields: [chauffeurId], references: [id], onDelete: SetNull)
   heuresGE       DepotageHeureGE[]
 
   @@index([siteId])
@@ -491,29 +495,29 @@ model DepotageHeureGE {
 }
 
 model ReleveEnergie {
-  id                 String        @id @default(uuid())
-  siteId             String        @map("site_id")
-  dateReleve         DateTime      @map("date_releve")
-  source             SourceEnergie
-  indexCompteur      Decimal?      @map("index_compteur") @db.Decimal(10, 2)
-  consommationKwh    Decimal?      @map("consommation_kwh") @db.Decimal(10, 2)
-  volumeGasoilLitres Decimal?      @map("volume_gasoil_litres") @db.Decimal(8, 2)
+  id                   String        @id @default(uuid())
+  siteId               String        @map("site_id")
+  dateReleve           DateTime      @map("date_releve")
+  source               SourceEnergie
+  indexCompteur        Decimal?      @map("index_compteur") @db.Decimal(10, 2)
+  consommationKwh      Decimal?      @map("consommation_kwh") @db.Decimal(10, 2)
+  volumeGasoilLitres   Decimal?      @map("volume_gasoil_litres") @db.Decimal(8, 2)
   // Hauteur mesurée au mètre ruban (cm) : la mesure BRUTE du terrain — les
   // litres ci-dessus en sont dérivés quand la cuve du site est calculable.
-  hauteurCuveCm      Decimal?      @map("hauteur_cuve_cm") @db.Decimal(6, 1)
-  indexHeuresGE      Decimal?      @map("index_heures_ge") @db.Decimal(10, 1)
-  heuresFonctGE      Decimal?      @map("heures_fonct_ge") @db.Decimal(8, 1)
-  gasoilConsommeLitres Decimal?    @map("gasoil_consomme_litres") @db.Decimal(8, 2)
-  puissanceKva       Decimal?      @map("puissance_kva") @db.Decimal(6, 2)
-  coutEstime         Decimal?      @map("cout_estime") @db.Decimal(12, 0)
-  technicienId       String?       @map("technicien_id")
-  maintenanceId      String?       @map("maintenance_id")
-  groupeId           String?       @map("groupe_id")
-  observations       String?
-  latitude           Decimal?      @db.Decimal(10, 8)
-  longitude          Decimal?      @db.Decimal(11, 8)
-  isSynced           Boolean       @default(true) @map("is_synced")
-  createdAt          DateTime      @default(now()) @map("created_at")
+  hauteurCuveCm        Decimal?      @map("hauteur_cuve_cm") @db.Decimal(6, 1)
+  indexHeuresGE        Decimal?      @map("index_heures_ge") @db.Decimal(10, 1)
+  heuresFonctGE        Decimal?      @map("heures_fonct_ge") @db.Decimal(8, 1)
+  gasoilConsommeLitres Decimal?      @map("gasoil_consomme_litres") @db.Decimal(8, 2)
+  puissanceKva         Decimal?      @map("puissance_kva") @db.Decimal(6, 2)
+  coutEstime           Decimal?      @map("cout_estime") @db.Decimal(12, 0)
+  technicienId         String?       @map("technicien_id")
+  maintenanceId        String?       @map("maintenance_id")
+  groupeId             String?       @map("groupe_id")
+  observations         String?
+  latitude             Decimal?      @db.Decimal(10, 8)
+  longitude            Decimal?      @db.Decimal(11, 8)
+  isSynced             Boolean       @default(true) @map("is_synced")
+  createdAt            DateTime      @default(now()) @map("created_at")
 
   site        Site               @relation(fields: [siteId], references: [id])
   technicien  User?              @relation(fields: [technicienId], references: [id])
@@ -532,37 +536,37 @@ model ReleveEnergie {
 }
 
 model Incident {
-  id                       String         @id @default(uuid())
-  reference                String?        @unique @db.VarChar(20) // INC-2026-00112
-  siteId                   String         @map("site_id")
+  id                         String         @id @default(uuid())
+  reference                  String?        @unique @db.VarChar(20) // INC-2026-00112
+  siteId                     String         @map("site_id")
   // Code du référentiel types_incident (éditable en admin — ex-enum).
-  type                     String         @db.VarChar(30)
-  severite                 NiveauSeverite
-  statut                   StatutIncident @default(OUVERT)
-  description              String
-  dateOuverture            DateTime       @default(now()) @map("date_ouverture")
-  dateIntervention         DateTime?      @map("date_intervention")
-  dateResolution           DateTime?      @map("date_resolution")
-  delaiInterventionMinutes Int?           @map("delai_intervention_minutes")
-  dureeCoupureMinutes      Int?           @map("duree_coupure_minutes")
-  technicienId             String?        @map("technicien_id")
-  declarePar               String?        @map("declare_par")
-  agentPresent             Boolean?       @map("agent_present") // agent de sécurité présent à l'intervention ?
+  type                       String         @db.VarChar(30)
+  severite                   NiveauSeverite
+  statut                     StatutIncident @default(OUVERT)
+  description                String
+  dateOuverture              DateTime       @default(now()) @map("date_ouverture")
+  dateIntervention           DateTime?      @map("date_intervention")
+  dateResolution             DateTime?      @map("date_resolution")
+  delaiInterventionMinutes   Int?           @map("delai_intervention_minutes")
+  dureeCoupureMinutes        Int?           @map("duree_coupure_minutes")
+  technicienId               String?        @map("technicien_id")
+  declarePar                 String?        @map("declare_par")
+  agentPresent               Boolean?       @map("agent_present") // agent de sécurité présent à l'intervention ?
   // Présent ⇒ il signe (même règle que le dépotage).
-  nomAgentSecurite           String? @map("nom_agent_securite") @db.VarChar(100)
-  signatureAgentSecuritePath String? @map("signature_agent_securite_path")
-  causeProbable            String?        @map("cause_probable")
-  actionCorrective         String?        @map("action_corrective")
-  signaturePath            String?        @map("signature_path")
-  latitude                 Decimal?       @db.Decimal(10, 8)
-  longitude                Decimal?       @db.Decimal(11, 8)
-  isSynced                 Boolean        @default(true) @map("is_synced")
-  createdAt                DateTime       @default(now()) @map("created_at")
-  updatedAt                DateTime       @updatedAt @map("updated_at")
+  nomAgentSecurite           String?        @map("nom_agent_securite") @db.VarChar(100)
+  signatureAgentSecuritePath String?        @map("signature_agent_securite_path")
+  causeProbable              String?        @map("cause_probable")
+  actionCorrective           String?        @map("action_corrective")
+  signaturePath              String?        @map("signature_path")
+  latitude                   Decimal?       @db.Decimal(10, 8)
+  longitude                  Decimal?       @db.Decimal(11, 8)
+  isSynced                   Boolean        @default(true) @map("is_synced")
+  createdAt                  DateTime       @default(now()) @map("created_at")
+  updatedAt                  DateTime       @updatedAt @map("updated_at")
 
-  site         Site          @relation(fields: [siteId], references: [id])
-  technicien   User?         @relation("TechnicienIncidents", fields: [technicienId], references: [id])
-  declarant    User?         @relation("DeclarantIncidents", fields: [declarePar], references: [id])
+  site         Site            @relation(fields: [siteId], references: [id])
+  technicien   User?           @relation("TechnicienIncidents", fields: [technicienId], references: [id])
+  declarant    User?           @relation("DeclarantIncidents", fields: [declarePar], references: [id])
   maintenances Maintenance[]
   coupures     CoupureReseau[]
 
@@ -694,9 +698,9 @@ enum EquipeMaintenance {
 }
 
 model Prestataire {
-  id         String   @id @default(uuid())
-  nom        String   @db.VarChar(120)
-  email      String?  @db.VarChar(100)
+  id                String   @id @default(uuid())
+  nom               String   @db.VarChar(120)
+  email             String?  @db.VarChar(100)
   // Coordonnées pour l'en-tête de la fiche de validation
   adresse           String?  @db.VarChar(200)
   rccm              String?  @db.VarChar(60)
@@ -708,18 +712,18 @@ model Prestataire {
   isTransporteur    Boolean  @default(false) @map("is_transporteur")
   // Société de gardiennage (agents de sécurité des sites — pas d'accès plateforme)
   isGardiennage     Boolean  @default(false) @map("is_gardiennage")
-  isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
-  assignments    LotAssignment[]
-  users          User[]
-  maintenances   Maintenance[]
-  bonsLivraison  BonLivraison[]
-  contacts       Contact[]
-  sitesGardes    Site[]          @relation("GardiennageSites")
-  vehicules      Vehicule[]
-  chauffeurs     Chauffeur[]
+  assignments   LotAssignment[]
+  users         User[]
+  maintenances  Maintenance[]
+  bonsLivraison BonLivraison[]
+  contacts      Contact[]
+  sitesGardes   Site[]          @relation("GardiennageSites")
+  vehicules     Vehicule[]
+  chauffeurs    Chauffeur[]
 
   @@map("prestataires")
 }
@@ -728,28 +732,28 @@ model Prestataire {
 // action. Indépendant des comptes User : la plupart de ces personnes n'ont pas
 // accès à la plateforme. Géré en CRUD par l'admin (+ import Excel).
 model Contact {
-  id            String   @id @default(uuid())
-  nom           String   @db.VarChar(80)
-  prenom        String   @db.VarChar(80)
-  telephone     String   @unique @db.VarChar(20)
-  email         String?  @db.VarChar(100)
-  societe       String   @db.VarChar(80) // libellé affiché (INTERNE, NETIS, …)
-  prestataireId String?  @map("prestataire_id") // résolu depuis societe quand possible
-  actif         Boolean  @default(true)
+  id                String   @id @default(uuid())
+  nom               String   @db.VarChar(80)
+  prenom            String   @db.VarChar(80)
+  telephone         String   @unique @db.VarChar(20)
+  email             String?  @db.VarChar(100)
+  societe           String   @db.VarChar(80) // libellé affiché (INTERNE, NETIS, …)
+  prestataireId     String?  @map("prestataire_id") // résolu depuis societe quand possible
+  actif             Boolean  @default(true)
   // Préférences de notification (configurables par contact)
-  notifDemarrage    Boolean @default(true) @map("notif_demarrage")
-  notifCloture      Boolean @default(true) @map("notif_cloture")
-  notifMaintenances Boolean @default(true) @map("notif_maintenances")
-  notifIncidents    Boolean @default(true) @map("notif_incidents")
+  notifDemarrage    Boolean  @default(true) @map("notif_demarrage")
+  notifCloture      Boolean  @default(true) @map("notif_cloture")
+  notifMaintenances Boolean  @default(true) @map("notif_maintenances")
+  notifIncidents    Boolean  @default(true) @map("notif_incidents")
   // Coupures partielles (site alimenté, défaut radio/transmission) — équipes actives.
-  notifCoupures     Boolean @default(true) @map("notif_coupures")
+  notifCoupures     Boolean  @default(true) @map("notif_coupures")
   // Situation périodique (récap des incidents/coupures dépassant le seuil).
-  notifSituations   Boolean @default(true) @map("notif_situations")
+  notifSituations   Boolean  @default(true) @map("notif_situations")
   // true : reçoit les actions de toutes les sociétés ; false : uniquement celles
   // de sa société (technicien du même prestataire, ou interne si contact interne).
-  toutesSocietes Boolean @default(false) @map("toutes_societes")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  toutesSocietes    Boolean  @default(false) @map("toutes_societes")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   prestataire Prestataire? @relation(fields: [prestataireId], references: [id])
 
@@ -787,7 +791,7 @@ model Lot {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   sites         Site[]
-  sitesSolaires Site[] @relation("SitesSolaires")
+  sitesSolaires Site[]          @relation("SitesSolaires")
   assignments   LotAssignment[]
 
   @@map("lots")
@@ -815,15 +819,15 @@ model LotAssignment {
 // ── Logistique carburant : Bon de commande → Bon de livraison → Plan de livraison → Sites ──
 
 enum StatutBonCommande {
-  OUVERT  // trimestre en cours d'exécution
+  OUVERT // trimestre en cours d'exécution
   CLOTURE // trimestre terminé
   ANNULE
 }
 
 enum StatutBonLivraison {
   PLANIFIE // camion à charger
-  CHARGE   // chargé, en distribution
-  LIVRE    // entièrement distribué
+  CHARGE // chargé, en distribution
+  LIVRE // entièrement distribué
   ANNULE
 }
 
@@ -835,9 +839,9 @@ enum StatutLigneLivraison {
 }
 
 enum TypeMouvementCarburant {
-  TRANSFERT_SORTIE  // gasoil qui quitte un site vers un autre
-  TRANSFERT_ENTREE  // la jambe d'arrivée du même transfert
-  PURGE             // vidange/purge de cuve : retiré, jamais consommé par le GE
+  TRANSFERT_SORTIE // gasoil qui quitte un site vers un autre
+  TRANSFERT_ENTREE // la jambe d'arrivée du même transfert
+  PURGE // vidange/purge de cuve : retiré, jamais consommé par le GE
   AVOIR_FOURNISSEUR // reprise du fournisseur sur un bon de commande (volume repris)
 }
 
@@ -857,8 +861,8 @@ model MouvementCarburant {
   id             String                 @id @default(uuid())
   reference      String?                @unique @db.VarChar(20) // MVT-2026-00123
   type           TypeMouvementCarburant
-  groupeId       String?                @map("groupe_id")  // relie les deux jambes d'un transfert
-  siteId         String?                @map("site_id")    // null pour un avoir fournisseur
+  groupeId       String?                @map("groupe_id") // relie les deux jambes d'un transfert
+  siteId         String?                @map("site_id") // null pour un avoir fournisseur
   contrepartieId String?                @map("contrepartie_id") // site d'en face (transfert)
   bonCommandeId  String?                @map("bon_commande_id") // avoir : commande créditée
   volumeLitres   Decimal                @map("volume_litres") @db.Decimal(10, 2) // toujours > 0, le SENS vient du type
@@ -890,22 +894,22 @@ model MouvementCarburant {
 // `immatriculation` est la forme NORMALISÉE (clé d'agrégation), `libelle` garde
 // la graphie d'origine pour l'affichage.
 model Vehicule {
-  id                    String   @id @default(uuid())
-  immatriculation       String   @unique @db.VarChar(30) // normalisée : TG1234AB
-  libelle               String   @db.VarChar(30)         // graphie d'origine
-  prestataireId         String?  @map("prestataire_id")  // transporteur propriétaire
-  capaciteCiterneLitres Decimal? @map("capacite_citerne_litres") @db.Decimal(10, 2)
-  marque                String?  @db.VarChar(60)
+  id                           String    @id @default(uuid())
+  immatriculation              String    @unique @db.VarChar(30) // normalisée : TG1234AB
+  libelle                      String    @db.VarChar(30) // graphie d'origine
+  prestataireId                String?   @map("prestataire_id") // transporteur propriétaire
+  capaciteCiterneLitres        Decimal?  @map("capacite_citerne_litres") @db.Decimal(10, 2)
+  marque                       String?   @db.VarChar(60)
   // ── Certificat de jaugeage (métrologie légale) ────────────────────────────
   // C'est la pièce qui rend le volume chargé OPPOSABLE : le bordereau s'appuie
   // sur le barème des compartiments de la citerne. Un certificat expiré rend
   // l'annoncé contestable en litige — d'où l'échéance suivie et alertée.
-  certificatJaugeagePath       String?   @map("certificat_jaugeage_path")       // scan PDF/photo
+  certificatJaugeagePath       String?   @map("certificat_jaugeage_path") // scan PDF/photo
   certificatJaugeageNumero     String?   @map("certificat_jaugeage_numero") @db.VarChar(60)
   certificatJaugeageExpiration DateTime? @map("certificat_jaugeage_expiration")
-  isActive              Boolean  @default(true) @map("is_active")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  isActive                     Boolean   @default(true) @map("is_active")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
 
   prestataire   Prestataire?   @relation(fields: [prestataireId], references: [id], onDelete: SetNull)
   bonsLivraison BonLivraison[]
@@ -944,7 +948,7 @@ model BonCommande {
   id           String            @id @default(uuid())
   numero       String            @unique @db.VarChar(50) // identifiant unique du BC
   annee        Int
-  trimestre    Int               // 1..4
+  trimestre    Int // 1..4
   numeroClient String?           @map("numero_client") @db.VarChar(50) // facultatif : absent du BC Moov réel
   statut       StatutBonCommande @default(OUVERT)
   bcPdfPath    String?           @map("bc_pdf_path") // PDF de la commande joint par le manager
@@ -964,7 +968,7 @@ model BonCommande {
 model VolumeMensuel {
   id                String  @id @default(uuid())
   bonCommandeId     String  @map("bon_commande_id")
-  mois              Int     // 1..12
+  mois              Int // 1..12
   volumePrevuLitres Decimal @map("volume_prevu_litres") @db.Decimal(12, 2)
 
   bonCommande BonCommande @relation(fields: [bonCommandeId], references: [id], onDelete: Cascade)
@@ -976,51 +980,51 @@ model VolumeMensuel {
 
 // Bon de livraison : un chargement réel de camion, exécutant le volume d'un mois.
 model BonLivraison {
-  id                 String             @id @default(uuid())
-  bonCommandeId      String             @map("bon_commande_id")
-  transporteurId     String?            @map("transporteur_id") // prestataire transporteur
-  numeroBL           String             @unique @map("numero_bl") @db.VarChar(50) // unique par chargement
-  mois               Int                // mois exécuté (1..12)
-  annee              Int
-  immatriculation    String             @db.VarChar(30) // camion (graphie saisie)
-  vehiculeId         String?            @map("vehicule_id")  // référentiel (clé d'agrégation)
+  id                     String             @id @default(uuid())
+  bonCommandeId          String             @map("bon_commande_id")
+  transporteurId         String?            @map("transporteur_id") // prestataire transporteur
+  numeroBL               String             @unique @map("numero_bl") @db.VarChar(50) // unique par chargement
+  mois                   Int // mois exécuté (1..12)
+  annee                  Int
+  immatriculation        String             @db.VarChar(30) // camion (graphie saisie)
+  vehiculeId             String?            @map("vehicule_id") // référentiel (clé d'agrégation)
   // Chauffeur DÉCLARÉ avant le départ du dépôt. Confronté au chauffeur qui
   // signe réellement au dépotage : déclaré ≠ signataire devient une anomalie.
-  chauffeurId        String?            @map("chauffeur_id")
-  volumeChargeLitres Decimal            @map("volume_charge_litres") @db.Decimal(12, 2)
-  numeroClient       String?            @map("numero_client") @db.VarChar(50) // hérité du BC (facultatif)
-  dateChargement     DateTime           @map("date_chargement")
-  dateTraitement     DateTime?          @map("date_traitement")
-  statut             StatutBonLivraison @default(PLANIFIE)
-  blPdfPath          String?            @map("bl_pdf_path")        // PDF du bon de livraison
-  bordereauPdfPath   String?            @map("bordereau_pdf_path") // PDF du bordereau de chargement
+  chauffeurId            String?            @map("chauffeur_id")
+  volumeChargeLitres     Decimal            @map("volume_charge_litres") @db.Decimal(12, 2)
+  numeroClient           String?            @map("numero_client") @db.VarChar(50) // hérité du BC (facultatif)
+  dateChargement         DateTime           @map("date_chargement")
+  dateTraitement         DateTime?          @map("date_traitement")
+  statut                 StatutBonLivraison @default(PLANIFIE)
+  blPdfPath              String?            @map("bl_pdf_path") // PDF du bon de livraison
+  bordereauPdfPath       String?            @map("bordereau_pdf_path") // PDF du bordereau de chargement
   // Brouillon généré par le réappro prédictif : exclu des agrégats (chargé/livré) jusqu'à finalisation.
-  isBrouillon        Boolean            @default(false) @map("is_brouillon")
+  isBrouillon            Boolean            @default(false) @map("is_brouillon")
   // ── Clôture comptable : ventilation du reste en citerne ──────────────────
   // Le « reste » (chargé − livré) était calculé et affiché, jamais décidé : un
   // camion rentré au dépôt avec 800 L restait un manquant perpétuel, et rien ne
   // distinguait un retour dépôt d'un siphonnage. La clôture est le geste qui
   // solde un chargement : les trois volumes doivent totaliser ce reste.
-  dateCloture            DateTime? @map("date_cloture")
-  clotureParId           String?   @map("cloture_par_id")
-  resteRetourDepotLitres Decimal?  @map("reste_retour_depot_litres") @db.Decimal(10, 2)
-  restePerteLitres       Decimal?  @map("reste_perte_litres") @db.Decimal(10, 2)
-  resteReportLitres      Decimal?  @map("reste_report_litres") @db.Decimal(10, 2)
-  reportSurBlId          String?   @map("report_sur_bl_id") // chargement suivant qui reprend le reste
-  motifCloture           String?   @map("motif_cloture")
-  bonRetourPath          String?   @map("bon_retour_path")  // scan du bon de retour signé au dépôt
-  observations       String?
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
+  dateCloture            DateTime?          @map("date_cloture")
+  clotureParId           String?            @map("cloture_par_id")
+  resteRetourDepotLitres Decimal?           @map("reste_retour_depot_litres") @db.Decimal(10, 2)
+  restePerteLitres       Decimal?           @map("reste_perte_litres") @db.Decimal(10, 2)
+  resteReportLitres      Decimal?           @map("reste_report_litres") @db.Decimal(10, 2)
+  reportSurBlId          String?            @map("report_sur_bl_id") // chargement suivant qui reprend le reste
+  motifCloture           String?            @map("motif_cloture")
+  bonRetourPath          String?            @map("bon_retour_path") // scan du bon de retour signé au dépôt
+  observations           String?
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
 
-  bonCommande BonCommande      @relation(fields: [bonCommandeId], references: [id])
-  transporteur Prestataire?    @relation(fields: [transporteurId], references: [id])
-  lignes      LigneLivraison[]
-  cloturePar    User?          @relation("ClotureBonsLivraison", fields: [clotureParId], references: [id])
-  vehicule      Vehicule?      @relation(fields: [vehiculeId], references: [id], onDelete: SetNull)
-  chauffeur     Chauffeur?     @relation(fields: [chauffeurId], references: [id], onDelete: SetNull)
-  reportSurBl   BonLivraison?  @relation("ReportReste", fields: [reportSurBlId], references: [id])
-  reportsRecus  BonLivraison[] @relation("ReportReste")
+  bonCommande  BonCommande      @relation(fields: [bonCommandeId], references: [id])
+  transporteur Prestataire?     @relation(fields: [transporteurId], references: [id])
+  lignes       LigneLivraison[]
+  cloturePar   User?            @relation("ClotureBonsLivraison", fields: [clotureParId], references: [id])
+  vehicule     Vehicule?        @relation(fields: [vehiculeId], references: [id], onDelete: SetNull)
+  chauffeur    Chauffeur?       @relation(fields: [chauffeurId], references: [id], onDelete: SetNull)
+  reportSurBl  BonLivraison?    @relation("ReportReste", fields: [reportSurBlId], references: [id])
+  reportsRecus BonLivraison[]   @relation("ReportReste")
 
   @@index([bonCommandeId])
   @@index([transporteurId])
@@ -1040,6 +1044,8 @@ model LigneLivraison {
   volumePrevuLitres Decimal              @map("volume_prevu_litres") @db.Decimal(10, 2)
   volumeLivreLitres Decimal?             @map("volume_livre_litres") @db.Decimal(10, 2)
   statut            StatutLigneLivraison @default(PREVU)
+  // Surcharge PONCTUELLE du pickup pour ce plan ; null = hérite du site.
+  pickup            Boolean?
   createdAt         DateTime             @default(now()) @map("created_at")
 
   bonLivraison BonLivraison @relation(fields: [bonLivraisonId], references: [id], onDelete: Cascade)
@@ -1057,42 +1063,42 @@ model LigneLivraison {
 // NB : l'unicité (site, technologie, frequence, dateDebut) est portée par un
 // index SQL avec COALESCE (migration 0029) — pas exprimable en Prisma.
 model CoupureReseau {
-  id                  String    @id @default(uuid())
-  siteId              String    @map("site_id")
-  technologie         String    @db.VarChar(12) // 2G | 3G | 4G | 5G | SITE
-  frequence           String?   @db.VarChar(30)
-  secteur             String?   @db.VarChar(20)
-  dateDebut           DateTime  @map("date_debut")
-  dateFin             DateTime? @map("date_fin")
-  downtimeMinutes     Int?      @map("downtime_minutes")
-  heureContact        DateTime? @map("heure_contact")
-  technicienContacte  String?   @map("technicien_contacte") @db.VarChar(100)
-  dateArriveeSite     DateTime? @map("date_arrivee_site")
-  intervenants        String?   @db.VarChar(200)
-  cause               String?   @db.VarChar(300)
-  actions             String?   @db.VarChar(300)
-  typeAlarme          String?   @map("type_alarme") @db.VarChar(10)
-  nocEngineer         String?   @map("noc_engineer") @db.VarChar(100)
-  observations        String?
+  id                 String    @id @default(uuid())
+  siteId             String    @map("site_id")
+  technologie        String    @db.VarChar(12) // 2G | 3G | 4G | 5G | SITE
+  frequence          String?   @db.VarChar(30)
+  secteur            String?   @db.VarChar(20)
+  dateDebut          DateTime  @map("date_debut")
+  dateFin            DateTime? @map("date_fin")
+  downtimeMinutes    Int?      @map("downtime_minutes")
+  heureContact       DateTime? @map("heure_contact")
+  technicienContacte String?   @map("technicien_contacte") @db.VarChar(100)
+  dateArriveeSite    DateTime? @map("date_arrivee_site")
+  intervenants       String?   @db.VarChar(200)
+  cause              String?   @db.VarChar(300)
+  actions            String?   @db.VarChar(300)
+  typeAlarme         String?   @map("type_alarme") @db.VarChar(10)
+  nocEngineer        String?   @map("noc_engineer") @db.VarChar(100)
+  observations       String?
   // LOCALE = cause racine sur ce site ; HERITEE = impact d'une coupure amont.
-  origine             String    @default("LOCALE") @db.VarChar(10)
+  origine            String    @default("LOCALE") @db.VarChar(10)
   // MANUEL (saisie/import NOC) | OSS (détection automatique eNodeB) : la
   // clôture automatique ne touche que les coupures OSS.
-  source              String    @default("MANUEL") @db.VarChar(10)
-  coupureOrigineId    String?   @map("coupure_origine_id")
+  source             String    @default("MANUEL") @db.VarChar(10)
+  coupureOrigineId   String?   @map("coupure_origine_id")
   // Incident terrain créé automatiquement pour cette coupure (groupé par site).
-  incidentId          String?   @map("incident_id")
+  incidentId         String?   @map("incident_id")
   // Classement de l'indisponibilité : ACTIF (équipement radio/transmission)
   // ou PASSIF (énergie/environnement — responsabilité O&M du prestataire).
-  causeCategorie      String?   @map("cause_categorie") @db.VarChar(10)
+  causeCategorie     String?   @map("cause_categorie") @db.VarChar(10)
   // Coupure PARTIELLE déjà notifiée aux équipes actives (pas d'incident terrain :
   // le site est alimenté, le défaut se traite côté radio/transmission).
-  notifieeActif       Boolean   @default(false) @map("notifiee_actif")
+  notifieeActif      Boolean   @default(false) @map("notifiee_actif")
   // Prise en charge NOC d'une détection AUTO : qui a adopté l'événement, quand.
-  priseEnChargePar    String?   @map("prise_en_charge_par") @db.VarChar(100)
-  priseEnChargeLe     DateTime? @map("prise_en_charge_le")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  priseEnChargePar   String?   @map("prise_en_charge_par") @db.VarChar(100)
+  priseEnChargeLe    DateTime? @map("prise_en_charge_le")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   site           Site            @relation(fields: [siteId], references: [id])
   coupureOrigine CoupureReseau?  @relation("CoupureHeritee", fields: [coupureOrigineId], references: [id])

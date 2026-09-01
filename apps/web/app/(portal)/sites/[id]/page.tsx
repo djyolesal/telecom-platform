@@ -268,6 +268,7 @@ export default function SiteDetailPage() {
           <InfoRow label="Type de pylône" value={pyloneOptions.find((t) => t.value === site.typePylone)?.label ?? site.typePylone ?? '—'} />
           <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
+          <InfoRow label="Accès camion citerne" value={site.accesPickup ? 'Livraison par pickup' : 'Accès direct'} />
           <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '—'} />
           <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '—'} />
           <InfoRow label="Dimensions cuve" value={

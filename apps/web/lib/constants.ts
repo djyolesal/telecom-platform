@@ -36,6 +36,16 @@ export const OUI_NON = [
   { value: 'false', label: 'Non' },
 ];
 
+/**
+ * Accès du camion citerne au site. « Livraison par pickup » = site à accès
+ * difficile : le camion s'arrête en contrebas, un véhicule de transfert
+ * termine la livraison. Réglage durable du site, surchargeable plan par plan.
+ */
+export const ACCES_OPTIONS = [
+  { value: 'false', label: 'Camion citerne (accès direct)' },
+  { value: 'true', label: 'Livraison par pickup (accès difficile)' },
+];
+
 export const ROLES = [
   { value: 'TECHNICIEN', label: 'Technicien' },
   { value: 'SUPERVISEUR', label: 'Superviseur' },

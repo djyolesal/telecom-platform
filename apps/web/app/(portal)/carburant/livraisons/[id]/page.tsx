@@ -5,7 +5,7 @@ import { L_STATUT_BL, L_STATUT_LIGNE } from '@/lib/constants';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, AlertTriangle, Plus, X, Trash2, Download, FileText, Pencil, Navigation } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Plus, X, Trash2, Download, FileText, Pencil, Navigation, Truck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -21,10 +21,12 @@ const TOL = 0.5;
 const BL_COLORS: Record<string, string> = { PLANIFIE: 'bg-amber-100 text-amber-700', CHARGE: 'bg-blue-100 text-blue-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 const LIGNE_COLORS: Record<string, string> = { PREVU: 'bg-gray-100 text-gray-600', PARTIEL: 'bg-amber-100 text-amber-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 
-interface SiteLite { id: string; code: string; nom: string }
+interface SiteLite { id: string; code: string; nom: string; accesPickup?: boolean }
 interface Ligne {
   id: string; volumePrevuLitres: number; volumeLivreReel: number; ecart: number; statut: string;
-  site: { code: string; nom: string; region: string; latitude?: number | null; longitude?: number | null };
+  site: { code: string; nom: string; region: string; latitude?: number | null; longitude?: number | null; accesPickup?: boolean };
+  /** Surcharge du mode d'accès pour CE plan ; null = réglage du site. */
+  pickup?: boolean | null;
   depotages: { id: string; dateDepotage: string; volumeLitres: number }[];
 }
 interface BL {
@@ -54,7 +56,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return <div className="flex justify-between py-1.5 text-sm border-b last:border-0"><span className="text-gray-500">{label}</span><span className="font-medium text-gray-800">{value}</span></div>;
 }
 
-interface LigneEdit { siteId: string; volume: string }
+interface LigneEdit { siteId: string; volume: string; pickup: boolean | null }
 
 // Upload d'une pièce jointe (bon de retour) → renvoie la clé de stockage.
 async function uploadPdfBl(file: File): Promise<string> {
@@ -69,7 +71,7 @@ async function uploadPdfBl(file: File): Promise<string> {
 function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [lignes, setLignes] = useState<LigneEdit[]>(
-    bl.lignes.length ? bl.lignes.map((l) => ({ siteId: '', volume: String(Math.round(l.volumePrevuLitres)) })) : [{ siteId: '', volume: '' }]
+    bl.lignes.length ? bl.lignes.map((l) => ({ siteId: '', volume: String(Math.round(l.volumePrevuLitres)), pickup: l.pickup ?? null })) : [{ siteId: '', volume: '', pickup: null }]
   );
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -83,9 +85,22 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
   const [seeded, setSeeded] = useState(false);
   if (!seeded && sites.length && bl.lignes.length) {
     const byCode = new Map(sites.map((s) => [s.code, s.id]));
-    setLignes(bl.lignes.map((l) => ({ siteId: byCode.get(l.site.code) ?? '', volume: String(Math.round(l.volumePrevuLitres)) })));
+    setLignes(bl.lignes.map((l) => ({ siteId: byCode.get(l.site.code) ?? '', volume: String(Math.round(l.volumePrevuLitres)), pickup: l.pickup ?? null })));
     setSeeded(true);
   }
+
+  // Pickup : la ligne hérite du réglage du site (`pickup === null`). Le bouton
+  // n'affiche donc que l'état EFFECTIF ; on ne stocke une valeur explicite que
+  // si elle s'écarte du site, pour que le plan suive une correction ultérieure
+  // de la fiche site.
+  const parId = new Map(sites.map((x) => [x.id, x]));
+  const pickupEffectif = (l: LigneEdit) => l.pickup ?? (parId.get(l.siteId)?.accesPickup ?? false);
+  const basculerPickup = (i: number) => setLignes((arr) => arr.map((x, j) => {
+    if (j !== i) return x;
+    const voulu = !pickupEffectif(x);
+    const defautSite = parId.get(x.siteId)?.accesPickup ?? false;
+    return { ...x, pickup: voulu === defautSite ? null : voulu };
+  }));
 
   const somme = lignes.reduce((s, l) => s + (Number(l.volume) || 0), 0);
   const charge = Number(bl.volumeChargeLitres);
@@ -93,7 +108,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
 
   const mutation = useMutation({
     mutationFn: () => api.put(`/bons-livraison/${bl.id}/plan`, {
-      lignes: lignes.filter((l) => l.siteId && Number(l.volume) > 0).map((l) => ({ siteId: l.siteId, volumePrevuLitres: Number(l.volume) })),
+      lignes: lignes.filter((l) => l.siteId && Number(l.volume) > 0).map((l) => ({ siteId: l.siteId, volumePrevuLitres: Number(l.volume), pickup: l.pickup })),
     }),
     onSuccess: (r: { data?: { warnings?: string[] } }) => {
       queryClient.invalidateQueries({ queryKey: ['bon-livraison', bl.id] });
@@ -122,7 +137,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
           <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-gray-500">Sites à approvisionner</p>
-              <button type="button" onClick={() => setLignes((l) => [...l, { siteId: '', volume: '' }])} className="text-sm text-blue-600 flex items-center gap-1"><Plus size={14} /> Ajouter un site</button>
+              <button type="button" onClick={() => setLignes((l) => [...l, { siteId: '', volume: '', pickup: null }])} className="text-sm text-blue-600 flex items-center gap-1"><Plus size={14} /> Ajouter un site</button>
             </div>
             <div className="space-y-2">
               {lignes.map((l, i) => (
@@ -133,6 +148,11 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
                       options={sites.map((s) => ({ value: s.id, label: `${s.code} - ${s.nom}` }))} />
                   </div>
                   <div className="w-28"><Input type="number" value={l.volume} placeholder="L" onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, volume: e.target.value } : x))} /></div>
+                  <button type="button" onClick={() => basculerPickup(i)} disabled={!l.siteId}
+                    title={pickupEffectif(l) ? 'Site inaccessible au camion citerne : livraison par pickup. Cliquer pour revenir à l’accès direct.' : 'Accès direct du camion citerne. Cliquer si le site nécessite un pickup.'}
+                    className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${pickupEffectif(l) ? 'border-amber-300 bg-amber-100 text-amber-800' : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50'}`}>
+                    <span className="flex items-center gap-1"><Truck size={12} /> Pickup</span>
+                  </button>
                   <button type="button" onClick={() => setLignes((arr) => arr.filter((_, j) => j !== i))} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
                 </div>
               ))}
@@ -141,6 +161,11 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
               <span>Total plan : {fmtNumber(somme)} L</span>
               <span>Chargé : {fmtNumber(charge)} L {coherent ? '✓' : `(écart ${fmtNumber(somme - charge)} L)`}</span>
             </div>
+            {lignes.filter((l) => l.siteId && pickupEffectif(l)).length > 0 && (
+              <p className="mt-2 text-xs text-amber-700">
+                {lignes.filter((l) => l.siteId && pickupEffectif(l)).length} site(s) en pickup : le camion citerne n’y accède pas, prévoir un véhicule de transfert. Le repère figure sur le PDF du plan.
+              </p>
+            )}
             <div className="flex justify-end gap-2 pt-3">
               <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
               <Button type="submit" loading={mutation.isPending} disabled={!coherent}>Enregistrer le plan</Button>
@@ -236,12 +261,22 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
   const [ouvert, setOuvert] = useState(false);
   const aCoord = l.site.latitude != null && l.site.longitude != null;
   const nbDepotages = l.depotages?.length ?? 0;
+  // Réglage de la ligne s'il existe, sinon celui de la fiche site.
+  const pickup = l.pickup ?? l.site.accesPickup ?? false;
 
   return (
     <>
       <tr className="border-b last:border-0">
         <td className="py-2">
           <span className="font-medium text-gray-800">{l.site.nom}</span>
+          {pickup && (
+            <span
+              title="Le camion citerne n'accède pas à ce site : livraison par véhicule de transfert."
+              className="ml-2 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+            >
+              <Truck size={11} /> Pickup
+            </span>
+          )}
           {aCoord && (
             <a
               href={`https://www.google.com/maps/dir/?api=1&destination=${l.site.latitude},${l.site.longitude}`}

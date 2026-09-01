@@ -501,7 +501,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
     const data = pick<Prisma.SiteUncheckedCreateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone',
-      'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
+      'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
@@ -538,7 +538,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
     const data = pick<Prisma.SiteUncheckedUpdateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone',
-      'hasClimatiseur', 'hasExtincteurs', 'cuveVolumeLitres', 'formeCuve',
+      'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);

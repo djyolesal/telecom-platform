@@ -67,9 +67,9 @@ function parseVolumes(raw: unknown): { mois: number; volumePrevuLitres: number }
 }
 
 /** Normalise et valide les lignes du plan de livraison. */
-function parseLignes(raw: unknown): { siteId: string; volumePrevuLitres: number }[] {
+function parseLignes(raw: unknown): { siteId: string; volumePrevuLitres: number; pickup: boolean | null }[] {
   const arr = Array.isArray(raw) ? raw : [];
-  const out: { siteId: string; volumePrevuLitres: number }[] = [];
+  const out: { siteId: string; volumePrevuLitres: number; pickup: boolean | null }[] = [];
   const seen = new Set<string>();
   for (const l of arr) {
     const siteId = String((l as any).siteId ?? '').trim();
@@ -78,7 +78,11 @@ function parseLignes(raw: unknown): { siteId: string; volumePrevuLitres: number 
     if (seen.has(siteId)) throw new AppError('Un même site apparaît deux fois dans le plan', 400);
     seen.add(siteId);
     if (vol <= 0 || vol > MAX_LITRES) throw new AppError('Volume prévu d\'une ligne hors limites (> 0)', 400);
-    out.push({ siteId, volumePrevuLitres: vol });
+    // Pickup : absent/null = la ligne hérite du réglage du site (cas courant) ;
+    // true/false = surcharge explicite pour CE plan.
+    const brut = (l as any).pickup;
+    const pickup = brut === true ? true : brut === false ? false : null;
+    out.push({ siteId, volumePrevuLitres: vol, pickup });
   }
   return out;
 }
@@ -360,7 +364,7 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
             // Coordonnées incluses : le transporteur doit rejoindre physiquement
             // CES sites (uniquement ceux de SON plan) — elles alimentent le
             // bouton « Itinéraire » du web et du mobile.
-            site: { select: { code: true, nom: true, region: true, latitude: true, longitude: true } },
+            site: { select: { code: true, nom: true, region: true, latitude: true, longitude: true, accesPickup: true } },
             depotages: { select: { id: true, dateDepotage: true, volumeLitres: true }, orderBy: { dateDepotage: 'asc' } },
           },
         },
@@ -616,7 +620,7 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
           observations: observations ?? null,
           ...(lignes.length ? { lignes: { create: lignes } } : {}),
         },
-        include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+        include: { lignes: { include: { site: { select: { code: true, nom: true, accesPickup: true } } } } },
       });
     });
     await auditLog(req.user!.id, 'CREATE', 'bons_livraison', bl.id, req.body, req);
@@ -769,7 +773,7 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
       data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : existing.volumeChargeLitres
     );
 
-    let nouvellesLignes: { siteId: string; volumePrevuLitres: number }[] | null = null;
+    let nouvellesLignes: { siteId: string; volumePrevuLitres: number; pickup: boolean | null }[] | null = null;
     if (req.body.lignes !== undefined && !isTransporteur) {
       nouvellesLignes = parseLignes(req.body.lignes);
       ({ warnings } = await validatePlan(existing.bonCommandeId, effMois, effVolume, nouvellesLignes, existing.id));
@@ -791,7 +795,7 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
       return tx.bonLivraison.update({
         where: { id: existing.id },
         data,
-        include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+        include: { lignes: { include: { site: { select: { code: true, nom: true, accesPickup: true } } } } },
       });
     });
     // Le plan a pu changer (lignes remplacées, BL finalisé) : le statut suit.
@@ -990,7 +994,7 @@ export async function rouvrirBonLivraison(req: Request, res: Response, next: Nex
 async function replaceLignesPreservees(
   tx: Prisma.TransactionClient,
   blId: string,
-  lignes: { siteId: string; volumePrevuLitres: number }[]
+  lignes: { siteId: string; volumePrevuLitres: number; pickup: boolean | null }[]
 ): Promise<string[]> {
   const warnings: string[] = [];
   const existantes = await tx.ligneLivraison.findMany({
@@ -1009,8 +1013,8 @@ async function replaceLignesPreservees(
   for (const l of lignes) {
     await tx.ligneLivraison.upsert({
       where: { bonLivraisonId_siteId: { bonLivraisonId: blId, siteId: l.siteId } },
-      create: { bonLivraisonId: blId, siteId: l.siteId, volumePrevuLitres: l.volumePrevuLitres },
-      update: { volumePrevuLitres: l.volumePrevuLitres }, // préserve volumeLivre/statut/dépotages
+      create: { bonLivraisonId: blId, siteId: l.siteId, volumePrevuLitres: l.volumePrevuLitres, pickup: l.pickup },
+      update: { volumePrevuLitres: l.volumePrevuLitres, pickup: l.pickup }, // préserve volumeLivre/statut/dépotages
     });
   }
   return warnings;
@@ -1046,7 +1050,7 @@ export async function setPlanLivraison(req: Request, res: Response, next: NextFu
       const preserveWarn = await replaceLignesPreservees(tx, bl.id, lignes);
       const full = await tx.bonLivraison.findUnique({
         where: { id: bl.id },
-        include: { lignes: { include: { site: { select: { code: true, nom: true } } } } },
+        include: { lignes: { include: { site: { select: { code: true, nom: true, accesPickup: true } } } } },
       });
       return { full, preserveWarn };
     });
@@ -1067,7 +1071,7 @@ async function loadPlan(id: string) {
     include: {
       bonCommande: { select: { numero: true } },
       transporteur: { select: { nom: true } },
-      lignes: { orderBy: { createdAt: 'asc' }, include: { site: { select: { code: true, nom: true, region: true } } } },
+      lignes: { orderBy: { createdAt: 'asc' }, include: { site: { select: { code: true, nom: true, region: true, accesPickup: true } } } },
     },
   });
 }
@@ -1107,7 +1111,7 @@ export async function exportPlanLivraisonPdf(req: Request, res: Response, next: 
       numeroClient: bl.numeroClient,
       volumeChargeLitres: n(bl.volumeChargeLitres),
       dateChargement: bl.dateChargement,
-      lignes: bl.lignes.map((l) => ({ siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, volumePrevuLitres: n(l.volumePrevuLitres) })),
+      lignes: bl.lignes.map((l) => ({ siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, volumePrevuLitres: n(l.volumePrevuLitres), pickup: l.pickup ?? l.site.accesPickup })),
     });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="plan-${bl.numeroBL}.pdf"`);

@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
-import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON } from '@/lib/constants';
+import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON, ACCES_OPTIONS } from '@/lib/constants';
 
 export default function NouveauSitePage() {
   const router = useRouter();
@@ -18,6 +18,7 @@ export default function NouveauSitePage() {
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
     latitude: '', longitude: '', lotId: '',
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
+    accesPickup: 'false',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     hasGardien: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
     marqueGE: '',
@@ -52,6 +53,7 @@ export default function NouveauSitePage() {
         longitude: form.longitude ? Number(form.longitude) : undefined,
         lotId: form.lotId || undefined,
         hasClimatiseur: form.hasClimatiseur === 'true',
+        accesPickup: form.accesPickup === 'true',
         hasExtincteurs: form.hasExtincteurs === 'true',
         typePylone: form.typePylone || undefined,
         cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : undefined,
@@ -125,6 +127,9 @@ export default function NouveauSitePage() {
           </Field>
           <Field label="Extincteurs sur le site">
             <Select value={form.hasExtincteurs} onChange={(e) => set('hasExtincteurs', e.target.value)} options={OUI_NON} />
+          </Field>
+          <Field label="Accès camion citerne" hint="« Livraison par pickup » : le camion citerne ne peut pas atteindre le site, un véhicule de transfert prend le relais.">
+            <Select value={form.accesPickup} onChange={(e) => set('accesPickup', e.target.value)} options={ACCES_OPTIONS} />
           </Field>
           <Field label="Volume cuve gasoil (L)">
             <Input type="number" step="0.01" value={form.cuveVolumeLitres} onChange={(e) => set('cuveVolumeLitres', e.target.value)} placeholder="2000" />
