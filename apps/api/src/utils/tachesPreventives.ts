@@ -109,10 +109,13 @@ export const CONTRACTUAL_TASKS: TachePreventive[] = [
   // ── Contrat SOLAIRE (scope contractuel séparé de la passive — même contrat
   // pour tous les prestataires solaires ; fréquences du PV contractuel). Les
   // 17 opérations du contrat deviennent la checklist typée de la clôture ;
-  // ici, les VISITES qui se planifient, regroupées par fréquence. ──
+  // ici, les VISITES qui se planifient, regroupées par fréquence.
+  // ⚠️ Libellés COURTS : ils sont recopiés dans `maintenances.equipement`
+  // (VarChar 100) et s'affichent dans les listes, PDF et exports. Le détail
+  // des opérations vit dans CHECKLIST_SOLAIRE, pas ici. ──
   {
     numero: 13, key: 'solaire_mensuel',
-    libelle: 'Visite mensuelle solaire : énergie moyenne délivrée/jour, marche Auto/Manuel avec le GE, déport des alarmes et backup des configurations',
+    libelle: 'Visite mensuelle solaire (production, mode de marche, alarmes)',
     categorie: 'SOLAIRE', frequence: 'MENSUELLE', cible: 'Sites solaires et hybrides',
     eligible: aDuSolaire,
   },
@@ -124,7 +127,7 @@ export const CONTRACTUAL_TASKS: TachePreventive[] = [
   },
   {
     numero: 15, key: 'solaire_semestriel',
-    libelle: 'Grande visite semestrielle solaire : panneaux (inspection, câblage, fixations, mises à la terre, Isc/Voc par string), batteries (visuel, aérations, tension et température par élément, nettoyage), régulateur et coffret outdoor (fixation, parafoudres, ventilation forcée, alarmes, courants/tensions PV, nettoyage)',
+    libelle: 'Grande visite semestrielle solaire (panneaux, batteries, régulateur)',
     categorie: 'SOLAIRE', frequence: 'SEMESTRIELLE', cible: 'Sites solaires et hybrides',
     eligible: aDuSolaire,
   },

@@ -71,7 +71,11 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
       const prochaine = last ? addMonths(last, freq) : now;
       if (prochaine > limite) continue;
       if (!prestataireId) { ignoresSansPrestataire++; continue; }
-      aCreer.push({ siteId: site.id, categorie: t.categorie, equipement: t.libelle, key: t.key, datePlanifiee: prochaine < now ? now : prochaine, prestataireId });
+      // `maintenances.equipement` est un VarChar(100) : un libellé plus long
+      // (surcharge admin, nouvelle tâche mal calibrée) faisait échouer TOUTE la
+      // génération du planning. On borne ici — le détail des opérations vit de
+      // toute façon dans la checklist, pas dans ce libellé.
+      aCreer.push({ siteId: site.id, categorie: t.categorie, equipement: t.libelle.slice(0, 100), key: t.key, datePlanifiee: prochaine < now ? now : prochaine, prestataireId });
     }
   }
 

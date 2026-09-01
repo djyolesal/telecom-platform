@@ -403,6 +403,9 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
       data.equipement = `${ref.libelle}${precision?.trim() ? ` - ${String(precision).trim().slice(0, 80)}` : ''}`;
       data.equipementCode = ref.code;
     }
+    // Borne de sécurité : `equipement` est un VarChar(100) et sa valeur vient
+    // du client (libellé de tâche, référentiel équipement + précision libre).
+    if (typeof data.equipement === 'string') data.equipement = data.equipement.slice(0, 100);
     if (!data.siteId || !data.type || !data.categorie || !data.equipement || !data.datePlanifiee) {
       throw new AppError('Site, type, catégorie, équipement et date planifiée sont requis.', 400);
     }
