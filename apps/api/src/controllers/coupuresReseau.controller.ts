@@ -64,6 +64,16 @@ export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
 
 const minutesEntre = (debut: Date, fin: Date) => Math.max(0, Math.round((fin.getTime() - debut.getTime()) / 60_000));
 
+/**
+ * Fragment « technicien contacté » PRÉ-FORMATÉ pour les SMS de coupure — même
+ * convention que {impactes} : le gabarit n'a pas à gérer le cas vide. Le nom
+ * n'apparaît que s'il a été saisi (prise en charge ou fiche de la coupure).
+ */
+function fragmentTechnicien(nom?: string | null): string {
+  const n = nom?.trim();
+  return n ? ` Technicien contacté : ${n}.` : '';
+}
+
 // CLASSIFICATION : alarmes d'infrastructure (atelier d'énergie, groupe
 // électrogène, environnement) → indisponibilité pré-classée PASSIF
 // (responsabilité O&M) ; le technicien affine à la résolution.
@@ -136,7 +146,11 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       if (reserves > 0) {
         await notifierIncidentCoupure(
           siteId,
-          rendreTemplate('sms.tpl.coupurePartielle', { technos: technos.join('/'), site: coupures[0].site.nom }),
+          rendreTemplate('sms.tpl.coupurePartielle', {
+            technos: technos.join('/'),
+            site: coupures[0].site.nom,
+            technicien: fragmentTechnicien(coupures.find((c) => c.technicienContacte)?.technicienContacte),
+          }),
           'COUPURE_PARTIELLE_NOC',
           'ACTIVE',
           'coupures'
@@ -210,6 +224,7 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
           site: coupures[0].site.nom,
           reference: incident.reference ?? '',
           impactes,
+          technicien: fragmentTechnicien(coupures.find((c) => c.technicienContacte)?.technicienContacte),
         }),
         'INCIDENT_COUPURE_NOC',
         'PASSIVE'
@@ -411,7 +426,7 @@ export async function notifierResolutionAutomatique(incidentId: string | null): 
       // du SMS d'alerte, pour que la fin d'alerte couvre tout l'événement.
       const racine = await prisma.coupureReseau.findFirst({
         where: { incidentId: inc.id },
-        select: { id: true },
+        select: { id: true, technicienContacte: true },
       });
       const nbAval = racine
         ? (await prisma.coupureReseau.findMany({
@@ -427,6 +442,7 @@ export async function notifierResolutionAutomatique(incidentId: string | null): 
           reference: inc.reference ?? '',
           duree: dureeTxt,
           impactes: nbAval ? ` (+${nbAval} site${s} aval également rétabli${s})` : '',
+          technicien: fragmentTechnicien(racine?.technicienContacte),
         }),
         'INCIDENT_COUPURE_RETABLI',
         'PASSIVE'
@@ -502,7 +518,7 @@ export async function declencherTerrainRacine(
 ): Promise<{ id: string; reference: string | null; reutilise: boolean } | null> {
   const racineFull = await prisma.coupureReseau.findUnique({
     where: { id: racineId },
-    select: { siteId: true, dateDebut: true, dateFin: true, technologie: true, site: { select: { nom: true } } },
+    select: { siteId: true, dateDebut: true, dateFin: true, technologie: true, technicienContacte: true, site: { select: { nom: true } } },
   });
   if (!racineFull || racineFull.dateFin || racineFull.technologie !== 'SITE') return null;
   const { incident, cree } = await avecRattrapageReferenceInc(() => prisma.$transaction(async (tx) => {
@@ -549,6 +565,7 @@ export async function declencherTerrainRacine(
         site: racineFull.site.nom,
         reference: incident.reference ?? '',
         impactes: nbAval ? ` (+${nbAval} site${s} aval impacté${s})` : '',
+        technicien: fragmentTechnicien(racineFull.technicienContacte),
       }),
       'INCIDENT_COUPURE_NOC',
       'PASSIVE'
@@ -1028,7 +1045,13 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
         await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'reouverture_noc', coupureId: existing.id }, req);
         await notifierIncidentCoupure(
           existing.siteId,
-          rendreTemplate('sms.tpl.incidentRouvert', { site: incident.site.nom, reference: incident.reference ?? '' }),
+          rendreTemplate('sms.tpl.incidentRouvert', {
+            site: incident.site.nom,
+            reference: incident.reference ?? '',
+            technicien: fragmentTechnicien(
+              'technicienContacte' in data ? (data.technicienContacte as string | null) : existing.technicienContacte
+            ),
+          }),
           'INCIDENT_ROUVERT_NOC'
         );
       }

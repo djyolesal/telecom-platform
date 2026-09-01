@@ -25,8 +25,11 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     label: 'Site entièrement hors service (incident créé par le NOC)',
     // {impactes} arrive PRÉ-FORMATÉ (« (+3 sites aval impactés) ») ou vide :
     // le gabarit n'a pas à gérer le singulier/pluriel ni le cas zéro.
-    defaut: '[E&M OpS] NOC : site {site} entièrement hors service{impactes}. Incident {reference} - intervention terrain requise.',
-    variables: ['site', 'reference', 'impactes'],
+    // {technicien} arrive lui aussi PRÉ-FORMATÉ (« Technicien contacté : X. »)
+    // ou vide : renseigné par le NOC, il dit au destinataire que quelqu'un est
+    // déjà sur le coup — et qui rappeler.
+    defaut: '[E&M OpS] NOC : site {site} entièrement hors service{impactes}. Incident {reference} - intervention terrain requise.{technicien}',
+    variables: ['site', 'reference', 'impactes', 'technicien'],
   },
   {
     key: 'sms.tpl.siteRetabli',
@@ -35,20 +38,20 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     // détection automatique voit le site remonter AVANT toute intervention.
     // {impactes} arrive PRÉ-FORMATÉ (« (+3 sites aval également rétablis) »)
     // ou vide - même convention que le gabarit d'alerte.
-    defaut: '[E&M OpS] NOC : site {site} rétabli après {duree} de coupure{impactes}. Incident {reference} résolu - intervention terrain plus nécessaire.',
-    variables: ['site', 'reference', 'duree', 'impactes'],
+    defaut: '[E&M OpS] NOC : site {site} rétabli après {duree} de coupure{impactes}. Incident {reference} résolu - intervention terrain plus nécessaire.{technicien}',
+    variables: ['site', 'reference', 'duree', 'impactes', 'technicien'],
   },
   {
     key: 'sms.tpl.coupurePartielle',
     label: 'Coupure partielle (équipes actives)',
-    defaut: '[E&M OpS] NOC : coupure {technos} sur {site} (site alimenté) - à traiter côté actif (radio/transmission).',
-    variables: ['site', 'technos'],
+    defaut: '[E&M OpS] NOC : coupure {technos} sur {site} (site alimenté) - à traiter côté actif (radio/transmission).{technicien}',
+    variables: ['site', 'technos', 'technicien'],
   },
   {
     key: 'sms.tpl.incidentRouvert',
     label: 'Incident rouvert par le NOC',
-    defaut: '[E&M OpS] NOC : coupure toujours constatée sur {site} - incident {reference} ROUVERT, merci de repasser.',
-    variables: ['site', 'reference'],
+    defaut: '[E&M OpS] NOC : coupure toujours constatée sur {site} - incident {reference} ROUVERT, merci de repasser.{technicien}',
+    variables: ['site', 'reference', 'technicien'],
   },
   {
     key: 'sms.tpl.affectationIncident',
