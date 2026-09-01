@@ -368,48 +368,101 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
 
     sectionTitle(doc, `Sites à approvisionner (${p.lignes.length})`);
 
-    // En-tête du tableau
-    const cols = { site: 50, region: 250, acces: 380, vol: 460 };
-    const headerY = doc.y;
-    doc.fontSize(9).fillColor('#666');
-    doc.text('Site', cols.site, headerY);
-    doc.text('Région', cols.region, headerY);
-    doc.text('Accès', cols.acces, headerY, { width: 75 });
-    doc.text('Prévu (L)', cols.vol, headerY, { width: 90, align: 'right' });
-    doc.moveTo(50, doc.y + 2).lineTo(doc.page.width - 50, doc.y + 2).strokeColor('#e0e0e0').stroke();
-    doc.moveDown(0.5);
+    // Le plan est aussi une FEUILLE D'ÉMARGEMENT : à chaque réception, le
+    // technicien du site écrit son nom et signe sa ligne — la preuve papier
+    // qui accompagne le camion et sur laquelle s'appuie tout rapprochement.
+    // D'où les cases manuscrites (lignes hautes, réglées) et le tableau
+    // resserré à gauche pour leur laisser la place.
+    const X0 = 50;
+    const X1 = doc.page.width - 50;
+    const cols = {
+      site: { x: X0, w: 126 },
+      region: { x: 182, w: 52 },
+      acces: { x: 238, w: 36 },
+      vol: { x: 276, w: 44 },
+      tech: { x: 330, w: 100 },
+      sig: { x: 436, w: X1 - 436 },
+    };
+
+    // En-tête répété à chaque page : les cases à remplir rehaussent les
+    // lignes, un plan de tournée pagine vite.
+    const enTeteTableau = () => {
+      const y = doc.y;
+      doc.fontSize(8).fillColor('#666');
+      doc.text('Site', cols.site.x, y, { width: cols.site.w });
+      doc.text('Région', cols.region.x, y, { width: cols.region.w });
+      doc.text('Accès', cols.acces.x, y, { width: cols.acces.w });
+      doc.text('Prévu (L)', cols.vol.x, y, { width: cols.vol.w, align: 'right' });
+      doc.text('Nom technicien', cols.tech.x, y, { width: cols.tech.w });
+      doc.text('Signature', cols.sig.x, y, { width: cols.sig.w });
+      doc.moveTo(X0, y + 12).lineTo(X1, y + 12).strokeColor('#bbbbbb').stroke();
+      doc.y = y + 17;
+    };
+    enTeteTableau();
 
     let total = 0;
     p.lignes.forEach((l) => {
       total += l.volumePrevuLitres;
+      const libelle = `${l.siteCode} - ${l.siteNom}`;
+      doc.fontSize(9);
+      // Hauteur pilotée par le libellé du site (seule cellule qui replie),
+      // avec un plancher : la case de signature doit rester écrivable.
+      const h = Math.max(doc.heightOfString(libelle, { width: cols.site.w }) + 8, 26);
+      if (doc.y + h > doc.page.height - 70) { doc.addPage(); enTeteTableau(); }
       const y = doc.y;
-      doc.fontSize(9).fillColor('#111');
-      doc.text(`${l.siteCode} - ${l.siteNom}`, cols.site, y, { width: 190 });
-      doc.text(l.region, cols.region, y, { width: 125 });
+      doc.fillColor('#111');
+      doc.text(libelle, cols.site.x, y, { width: cols.site.w });
+      doc.text(l.region, cols.region.x, y, { width: cols.region.w });
       // Accès difficile : le camion citerne ne monte pas jusqu'au site, la
       // livraison se termine en véhicule de transfert (pickup). Signalé au
       // chauffeur AVANT le départ, d'où sa présence sur le plan papier.
-      if (l.pickup) doc.fillColor('#b45309').text('Pickup', cols.acces, y, { width: 75 });
-      doc.fillColor('#111').text(String(Math.round(l.volumePrevuLitres)), cols.vol, y, { width: 90, align: 'right' });
-      doc.moveDown(0.5);
-      if (doc.y > doc.page.height - 80) doc.addPage();
+      if (l.pickup) doc.fillColor('#b45309').text('Pickup', cols.acces.x, y, { width: cols.acces.w });
+      doc.fillColor('#111').text(String(Math.round(l.volumePrevuLitres)), cols.vol.x, y, { width: cols.vol.w, align: 'right' });
+      // Réglure de la ligne + séparateurs des deux cases manuscrites.
+      doc.strokeColor('#e0e0e0');
+      doc.moveTo(X0, y + h - 5).lineTo(X1, y + h - 5).stroke();
+      doc.moveTo(cols.tech.x - 6, y - 2).lineTo(cols.tech.x - 6, y + h - 5).stroke();
+      doc.moveTo(cols.sig.x - 6, y - 2).lineTo(cols.sig.x - 6, y + h - 5).stroke();
+      doc.y = y + h;
     });
 
-    doc.moveTo(50, doc.y + 2).lineTo(doc.page.width - 50, doc.y + 2).strokeColor('#e0e0e0').stroke();
-    doc.moveDown(0.5);
+    doc.moveDown(0.3);
     const ty = doc.y;
     doc.fontSize(10).fillColor(BRAND);
-    doc.text('TOTAL', cols.region, ty);
-    doc.text(`${Math.round(total)} L`, cols.vol, ty, { width: 90, align: 'right' });
+    doc.text('TOTAL', cols.region.x, ty);
+    doc.text(`${Math.round(total)} L`, cols.vol.x - 30, ty, { width: cols.vol.w + 30, align: 'right' });
 
     const nbPickup = p.lignes.filter((l) => l.pickup).length;
     if (nbPickup > 0) {
       doc.moveDown(0.8);
       doc.fontSize(8).fillColor('#b45309').text(
         `Pickup : ${nbPickup} site(s) inaccessibles au camion citerne — prévoir un véhicule de transfert.`,
-        50, doc.y, { width: doc.page.width - 100 }
+        X0, doc.y, { width: X1 - X0 }
       );
     }
+
+    // ── Signatures des deux parties ────────────────────────────────────────
+    // Le plan engage le donneur d'ordre ET le transporteur : deux cadres côte
+    // à côte, jamais coupés par un saut de page (cadre entier reporté sinon).
+    const hCadre = 92;
+    if (doc.y + hCadre + 30 > doc.page.height - 60) doc.addPage();
+    const ySig = doc.y + 18;
+    const wCadre = 226;
+    const cadres = [
+      { titre: 'Pour Moov Africa', x: X0 },
+      { titre: 'Pour le transporteur', x: X1 - wCadre },
+    ];
+    for (const c of cadres) {
+      doc.roundedRect(c.x, ySig, wCadre, hCadre, 6).strokeColor('#cccccc').stroke();
+      doc.fontSize(9).fillColor(BRAND).text(c.titre, c.x + 10, ySig + 8, { width: wCadre - 20 });
+      doc.fontSize(8).fillColor('#666');
+      doc.text('Nom :', c.x + 10, ySig + 26);
+      doc.moveTo(c.x + 40, ySig + 34).lineTo(c.x + wCadre - 10, ySig + 34).strokeColor('#dddddd').stroke();
+      doc.text('Date :', c.x + 10, ySig + 44);
+      doc.moveTo(c.x + 40, ySig + 52).lineTo(c.x + 120, ySig + 52).strokeColor('#dddddd').stroke();
+      doc.fontSize(7).fillColor('#999').text('Signature et cachet', c.x + 10, ySig + hCadre - 13);
+    }
+    doc.y = ySig + hCadre + 8;
 
     doc.fontSize(8).fillColor('#999').text(
       `Généré le ${fmtDate(new Date())} - E&M OpS`,
