@@ -1642,6 +1642,17 @@ export async function getDisponibiliteReseau(req: Request, res: Response, next: 
  *   - estampille SILENCIEUSE de tout l'arbre clôturé (racine + héritées) :
  *     aucun incident, aucun SMS.
  */
+/**
+ * Technicien appelé par le NOC au moment où il adopte l'événement : c'est
+ * précisément là qu'il passe l'appel, et la colonne existe déjà au rapport
+ * NOC. Optionnel — jamais écrasé par un vide (une saisie antérieure reste).
+ */
+function lireTechnicienContacte(req: Request): string | null {
+  const brut = (req.body as { technicienContacte?: unknown })?.technicienContacte;
+  if (typeof brut !== 'string') return null;
+  return brut.trim().slice(0, 100) || null;
+}
+
 async function validerEvenementCloture(
   req: Request,
   res: Response,
@@ -1689,6 +1700,10 @@ async function validerEvenementCloture(
     data: { priseEnChargePar: nom, priseEnChargeLe: quand, nocEngineer: nom },
   });
   if (maj.count === 0) throw new AppError('Rien à valider : cet événement est déjà compté.', 422);
+  const technicienContacte = lireTechnicienContacte(req);
+  if (technicienContacte) {
+    await prisma.coupureReseau.update({ where: { id: root.id }, data: { technicienContacte } });
+  }
 
   await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', root.id, {
     validationCloturee: true, depuisCoupure: coupure.id, lignesValidees: maj.count, dureeMin: duree,
@@ -1851,9 +1866,13 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
     }
 
     // Trace : qui a pris en charge, quand — le nom remplace AUTO-OSS.
+    const technicienContacte = lireTechnicienContacte(req);
     await prisma.coupureReseau.update({
       where: { id: racine.id },
-      data: { priseEnChargePar: nom, priseEnChargeLe: quand, nocEngineer: nom },
+      data: {
+        priseEnChargePar: nom, priseEnChargeLe: quand, nocEngineer: nom,
+        ...(technicienContacte ? { technicienContacte } : {}),
+      },
     });
 
     // ── Déclenchement terrain (optionnel) : incident sur la RACINE ──────────
