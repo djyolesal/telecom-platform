@@ -40,6 +40,23 @@ interface RecapData {
   };
 }
 
+/**
+ * Ligne du tableau « Détail par prestataire » de l'email INTERNE : chaque
+ * société résumée en une ligne comparable. Réservé aux internes — un
+ * superviseur de société ne voit jamais les chiffres des autres (son email
+ * EST déjà son propre détail).
+ */
+interface LignePrestataire {
+  nom: string;
+  contrats: string;
+  terminees: number;
+  enCours: number;
+  planifiees: number;
+  pct: number;
+  incidentsOuverts: number;
+  litres: number | null; // null = pas de contrat passif (le carburant est hors sujet)
+}
+
 const LABEL_STATUT: Record<string, string> = { PLANIFIEE: 'planifiée', EN_COURS: 'en cours' };
 
 async function blocMaintenances(
@@ -82,7 +99,7 @@ async function blocMaintenances(
   };
 }
 
-async function calculerRecap(prestataireId: string | null, debutMois: Date, debutJour: Date): Promise<RecapData | null> {
+export async function calculerRecap(prestataireId: string | null, debutMois: Date, debutJour: Date): Promise<RecapData | null> {
   // Découpage par CONTRAT : sites passifs (lot) et sites solaires (lotSolaire)
   // du périmètre. Interne (null) = tout le parc, les deux contrats.
   let passifIds: string[] | null = null;
@@ -144,6 +161,48 @@ async function calculerRecap(prestataireId: string | null, debutMois: Date, debu
   return { passif, solaire, depotages, incidents };
 }
 
+function versLignePrestataire(nom: string, d: RecapData): LignePrestataire {
+  const blocs = [d.passif, d.solaire].filter((b): b is BlocMaintenances => b !== null);
+  const terminees = blocs.reduce((t, b) => t + b.terminees, 0);
+  const enCours = blocs.reduce((t, b) => t + b.enCours, 0);
+  const planifiees = blocs.reduce((t, b) => t + b.planifiees, 0);
+  const total = terminees + enCours + planifiees;
+  return {
+    nom,
+    contrats: d.passif && d.solaire ? 'passif/actif + solaire' : d.solaire ? 'solaire' : 'passif/actif',
+    terminees, enCours, planifiees,
+    pct: total ? Math.round((terminees / total) * 100) : 0,
+    incidentsOuverts: d.incidents.encoreOuverts,
+    litres: d.depotages ? d.depotages.litres : null,
+  };
+}
+
+/**
+ * Détail par prestataire pour l'email interne : un `calculerRecap` par société
+ * détentrice d'au moins un site (les autres sont ignorées, comme leurs emails).
+ * Renvoie aussi les RecapData bruts : le job les réutilise pour les emails des
+ * superviseurs de ces sociétés — un seul calcul par périmètre.
+ */
+export async function calculerDetailPrestataires(
+  debutMois: Date,
+  debutJour: Date,
+): Promise<{ lignes: LignePrestataire[]; parPrestataire: Map<string, RecapData> }> {
+  const prestas = await prisma.prestataire.findMany({
+    where: { isActive: true },
+    orderBy: { nom: 'asc' },
+    select: { id: true, nom: true },
+  });
+  const lignes: LignePrestataire[] = [];
+  const parPrestataire = new Map<string, RecapData>();
+  for (const p of prestas) {
+    const d = await calculerRecap(p.id, debutMois, debutJour);
+    if (!d) continue; // société sans site (transporteur, gardiennage…)
+    parPrestataire.set(p.id, d);
+    lignes.push(versLignePrestataire(p.nom, d));
+  }
+  return { lignes, parPrestataire };
+}
+
 // ── Rendu HTML (styles inline : clients mail) ────────────────────────────────
 const NAVY = '#1B3F6B';
 const fmtD = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
@@ -171,7 +230,33 @@ function sectionMaintenances(titre: string, b: BlocMaintenances): string {
   </table>${retard}`;
 }
 
-export function rendreEmail(d: RecapData, jour: Date, perimetreLabel: string): string {
+function celluleDetail(v: string, opts?: { gauche?: boolean; accent?: boolean }): string {
+  return `<td style="padding:6px ${opts?.gauche ? '8px' : '4px'};text-align:${opts?.gauche ? 'left' : 'center'};border-bottom:1px solid #eef1f5;${opts?.accent ? `font-weight:700;color:${NAVY};` : ''}">${v}</td>`;
+}
+
+function sectionDetailPrestataires(lignes: LignePrestataire[]): string {
+  if (!lignes.length) return '';
+  const th = (t: string, gauche = false) =>
+    `<th style="padding:6px ${gauche ? '8px' : '4px'};text-align:${gauche ? 'left' : 'center'};color:#555;font-weight:600;">${t}</th>`;
+  const rows = lignes.map((l) => `<tr>
+    ${celluleDetail(`<b>${l.nom}</b><br><span style="color:#8a94a0;font-size:10px;">${l.contrats}</span>`, { gauche: true })}
+    ${celluleDetail(String(l.terminees))}
+    ${celluleDetail(String(l.enCours))}
+    ${celluleDetail(String(l.planifiees))}
+    ${celluleDetail(`${l.pct} %`, { accent: true })}
+    ${celluleDetail(l.incidentsOuverts ? `<span style="color:#B23124;font-weight:700;">${l.incidentsOuverts}</span>` : '0')}
+    ${celluleDetail(l.litres != null ? `${l.litres.toLocaleString('fr-FR')} L` : '—')}
+  </tr>`).join('');
+  return `
+  <h3 style="margin:18px 0 6px;color:${NAVY};font-size:15px;">Détail par prestataire</h3>
+  <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e8ef;border-radius:6px;font-size:12px;">
+    <tr style="background:#eef2f7;">${th('Prestataire', true)}${th('Terminées')}${th('En cours')}${th('Planifiées')}${th('Avanc.')}${th('Incidents ouverts')}${th('Carburant (mois)')}</tr>
+    ${rows}
+  </table>
+  <p style="margin:4px 12px 0;font-size:11px;color:#8a94a0;">Maintenances du mois (tous contrats confondus) · incidents encore ouverts · volume livré depuis le 1er.</p>`;
+}
+
+export function rendreEmail(d: RecapData, jour: Date, perimetreLabel: string, detailPrestataires?: LignePrestataire[]): string {
   const inc = d.incidents;
   const critiques = inc.critiquesOuverts.length
     ? `<p style="margin:8px 12px 4px;font-size:12px;color:#B23124;"><b>Critiques ouverts :</b> ${inc.critiquesOuverts
@@ -199,6 +284,7 @@ export function rendreEmail(d: RecapData, jour: Date, perimetreLabel: string): s
         ${ligne('Dépotages (mois)', `${d.depotages.nombre}${d.depotages.aujourdhui ? ` <span style="color:#1C6B49;">(+${d.depotages.aujourdhui} aujourd'hui)</span>` : ''}`)}
         ${ligne('Volume livré', `${d.depotages.litres.toLocaleString('fr-FR')} L`, true)}
       </table>` : ''}
+      ${detailPrestataires ? sectionDetailPrestataires(detailPrestataires) : ''}
       <p style="margin:16px 0 0;font-size:11px;color:#8a94a0;">Email automatique quotidien — merci de ne pas y répondre. Le détail des activités est dans l'application E&M OpS.</p>
     </div>
   </div>`;
@@ -227,16 +313,25 @@ export async function dailyRecapJob(): Promise<void> {
     groupes.set(cle, [...(groupes.get(cle) ?? []), u.email]);
   }
 
+  // Détail par prestataire : calculé UNE fois si l'email interne part — et
+  // ses RecapData resservent aux emails des superviseurs de ces sociétés.
+  const detail = groupes.has('INTERNE') ? await calculerDetailPrestataires(debutMois, debutJour) : null;
+
   const sujets = `Récap E&M OpS du ${maintenant.toLocaleDateString('fr-FR')}`;
   let envoyes = 0;
   for (const [cle, emails] of groupes) {
     const prestataireId = cle === 'INTERNE' ? null : cle;
-    const data = await calculerRecap(prestataireId, debutMois, debutJour);
+    const data = prestataireId
+      ? detail?.parPrestataire.get(prestataireId) ?? await calculerRecap(prestataireId, debutMois, debutJour)
+      : await calculerRecap(null, debutMois, debutJour);
     if (!data) continue; // société sans site
     const label = prestataireId
       ? (await prisma.prestataire.findUnique({ where: { id: prestataireId }, select: { nom: true } }))?.nom ?? 'Votre périmètre'
       : 'Parc entier';
-    const ok = await sendEmail({ to: emails, subject: sujets, html: rendreEmail(data, maintenant, label) });
+    const ok = await sendEmail({
+      to: emails, subject: sujets,
+      html: rendreEmail(data, maintenant, label, prestataireId ? undefined : detail?.lignes),
+    });
     if (ok) envoyes += emails.length;
   }
   logger.info(`[daily-recap] ${envoyes}/${users.length} destinataire(s) servis (${groupes.size} périmètre(s))`);
