@@ -42,7 +42,11 @@ export function assertOnSite(
   const dist = distanceMeters(lat, lng, Number(site.latitude), Number(site.longitude));
   if (dist > geofenceRadiusM()) {
     throw new AppError(
-      `Vous n'êtes pas sur le site ${site.nom ?? site.code ?? ''} (à ${Math.round(dist)} m, max ${geofenceRadiusM()} m) : ${action} ne peut se faire que sur place.`,
+      // La position transmise figure dans le message : quand c'est la FICHE du
+      // site qui est mal géolocalisée, ce point (relevé au pied du site, ~5 m)
+      // est exactement la valeur à y recopier — le NOC corrige sans rappeler
+      // le technicien ni deviner où il se trouvait.
+      `Vous n'êtes pas sur le site ${site.nom ?? site.code ?? ''} (à ${Math.round(dist)} m, max ${geofenceRadiusM()} m) : ${action} ne peut se faire que sur place. Position relevée à la saisie : ${lat.toFixed(6)}, ${lng.toFixed(6)}.`,
       422
     );
   }
