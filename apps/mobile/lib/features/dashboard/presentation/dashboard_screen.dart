@@ -129,6 +129,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           const SizedBox(width: 8),
                           FilledButton(
+                            // Le thème donne aux FilledButton une largeur
+                            // infinie (Size.fromHeight) : dans une Row, sans
+                            // cette taille compacte, le bouton déborde de
+                            // l'écran et devient invisible.
+                            style: FilledButton.styleFrom(
+                                minimumSize: const Size(120, 44)),
                             onPressed: () async {
                               Navigator.of(ctx).pop();
                               await sync.confirmer(e);
@@ -236,6 +242,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           const SizedBox(width: 8),
                           FilledButton(
+                            // Même piège du thème que « Confirmer » ci-dessus :
+                            // taille compacte obligatoire dans une Row.
+                            style: FilledButton.styleFrom(
+                                minimumSize: const Size(120, 44)),
                             onPressed: () async {
                               Navigator.of(ctx).pop();
                               await sync.retryFailed(e.localId);
