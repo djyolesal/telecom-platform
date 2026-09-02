@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { L_SEVERITE, L_STATUT_INCIDENT, libelle } from '../utils/libelles';
-import { sitePerimetre, isRestreint, assertSiteInPerimetre, techniciensAssignables } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables } from '../utils/perimetre';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
@@ -234,11 +234,12 @@ export async function assignIncident(req: Request, res: Response, next: NextFunc
     if (!existant) throw new AppError('Incident introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, existant.siteId);
 
-    // Le technicien assigné doit exister, être actif, et relever du même
-    // périmètre que le site (pas d'assignation à un compte arbitraire).
-    const tech = await prisma.user.findUnique({ where: { id: technicienId }, select: { id: true, isActive: true, role: true } });
-    if (!tech || !tech.isActive) throw new AppError('Technicien introuvable ou inactif', 400);
-    await assertSiteInPerimetre(technicienId, existant.siteId);
+    // Mêmes règles que la réaffectation de maintenance : technicien actif,
+    // couvrant le site, et — pour un superviseur de société — uniquement les
+    // techniciens de SA société. La liste proposée au web était déjà filtrée
+    // ainsi ; le serveur, lui, laissait passer une assignation inter-sociétés
+    // forgée à la main (site couvert par deux prestataires : passif + solaire).
+    await assertTechnicienAssignable(req.user!.id, technicienId, existant.siteId);
 
     const incident = await prisma.incident.update({
       where: { id: req.params.id },
