@@ -79,7 +79,15 @@ export default function ConformiteArcepPage() {
       render: (l) => {
         const v = vue(l);
         return (
-          <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${v.dr1Conforme ? (v.dr1 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700') : 'bg-red-100 text-red-700'}`}>
+          // Ambre = « approche du seuil » mais TOUJOURS CONFORME : la violation
+          // ne commence qu'au-delà de 2 épisodes (3 et plus). L'infobulle le
+          // dit pour éviter de lire l'ambre comme une demi-violation.
+          <span
+            title={v.dr1Conforme
+              ? `Conforme : ${v.dr1} épisode(s) ≥ 1 h continu sur le mois - la limite n'est violée qu'au-delà de ${data.seuils.dr1Max}.`
+              : `Hors seuil : ${v.dr1} épisodes ≥ 1 h continu sur le mois (plus de ${data.seuils.dr1Max} autorisés).`}
+            className={`rounded px-1.5 py-0.5 text-xs font-semibold ${v.dr1Conforme ? (v.dr1 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700') : 'bg-red-100 text-red-700'}`}
+          >
             {v.dr1} épisode{v.dr1 > 1 ? 's' : ''} ≥ 1 h
           </span>
         );
