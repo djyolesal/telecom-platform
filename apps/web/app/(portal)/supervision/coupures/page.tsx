@@ -780,6 +780,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       )}
       {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
       {errSuppr && <p className="text-sm text-red-600">{errSuppr}</p>}
+      <HistoriqueBloc coupureId={coupure.id} />
       {confirmerSuppression ? (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
           <p className="text-sm text-red-800">
@@ -812,6 +813,45 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         </div>
       )}
     </Modal>
+  );
+}
+
+// ── Historique des actions sur la coupure ───────────────────────────────────
+// Chaque ligne du rapport doit pouvoir répondre à « qui a fait quoi, quand » :
+// déclaration, prise en charge, requalification, clôture, réouverture… servies
+// depuis les traces d'audit (celles de la ligne + celles de sa racine).
+
+function HistoriqueBloc({ coupureId }: { coupureId: string }) {
+  const { data: entrees, isLoading } = useQuery({
+    queryKey: ['coupure-historique', coupureId],
+    queryFn: () => api.get(`/coupures-reseau/${coupureId}/historique`).then(
+      (r) => r.data.data as { date: string; par: string; libelle: string }[]
+    ),
+  });
+  const fmtDH = (iso: string) => new Date(iso).toLocaleString('fr-FR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+  return (
+    <div className="mt-4 border-t border-gray-100 pt-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Historique</p>
+      {isLoading && <p className="text-xs text-gray-400">Chargement…</p>}
+      {entrees && entrees.length === 0 && (
+        <p className="text-xs text-gray-400">
+          Aucune action tracée — les lignes issues d&apos;un import de rapport n&apos;ont pas d&apos;historique individuel avant leur première action.
+        </p>
+      )}
+      {entrees && entrees.length > 0 && (
+        <ul className="space-y-1.5">
+          {entrees.map((e, i) => (
+            <li key={i} className="flex items-baseline gap-2 text-xs">
+              <span className="shrink-0 tabular-nums text-gray-400">{fmtDH(e.date)}</span>
+              <span className="text-gray-700">{e.libelle}</span>
+              <span className="shrink-0 text-gray-400">· {e.par}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -36,12 +36,22 @@ export interface LigneCoupureExport {
   cause: string | null;
   actions: string | null;
   intervenants: string | null;
+  frequence: string | null;
+  secteur: string | null;
+  technicienContacte: string | null;
+  heureContact: Date | null;
+  dateArriveeSite: Date | null;
+  nocEngineer: string | null;
+  priseEnChargeLe: Date | null;
+  observations: string | null;
 }
 
 export const COLONNES_DETAIL = [
   { key: 'site', header: 'Site', width: 20 },
   { key: 'region', header: 'Région', width: 15 },
   { key: 'technologie', header: 'Technologie', width: 12 },
+  { key: 'frequence', header: 'Fréquence', width: 12 },
+  { key: 'secteur', header: 'Secteur', width: 10 },
   { key: 'debut', header: 'Début', width: 17 },
   { key: 'fin', header: 'Fin', width: 17 },
   { key: 'downtime', header: 'Downtime (min)', width: 14 },
@@ -53,6 +63,12 @@ export const COLONNES_DETAIL = [
   { key: 'cause', header: 'Cause', width: 36 },
   { key: 'actions', header: 'Actions', width: 32 },
   { key: 'intervenants', header: 'Intervenant(s)', width: 22 },
+  { key: 'technicienContacte', header: 'Technicien contacté', width: 22 },
+  { key: 'heureContact', header: 'Heure de contact', width: 17 },
+  { key: 'dateArriveeSite', header: 'Arrivée sur site', width: 17 },
+  { key: 'nocEngineer', header: 'Ingénieur NOC', width: 20 },
+  { key: 'priseEnChargeLe', header: 'Prise en charge le', width: 17 },
+  { key: 'observations', header: 'Observations', width: 40 },
 ] as const;
 
 /** Durée lisible pour un document destiné à être LU (PDF) : « 2 h 30 », « 3 j 4 h ».
@@ -222,6 +238,14 @@ export function construireClasseurCoupures(opts: {
       cause: l.cause ?? '',
       actions: l.actions ?? '',
       intervenants: l.intervenants ?? '',
+      frequence: l.frequence ?? '',
+      secteur: l.secteur ?? '',
+      technicienContacte: l.technicienContacte ?? '',
+      heureContact: l.heureContact ? fmtDh(l.heureContact) : '',
+      dateArriveeSite: l.dateArriveeSite ? fmtDh(l.dateArriveeSite) : '',
+      nocEngineer: l.nocEngineer ?? '',
+      priseEnChargeLe: l.priseEnChargeLe ? fmtDh(l.priseEnChargeLe) : '',
+      observations: l.observations ?? '',
     };
     const row = dt.addRow(visibles.map((c) => valeurs[c.key]));
     row.height = 18;

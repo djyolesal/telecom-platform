@@ -1999,6 +1999,86 @@ export async function annulerPriseEnCharge(req: Request, res: Response, next: Ne
  * Situation en direct pour la page Coupures : compteurs des onglets, bandeau
  * de synthèse et file « à qualifier » — périmètre prestataire appliqué.
  */
+/** Libellé métier d'une trace d'audit de coupure, à partir des formes connues. */
+function libelleAuditCoupure(action: string, brut: unknown, surCetteLigne: boolean): string {
+  const d = (brut ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' ? v : 0);
+  const suffixeRacine = surCetteLigne ? '' : ' — sur la coupure racine de l\'événement';
+  if (action === 'CREATE') {
+    const technos = Array.isArray(d.technologies) ? (d.technologies as string[]).join('/') : '';
+    const impactes = n(d.sitesImpactes);
+    return `Déclaration de la coupure${technos ? ` (${technos})` : ''}${impactes > 1 ? ` — ${impactes} sites impactés` : ''}`;
+  }
+  if (action === 'DELETE') {
+    return `Suppression (saisie erronée)${n(d.heriteesSupprimees) ? ` — ${n(d.heriteesSupprimees)} héritée(s) supprimée(s)` : ''}`;
+  }
+  if (action === 'UPDATE') {
+    if (d.priseEnCharge === true) {
+      const morceaux = [`Prise en charge de la détection automatique`];
+      if (n(d.heriteesReclassees)) morceaux.push(`${n(d.heriteesReclassees)} coupure(s) aval reclassée(s)`);
+      if (n(d.heriteesCreees)) morceaux.push(`${n(d.heriteesCreees)} héritée(s) créée(s)`);
+      if (d.incidentCree) morceaux.push('intervention terrain déclenchée');
+      if (d.incidentReutilise) morceaux.push('rattachée à l\'incident déjà ouvert');
+      return morceaux.join(' — ') + suffixeRacine;
+    }
+    if (d.validationCloturee === true) {
+      return `Validation a posteriori — comptée dans la disponibilité (durée ${n(d.dureeMin)} min${n(d.lignesValidees) > 1 ? `, ${n(d.lignesValidees)} lignes` : ''})${suffixeRacine}`;
+    }
+    if (d.annulationPriseEnCharge === true) {
+      return `Annulation de la prise en charge — ${n(d.heriteesRedeclassees)} coupure(s) redevenue(s) locale(s)${n(d.heriteesSupprimees) ? `, ${n(d.heriteesSupprimees)} héritée(s) supprimée(s)` : ''}${suffixeRacine}`;
+    }
+    if (d.action === 'reouverture_noc') return 'Réouverture de l\'incident lié (coupure toujours constatée)';
+    const morceaux: string[] = [];
+    if (d.cloture === true) morceaux.push('clôture');
+    // Clé historique accentuée telle qu'enregistrée.
+    if (n(d['hériteesCloturees'])) morceaux.push(`${n(d['hériteesCloturees'])} héritée(s) clôturée(s)`);
+    if (d.incidentRouvert) morceaux.push('incident rouvert');
+    if (d.incidentResolu) morceaux.push('incident résolu');
+    if (d.ancienDebut) morceaux.push('début corrigé');
+    if (d.nouvelleTechnologie) morceaux.push(`requalifiée ${String(d.nouvelleTechnologie) === 'SITE' ? 'Site entier' : d.nouvelleTechnologie}`);
+    if (d.nouveauSiteId) morceaux.push('site corrigé');
+    return morceaux.length ? `Modification — ${morceaux.join(', ')}` : 'Modification de la fiche';
+  }
+  return action;
+}
+
+/**
+ * Historique des actions sur UNE ligne du rapport : traces d'audit de la
+ * coupure elle-même + celles portées par sa racine (prise en charge,
+ * annulation… s'enregistrent sur la racine de l'événement) + la réouverture
+ * de l'incident lié (tracée côté incidents avec le lien coupureId).
+ */
+export async function getHistoriqueCoupure(req: Request, res: Response, next: NextFunction) {
+  try {
+    const c = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, siteId: true, coupureOrigineId: true },
+    });
+    if (!c) throw new AppError('Coupure introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, c.siteId);
+    const ids = [c.id, ...(c.coupureOrigineId ? [c.coupureOrigineId] : [])];
+    const entrees = await prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { resource: 'coupure_reseau', resourceId: { in: ids } },
+          { resource: 'incidents', details: { path: ['coupureId'], equals: c.id } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+      include: { user: { select: { nom: true, prenom: true } } },
+    });
+    res.json({
+      success: true,
+      data: entrees.map((e) => ({
+        date: e.createdAt,
+        par: [e.user?.prenom, e.user?.nom].filter(Boolean).join(' ') || '—',
+        libelle: libelleAuditCoupure(e.action, e.details, e.resourceId === c.id),
+      })),
+    });
+  } catch (err) { next(err); }
+}
+
 export async function getCoupuresStats(req: Request, res: Response, next: NextFunction) {
   try {
     const perimetre = await sitePerimetre(req.user!.id);
@@ -2213,6 +2293,14 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
           cause: c.cause,
           actions: c.actions,
           intervenants: c.intervenants,
+          frequence: c.frequence,
+          secteur: c.secteur,
+          technicienContacte: c.technicienContacte,
+          heureContact: c.heureContact,
+          dateArriveeSite: c.dateArriveeSite,
+          nocEngineer: c.nocEngineer,
+          priseEnChargeLe: c.priseEnChargeLe,
+          observations: c.observations,
         })),
         periodeTexte,
         perimetreTexte: restreint ? 'vos lots' : 'réseau entier',

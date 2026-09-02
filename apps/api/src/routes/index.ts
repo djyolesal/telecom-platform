@@ -229,6 +229,7 @@ router.get('/sites/:id/etiquettes-qr.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN'
 router.get('/coupures-reseau', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getCoupures);
 router.get('/coupures-reseau/stats', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getCoupuresStats);
 router.get('/coupures-reseau/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.exportCoupures);
+router.get('/coupures-reseau/:id/historique', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), coupuresCtrl.getHistoriqueCoupure);
 router.post('/coupures-reseau', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.createCoupure);
 router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
 router.post('/coupures-reseau/:id/prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.prendreEnChargeCoupure);
