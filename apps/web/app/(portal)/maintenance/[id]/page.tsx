@@ -1,9 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, FileSignature, Trash2 } from 'lucide-react';
+import { FileText, FileSignature, Trash2, Pencil, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { downloadFile } from '@/lib/download';
@@ -13,6 +14,8 @@ import { Loading, ErrorState } from '@/components/shared/states';
 import { StatutMaintBadge } from '@/components/shared/Badge';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
 import { SignatureBlock } from '@/components/shared/SignatureBlock';
+import { Field, Input, Textarea } from '@/components/shared/Form';
+import { SearchSelect } from '@/components/shared/SearchSelect';
 import { TYPES_MAINTENANCE, CATEGORIES_EQUIPEMENT, PASSIVE_CATEGORIES, SOURCES_ENERGIE } from '@/lib/constants';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 
@@ -25,12 +28,95 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+// ── Modification du planning (superviseur+) ─────────────────────────────────
+// L'API l'autorisait depuis toujours (PUT méta de planification) mais aucun
+// écran ne l'exposait : reprogrammer ou réassigner exigeait de supprimer et
+// recréer. Uniquement pour une maintenance encore PLANIFIÉE - l'exécution
+// (démarrage, clôture) reste au mobile avec ses contrôles terrain.
+type MaintEdit = {
+  id: string; siteId: string; equipement: string; description?: string | null;
+  datePlanifiee: string; technicienId?: string | null;
+};
+
+function EditPlanningModal({ m, onClose }: { m: MaintEdit; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({
+    equipement: m.equipement ?? '',
+    description: m.description ?? '',
+    datePlanifiee: m.datePlanifiee ? new Date(m.datePlanifiee).toISOString().slice(0, 16) : '',
+    technicienId: m.technicienId ?? '',
+  });
+  const [error, setError] = useState('');
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Mêmes techniciens que la création : internes + prestataires du lot,
+  // filtrés côté serveur selon la société de l'appelant.
+  const { data: techs } = useQuery({
+    queryKey: ['techs-assignables-site', m.siteId],
+    queryFn: () => api.get('/maintenances/techniciens-assignables', { params: { site_id: m.siteId } }).then((r) => r.data.data),
+  });
+  const L_SCOPE: Record<string, string> = { PASSIVE: 'passif', ACTIVE: 'actif', LES_DEUX: 'passif + actif', SOLAIRE: 'solaire' };
+  const techOptions = ((techs ?? []) as { id: string; nom: string; prenom: string; societe: string; scopes: string[] }[]).map((t) => ({
+    value: t.id,
+    label: `${t.prenom} ${t.nom} - ${t.societe}${t.scopes.length ? ` (${t.scopes.map((x) => L_SCOPE[x] ?? x).join(' / ')})` : ''}`,
+  }));
+
+  const mutation = useMutation({
+    mutationFn: () => api.put(`/maintenances/${m.id}`, {
+      equipement: form.equipement,
+      description: form.description || null,
+      datePlanifiee: form.datePlanifiee,
+      ...(form.technicienId ? { technicienId: form.technicienId } : {}),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maintenance', m.id] });
+      queryClient.invalidateQueries({ queryKey: ['maintenances'] });
+      toast('Planning mis à jour.', 'success');
+      onClose();
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Modification impossible'),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-gray-800">Modifier le planning</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
+          <Field label="Date planifiée" required>
+            <Input type="datetime-local" value={form.datePlanifiee} onChange={(e) => set('datePlanifiee', e.target.value)} required />
+          </Field>
+          <Field label="Technicien" hint="Réassigner prévient le nouveau technicien (notification + push).">
+            <SearchSelect value={form.technicienId} onChange={(v) => set('technicienId', v)} options={techOptions} placeholder="Choisir un technicien…" />
+          </Field>
+          <Field label="Équipement" required>
+            <Input value={form.equipement} onChange={(e) => set('equipement', e.target.value)} required />
+          </Field>
+          <Field label="Description">
+            <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={2} />
+          </Field>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
+            <Button type="submit" loading={mutation.isPending}>Enregistrer</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function MaintenanceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
+  const role = (session?.user as { role?: string })?.role ?? '';
+  const isAdmin = role === 'ADMIN';
+  const peutPlanifier = ['SUPERVISEUR', 'MANAGER', 'ADMIN'].includes(role);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data: m, isLoading, isError } = useQuery({
     queryKey: ['maintenance', id],
@@ -68,6 +154,10 @@ export default function MaintenanceDetailPage() {
               <button type="button" onClick={() => downloadFile(`/maintenances/${id}/bon-mouvement.pdf`, `bon-mouvement-${id}.pdf`, true)} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                 <FileSignature size={15} /> Bon de mouvement
               </button>
+            )}
+            {/* Reprogrammation/réassignation : superviseur+, planning non encore exécuté. */}
+            {peutPlanifier && m.statut === 'PLANIFIEE' && (
+              <Button variant="secondary" icon={Pencil} onClick={() => setEditOpen(true)}>Modifier</Button>
             )}
             {/* Suppression réservée à l'admin et aux plannings non encore exécutés. */}
             {isAdmin && m.statut === 'PLANIFIEE' && (
@@ -249,6 +339,12 @@ export default function MaintenanceDetailPage() {
         </div>
       </div>
 
+      {editOpen && (
+        <EditPlanningModal
+          m={{ id: m.id, siteId: m.siteId, equipement: m.equipement, description: m.description, datePlanifiee: m.datePlanifiee, technicienId: m.technicien?.id ?? null }}
+          onClose={() => setEditOpen(false)}
+        />
+      )}
     </div>
   );
 }
