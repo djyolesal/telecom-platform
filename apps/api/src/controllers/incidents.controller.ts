@@ -426,6 +426,9 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
           datePlanifiee: dateResol,
           dateDebut: dateInterv,
           dateFin: dateResol,
+          // Durée réelle de l'intervention : sans elle la fiche affichait
+          // « Durée — » malgré un début et une fin renseignés.
+          dureeMinutes: Math.max(0, differenceInMinutes(dateResol, dateInterv)),
           technicienId: incident.technicienId,
         },
       }));

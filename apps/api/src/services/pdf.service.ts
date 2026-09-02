@@ -153,6 +153,9 @@ export interface MaintenancePdfData {
   totalPhotosApres?: number;
   signatureTechnicien?: Buffer | null;
   signatureAgent?: Buffer | null;
+  /** Mention affichée quand photos/signatures proviennent de l'incident lié
+   *  (curative auto-créée à la résolution : aucune preuve propre). */
+  notePreuves?: string | null;
 }
 
 const fmtN = (v: number | null | undefined, suffixe = '') =>
@@ -261,6 +264,10 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
         ? [{ label: 'Agent de sécurité', nom: m.nomAgentSecurite ?? null, image: m.signatureAgent ?? null }]
         : []),
     ]);
+    if (m.notePreuves) {
+      doc.moveDown(0.5);
+      doc.fontSize(8).fillColor('#666').text(m.notePreuves, 50, doc.y, { width: doc.page.width - 100 });
+    }
 
     doc.moveDown(2);
     doc.fontSize(8).fillColor('#999').text(

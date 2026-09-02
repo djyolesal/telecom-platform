@@ -323,6 +323,62 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
   } catch (err) { next(err); }
 }
 
+/**
+ * Emplacements de signature d'une maintenance (fiche ET PDF). Un emplacement
+ * attendu mais vide sort avec url null (« Signature manquante ») — sauf pour
+ * une curative AUTO-CRÉÉE à la résolution d'un incident : ses preuves vivent
+ * sur l'incident, on les remonte étiquetées au lieu d'accuser à tort.
+ */
+function construireSignaturesMaintenance(m: {
+  statut: string;
+  signaturePath: string | null;
+  nomAgentSecurite: string | null;
+  signatureAgentSecuritePath: string | null;
+  technicien: { nom: string; prenom: string } | null;
+  incident?: {
+    reference: string | null;
+    signaturePath: string | null;
+    nomAgentSecurite: string | null;
+    signatureAgentSecuritePath: string | null;
+    technicien: { nom: string; prenom: string } | null;
+  } | null;
+}): Array<{ label: string; nom: string | null; url: string | null }> {
+  if (m.statut !== 'TERMINEE' && !m.signaturePath) return [];
+  // Repli incident : aucune signature propre, mais l'incident lié en porte.
+  const inc = m.incident;
+  if (!m.signaturePath && !m.signatureAgentSecuritePath && inc?.signaturePath) {
+    const suffixe = ` (incident ${inc.reference ?? 'lié'})`;
+    return [
+      {
+        label: `Technicien${suffixe}`,
+        nom: inc.technicien ? `${inc.technicien.prenom} ${inc.technicien.nom}` : (m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : null),
+        url: publicFileUrl(inc.signaturePath),
+      },
+      ...(inc.nomAgentSecurite || inc.signatureAgentSecuritePath
+        ? [{
+            label: `Agent de sécurité${suffixe}`,
+            nom: inc.nomAgentSecurite ?? null,
+            url: inc.signatureAgentSecuritePath ? publicFileUrl(inc.signatureAgentSecuritePath) : null,
+          }]
+        : []),
+    ];
+  }
+  return [
+    {
+      label: 'Technicien',
+      nom: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : null,
+      url: m.signaturePath ? publicFileUrl(m.signaturePath) : null,
+    },
+    ...(m.nomAgentSecurite || m.signatureAgentSecuritePath
+      ? [{
+          label: 'Agent de sécurité',
+          nom: m.nomAgentSecurite ?? null,
+          url: m.signatureAgentSecuritePath ? publicFileUrl(m.signatureAgentSecuritePath) : null,
+        }]
+      : []),
+  ];
+}
+
 export async function getMaintenanceById(req: Request, res: Response, next: NextFunction) {
   try {
     const maintenance = await prisma.maintenance.findUnique({
@@ -335,11 +391,28 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
         photos: true,
         checklist: { orderBy: { cle: 'asc' } },
         releves: { include: { groupe: { select: { numero: true } } }, orderBy: { source: 'asc' } },
-        incident: { select: { id: true, type: true, severite: true } },
+        incident: {
+          select: {
+            id: true, type: true, severite: true, reference: true,
+            // Preuves de la clôture terrain : une curative AUTO-CRÉÉE à la
+            // résolution d'un incident naît TERMINEE sans photos ni signatures
+            // propres — les preuves exigées vivent sur l'incident. La fiche
+            // (et le PDF) les remontent, étiquetées, au lieu d'afficher à tort
+            // « Signature manquante » et zéro photo.
+            signaturePath: true, nomAgentSecurite: true, signatureAgentSecuritePath: true,
+            technicien: { select: { nom: true, prenom: true } },
+          },
+        },
       },
     });
     if (!maintenance) throw new AppError('Maintenance introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, maintenance.siteId);
+
+    // Photos de l'incident lié, servies en repli quand la maintenance n'en a
+    // aucune en propre (cas de la curative auto-créée).
+    const photosIncident = maintenance.incident && maintenance.photos.length === 0
+      ? await prisma.photo.findMany({ where: { entityType: 'incident', entityId: maintenance.incident.id } })
+      : [];
     // URL des photos recalculée depuis la clé MinIO (jamais figée en base) :
     // robuste si l'IP/domaine (APP_URL) change après l'upload.
     const data = {
@@ -355,27 +428,16 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
       checklistAttendue: maintenance.tachePreventiveKey
         ? (CHECKLIST_SOLAIRE[maintenance.tachePreventiveKey] ?? null)
         : null,
-      photos: maintenance.photos.map((p) => ({ ...p, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
+      photos: (maintenance.photos.length ? maintenance.photos : photosIncident).map((p) => ({
+        ...p,
+        url: p.minioKey ? publicFileUrl(p.minioKey) : p.url,
+        ...(maintenance.photos.length === 0 ? { origine: `Incident ${maintenance.incident?.reference ?? ''}`.trim() } : {}),
+      })),
       // Signatures visibles sur la fiche (même logique que le PDF) : un
       // emplacement attendu mais non signé sort avec url null — le web
       // l'affiche « Signature manquante » au lieu de le cacher. Uniquement
       // une fois l'intervention TERMINÉE (avant, tout serait « manquant »).
-      signatures: maintenance.statut === 'TERMINEE' || maintenance.signaturePath
-        ? [
-            {
-              label: 'Technicien',
-              nom: maintenance.technicien ? `${maintenance.technicien.prenom} ${maintenance.technicien.nom}` : null,
-              url: maintenance.signaturePath ? publicFileUrl(maintenance.signaturePath) : null,
-            },
-            ...(maintenance.nomAgentSecurite || maintenance.signatureAgentSecuritePath
-              ? [{
-                  label: 'Agent de sécurité',
-                  nom: maintenance.nomAgentSecurite ?? null,
-                  url: maintenance.signatureAgentSecuritePath ? publicFileUrl(maintenance.signatureAgentSecuritePath) : null,
-                }]
-              : []),
-          ]
-        : [],
+      signatures: construireSignaturesMaintenance(maintenance),
     };
     res.json({ success: true, data });
   } catch (err) { next(err); }
@@ -1230,15 +1292,27 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
       prestataire: { select: { nom: true } },
       pieces: true,
       releves: { include: { groupe: { select: { numero: true } } }, orderBy: { source: 'asc' } },
+      incident: { select: { id: true, reference: true, signaturePath: true, signatureAgentSecuritePath: true, nomAgentSecurite: true } },
     },
   });
   if (!maintenance) return null;
 
-  const photos = await prisma.photo.findMany({
+  let photos = await prisma.photo.findMany({
     where: { entityType: 'maintenance', entityId: maintenance.id },
     orderBy: { createdAt: 'asc' },
     select: { minioKey: true, phase: true },
   });
+  // Curative AUTO-CRÉÉE à la résolution d'un incident : aucune preuve propre,
+  // celles exigées à la clôture vivent sur l'incident lié — le PDF les reprend
+  // (photos sans phase → présentées côté « après intervention »).
+  const preuvesIncident = photos.length === 0 && !maintenance.signaturePath && maintenance.incident;
+  if (preuvesIncident) {
+    photos = (await prisma.photo.findMany({
+      where: { entityType: 'incident', entityId: maintenance.incident!.id },
+      orderBy: { createdAt: 'asc' },
+      select: { minioKey: true, phase: true },
+    })).map((p) => ({ ...p, phase: p.phase ?? 'APRES' }));
+  }
   const charger = async (key?: string | null): Promise<Buffer | null> => {
     if (!key) return null;
     try { return await getObjectBuffer(key); } catch { return null; }
@@ -1253,8 +1327,8 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
   const [avant, apres, signatureTechnicien, signatureAgent] = await Promise.all([
     bufsPhase('AVANT'),
     bufsPhase('APRES'),
-    charger(maintenance.signaturePath),
-    charger(maintenance.signatureAgentSecuritePath),
+    charger(preuvesIncident ? maintenance.incident!.signaturePath : maintenance.signaturePath),
+    charger(preuvesIncident ? maintenance.incident!.signatureAgentSecuritePath : maintenance.signatureAgentSecuritePath),
   ]);
 
   return generateMaintenancePdf({
@@ -1277,6 +1351,10 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
     totalPhotosApres: apres.total,
     signatureTechnicien,
     signatureAgent,
+    ...(preuvesIncident
+      ? { nomAgentSecurite: maintenance.incident!.nomAgentSecurite ?? maintenance.nomAgentSecurite,
+          notePreuves: `Preuves reprises de l'incident ${maintenance.incident!.reference ?? ''} (curative créée à sa résolution).`.replace('  ', ' ') }
+      : {}),
   });
 }
 
