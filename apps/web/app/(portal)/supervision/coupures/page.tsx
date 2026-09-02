@@ -330,7 +330,7 @@ export default function CoupuresReseauPage() {
             )}
             {peutEcrire && <Button icon={Plus} onClick={() => setShowCreate(true)}>Nouvelle coupure</Button>}
             <ExportButtons base="/coupures-reseau/export"
-              name={`coupures-reseau${du || au ? `_du-${du || 'origine'}_au-${au || 'ce-jour'}` : ''}`}
+              name={`Rapport de supervision${du || au ? ` du ${du || 'origine'} au ${au || 'ce jour'}` : ''}`}
               query={exportQuery || undefined} />
           </>
         }
