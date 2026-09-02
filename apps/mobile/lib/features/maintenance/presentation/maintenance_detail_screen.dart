@@ -6,13 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/errors/exceptions.dart';
-import '../../../core/services/location_service.dart';
+import '../../../core/services/gps_gate.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../../../core/sync/sync_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/avertissements_dialog.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../core/widgets/gps_refine_sheet.dart';
 import '../../../core/widgets/photo_gallery.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../data/maintenance_model.dart';
@@ -50,49 +49,17 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             context.read<MaintenanceRepository>().getMaintenance(widget.id);
       });
 
-  /// Vérifie la présence physique sur le site avant une opération, après un
-  /// AFFINAGE GPS (~5 m visés, feuille avec précision en direct). Retourne
-  /// (ok, lat, lng). Si le site n'a pas de coordonnées, la vérification est
-  /// ignorée (le serveur tranchera). Affiche un dialogue si hors site.
+  /// Vérifie la présence physique sur le site via le garde GPS commun
+  /// (affinage ~5 m, distance locale, refus des mesures trop imprécises).
   Future<({bool ok, double? lat, double? lng})> _verifyOnSite(
-      Maintenance m, String action) async {
-    final hasSiteCoords = m.siteLatitude != null && m.siteLongitude != null;
-    if (!hasSiteCoords) {
-      // Site non géolocalisé : simple capture silencieuse pour tracer la position.
-      final pos = await LocationService().freshPosition();
-      return (ok: true, lat: pos?.lat, lng: pos?.lng);
-    }
-    final fix = await refineGpsPosition(context);
-    if (fix == null) {
-      await _siteDialog('Position GPS indisponible',
-          'Impossible de vérifier votre présence sur site pour $action. Activez la localisation (précision élevée) et réessayez.');
-      return (ok: false, lat: null, lng: null);
-    }
-    final dist = LocationService.distanceMeters(
-        fix.lat, fix.lng, m.siteLatitude!, m.siteLongitude!);
-    if (dist > AppConfig.geofenceRadiusM) {
-      await _siteDialog('Vous n\'êtes pas sur le site',
-          'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${m.siteNom ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
-      return (ok: false, lat: null, lng: null);
-    }
-    return (ok: true, lat: fix.lat, lng: fix.lng);
+      Maintenance m, String action) {
+    return positionVerifiee(context,
+        siteLat: m.siteLatitude,
+        siteLng: m.siteLongitude,
+        siteNom: m.siteNom,
+        action: action);
   }
 
-  Future<void> _siteDialog(String title, String message) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.location_off, color: Colors.red, size: 32),
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Compris'))
-        ],
-      ),
-    );
-  }
 
   Future<void> _start(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();

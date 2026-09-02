@@ -7,12 +7,11 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/errors/exceptions.dart';
-import '../../../core/services/location_service.dart';
+import '../../../core/services/gps_gate.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../core/widgets/gps_refine_sheet.dart';
 import '../../../core/widgets/photo_gallery.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../data/incident_model.dart';
@@ -62,47 +61,17 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
             'Opération impossible - réessayez, puis signalez à votre superviseur.');
   }
 
-  /// Vérifie la présence physique sur le site (affinage GPS ~5 m, feuille avec
-  /// loader - comme le dépotage). Si le site n'a pas de coordonnées, simple
-  /// capture silencieuse (le serveur laisse passer). Retourne (ok, lat, lng).
+  /// Vérifie la présence physique sur le site via le garde GPS commun
+  /// (affinage ~5 m, distance locale, refus des mesures trop imprécises).
   Future<({bool ok, double? lat, double? lng})> _verifyOnSite(
-      Incident inc, String action) async {
-    final hasSiteCoords = inc.siteLatitude != null && inc.siteLongitude != null;
-    if (!hasSiteCoords) {
-      final pos = await LocationService().freshPosition();
-      return (ok: true, lat: pos?.lat, lng: pos?.lng);
-    }
-    final fix = await refineGpsPosition(context);
-    if (fix == null) {
-      await _siteDialog('Position GPS indisponible',
-          'Impossible de vérifier votre présence sur site pour $action. Activez la localisation (précision élevée) et réessayez.');
-      return (ok: false, lat: null, lng: null);
-    }
-    final dist = LocationService.distanceMeters(
-        fix.lat, fix.lng, inc.siteLatitude!, inc.siteLongitude!);
-    if (dist > AppConfig.geofenceRadiusM) {
-      await _siteDialog('Vous n\'êtes pas sur le site',
-          'Vous êtes à ${dist.round()} m${fix.accuracyM > 0 ? ' (± ${fix.accuracyM.round()} m)' : ''} du site ${inc.siteNom ?? ''}.\nRapprochez-vous à moins de ${AppConfig.geofenceRadiusM.round()} m pour $action.');
-      return (ok: false, lat: null, lng: null);
-    }
-    return (ok: true, lat: fix.lat, lng: fix.lng);
+      Incident inc, String action) {
+    return positionVerifiee(context,
+        siteLat: inc.siteLatitude,
+        siteLng: inc.siteLongitude,
+        siteNom: inc.siteNom,
+        action: action);
   }
 
-  Future<void> _siteDialog(String title, String message) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.location_off, color: Colors.red, size: 32),
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Compris'))
-        ],
-      ),
-    );
-  }
 
   Future<void> _startFlow(Incident inc) async {
     final repo = context.read<IncidentRepository>();

@@ -6,7 +6,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/errors/exceptions.dart';
-import '../../../core/services/location_service.dart';
+import '../../../core/services/gps_gate.dart';
+import '../../sites/data/site_model.dart';
+import '../../sites/data/site_repository.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../../../core/sync/sync_service.dart';
 import '../../../core/widgets/avertissements_dialog.dart';
@@ -473,10 +475,30 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
       }
     }
     final repo = context.read<DepotageRepository>();
+    final siteRepo = context.read<SiteRepository>();
     final router = GoRouter.of(context);
+    // Garde GPS commun AVANT d'enregistrer (cas ANYRONKOPE) : le dépotage
+    // faisait un simple currentPosition() sans contrôle — une localisation
+    // réseau (± ~340 m) partait en file et se faisait refuser par le serveur
+    // à chaque rejeu, sans recours. Ici la présence est vérifiée localement
+    // (fiche du cache hors-ligne) et une mesure trop imprécise est refusée
+    // avec la consigne utile, tant que tout est encore corrigeable.
+    Site? site;
+    try {
+      for (final s in await siteRepo.getSites()) {
+        if (s.id == _siteId) { site = s; break; }
+      }
+    } catch (_) {/* cache indisponible : le serveur tranchera */}
+    if (!mounted) return;
+    final check = await positionVerifiee(context,
+        siteLat: site?.latitude,
+        siteLng: site?.longitude,
+        siteNom: site?.nom,
+        action: 'le dépotage');
+    if (!check.ok) return;
     setState(() => _saving = true);
     try {
-      final pos = await LocationService().currentPosition();
+      final pos = (lat: check.lat, lng: check.lng);
       // Index d'heures saisis par GE → [{groupeId, indexHeuresGE}].
       final heuresGE = <Map<String, dynamic>>[
         for (final g in _groupes)
@@ -495,8 +517,8 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
             fournisseur: _fournisseur.text.trim(),
             numeroBonLivraison: _bon.text.trim(),
             observations: _obs.text.trim(),
-            latitude: pos?.lat,
-            longitude: pos?.lng,
+            latitude: pos.lat,
+            longitude: pos.lng,
             ligneLivraisonId: _ligneLivraisonId,
             heuresGE: heuresGE,
             photoPaths: _photos,
