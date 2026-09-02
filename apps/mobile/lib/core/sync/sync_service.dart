@@ -90,7 +90,8 @@ class SyncService {
 
   /// L'utilisateur abandonne la saisie : l'entrée est retirée de la file et
   /// l'éventuel patch optimiste du cache est révoqué (l'écran ne montre plus
-  /// une opération « validée » qui ne l'a jamais été).
+  /// une opération « validée » qui ne l'a jamais été). Sert aussi à abandonner
+  /// une opération en ÉCHEC définitif depuis la revue des échecs.
   Future<void> annulerConfirmation(OutboxEntry entry) async {
     if (entry.entityRef != null) await onOptimistiqueEchoue?.call(entry.entityRef!);
     await _db.removeOutbox(entry.localId);
@@ -198,10 +199,13 @@ class SyncService {
           // immédiat, visible dans le bandeau avec le motif exact.
           final code = e.statusCode ?? 0;
           if (code >= 400 && code < 500) {
-            await _echecImmediat(entry, e.toString());
+            // `e.message` (pas toString) : ce texte est MONTRÉ au technicien
+            // dans la revue des échecs - « ServerException(422): » n'y a pas
+            // sa place, seul le motif métier du serveur compte.
+            await _echecImmediat(entry, e.message);
             continue;
           }
-          await _compterEchec(entry, e.toString());
+          await _compterEchec(entry, e.message);
         } catch (e) {
           // Erreur SERVEUR (validation, refus…) propre à CETTE entrée : on compte
           // un essai et on CONTINUE avec les suivantes (pas de blocage en tête).

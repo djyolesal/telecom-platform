@@ -150,6 +150,123 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Revue des opérations en ÉCHEC : le bandeau relançait aveuglément, alors
+  /// que le motif exact du refus est stocké (`lastError`) - et qu'un refus de
+  /// validation (4xx) redonnera toujours le même résultat. Ici le technicien
+  /// VOIT pourquoi ça n'est pas parti, et choisit : réessayer (réseau revenu,
+  /// serveur corrigé) ou abandonner la saisie en connaissance de cause.
+  Future<void> _ouvrirEchecs(BuildContext context, SyncService sync) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final entries = await sync.failedEntries();
+    if (!context.mounted || entries.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (ctx, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text('Opérations non envoyées',
+                style: Theme.of(ctx).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+                'Le serveur a refusé ces saisies (motif ci-dessous). Corrigez la cause puis réessayez, ou abandonnez la saisie.',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600)),
+            const SizedBox(height: 12),
+            for (final e in entries)
+              Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                          child: Text(_libelleEntite(e.entityType),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                        Text(_fmtDateEchec(e.createdAt),
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500)),
+                      ]),
+                      const SizedBox(height: 6),
+                      Text(_motifEchec(e.lastError),
+                          style: TextStyle(
+                              fontSize: 12.5, color: Colors.red.shade800)),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () async {
+                              final ok = await showDialog<bool>(
+                                context: ctx,
+                                builder: (dctx) => AlertDialog(
+                                  title: const Text('Abandonner cette saisie ?'),
+                                  content: const Text(
+                                      'Elle sera définitivement perdue - photos et signatures comprises. À ne faire que si elle a été refaite ou n\'a plus lieu d\'être.'),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(dctx).pop(false),
+                                        child: const Text('Garder')),
+                                    TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(dctx).pop(true),
+                                        child: const Text('Abandonner',
+                                            style:
+                                                TextStyle(color: Colors.red))),
+                                  ],
+                                ),
+                              );
+                              if (ok != true || !ctx.mounted) return;
+                              Navigator.of(ctx).pop();
+                              await sync.annulerConfirmation(e);
+                              messenger.showSnackBar(const SnackBar(
+                                  content: Text('Saisie abandonnée.')));
+                            },
+                            child: const Text('Abandonner',
+                                style: TextStyle(color: Colors.red)),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: () async {
+                              Navigator.of(ctx).pop();
+                              await sync.retryFailed(e.localId);
+                              messenger.showSnackBar(const SnackBar(
+                                  content:
+                                      Text('Nouvel essai de l\'opération…')));
+                            },
+                            child: const Text('Réessayer'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Motif lisible : les entrées d'avant la correction portent encore le
+  /// préfixe technique « ServerException(422): » - on le retire à l'affichage.
+  String _motifEchec(String? brut) {
+    final m = (brut ?? '').replaceFirst(RegExp(r'^\w+Exception\(\d*\):\s*'), '').trim();
+    return m.isEmpty ? 'Motif inconnu - réessayez, le serveur précisera.' : m;
+  }
+
+  String _fmtDateEchec(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}h${d.minute.toString().padLeft(2, '0')}';
+
   String _libelleEntite(String type) {
     switch (type) {
       case 'depotage':
@@ -295,20 +412,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return Material(
                   color: Colors.red.shade50,
                   child: InkWell(
-                    onTap: () async {
-                      final entries = await sync.failedEntries();
-                      if (!context.mounted) return;
-                      for (final e in entries) {
-                        sync.retryFailed(e.localId);
-                      }
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  'Nouvel essai des opérations en échec…')),
-                        );
-                      }
-                    },
+                    onTap: () => _ouvrirEchecs(context, sync),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
@@ -318,13 +422,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                              '$n opération(s) non envoyée(s) - vos saisies sont conservées. Touchez pour réessayer.',
+                              '$n opération(s) non envoyée(s) - vos saisies sont conservées. Touchez pour voir le motif.',
                               style: TextStyle(
                                   color: Colors.red.shade800,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500)),
                         ),
-                        Icon(Icons.refresh,
+                        Icon(Icons.chevron_right,
                             color: Colors.red.shade700, size: 18),
                       ]),
                     ),
