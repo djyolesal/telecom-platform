@@ -346,7 +346,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // que les incidents et les maintenances (sites non géolocalisés : ignoré).
     const siteDepotage = await prisma.site.findUnique({
       where: { id: siteId },
-      select: { latitude: true, longitude: true, code: true },
+      select: { latitude: true, longitude: true, code: true, nom: true },
     });
     if (!siteDepotage) throw new AppError('Site introuvable', 404);
     assertOnSite(siteDepotage, b.latitude, b.longitude, 'le dépotage');

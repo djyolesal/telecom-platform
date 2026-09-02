@@ -24,7 +24,9 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
  * - Sinon la position GPS est obligatoire et doit être à moins de geofenceRadiusM().
  */
 export function assertOnSite(
-  site: { latitude: Prisma.Decimal | null; longitude: Prisma.Decimal | null; code?: string },
+  // `nom` d'abord : les messages destinés au terrain désignent les sites par
+  // leur NOM, jamais par leur code (règle transverse de la plateforme).
+  site: { latitude: Prisma.Decimal | null; longitude: Prisma.Decimal | null; nom?: string; code?: string },
   latitude: unknown,
   longitude: unknown,
   action: string
@@ -33,12 +35,14 @@ export function assertOnSite(
   const lat = latitude == null || latitude === '' ? null : Number(latitude);
   const lng = longitude == null || longitude === '' ? null : Number(longitude);
   if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
-    throw new AppError(`Position GPS requise : ${action} doit être effectué(e) sur le site.`, 422);
+    // « ne peut se faire que » : accord neutre, valable pour « le dépotage »
+    // comme pour « la clôture » — pas de « effectué(e) » dans un message métier.
+    throw new AppError(`Position GPS requise : ${action} ne peut se faire que sur le site.`, 422);
   }
   const dist = distanceMeters(lat, lng, Number(site.latitude), Number(site.longitude));
   if (dist > geofenceRadiusM()) {
     throw new AppError(
-      `Vous n'êtes pas sur le site ${site.code ?? ''} (à ${Math.round(dist)} m, max ${geofenceRadiusM()} m). ${action} autorisé(e) uniquement sur place.`.trim(),
+      `Vous n'êtes pas sur le site ${site.nom ?? site.code ?? ''} (à ${Math.round(dist)} m, max ${geofenceRadiusM()} m) : ${action} ne peut se faire que sur place.`,
       422
     );
   }
