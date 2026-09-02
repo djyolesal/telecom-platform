@@ -133,6 +133,12 @@ function LoginForm() {
       <p className="mt-6 text-center text-xs text-gray-400">
         Accès réservé au personnel autorisé
       </p>
+      {/* Même version que la barre latérale (figée au build depuis package.json) :
+          visible AVANT connexion - le support peut demander « quelle version
+          vois-tu ? » à un utilisateur qui n'arrive justement pas à se connecter. */}
+      <p className="mt-1 text-center text-[10px] text-gray-300">
+        v{process.env.NEXT_PUBLIC_APP_VERSION}
+      </p>
     </div>
   );
 }
