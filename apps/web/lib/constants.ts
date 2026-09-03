@@ -127,7 +127,10 @@ export const SCOPE_COLORS: Record<string, string> = {
 };
 
 // Catégories d'équipement considérées « passives » (→ relevés énergie à la clôture)
-export const PASSIVE_CATEGORIES = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
+// Aligné sur l'API (PASSIVE_CATS) : AUTRE relève du périmètre PASSIF — la
+// fiche affichait « Autre · active » alors que le serveur résout prestataire
+// et équipes en passif pour cette catégorie.
+export const PASSIVE_CATEGORIES = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE', 'AUTRE'];
 
 /** Sources d'énergie présentes selon la configuration du site (aligné sur l'API). */
 export function energySourcesForConfig(powerConfig?: string): string[] {

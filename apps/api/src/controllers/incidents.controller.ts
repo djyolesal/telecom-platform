@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { L_SEVERITE, L_STATUT_INCIDENT, libelle } from '../utils/libelles';
 import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables } from '../utils/perimetre';
+import { resolvePrestataireId } from './maintenances.controller';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
@@ -414,6 +415,17 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
 
     // Créer maintenance curative si demandé
     if (creerMaintenance) {
+      // Prestataire : ce chemin le laissait VIDE (fiche « Prestataire — »),
+      // alors que la création manuelle le résout toujours. La vérité terrain
+      // d'abord : la société du technicien qui a résolu ; à défaut (interne
+      // sans société, incident non assigné), le titulaire du lot comme pour
+      // une création manuelle en catégorie AUTRE (périmètre passif).
+      let prestataireCuratif: string | null = null;
+      if (incident.technicienId) {
+        const tech = await prisma.user.findUnique({ where: { id: incident.technicienId }, select: { prestataireId: true } });
+        prestataireCuratif = tech?.prestataireId ?? null;
+      }
+      if (!prestataireCuratif) prestataireCuratif = await resolvePrestataireId(incident.siteId, 'AUTRE');
       await prisma.$transaction(async (tx) => tx.maintenance.create({
         data: {
           reference: await genererReference(tx, 'MNT', dateResol),
@@ -421,6 +433,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
           incidentId: incident.id,
           type: 'CURATIVE',
           categorie: 'AUTRE',
+          prestataireId: prestataireCuratif,
           equipement: 'À préciser',
           description: `Maintenance suite incident : ${incident.description}`,
           statut: 'TERMINEE',

@@ -157,7 +157,7 @@ function sourcesForConfig(powerConfig: string): SourceEnergie[] {
  * Détermine le prestataire responsable d'une maintenance à partir du lot du site
  * et du périmètre (passive/active déduit de la catégorie). Renvoie null si non attribué.
  */
-async function resolvePrestataireId(siteId: string, categorie: string): Promise<string | null> {
+export async function resolvePrestataireId(siteId: string, categorie: string): Promise<string | null> {
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { lotId: true, lotSolaireId: true } });
 
   // Contrat SOLAIRE : découpage de lots DISTINCT — l'attribution vit sur le
