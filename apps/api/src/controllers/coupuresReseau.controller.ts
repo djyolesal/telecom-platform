@@ -862,6 +862,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     // des héritées fictives sur tout l'aval (règle vérifiée ici, pas seulement
     // dans le formulaire web).
     let sitesImpactes = 0;
+    const avertissements: string[] = [];
     if (b.propagerAval === true && siteEntier) {
       const aval = await descendantsTransmission(siteId);
       if (aval.length) {
@@ -872,24 +873,55 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
         // aussi. Ne sont créées que les héritées des sites non couverts.
         const dejaOuvertes = await prisma.coupureReseau.findMany({
           where: { siteId: { in: aval.map((s) => s.id) }, technologie: 'SITE', dateFin: null },
-          select: { id: true, siteId: true, origine: true, incidentId: true },
+          select: { id: true, siteId: true, origine: true, incidentId: true, dateDebut: true, site: { select: { nom: true } } },
         });
         const couverts = new Set(dejaOuvertes.map((c) => c.siteId));
-        const aRattacher = dejaOuvertes
-          .filter((c) => c.origine === 'LOCALE' && !c.incidentId)
-          .map((c) => c.id);
+        // CHRONOLOGIE : une héritée ne peut pas commencer AVANT sa racine — un
+        // aval tombé plus tôt est tombé pour son propre compte (autre panne),
+        // ou la racine est datée trop tard. On ne rattache que ce qui suit le
+        // début déclaré (2 min de tolérance d'horloge OSS/saisie) ; le reste
+        // est laissé tel quel et SIGNALÉ au NOC, qui corrige la date de la
+        // racine ou traite ces coupures séparément.
+        const TOLERANCE_CHRONO_MS = 2 * 60_000;
+        const candidates = dejaOuvertes.filter((c) => c.origine === 'LOCALE' && !c.incidentId);
+        const anterieures = candidates.filter((c) => c.dateDebut.getTime() < dateDebut.getTime() - TOLERANCE_CHRONO_MS);
+        const aRattacher = candidates.filter((c) => !anterieures.includes(c));
+        if (anterieures.length) {
+          avertissements.push(
+            `${anterieures.length} détection(s) aval NON rattachée(s) car antérieure(s) au début déclaré (${anterieures
+              .map((c) => `${c.site.nom} dès ${c.dateDebut.toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' })}`)
+              .join(', ')}). Si la racine est bien la cause, corrigez son début pour qu'il précède ces détections ; sinon traitez-les comme des pannes distinctes.`
+          );
+        }
+        // Aval déjà pris en charge AVEC incident terrain : jamais rattaché
+        // d'office (le terrain travaille sur cette ligne). Mais le silence
+        // laissait le NOC croire l'événement unifié — on lui dit quoi faire.
+        const avecIncident = dejaOuvertes.filter((c) => c.origine === 'LOCALE' && c.incidentId);
+        if (avecIncident.length) {
+          avertissements.push(
+            `${avecIncident.length} coupure(s) aval déjà en traitement terrain (${avecIncident
+              .map((c) => c.site.nom)
+              .join(', ')}) — non rattachée(s) à cette racine. Pour unifier l'événement : clôturez ou supprimez l'incident de la coupure aval, annulez sa prise en charge, puis rattachez-la en reprenant la prise en charge depuis la racine.`
+          );
+        }
         if (aRattacher.length) {
           // ESTAMPILLE comprise : la déclaration manuelle de la racine EST la
           // validation humaine de l'événement. Sans elle, une détection AUTO
           // rattachée ici restait « non prise en charge » et l'indisponibilité
           // du site aval disparaissait du rapport officiel (règle « OSS comptée
-          // seulement si adoptée ») — la prise en charge classique estampille
-          // déjà tout ce qu'elle rattache.
+          // seulement si adoptée »). En deux temps : une adoption DÉJÀ posée
+          // (prise en charge antérieure sans incident) n'est jamais écrasée —
+          // la trace de qui a validé quoi en premier reste vraie.
           const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
           const nomNoc = [moi?.prenom, moi?.nom].filter(Boolean).join(' ') || 'NOC';
+          const ids = aRattacher.map((c) => c.id);
           await prisma.coupureReseau.updateMany({
-            where: { id: { in: aRattacher } },
+            where: { id: { in: ids }, priseEnChargePar: null },
             data: { origine: 'HERITEE', coupureOrigineId: racineId, priseEnChargePar: nomNoc, priseEnChargeLe: new Date() },
+          });
+          await prisma.coupureReseau.updateMany({
+            where: { id: { in: ids }, priseEnChargePar: { not: null } },
+            data: { origine: 'HERITEE', coupureOrigineId: racineId },
           });
         }
         // Même règle qu'à la prise en charge : on ne crée que pour les sites
@@ -924,7 +956,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
 
     await auditLog(req.user!.id, 'CREATE', 'coupure_reseau', rows[0].id, { siteId, technologies, sitesImpactes, incidentsCrees }, req);
     emettreCoupuresChangees({ action: 'creation', siteId });
-    res.status(201).json({ success: true, data: { coupures: rows, sitesImpactes, incidentsCrees } });
+    res.status(201).json({ success: true, data: { coupures: rows, sitesImpactes, incidentsCrees, avertissements } });
   } catch (err) { next(err); }
 }
 

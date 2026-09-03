@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, Upload, X, CheckCircle2, AlertTriangle, WifiOff, Search } from 'lucide-react';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, Column } from '@/components/shared/DataTable';
@@ -534,7 +535,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
   const siteEntier = technos.has('SITE') || ['2G', '3G', '4G', '5G'].every((t) => technos.has(t));
 
   const mutation = useMutation({
-    mutationFn: () => api.post('/coupures-reseau', {
+    mutationFn: () => api.post<{ data?: { avertissements?: string[] } }>('/coupures-reseau', {
       siteId,
       technologies: [...technos],
       propagerAval: siteEntier && nbAval > 0 && propagerAval,
@@ -546,7 +547,13 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
       technicienContacte: technicien || undefined,
       observations: observations || undefined,
     }),
-    onSuccess: () => { onDone(); onClose(); },
+    onSuccess: (r) => {
+      // Rattachements refusés (aval antérieur à la racine, aval déjà en
+      // traitement terrain) : signalés APRÈS fermeture — sinon le NOC croit
+      // l'événement unifié alors que des lignes restent séparées.
+      for (const a of r.data?.data?.avertissements ?? []) toast(a, 'error');
+      onDone(); onClose();
+    },
   });
 
   const toggleTechno = (v: string) => {
