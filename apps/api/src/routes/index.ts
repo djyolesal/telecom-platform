@@ -439,6 +439,9 @@ router.post('/users/:id/delier-appareil', rbac(['ADMIN']), usersCtrl.delierAppar
 // Référentiel types de pylône : lecture pour tous (formulaires), édition admin.
 router.get('/types-pylone', adminCtrl.listTypesPylone);
 router.get('/types-incident', adminCtrl.listTypesIncident);
+router.get('/motifs-coupure', adminCtrl.listMotifsCoupure);
+router.post('/admin/motifs-coupure', rbac(['ADMIN']), adminCtrl.upsertMotifCoupure);
+router.delete('/admin/motifs-coupure/:id', rbac(['ADMIN']), adminCtrl.deleteMotifCoupure);
 router.get('/equipements', adminCtrl.listEquipements);
 router.post('/admin/equipements', rbac(['ADMIN']), adminCtrl.upsertEquipement);
 router.delete('/admin/equipements/:code', rbac(['ADMIN']), adminCtrl.deleteEquipement);

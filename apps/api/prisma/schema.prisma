@@ -616,6 +616,21 @@ model EquipementRef {
 
 // Référentiel des types d'incident (éditable en admin ; systeme = créé par le
 // code applicatif, ni supprimable ni désactivable).
+// Bibliothèque de FORMULATIONS types pour les champs libres des coupures
+// (cause, actions) : suggérées à la saisie NOC pour unifier l'orthographe
+// (« Coupure CEET/pas de GE » vs « Coupure cet/pas de GE ») sans jamais
+// interdire la frappe libre. Le texte reste stocké en clair sur la coupure.
+model MotifCoupureRef {
+  id        String   @id @default(uuid())
+  champ     String   @db.VarChar(10) // CAUSE | ACTION
+  libelle   String   @db.VarChar(150)
+  actif     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([champ, libelle])
+  @@map("motifs_coupure")
+}
+
 model TypeIncidentRef {
   code      String   @id @db.VarChar(30)
   libelle   String   @db.VarChar(80)

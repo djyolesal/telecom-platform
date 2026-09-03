@@ -101,6 +101,7 @@ export default function CoupuresReseauPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [edition, setEdition] = useState<Coupure | null>(null);
+  const motifs = useMotifsCoupure();
   // Tri d'en-tête DÉLÉGUÉ au serveur : la pagination est côté API, un tri
   // local ne réordonnerait que les 20 lignes affichées. null = tri composite.
   const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
@@ -530,6 +531,7 @@ export default function CoupuresReseauPage() {
         />
       )}
       {edition && <CoupureEditModal coupure={edition} onClose={() => setEdition(null)} onDone={rafraichir} />}
+      <DatalistsMotifs causes={motifs.causes} actions={motifs.actions} />
       {showImport && <ImportModal onClose={() => setShowImport(false)} onDone={rafraichir} />}
     </div>
   );
@@ -639,7 +641,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
           <Input value={secteur} onChange={(e) => setSecteur(e.target.value)} placeholder="ex. S2" />
         </Field>
       </div>
-      <Field label="Cause constatée"><Input value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" /></Field>
+      <Field label="Cause constatée"><Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" /></Field>
       <Field label="Technicien contacté"><Input value={technicien} onChange={(e) => setTechnicien(e.target.value)} /></Field>
       <Field label="Observations"><Textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} /></Field>
       {siteEntier && nbAval > 0 && (
@@ -794,7 +796,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <Input value={technicienContacte} onChange={(e) => setTechnicienContacte(e.target.value)} placeholder="Qui a été appelé pour cette coupure" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Cause"><Input value={cause} onChange={(e) => setCause(e.target.value)} /></Field>
+        <Field label="Cause"><Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} /></Field>
         <Field label="Classement (actif/passif)">
           <Select
             value={causeCategorie}
@@ -807,7 +809,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           />
         </Field>
       </div>
-      <Field label="Actions effectuées"><Input value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" /></Field>
+      <Field label="Actions effectuées"><Input list="motifs-action" value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" /></Field>
       {coupure.incident && (
         <p className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
           Incident lié : <b>{coupure.incident.reference ?? coupure.incident.id.slice(0, 8)}</b> ({coupure.incident.statut})
@@ -1133,6 +1135,31 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 }
 
 // ── Coquille de modal locale ────────────────────────────────────────────────
+
+// Formulations types (référentiel admin) suggérées dans les champs Cause et
+// Actions : unifie l'orthographe du NOC (« Coupure CEET/pas de GE » ne se
+// décline plus en variantes) sans jamais interdire la frappe libre.
+function useMotifsCoupure() {
+  const { data } = useQuery({
+    queryKey: ['motifs-coupure'],
+    queryFn: () => api.get('/motifs-coupure').then((r) => r.data.data as { champ: string; libelle: string; actif: boolean }[]),
+    staleTime: 5 * 60_000,
+  });
+  const actifs = (data ?? []).filter((m) => m.actif);
+  return {
+    causes: actifs.filter((m) => m.champ === 'CAUSE').map((m) => m.libelle),
+    actions: actifs.filter((m) => m.champ === 'ACTION').map((m) => m.libelle),
+  };
+}
+
+function DatalistsMotifs({ causes, actions }: { causes: string[]; actions: string[] }) {
+  return (
+    <>
+      <datalist id="motifs-cause">{causes.map((l) => <option key={l} value={l} />)}</datalist>
+      <datalist id="motifs-action">{actions.map((l) => <option key={l} value={l} />)}</datalist>
+    </>
+  );
+}
 
 function Modal({ titre, children, onClose }: { titre: string; children: React.ReactNode; onClose: () => void }) {
   return (

@@ -305,6 +305,50 @@ export async function deleteTypeIncident(req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 }
 
+// ── Motifs de coupure (formulations types cause/actions) ────────────────────
+// Suggestions de saisie pour unifier l'orthographe du NOC ; la frappe libre
+// reste possible, le texte est stocké en clair sur la coupure.
+
+export async function listMotifsCoupure(req: Request, res: Response, next: NextFunction) {
+  try {
+    const champ = String(req.query.champ ?? '').toUpperCase();
+    const motifs = await prisma.motifCoupureRef.findMany({
+      where: champ === 'CAUSE' || champ === 'ACTION' ? { champ } : {},
+      orderBy: [{ champ: 'asc' }, { libelle: 'asc' }],
+    });
+    res.json({ success: true, data: motifs });
+  } catch (err) { next(err); }
+}
+
+export async function upsertMotifCoupure(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id, champ, libelle, actif } = req.body as { id?: string; champ?: string; libelle?: string; actif?: boolean };
+    const champClean = String(champ ?? '').toUpperCase();
+    if (!['CAUSE', 'ACTION'].includes(champClean)) throw new AppError('Champ invalide (cause ou action).', 422);
+    if (!libelle?.trim()) throw new AppError('Libellé requis.', 422);
+    const data = { champ: champClean, libelle: libelle.trim().slice(0, 150), actif: actif !== false };
+    const motif = id
+      ? await prisma.motifCoupureRef.update({ where: { id }, data })
+      : await prisma.motifCoupureRef.upsert({
+          where: { champ_libelle: { champ: data.champ, libelle: data.libelle } },
+          create: data,
+          update: { actif: data.actif },
+        });
+    await auditLog(req.user!.id, 'UPDATE', 'motifs_coupure', motif.id, data, req);
+    res.json({ success: true, data: motif });
+  } catch (err) { next(err); }
+}
+
+export async function deleteMotifCoupure(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Pas de garde d'usage : le motif n'est qu'une SUGGESTION - le texte des
+    // coupures existantes vit en clair chez elles, rien ne casse.
+    await prisma.motifCoupureRef.delete({ where: { id: req.params.id } });
+    await auditLog(req.user!.id, 'DELETE', 'motifs_coupure', req.params.id, {}, req);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
 export async function listTypesPylone(_req: Request, res: Response, next: NextFunction) {
   try {
     const types = await prisma.typePyloneRef.findMany({ orderBy: { libelle: 'asc' } });
