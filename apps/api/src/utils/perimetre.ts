@@ -62,13 +62,22 @@ export async function techniciensAssignables(appelantId: string, siteId: string)
   const [site, moi] = await Promise.all([
     prisma.site.findUnique({
       where: { id: siteId },
-      select: { lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } } },
+      // Les DEUX découpages de parc, comme sitePerimetre : lot passif/actif ET
+      // lot solaire. Ne lire que le premier ne proposait AUCUN prestataire
+      // pour un site couvert par le seul contrat solaire — et masquait le
+      // titulaire solaire partout ailleurs.
+      select: {
+        lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } },
+        lotSolaire: { select: { assignments: { select: { prestataireId: true, scope: true } } } },
+      },
     }),
     prisma.user.findUnique({ where: { id: appelantId }, select: { prestataireId: true } }),
   ]);
   const scopesDe = new Map<string, string[]>();
-  for (const a of site?.lot?.assignments ?? []) {
-    const l = scopesDe.get(a.prestataireId) ?? []; l.push(a.scope); scopesDe.set(a.prestataireId, l);
+  for (const a of [...(site?.lot?.assignments ?? []), ...(site?.lotSolaire?.assignments ?? [])]) {
+    const l = scopesDe.get(a.prestataireId) ?? [];
+    if (!l.includes(a.scope)) l.push(a.scope);
+    scopesDe.set(a.prestataireId, l);
   }
   const techs = await prisma.user.findMany({
     where: {
