@@ -667,7 +667,13 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
   }
   // « À qualifier » : type d'alarme ou classement actif/passif manquant —
   // typiquement les détections AUTO OSS, dont les rapports ont besoin.
-  if (a_qualifier === '1') et.push({ OR: [{ typeAlarme: null }, { causeCategorie: null }] });
+  // « À qualifier » = il manque AU MOINS UN des renseignements du rapport :
+  // alarme, classement actif/passif, cause ou actions. Racines seulement
+  // (une héritée hérite de la qualification de sa racine à l'affichage).
+  if (a_qualifier === '1') et.push({
+    origine: 'LOCALE',
+    OR: [{ typeAlarme: null }, { causeCategorie: null }, { cause: null }, { actions: null }],
+  });
   if (source === 'MANUEL') et.push({ OR: [{ source: 'MANUEL' }, { priseEnChargePar: { not: null } }] });
   if (statut === 'EN_COURS') where.dateFin = null;
   if (statut === 'TERMINEE') where.dateFin = { not: null };
@@ -2161,11 +2167,19 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
         prisma.coupureReseau.count({ where: { dateFin: null, origine: 'HERITEE', ...surSite } }),
         prisma.coupureReseau.count({ where: { dateFin: { not: null }, ...surSite } }),
         prisma.coupureReseau.count({ where: { dateDebut: { gte: ilYaUneHeure }, ...surSite } }),
-        // RACINES seulement : une héritée n'a jamais d'alarme/classement
-        // propres - les compter gonflait la tuile et divergeait de la liste
-        // filtrée (qui ne montre que les racines).
+        // RACINES seulement : une héritée n'a jamais de qualification propre.
+        // En cours ET clôturées : une ligne auto-rétablie sans cause/alarme
+        // sortait du compteur à sa clôture et n'attirait plus jamais l'œil —
+        // le rapport partait avec des colonnes vides. Borné à 30 jours
+        // glissants pour rester actionnable (l'historique importé ne noie pas
+        // la tuile).
         prisma.coupureReseau.count({
-          where: { dateFin: null, origine: 'LOCALE', OR: [{ typeAlarme: null }, { causeCategorie: null }], ...surSite },
+          where: {
+            origine: 'LOCALE',
+            dateDebut: { gte: new Date(Date.now() - 30 * 86_400_000) },
+            OR: [{ typeAlarme: null }, { causeCategorie: null }, { cause: null }, { actions: null }],
+            ...surSite,
+          },
         }),
         prisma.coupureReseau.findFirst({
           where: { dateFin: null, origine: 'LOCALE', ...surSite },
@@ -2340,8 +2354,10 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
     const avecHeritage = rows.map((c) => c.origine !== 'HERITEE' ? c : ({
       ...c,
       typeAlarme: c.typeAlarme && c.typeAlarme !== 'NA' ? c.typeAlarme : (c.coupureOrigine?.typeAlarme ?? c.typeAlarme),
-      cause: c.cause ?? c.coupureOrigine?.cause ?? null,
-      actions: c.actions ?? c.coupureOrigine?.actions ?? null,
+      // Cause propre = chute de l'amont ; le texte de la racine précise, ne
+      // remplace pas (une ligne lue seule doit dire d'où vient la panne).
+      cause: c.cause ?? `Coupure du site amont ${c.coupureOrigine?.site?.nom ?? ''}${c.coupureOrigine?.cause ? ` : ${c.coupureOrigine.cause}` : ''}`,
+      actions: c.actions ?? (c.coupureOrigine?.actions ? `Actions sur le site amont : ${c.coupureOrigine.actions}` : null),
       causeCategorie: c.causeCategorie ?? c.coupureOrigine?.causeCategorie ?? null,
       intervenants: c.intervenants ?? c.coupureOrigine?.intervenants ?? null,
       technicienContacte: c.technicienContacte ?? c.coupureOrigine?.technicienContacte ?? null,

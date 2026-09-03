@@ -180,8 +180,11 @@ export default function CoupuresReseauPage() {
             // sous-lignes restaient à « N/A / — » (idem export : même repli
             // côté serveur).
             typeAlarme: h.typeAlarme && h.typeAlarme !== 'NA' ? h.typeAlarme : r.typeAlarme,
-            cause: h.cause ?? r.cause,
-            actions: h.actions ?? r.actions,
+            // La cause PROPRE d'une héritée est la chute de son amont — le
+            // texte de la racine vient en précision, pas en substitution :
+            // une ligne lue seule (export filtré) doit dire d'où vient la panne.
+            cause: h.cause ?? `Coupure du site amont ${r.site?.nom ?? ''}${r.cause ? ` : ${r.cause}` : ''}`,
+            actions: h.actions ?? (r.actions ? `Actions sur le site amont : ${r.actions}` : null),
             causeCategorie: h.causeCategorie ?? r.causeCategorie,
             intervenants: h.intervenants ?? r.intervenants,
             technicienContacte: h.technicienContacte ?? r.technicienContacte,
@@ -246,6 +249,20 @@ export default function CoupuresReseauPage() {
           {c.origine === 'HERITEE' && (
             <span className="ml-1.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700" title={`Impact hérité de ${c.coupureOrigine?.site?.nom ?? 'un site amont'}`}>
               ← {c.coupureOrigine?.site?.nom ?? 'amont'}
+            </span>
+          )}
+          {/* Racine sans renseignement complet : l'œil doit accrocher MÊME
+              clôturée — une auto-rétablie sans cause partait au rapport avec
+              des colonnes vides sans que personne ne la revoie. */}
+          {c.origine !== 'HERITEE' && (!c.typeAlarme || c.typeAlarme === 'NA' || !c.causeCategorie || !c.cause || !c.actions) && (
+            <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+              title={`À compléter : ${[
+                (!c.typeAlarme || c.typeAlarme === 'NA') && 'alarme',
+                !c.causeCategorie && 'classement',
+                !c.cause && 'cause',
+                !c.actions && 'actions',
+              ].filter(Boolean).join(', ')} - cliquez pour renseigner.`}>
+              à compléter
             </span>
           )}
           {(c._count?.heritees ?? 0) > 0 && (() => {
@@ -384,8 +401,8 @@ export default function CoupuresReseauPage() {
               {stats.nouvellesDerniereHeure}
             </p>
           </div>
-          <button type="button" onClick={() => { setAQualifier(!aQualifier); setPage(1); }}
-            title="Coupures en cours sans type d'alarme ou sans classement actif/passif - à compléter pour les rapports. Cliquer pour filtrer."
+          <button type="button" onClick={() => { const actif = !aQualifier; setAQualifier(actif); if (actif) setStatut(''); setPage(1); }}
+            title="Coupures des 30 derniers jours - en cours OU clôturées - sans alarme, classement, cause ou actions : à compléter pour les rapports. Cliquer pour filtrer."
             className={`rounded-xl border px-4 py-3 text-left transition-colors ${aQualifier ? 'border-[#1B3F6B] bg-[#EAF1F8]' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
             <p className="text-xs text-gray-500">À qualifier {aQualifier && '· filtre actif'}</p>
             <p className={`mt-0.5 text-lg font-bold ${stats.aQualifier > 0 ? 'text-[#1B3F6B]' : 'text-gray-800'}`}>{stats.aQualifier}</p>
