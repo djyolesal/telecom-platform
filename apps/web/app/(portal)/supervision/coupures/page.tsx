@@ -46,7 +46,7 @@ interface Coupure {
 /** Ligne du tableau : une racine, ou une héritée dépliée sous sa racine.
  *  `_episode` : n° d'épisode quand un site rebondit (retombe) pendant la même
  *  panne amont - deux lignes réelles, pas un doublon. */
-type LigneCoupure = Coupure & { _sousLigne?: boolean; _episode?: number };
+type LigneCoupure = Coupure & { _sousLigne?: boolean; _episode?: number; _brut?: Coupure };
 
 const TECHNOS = [
   { value: 'SITE', label: 'Site entier' },
@@ -172,7 +172,25 @@ export default function CoupuresReseauPage() {
           // épisodes pour que deux lignes du même site ne lisent pas en doublon.
           const memeSite = arr.filter((x) => x.site?.nom === h.site?.nom);
           const episode = memeSite.length > 1 ? memeSite.indexOf(h) + 1 : 0;
-          return { ...h, _sousLigne: true, _episode: episode, coupureOrigine: { id: r.id, site: r.site } };
+          return {
+            ...h,
+            // Qualification HÉRITÉE de la racine quand la ligne n'a pas la
+            // sienne : la cause d'une héritée EST structurellement celle de
+            // sa racine — sans ça, le NOC qualifiait la racine et les
+            // sous-lignes restaient à « N/A / — » (idem export : même repli
+            // côté serveur).
+            typeAlarme: h.typeAlarme && h.typeAlarme !== 'NA' ? h.typeAlarme : r.typeAlarme,
+            cause: h.cause ?? r.cause,
+            actions: h.actions ?? r.actions,
+            causeCategorie: h.causeCategorie ?? r.causeCategorie,
+            intervenants: h.intervenants ?? r.intervenants,
+            technicienContacte: h.technicienContacte ?? r.technicienContacte,
+            // L'ÉDITION repart toujours de la ligne BRUTE : sans ça, ouvrir
+            // puis enregistrer une héritée matérialisait la qualification de
+            // la racine en copie locale, sourde aux corrections ultérieures.
+            _brut: h,
+            _sousLigne: true, _episode: episode, coupureOrigine: { id: r.id, site: r.site },
+          };
         }),
       ])
     : rows.map((r) => ({ ...r } as LigneCoupure));
@@ -469,7 +487,7 @@ export default function CoupuresReseauPage() {
           <>
             <DataTable
               columns={columns} data={lignes} maxHeight="65vh"
-              onRowClick={peutEcrire ? (c) => setEdition(c) : undefined}
+              onRowClick={peutEcrire ? (c) => setEdition((c as LigneCoupure)._brut ?? c) : undefined}
               serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }}
             />
             <Pagination meta={meta} onChange={setPage} />

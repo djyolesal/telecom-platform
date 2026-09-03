@@ -2311,7 +2311,9 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
       include: {
         site: { select: { nom: true, region: true } },
         incident: { select: { reference: true } },
-        coupureOrigine: { select: { site: { select: { nom: true } } } },
+        // Qualification de la racine embarquée : les héritées en héritent à
+        // l'export quand elles n'ont pas la leur (même repli qu'à l'écran).
+        coupureOrigine: { select: { site: { select: { nom: true } }, typeAlarme: true, cause: true, actions: true, causeCategorie: true, intervenants: true, technicienContacte: true } },
       },
     });
     // Comme à l'écran : chaque héritée est regroupée DIRECTEMENT sous sa
@@ -2333,6 +2335,18 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
       ? `Période : ${date_debut || '…'} → ${date_fin || '…'}`
       : 'Toutes périodes';
 
+    // Repli d'héritage vers la racine (cause structurelle commune) - vaut
+    // pour le xlsx ET le PDF.
+    const avecHeritage = rows.map((c) => c.origine !== 'HERITEE' ? c : ({
+      ...c,
+      typeAlarme: c.typeAlarme && c.typeAlarme !== 'NA' ? c.typeAlarme : (c.coupureOrigine?.typeAlarme ?? c.typeAlarme),
+      cause: c.cause ?? c.coupureOrigine?.cause ?? null,
+      actions: c.actions ?? c.coupureOrigine?.actions ?? null,
+      causeCategorie: c.causeCategorie ?? c.coupureOrigine?.causeCategorie ?? null,
+      intervenants: c.intervenants ?? c.coupureOrigine?.intervenants ?? null,
+      technicienContacte: c.technicienContacte ?? c.coupureOrigine?.technicienContacte ?? null,
+    }));
+
     // Format xlsx → classeur designé (Synthèse + Détail) ; PDF → tableau simple.
     if (req.params.format === 'xlsx') {
       const restreint = isRestreint(await sitePerimetre(req.user!.id));
@@ -2340,7 +2354,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         ? new Set(req.query.colonnes.split(',').map((x) => x.trim()).filter(Boolean))
         : null;
       const wb = construireClasseurCoupures({
-        lignes: rows.map((c) => ({
+        lignes: avecHeritage.map((c) => ({
           siteNom: c.site.nom,
           region: c.site.region,
           technologie: c.technologie,
@@ -2398,7 +2412,7 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         { header: 'Actions', key: 'actions', width: 34 },
         { header: 'Intervenant(s)', key: 'intervenants', width: 22 },
       ],
-      rows: rows.map((c) => ({
+      rows: avecHeritage.map((c) => ({
         site: c.origine === 'HERITEE' ? `  ↳ ${c.site.nom}` : c.site.nom,
         region: c.site.region,
         technologie: c.technologie === 'SITE' ? 'Site entier' : c.technologie,
