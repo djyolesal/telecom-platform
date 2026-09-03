@@ -65,6 +65,19 @@ export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
 const minutesEntre = (debut: Date, fin: Date) => Math.max(0, Math.round((fin.getTime() - debut.getTime()) / 60_000));
 
 /**
+ * Fragment « aval » PRÉ-FORMATÉ des SMS de coupure : jusqu'à 3 sites, on les
+ * NOMME (le destinataire sait immédiatement qui est touché) ; au-delà, le
+ * compte — un SMS n'est pas une liste. Vide si aucun aval.
+ */
+function fragmentAval(noms: string[], forme: 'impactes' | 'retablis'): string {
+  if (!noms.length) return '';
+  const s = noms.length > 1 ? 's' : '';
+  const libelle = forme === 'impactes' ? `impacté${s}` : `également rétabli${s}`;
+  if (noms.length <= 3) return ` (site${s} aval ${libelle} : ${noms.join(', ')})`;
+  return ` (+${noms.length} sites aval ${forme === 'impactes' ? 'impactés' : 'également rétablis'})`;
+}
+
+/**
  * Fragment « technicien contacté » PRÉ-FORMATÉ pour les SMS de coupure — même
  * convention que {impactes} : le gabarit n'a pas à gérer le cas vide. Le nom
  * n'apparaît que s'il a été saisi (prise en charge ou fiche de la coupure).
@@ -213,11 +226,10 @@ export async function rattacherIncidentsCoupures(userId: string, siteIds?: strin
       // import), le compte est donc déjà juste au moment de l'envoi.
       const aval = await prisma.coupureReseau.findMany({
         where: { coupureOrigineId: { in: coupures.map((c) => c.id) }, dateFin: null },
-        select: { siteId: true },
+        select: { siteId: true, site: { select: { nom: true } } },
         distinct: ['siteId'],
       });
-      const s = aval.length > 1 ? 's' : '';
-      const impactes = aval.length ? ` (+${aval.length} site${s} aval impacté${s})` : '';
+      const impactes = fragmentAval(aval.map((a) => a.site.nom), 'impactes');
       await notifierIncidentCoupure(
         siteId,
         rendreTemplate('sms.tpl.siteHorsService', {
@@ -428,20 +440,19 @@ export async function notifierResolutionAutomatique(incidentId: string | null): 
         where: { incidentId: inc.id },
         select: { id: true, technicienContacte: true },
       });
-      const nbAval = racine
-        ? (await prisma.coupureReseau.findMany({
+      const avalRetabli = racine
+        ? await prisma.coupureReseau.findMany({
             where: { coupureOrigineId: racine.id },
-            select: { siteId: true }, distinct: ['siteId'],
-          })).length
-        : 0;
-      const s = nbAval > 1 ? 's' : '';
+            select: { siteId: true, site: { select: { nom: true } } }, distinct: ['siteId'],
+          })
+        : [];
       void notifierIncidentCoupure(
         inc.siteId,
         rendreTemplate('sms.tpl.siteRetabli', {
           site: inc.site.nom,
           reference: inc.reference ?? '',
           duree: dureeTxt,
-          impactes: nbAval ? ` (+${nbAval} site${s} aval également rétabli${s})` : '',
+          impactes: fragmentAval(avalRetabli.map((a) => a.site.nom), 'retablis'),
           technicien: fragmentTechnicien(racine?.technicienContacte),
         }),
         'INCIDENT_COUPURE_RETABLI',
@@ -554,17 +565,16 @@ export async function declencherTerrainRacine(
     io.of('/supervision').emit('incident:created', { id: incident.id, siteId: racineFull.siteId });
     // SITES distincts, pas lignes : un site à deux coupures ouvertes
     // (OSS + rapport) comptait double dans le SMS.
-    const nbAval = (await prisma.coupureReseau.findMany({
+    const avalTerrain = await prisma.coupureReseau.findMany({
       where: { coupureOrigineId: racineId, dateFin: null },
-      select: { siteId: true }, distinct: ['siteId'],
-    })).length;
-    const s = nbAval > 1 ? 's' : '';
+      select: { siteId: true, site: { select: { nom: true } } }, distinct: ['siteId'],
+    });
     await notifierIncidentCoupure(
       racineFull.siteId,
       rendreTemplate('sms.tpl.siteHorsService', {
         site: racineFull.site.nom,
         reference: incident.reference ?? '',
-        impactes: nbAval ? ` (+${nbAval} site${s} aval impacté${s})` : '',
+        impactes: fragmentAval(avalTerrain.map((a) => a.site.nom), 'impactes'),
         technicien: fragmentTechnicien(racineFull.technicienContacte),
       }),
       'INCIDENT_COUPURE_NOC',
