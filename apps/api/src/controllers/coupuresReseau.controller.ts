@@ -73,7 +73,9 @@ function fragmentAval(noms: string[], forme: 'impactes' | 'retablis'): string {
   if (!noms.length) return '';
   const s = noms.length > 1 ? 's' : '';
   const libelle = forme === 'impactes' ? `impacté${s}` : `également rétabli${s}`;
-  if (noms.length <= 3) return ` (site${s} aval ${libelle} : ${noms.join(', ')})`;
+  // Formulation directe : les noms d'abord, le verbe ensuite — plus court et
+  // plus naturel à lire qu'une étiquette (« sites aval impactés : … »).
+  if (noms.length <= 3) return ` (${noms.join(', ')} ${libelle})`;
   return ` (+${noms.length} sites aval ${forme === 'impactes' ? 'impactés' : 'également rétablis'})`;
 }
 
