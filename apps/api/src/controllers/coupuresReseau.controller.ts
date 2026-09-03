@@ -944,7 +944,10 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
               siteId: s.id,
               technologie: 'SITE',
               dateDebut,
-              cause: champs.cause ?? `Coupure amont - propagation transmission`,
+              // Pas de copie figée de la cause : l'héritée HÉRITE en direct de
+              // sa racine à l'affichage et à l'export (« Coupure du site amont
+              // X : … ») — une correction ultérieure de la racine suit partout,
+              // alors qu'une copie créée ici restait sourde.
               typeAlarme: champs.typeAlarme,
               origine: 'HERITEE',
               coupureOrigineId: racineId,
