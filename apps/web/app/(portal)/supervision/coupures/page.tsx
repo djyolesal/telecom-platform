@@ -325,8 +325,15 @@ export default function CoupuresReseauPage() {
       },
     },
     { key: 'downtimeMinutes', header: 'Indispo.', align: 'right', render: (c) => fmtDowntime(c.downtimeMinutes) },
-    { key: 'typeAlarme', header: 'Alarme', align: 'center', render: (c) => (!c.typeAlarme || c.typeAlarme === 'NA') ? 'N/A' : c.typeAlarme },
-    { key: 'cause', header: 'Cause', render: (c) => <span className="text-gray-600">{c.cause ?? '—'}</span> },
+    // Cellule vide sur une RACINE : surlignée en ambre — l'œil du NOC tombe
+    // directement sur le champ à renseigner (une héritée hérite : jamais
+    // surlignée). Le badge « à compléter » donne la liste, la cellule le lieu.
+    { key: 'typeAlarme', header: 'Alarme', align: 'center', render: (c) => (!c.typeAlarme || c.typeAlarme === 'NA')
+      ? <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : undefined} title={c.origine !== 'HERITEE' ? 'Alarme à renseigner' : undefined}>N/A</span>
+      : c.typeAlarme },
+    { key: 'cause', header: 'Cause', render: (c) => c.cause
+      ? <span className="text-gray-600">{c.cause}</span>
+      : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : 'text-gray-600'} title={c.origine !== 'HERITEE' ? 'Cause à renseigner' : undefined}>—</span> },
     // Colonnes complémentaires : masquées par défaut pour garder le tableau
     // lisible, mais proposées dans le sélecteur « Colonnes » (choix mémorisé).
     { key: 'region', header: 'Région', defaultHidden: true, sortValue: (c) => c.site?.region, render: (c) => c.site?.region ?? '—' },
@@ -334,9 +341,12 @@ export default function CoupuresReseauPage() {
     { key: 'secteur', header: 'Secteur', defaultHidden: true, render: (c) => c.secteur ?? '—' },
     {
       key: 'causeCategorie', header: 'Classement', defaultHidden: true,
-      render: (c) => c.causeCategorie === 'ACTIF' ? 'Actif' : c.causeCategorie === 'PASSIF' ? 'Passif' : '—',
+      render: (c) => c.causeCategorie === 'ACTIF' ? 'Actif' : c.causeCategorie === 'PASSIF' ? 'Passif'
+        : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : undefined} title={c.origine !== 'HERITEE' ? 'Classement actif/passif à renseigner' : undefined}>—</span>,
     },
-    { key: 'actions', header: 'Actions effectuées', defaultHidden: true, render: (c) => <span className="text-gray-600">{c.actions ?? '—'}</span> },
+    { key: 'actions', header: 'Actions effectuées', defaultHidden: true, render: (c) => c.actions
+      ? <span className="text-gray-600">{c.actions}</span>
+      : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : 'text-gray-600'} title={c.origine !== 'HERITEE' ? 'Actions effectuées à renseigner' : undefined}>—</span> },
     { key: 'technicienContacte', header: 'Technicien contacté', defaultHidden: true, render: (c) => c.technicienContacte ?? '—' },
     { key: 'intervenants', header: 'Intervenant(s)', defaultHidden: true, render: (c) => c.intervenants ?? '—' },
     { key: 'observations', header: 'Observations', defaultHidden: true, render: (c) => <span className="text-gray-600">{c.observations ?? '—'}</span> },
@@ -704,6 +714,11 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
     });
   };
   const [cloturerHeritees, setCloturerHeritees] = useState(true);
+  // Champ du RAPPORT encore vide (racine seulement) : bord ambre — le modal
+  // s'ouvre en montrant quoi remplir, en écho au badge « à compléter » de la
+  // liste. La surbrillance s'éteint dès la frappe.
+  const estRacine = coupure.origine !== 'HERITEE';
+  const aCompleter = (v: string) => estRacine && !v.trim() ? 'border-amber-400 bg-amber-50' : undefined;
   const nbHeritees = coupure._count?.heritees ?? 0;
   // Retirer la date de fin d'une coupure clôturée = réouverture : l'incident
   // lié (s'il a été résolu) sera rouvert côté serveur et le prestataire notifié.
@@ -788,7 +803,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Type d'alarme">
-          <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="N/A" />
+          <Select value={typeAlarme} onChange={(e) => setTypeAlarme(e.target.value)} options={TYPES_ALARME} placeholder="N/A" className={aCompleter(typeAlarme)} />
         </Field>
         <Field label="Intervenant(s)"><Input value={intervenants} onChange={(e) => setIntervenants(e.target.value)} /></Field>
       </div>
@@ -796,10 +811,11 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <Input value={technicienContacte} onChange={(e) => setTechnicienContacte(e.target.value)} placeholder="Qui a été appelé pour cette coupure" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Cause"><Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} /></Field>
+        <Field label="Cause"><Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} className={aCompleter(cause)} /></Field>
         <Field label="Classement (actif/passif)">
           <Select
             value={causeCategorie}
+            className={aCompleter(causeCategorie)}
             onChange={(e) => setCauseCategorie(e.target.value)}
             options={[
               { value: 'ACTIF', label: 'Actif - radio/transmission' },
@@ -809,7 +825,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           />
         </Field>
       </div>
-      <Field label="Actions effectuées"><Input list="motifs-action" value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" /></Field>
+      <Field label="Actions effectuées"><Input list="motifs-action" value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" className={aCompleter(actions)} /></Field>
       {coupure.incident && (
         <p className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
           Incident lié : <b>{coupure.incident.reference ?? coupure.incident.id.slice(0, 8)}</b> ({coupure.incident.statut})
