@@ -816,6 +816,30 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
           { coupureExistanteId: deja.id }
         );
       }
+    } else {
+      // Coupure PARTIELLE : même règle, techno par techno. Deux lignes
+      // OUVERTES pour la même technologie à fréquence égale doublaient le SMS
+      // actif et les lignes du rapport NOC ; une coupure SITE ouverte couvre
+      // déjà toutes les technologies. La même techno sur une AUTRE fréquence
+      // (L800 vs U900) reste une panne distincte, donc autorisée.
+      const freq = b.frequence ? String(b.frequence).slice(0, 30) : null;
+      const ouvertes = await prisma.coupureReseau.findMany({
+        where: { siteId, dateFin: null },
+        select: { id: true, technologie: true, frequence: true, dateDebut: true, source: true },
+      });
+      const deja = ouvertes.find((c) =>
+        c.technologie === 'SITE'
+          ? true
+          : (c.frequence ?? null) === freq && c.technologie.split('/').some((t) => technologies.includes(t))
+      );
+      if (deja) {
+        const quoi = deja.technologie === 'SITE' ? 'site entier (toutes technologies)' : deja.technologie;
+        throw new AppError(
+          `Une coupure ${quoi} est déjà EN COURS sur ce site (${deja.source === 'OSS' ? 'détection AUTO' : 'saisie manuelle'} du ${deja.dateDebut.toLocaleString('fr-FR', { timeZone: 'Africa/Lome' })}) - complétez ou clôturez-la plutôt que d'en créer une seconde.`,
+          422,
+          { coupureExistanteId: deja.id }
+        );
+      }
     }
 
     const champs = {
