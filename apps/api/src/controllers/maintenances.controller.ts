@@ -240,6 +240,9 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
             in: me.equipe === 'ACTIVE' ? ACTIVE_CATS : me.equipe === 'SOLAIRE' ? SOLAIRE_CATS : PASSIVE_CATS,
           };
         }
+        // Le périmètre par sites borne la branche ENTREPRISE seulement : la
+        // branche « assigné à moi » doit y échapper (cf. filtre plus bas).
+        if (isRestreint(perimetreListe)) entreprise.site = perimetreListe;
         scope.push(entreprise);
       }
       where.AND = [...((where.AND as unknown[]) ?? []), { OR: scope }];
@@ -251,7 +254,14 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       };
     }
 
-    if (isRestreint(perimetreListe)) where.site = { ...(where.site as object ?? {}), ...perimetreListe };
+    // Le périmètre par sites ne s'applique PAS au technicien : sa branche
+    // « entreprise » est déjà bornée par ses lots via prestataireId, et
+    // l'appliquer en ET cachait une maintenance qui lui était EXPLICITEMENT
+    // assignée hors de ces lots (destination d'un déplacement, site sans lot)
+    // — contredisant la promesse du scope ci-dessus.
+    if (isRestreint(perimetreListe) && req.user!.role !== 'TECHNICIEN') {
+      where.site = { ...(where.site as object ?? {}), ...perimetreListe };
+    }
 
     const include = {
       ...techInclude,
