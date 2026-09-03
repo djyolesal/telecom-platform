@@ -32,6 +32,7 @@ export async function getIncidents(req: Request, res: Response, next: NextFuncti
       { reference: { contains: search, mode: 'insensitive' } },
       { description: { contains: search, mode: 'insensitive' } },
       { site: { is: { nom: { contains: search, mode: 'insensitive' } } } },
+      { site: { is: { code: { contains: search, mode: 'insensitive' } } } },
     ];
     if (type) where.type = type;
     if (severite) where.severite = severite;

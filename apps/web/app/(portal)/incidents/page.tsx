@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -37,6 +38,8 @@ export default function IncidentsPage() {
   const roleExport = (sessionExp?.user as { role?: string })?.role ?? '';
   const router = useRouter();
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [type, setType] = useState('');
   const [severite, setSeverite] = useState('');
   const [statut, setStatut] = useState('');
@@ -46,10 +49,10 @@ export default function IncidentsPage() {
   const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['incidents', { page, type, severite, statut, region, tri }],
+    queryKey: ['incidents', { page, search: debouncedSearch, type, severite, statut, region, tri }],
     queryFn: () =>
       api.get('/incidents', { params: {
-        page, limit: 20, type: type || undefined, severite: severite || undefined, statut: statut || undefined, region: region || undefined,
+        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, severite: severite || undefined, statut: statut || undefined, region: region || undefined,
         tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
       } }).then((r) => r.data),
   });
@@ -81,6 +84,9 @@ export default function IncidentsPage() {
       />
 
       <FilterBar
+        search={search}
+        onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Rechercher (réf., site, description)…"
         filters={[
           { key: 'type', label: 'Tous types', value: type, options: typesOptions, onChange: (v) => { setType(v); setPage(1); } },
           { key: 'severite', label: 'Toutes sévérités', value: severite, options: SEVERITES, onChange: (v) => { setSeverite(v); setPage(1); } },
