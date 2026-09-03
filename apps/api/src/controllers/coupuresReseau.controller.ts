@@ -879,9 +879,17 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
           .filter((c) => c.origine === 'LOCALE' && !c.incidentId)
           .map((c) => c.id);
         if (aRattacher.length) {
+          // ESTAMPILLE comprise : la déclaration manuelle de la racine EST la
+          // validation humaine de l'événement. Sans elle, une détection AUTO
+          // rattachée ici restait « non prise en charge » et l'indisponibilité
+          // du site aval disparaissait du rapport officiel (règle « OSS comptée
+          // seulement si adoptée ») — la prise en charge classique estampille
+          // déjà tout ce qu'elle rattache.
+          const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+          const nomNoc = [moi?.prenom, moi?.nom].filter(Boolean).join(' ') || 'NOC';
           await prisma.coupureReseau.updateMany({
             where: { id: { in: aRattacher } },
-            data: { origine: 'HERITEE', coupureOrigineId: racineId },
+            data: { origine: 'HERITEE', coupureOrigineId: racineId, priseEnChargePar: nomNoc, priseEnChargeLe: new Date() },
           });
         }
         // Même règle qu'à la prise en charge : on ne crée que pour les sites
