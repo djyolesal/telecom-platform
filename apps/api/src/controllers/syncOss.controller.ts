@@ -330,6 +330,20 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       // échappent à la détection — à mapper en priorité (fiche site → NodeID).
       disconnectedNonRapproches: nonRapproches,
     };
+    // BILAN PERSISTÉ : jusqu'ici les « down non rapprochés » ne vivaient que
+    // dans la réponse machine et les logs — le NOC ne voyait JAMAIS qu'un
+    // eNodeB en panne échappe à la détection. La page coupures lit ce bilan
+    // et affiche le bandeau d'alerte avec la marche à suivre (NodeID fiche).
+    await prisma.systemSettings.upsert({
+      where: { key: 'oss.dernierBilan' },
+      create: {
+        key: 'oss.dernierBilan',
+        value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50) },
+        description: 'Dernier passage de synchronisation OSS (écrit par sync-oss).',
+      },
+      update: { value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50) } },
+    });
+
     // Push temps réel : un passage qui a changé quelque chose invalide les
     // écrans à la seconde (liste, carte, dashboard NOC) - sinon silence.
     if (creees + cloturees + clotureesHeritees + reclasseesAval + incidentsResolus > 0) {

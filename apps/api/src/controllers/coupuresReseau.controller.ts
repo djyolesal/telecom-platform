@@ -2206,9 +2206,13 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
         // racine, elles ne sont pas « à traiter » individuellement).
         prisma.coupureReseau.count({ where: { dateFin: null, source: 'OSS', priseEnChargePar: null, origine: 'LOCALE', ...surSite } }),
       ]);
+    // Dernier passage OSS : le NOC doit VOIR quels eNodeB down échappent à la
+    // détection (non rapprochés à un site) au lieu de le découvrir par hasard.
+    const bilanOss = await prisma.systemSettings.findUnique({ where: { key: 'oss.dernierBilan' } });
     res.json({
       success: true,
       data: {
+        syncOss: bilanOss?.value ?? null,
         enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne,
         enCoursAuto,
         // Rapport NOC = racines manuelles + AUTO adoptées (aligné sur l'onglet).

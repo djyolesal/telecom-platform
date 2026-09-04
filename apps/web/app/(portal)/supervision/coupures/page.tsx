@@ -113,6 +113,7 @@ export default function CoupuresReseauPage() {
   interface CoupuresStats {
     enCours: number; enCoursSiteEntier: number; enCoursHeritees: number; terminees: number;
     nouvellesDerniereHeure: number; aQualifier: number; enCoursAuto: number; enCoursManuel: number;
+    syncOss?: { quand: string; lignesAnalysees: number; disconnectedNonRapproches: string[] } | null;
     plusAncienne?: { dateDebut: string; technologie: string; site?: { nom: string } } | null;
     perimetreRestreint?: boolean;
   }
@@ -384,6 +385,27 @@ export default function CoupuresReseauPage() {
       />
 
       {/* Bandeau de situation : l'opérateur sait en un coup d'œil si c'est calme. */}
+      {/* eNodeB DOWN non rapprochés à un site : ils échappent totalement à la
+          détection automatique — le NOC doit le savoir, avec la marche à
+          suivre (NodeID sur la fiche). Invisible tant que tout est rapproché. */}
+      {(stats?.syncOss?.disconnectedNonRapproches?.length ?? 0) > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">
+            {stats!.syncOss!.disconnectedNonRapproches.length} eNodeB en panne côté OSS ne sont rattachés à aucun site — invisibles de la détection automatique.
+          </p>
+          <p className="mt-1 text-xs">
+            Dernière synchronisation : {new Date(stats!.syncOss!.quand).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ·{' '}
+            {stats!.syncOss!.disconnectedNonRapproches.slice(0, 8).join(' · ')}
+            {stats!.syncOss!.disconnectedNonRapproches.length > 8 ? ' · …' : ''}
+          </p>
+          <p className="mt-1 text-xs">
+            Pour les couvrir : renseignez le champ <b>Identifiant réseau (NodeID)</b> de la fiche du site avec le numéro indiqué
+            (chiffres seuls, ex. « 5159 » pour Macro-5159). Si la fiche porte déjà un autre NodeID, corrigez-le — le rapprochement
+            par nom refuse d&apos;écraser un identifiant existant.
+          </p>
+        </div>
+      )}
+
       {stats && (
         <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
           <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
