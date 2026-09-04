@@ -242,7 +242,12 @@ export default function TopologiePage() {
         <StatCard title="Aval sous menace" value={sitesImpactes.size} subtitle="dépendants d'un site coupé" icon={WifiOff} color="bg-[#E67E22]" />
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/* Barre d'outils COLLANTE : la page liste des dizaines de chaînes — en
+          défilant les résultats, la recherche disparaissait de l'écran et il
+          fallait remonter pour corriger le terme. Elle reste accrochée au haut
+          de la zone de défilement (fond opaque + ombre légère pour se détacher
+          du contenu qui passe dessous). */}
+      <div className="sticky top-0 z-20 -mx-6 mb-4 flex flex-wrap items-center gap-3 bg-gray-50/95 px-6 py-3 shadow-[0_4px_10px_-6px_rgba(0,0,0,0.15)] backdrop-blur-sm">
         <input
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
