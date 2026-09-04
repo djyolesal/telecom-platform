@@ -149,6 +149,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     let creeesHeritees = 0;
     let reclasseesAval = 0;
     let cloturees = 0;
+    let retablissementsEnAttente = 0;
     let clotureesHeritees = 0;
     let incidentsResolus = 0;
     let dejaOuvertes = 0;
@@ -259,6 +260,20 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         // l'heure de reconnexion. Les coupures MANUELLES restent à la main du NOC.
         const ouverte = ouverteParSite.get(site.id);
         if (!ouverte || ouverte.source !== 'OSS') continue;
+        // RÉTABLISSEMENT STABLE SEULEMENT (incident du 04/09/2026, zone nord) :
+        // lors d'un rebond de transmission régional, l'OSS a montré tout un
+        // paquet d'eNodeB « connected » quelques minutes (09:32) avant la
+        // re-chute (09:51) — la plateforme clôturait, carte et topologie
+        // passaient au vert alors que les sites étaient toujours coupés.
+        // On ne clôture que si la reconnexion (date de transition OSS) tient
+        // depuis au moins N minutes ; l'heure de FIN enregistrée reste la
+        // vraie heure de reconnexion, seule la décision est différée. Un vrai
+        // rétablissement n'attend donc que le passage suivant du collecteur.
+        const stabiliteMin = getNum('oss.stabiliteRetablissementMin', 10);
+        if (stabiliteMin > 0 && Date.now() - l.quand.getTime() < stabiliteMin * 60_000) {
+          retablissementsEnAttente++;
+          continue;
+        }
         const fin = l.quand > ouverte.dateDebut ? l.quand : new Date();
         await prisma.coupureReseau.update({
           where: { id: ouverte.id },
@@ -323,6 +338,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       dontHeriteesAmont: creeesHeritees,
       reclasseesHeriteesAval: reclasseesAval,
       coupuresCloturees: cloturees,
+      retablissementsEnAttenteDeStabilite: retablissementsEnAttente,
       heriteesAveuglesCloturees: clotureesHeritees,
       incidentsResolus,
       coupuresDejaOuvertes: dejaOuvertes,
