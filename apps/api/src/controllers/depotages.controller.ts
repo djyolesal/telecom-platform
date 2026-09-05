@@ -427,6 +427,27 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // (confirmerVraisemblance: true). La confirmation est tracée (observations + audit).
     const confirmeVraisemblance = b.confirmerVraisemblance === true;
     const avertissements = await verifierDepotage(siteId, { stockAvant, stockApres, volume });
+    // ANTI-DOUBLON (incident du 05/09 : 2 × 1000 L enregistrés pour UNE seule
+    // livraison prévue) : l'idempotence ne couvre que le REJEU de la même
+    // saisie — deux saisies distinctes de la même livraison physique (resaisie
+    // après une erreur perçue, deux personnes sur le même dépotage) passaient
+    // sans un mot. Un dépotage récent sur le même site déclenche désormais la
+    // confirmation explicite, comme les valeurs inhabituelles. Le rejeu de la
+    // file n'est pas concerné : il court-circuite plus haut (Idempotency-Key).
+    const fenetreDoublonMin = getNum('depotage.antiDoublonMinutes', 120);
+    if (fenetreDoublonMin > 0) {
+      const recent = await prisma.depotage.findFirst({
+        where: { siteId, createdAt: { gte: new Date(Date.now() - fenetreDoublonMin * 60_000) } },
+        orderBy: { createdAt: 'desc' },
+        select: { reference: true, volumeLitres: true, createdAt: true, technicien: { select: { nom: true, prenom: true } } },
+      });
+      if (recent) {
+        avertissements.push({
+          champ: 'volumeLitres',
+          message: `Un dépotage de ${Math.round(Number(recent.volumeLitres))} L (${recent.reference ?? 'sans référence'}) a déjà été enregistré sur ce site à ${recent.createdAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' })}${recent.technicien ? ` par ${[recent.technicien.prenom, recent.technicien.nom].filter(Boolean).join(' ')}` : ''}. Vérifiez qu'il ne s'agit pas d'un double enregistrement de la même livraison.`,
+        });
+      }
+    }
     if (avertissements.length && !confirmeVraisemblance) {
       return res.status(422).json({
         success: false,
