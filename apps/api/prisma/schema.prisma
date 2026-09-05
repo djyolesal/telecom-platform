@@ -762,6 +762,8 @@ model Contact {
   notifIncidents    Boolean  @default(true) @map("notif_incidents")
   // Coupures partielles (site alimenté, défaut radio/transmission) — équipes actives.
   notifCoupures     Boolean  @default(true) @map("notif_coupures")
+  // OPT-IN (défaut false) : SMS à chaque dépotage du périmètre — coût réel.
+  notifLivraisons   Boolean  @default(false) @map("notif_livraisons")
   // Situation périodique (récap des incidents/coupures dépassant le seuil).
   notifSituations   Boolean  @default(true) @map("notif_situations")
   // true : reçoit les actions de toutes les sociétés ; false : uniquement celles

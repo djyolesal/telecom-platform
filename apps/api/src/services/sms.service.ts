@@ -54,6 +54,14 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     variables: ['site', 'reference', 'technicien'],
   },
   {
+    key: 'sms.tpl.depotage',
+    label: 'Dépotage carburant enregistré (contacts du périmètre du site)',
+    // {stock} arrive PRÉ-FORMATÉ (« Stock : 1 250 L.») ou vide - même
+    // convention que {impactes} : le gabarit n'a pas à gérer le cas absent.
+    defaut: '[E&M OpS] Dépotage de {litres} L sur {site} par {technicien} (chauffeur : {chauffeur}). {stock}',
+    variables: ['site', 'litres', 'technicien', 'chauffeur', 'stock'],
+  },
+  {
     key: 'sms.tpl.affectationIncident',
     label: 'Affectation d\'un incident (SMS au technicien)',
     defaut: '[E&M OpS] Incident {reference} - {site} vous est assigné ({severite}). Merci d\'intervenir.',
@@ -420,7 +428,7 @@ export async function notifierIncidentCoupure(
   message: string,
   evenement: string,
   scope: 'PASSIVE' | 'ACTIVE' = 'PASSIVE',
-  pref: 'incidents' | 'coupures' = 'incidents'
+  pref: 'incidents' | 'coupures' | 'livraisons' = 'incidents'
 ): Promise<void> {
   try {
     const site = await prisma.site.findUnique({
@@ -434,7 +442,12 @@ export async function notifierIncidentCoupure(
     );
 
     const contacts = await prisma.contact.findMany({
-      where: { actif: true, ...(pref === 'coupures' ? { notifCoupures: true } : { notifIncidents: true }) },
+      where: {
+        actif: true,
+        ...(pref === 'coupures' ? { notifCoupures: true }
+          : pref === 'livraisons' ? { notifLivraisons: true }
+          : { notifIncidents: true }),
+      },
     });
     const cibles = contacts.filter(
       (c) => c.toutesSocietes || (c.prestataireId != null && prestataires.has(c.prestataireId))

@@ -13,7 +13,7 @@ import { getNum } from '../services/settings.service';
  */
 
 // Préférences booléennes éditables (liste blanche anti mass-assignment).
-const PREF_KEYS = ['actif', 'notifDemarrage', 'notifCloture', 'notifMaintenances', 'notifIncidents', 'notifCoupures', 'notifSituations', 'toutesSocietes'] as const;
+const PREF_KEYS = ['actif', 'notifDemarrage', 'notifCloture', 'notifMaintenances', 'notifIncidents', 'notifCoupures', 'notifSituations', 'notifLivraisons', 'toutesSocietes'] as const;
 
 const normNom = (s: string) => s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
 

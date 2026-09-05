@@ -7,6 +7,7 @@ import { AppError } from '../utils/AppError';
 import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
 import { dateBornee } from '../utils/dates';
 import { assertOnSite } from '../utils/geofence';
+import { notifierIncidentCoupure, rendreTemplate } from '../services/sms.service';
 import { memeChauffeur } from '../utils/referentielTransport';
 import { resoudreChauffeur } from '../services/referentielTransport.service';
 import { soldeMouvementsSite } from '../services/mouvementsCarburant.service';
@@ -559,6 +560,31 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       // Pas de 500 (le dépotage est créé) ; on trace pour exploitation.
       logger.error(`Post-commit dépotage ${depotage.id} : audit/emit échoué`, e);
     }
+
+    // SMS aux contacts du PÉRIMÈTRE du site (prestataires du lot + internes
+    // « toutes sociétés ») ayant coché « livraisons » — opt-in : la passerelle
+    // est réelle, un SMS par dépotage sur tout le parc coûterait cher.
+    // Best-effort et hors réponse : un échec SMS ne doit jamais rejouer la sync.
+    void (async () => {
+      try {
+        const tech = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+        await notifierIncidentCoupure(
+          siteId,
+          rendreTemplate('sms.tpl.depotage', {
+            site: depotage.site?.nom ?? '',
+            litres: String(Math.round(volume)),
+            technicien: [tech?.prenom, tech?.nom].filter(Boolean).join(' ') || 'technicien',
+            chauffeur: b.nomChauffeur ? String(b.nomChauffeur) : '—',
+            stock: stockApres != null ? `Stock : ${Math.round(stockApres)} L.` : '',
+          }),
+          'DEPOTAGE_LIVRAISON',
+          'PASSIVE',
+          'livraisons'
+        );
+      } catch (e) {
+        logger.warn(`[sms] notification dépotage ${depotage.id} échouée:`, e);
+      }
+    })();
 
     res.status(201).json({ success: true, data: depotage });
   } catch (err) {
