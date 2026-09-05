@@ -25,8 +25,22 @@ Future<({bool ok, double? lat, double? lng})> positionVerifiee(
   required String action,
 }) async {
   if (siteLat == null || siteLng == null) {
+    // Coordonnées du site inconnues LOCALEMENT (fiche sans GPS dans le cache,
+    // liste indisponible) : le serveur, lui, peut les connaître — envoyer sans
+    // position se solderait par « Position GPS requise » à l'arrivée (vu au
+    // terrain, 05/09). On capture donc coûte que coûte : capture rapide,
+    // sinon feuille d'affinage (qui demande la permission avec interface),
+    // et à défaut on explique AVANT d'enregistrer au lieu de laisser le
+    // serveur refuser après coup.
     final pos = await LocationService().freshPosition();
-    return (ok: true, lat: pos?.lat, lng: pos?.lng);
+    if (pos != null) return (ok: true, lat: pos.lat, lng: pos.lng);
+    if (!context.mounted) return (ok: false, lat: null, lng: null);
+    final fix = await refineGpsPosition(context);
+    if (fix != null) return (ok: true, lat: fix.lat, lng: fix.lng);
+    if (!context.mounted) return (ok: false, lat: null, lng: null);
+    await _dialogHorsSite(context, 'Position GPS indisponible',
+        'Impossible d\'obtenir votre position pour $action. Activez la localisation (précision élevée), placez-vous à découvert, puis réessayez.');
+    return (ok: false, lat: null, lng: null);
   }
   final fix = await refineGpsPosition(context);
   if (!context.mounted) return (ok: false, lat: null, lng: null);

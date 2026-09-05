@@ -1,7 +1,7 @@
 name: telecom_mobile
 description: Application terrain — Plateforme Gestion Télécom & Énergie
 publish_to: 'none'
-version: 1.6.1+37
+version: 1.6.2+38
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
