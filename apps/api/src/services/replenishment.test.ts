@@ -12,6 +12,7 @@ function site(p: Partial<SiteForecast>): SiteForecast {
     derniereMesure: null, heuresGEJour: null,
     autonomieJours: 5, dateRupture: null, dateLivraisonCible: null, joursAvantLivraison: 5,
     quantiteRecommandee: p.quantiteRecommandee ?? 1000, priorite: 'URGENT',
+    rangEnergie: p.rangEnergie ?? 0,
   };
 }
 

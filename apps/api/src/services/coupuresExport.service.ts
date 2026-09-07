@@ -214,15 +214,18 @@ export function construireClasseurCoupures(opts: {
   dt.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: visibles.length } };
 
   const idx = new Map<string, number>(visibles.map((c, i) => [c.key, i + 1]));
+  // Horodatages écrits en VRAIES dates Excel (triables/filtrables), pas en
+  // texte. Lomé = UTC+0 toute l'année : le Date brut affiche l'heure locale.
+  const CLES_DATES = ['debut', 'fin', 'heureContact', 'dateArriveeSite', 'priseEnChargeLe'];
   lignes.forEach((l, i) => {
     const heritee = l.origine === 'HERITEE';
-    const valeurs: Record<string, string | number | null> = {
+    const valeurs: Record<string, string | number | Date | null> = {
       // Héritée : indentée sous sa racine (l'export regroupe déjà les lignes).
       site: heritee ? `    ↳ ${l.siteNom}` : l.siteNom,
       region: l.region,
       technologie: l.technologie === 'SITE' ? 'Site entier' : l.technologie,
-      debut: fmtDh(l.dateDebut),
-      fin: l.dateFin ? fmtDh(l.dateFin) : 'EN COURS',
+      debut: l.dateDebut,
+      fin: l.dateFin ?? 'EN COURS',
       // NOMBRE brut de minutes (pas « 2 h 30 ») : la colonne doit rester
       // sommable/filtrable dans Excel. Coupure en cours → cellule VIDE plutôt
       // qu'un tiret, qui polluerait une colonne numérique (la colonne « Fin »
@@ -241,20 +244,22 @@ export function construireClasseurCoupures(opts: {
       frequence: l.frequence ?? '',
       secteur: l.secteur ?? '',
       technicienContacte: l.technicienContacte ?? '',
-      heureContact: l.heureContact ? fmtDh(l.heureContact) : '',
-      dateArriveeSite: l.dateArriveeSite ? fmtDh(l.dateArriveeSite) : '',
+      heureContact: l.heureContact ?? '',
+      dateArriveeSite: l.dateArriveeSite ?? '',
       nocEngineer: l.nocEngineer ?? '',
-      priseEnChargeLe: l.priseEnChargeLe ? fmtDh(l.priseEnChargeLe) : '',
+      priseEnChargeLe: l.priseEnChargeLe ?? '',
       observations: l.observations ?? '',
     };
     const row = dt.addRow(visibles.map((c) => valeurs[c.key]));
     row.height = 18;
     const colDowntime = idx.get('downtime');
+    const colsDates = new Set(CLES_DATES.map((k) => idx.get(k)).filter(Boolean));
     row.eachCell((c, colNum) => {
       c.font = { size: 10, color: { argb: heritee ? GRIS : 'FF2C3E50' } };
       const estDowntime = colNum === colDowntime;
       c.alignment = { vertical: 'middle', horizontal: estDowntime ? 'right' : 'left', indent: 1 };
       if (estDowntime) c.numFmt = '0';
+      if (colsDates.has(colNum) && c.value instanceof Date) c.numFmt = 'dd/mm/yyyy hh:mm';
       if (i % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA } };
       c.border = { bottom: { style: 'hair', color: { argb: 'FFE5E8EB' } } };
     });
