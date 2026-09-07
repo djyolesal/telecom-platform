@@ -20,6 +20,7 @@ const RAPPORTS: Array<{
   { href: '/rapports/sla', icon: ShieldCheck, title: 'SLA prestataires', desc: 'Respect des délais et du préventif par prestataire, pénalités estimées.' },
   { href: '/rapports/gardiennage', icon: Shield, title: 'Gardiennage', desc: 'Présence des agents de sécurité constatée en intervention, par société.', internesSeulement: true },
   { href: '/carburant/stock', icon: Fuel, title: 'Stock carburant', desc: 'État du stock et autonomie de chaque site.' },
+  { href: '/rapports/stocks-mensuels', icon: Fuel, title: 'Stocks carburant mensuels', desc: 'Bilan matière par site et par mois : stocks aux frontières, consommation, gasoil non expliqué (vol/fuite).', roles: ['MANAGER', 'ADMIN', 'SUPERVISEUR', 'DIRECTION'] },
   { href: '/energie/rapports', icon: Zap, title: 'Consommation énergie', desc: 'Tendances kWh et gasoil sur la période.' },
   { href: '/rapports/empreinte-carbone', icon: Leaf, title: 'Empreinte carbone', desc: 'Émissions de CO₂ (gasoil GE, réseau CEET) et émissions évitées par le solaire, par mois, région et site.', internesSeulement: true },
   { href: '/rapports/arcep', icon: ShieldCheck, title: 'Conformité ARCEP (DR1/DR2)', desc: 'Seuils réglementaires : indisponibilités ≥ 1 h par mois (DR1) et durée par jour (DR2), station par station.' },

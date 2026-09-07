@@ -12,6 +12,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular } from '../utils/exporter';
+import { stocksMensuels } from '../services/stocksMensuels.service';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { rapprochementBc } from '../services/rapprochement.service';
@@ -1372,6 +1373,69 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
  * lisible) : la même sélection que l'écran (horizon, région), une ligne par
  * site avec priorité, autonomie, stock, conso et quantité recommandée.
  */
+/**
+ * Bilan mensuel des stocks carburant (méthode validée 07/09/2026, voir
+ * stocksMensuels.service). Écran + exports xlsx/PDF.
+ */
+export async function getStocksMensuels(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { annee, mois, region } = req.query as Record<string, string>;
+    const a = parseInt(annee) || new Date().getFullYear();
+    const m = parseInt(mois) || new Date().getMonth() + 1;
+    if (m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
+    const lignes = await stocksMensuels({ annee: a, mois: m, region: region || undefined });
+    res.json({
+      success: true,
+      data: {
+        lignes,
+        totaux: {
+          sites: lignes.length,
+          stockDebut: lignes.reduce((s, l) => s + l.stockDebut, 0),
+          stockFin: lignes.reduce((s, l) => s + l.stockFin, 0),
+          livraisons: lignes.reduce((s, l) => s + l.livraisons, 0),
+          conso: lignes.reduce((s, l) => s + (l.conso ?? 0), 0),
+          anomalies: lignes.filter((l) => l.drapeaux.some((d) => d.includes('vérifier') || d.includes('expliqué'))).length,
+        },
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+export async function exportStocksMensuels(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { annee, mois, region } = req.query as Record<string, string>;
+    const a = parseInt(annee) || new Date().getFullYear();
+    const m = parseInt(mois) || new Date().getMonth() + 1;
+    if (m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
+    const lignes = await stocksMensuels({ annee: a, mois: m, region: region || undefined });
+    await auditLog(req.user!.id, 'EXPORT', 'stocks_mensuels', undefined, { annee: a, mois: m, sites: lignes.length, format: req.params.format }, req);
+    await sendTabular(res, req.params.format, `stocks-${a}-${String(m).padStart(2, '0')}`, `Stocks carburant - ${MOIS[m]} ${a}`,
+      [{
+        name: 'Sites',
+        columns: [
+          { header: 'Site', key: 'site', width: 26 },
+          { header: 'Région', key: 'region', width: 14 },
+          { header: 'Stock au 1er (L)', key: 'debut', width: 15 },
+          { header: 'Stock fin de mois (L)', key: 'fin', width: 18 },
+          { header: 'Livraisons (L)', key: 'liv', width: 13 },
+          { header: 'Conso du mois (L)', key: 'conso', width: 16 },
+          { header: 'Conso/j (L/j)', key: 'consoJour', width: 13 },
+          { header: 'Débit (L/h)', key: 'lh', width: 11 },
+          { header: 'Gasoil non expliqué (L)', key: 'inexplique', width: 20 },
+          { header: 'Fenêtre (j)', key: 'fenetre', width: 11 },
+          { header: 'Observations', key: 'obs', width: 50 },
+        ],
+        rows: lignes.map((l) => ({
+          site: l.site, region: l.region, debut: l.stockDebut, fin: l.stockFin, liv: l.livraisons,
+          conso: l.conso ?? '', consoJour: l.consoJour ?? '', lh: l.debitLh ?? '',
+          inexplique: l.gasoilInexplique ?? '', fenetre: l.fenetreJours, obs: l.drapeaux.join(' · '),
+        })),
+      }],
+      `${lignes.length} site(s)${region ? ` · ${region}` : ''} · méthode bilan matière validée 07/09/2026`
+    );
+  } catch (err) { next(err); }
+}
+
 export async function exportReapprovisionnement(req: Request, res: Response, next: NextFunction) {
   try {
     const { region, horizon } = req.query as Record<string, string>;
