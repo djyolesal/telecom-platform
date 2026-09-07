@@ -6,6 +6,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { AlertTriangle, Droplet, Truck, MapPin, Check, Sparkles, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { Loading, EmptyState } from '@/components/shared/states';
@@ -97,7 +98,14 @@ export default function ReapprovisionnementPage() {
         title="Réapprovisionnement prédictif"
         subtitle={`Prévision de rupture et tournées suggérées · horizon ${data?.params.horizonJours ?? 14} j`}
         backHref="/carburant/commandes"
-        actions={<Button icon={Sparkles} loading={synthese.isPending} onClick={() => synthese.mutate()}>Synthèse intelligente</Button>}
+        actions={
+          <>
+            <ExportButtons base="/rapports/reapprovisionnement/export"
+              name="Sites à réapprovisionner"
+              query={region ? `region=${encodeURIComponent(region)}` : undefined} />
+            <Button icon={Sparkles} loading={synthese.isPending} onClick={() => synthese.mutate()}>Synthèse intelligente</Button>
+          </>
+        }
       />
 
       {synthese.data && (

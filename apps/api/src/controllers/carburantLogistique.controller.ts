@@ -1367,6 +1367,54 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
 
 // ── RÉAPPROVISIONNEMENT PRÉDICTIF ─────────────────────────────
 
+/**
+ * Export de la liste des sites à réapprovisionner (xlsx calculable / PDF
+ * lisible) : la même sélection que l'écran (horizon, région), une ligne par
+ * site avec priorité, autonomie, stock, conso et quantité recommandée.
+ */
+export async function exportReapprovisionnement(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { region, horizon } = req.query as Record<string, string>;
+    const horizonJours = horizon ? parseInt(horizon) : getNum('appro.horizonJours', env.APPRO_HORIZON_JOURS);
+    const sitesAll = await forecastSites({ region: region || undefined, all: true });
+    const sites = sitesAll.filter((s) => s.autonomieJours != null && s.autonomieJours <= horizonJours);
+    const L_PRIORITE: Record<string, string> = { CRITIQUE: 'Critique', URGENT: 'Urgent', A_PLANIFIER: 'À planifier' };
+    const L_TENDANCE: Record<string, string> = { HAUSSE: 'Hausse', STABLE: 'Stable', BAISSE: 'Baisse' };
+    const fmtJ = (d: string | null) => (d ? new Date(d).toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' }) : '');
+    await auditLog(req.user!.id, 'EXPORT', 'reapprovisionnement', undefined, { sites: sites.length, format: req.params.format }, req);
+    await sendTabular(res, req.params.format, 'reapprovisionnement', 'Sites à réapprovisionner',
+      [{
+        name: 'Sites',
+        columns: [
+          { header: 'Site', key: 'site', width: 26 },
+          { header: 'Région', key: 'region', width: 14 },
+          { header: 'Priorité', key: 'priorite', width: 12 },
+          { header: 'Autonomie (j)', key: 'autonomie', width: 13 },
+          { header: 'Stock (L)', key: 'stock', width: 11 },
+          { header: 'Conso/j (L)', key: 'conso', width: 12 },
+          { header: 'Quantité recommandée (L)', key: 'quantite', width: 22 },
+          { header: 'Rupture estimée', key: 'rupture', width: 16 },
+          { header: 'Livraison cible', key: 'cible', width: 16 },
+          { header: 'Tendance', key: 'tendance', width: 11 },
+        ],
+        rows: sites.map((s) => ({
+          site: s.nom,
+          region: s.region,
+          priorite: L_PRIORITE[s.priorite] ?? s.priorite,
+          autonomie: s.autonomieJours,
+          stock: Math.round(s.stockActuel),
+          conso: Math.round(s.consoJour),
+          quantite: Math.round(s.quantiteRecommandee),
+          rupture: fmtJ(s.dateRupture),
+          cible: fmtJ(s.dateLivraisonCible),
+          tendance: L_TENDANCE[s.tendance] ?? s.tendance,
+        })),
+      }],
+      `Horizon ${horizonJours} j${region ? ` · ${region}` : ''} · ${sites.length} site(s)`
+    );
+  } catch (err) { next(err); }
+}
+
 export async function getReapprovisionnement(req: Request, res: Response, next: NextFunction) {
   try {
     const { region, horizon } = req.query as Record<string, string>;

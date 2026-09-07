@@ -363,6 +363,7 @@ router.get('/rapports/correlation-carburant', carburantCtrl.getCorrelationCarbur
 
 // ── Réapprovisionnement prédictif ─────────────────────────────
 router.get('/rapports/reapprovisionnement', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getReapprovisionnement);
+router.get('/rapports/reapprovisionnement/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.exportReapprovisionnement);
 router.get('/rapports/anomalies-conso', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR']), carburantCtrl.getAnomaliesConso);
 router.get('/rapports/anomalies-carburant', rbac(['MANAGER', 'ADMIN', 'SUPERVISEUR', 'DIRECTION']), rapportsCtrl.getAnomaliesCarburant);
 router.get('/rapports/dashboard-direction', rbac(['MANAGER', 'ADMIN', 'DIRECTION']), rapportsCtrl.getDashboardDirection);
