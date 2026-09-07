@@ -31,8 +31,8 @@ const ALIAS: Record<string, string> = {
   DAVIEMONDJI: 'DAVIEMODJI',
   MPOTI: "N'POTI",
   TANTANCHA: 'TANTANTCHA',
-  // KOVIE-DZEMEKE : volontairement absent — aucun site correspondant en base,
-  // à trancher par l'exploitant (rattacher à KOVIE ou créer la fiche).
+  // Confirmé par l'exploitant (07/09) : même site, ordre des mots inversé.
+  KOVIEDZEMEKE: 'DJEMEKEKOVIE',
 };
 const norm = (s: string) => s.trim().toUpperCase().replace(/[\s\-_']/g, '');
 
