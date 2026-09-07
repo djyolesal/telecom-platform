@@ -28,7 +28,16 @@ const SOURCES_CONSO: Record<string, { label: string; classe: string; aide: strin
   theorique:  { label: 'Théorique',  classe: 'bg-gray-200 text-gray-600',   aide: 'Formule kVA × facteur de charge - aucune mesure terrain disponible' },
 };
 
-interface SiteForecast { siteId: string; code: string; nom: string; region: string; stockActuel: number; consoJour: number; source: string; tendance: string; autonomieJours: number | null; dateLivraisonCible: string | null; joursAvantLivraison: number | null; quantiteRecommandee: number; priorite: string }
+interface SiteForecast { siteId: string; code: string; nom: string; region: string; stockActuel: number; consoJour: number; source: string; tendance: string; autonomieJours: number | null; dateLivraisonCible: string | null; joursAvantLivraison: number | null; quantiteRecommandee: number; priorite: string; rangEnergie?: number }
+
+// Dépendance au gasoil (ordre exploitant) : plus le rang est bas, plus la
+// panne sèche est grave — départage l'ordre à urgence temporelle égale.
+const DEPENDANCE: Record<number, { label: string; classe: string; aide: string }> = {
+  0: { label: '100 % gasoil', classe: 'bg-red-100 text-red-700', aide: 'GE permanent ou GE seul : cuve vide = site coupé immédiatement, aucun secours. Passe Critique avec quelques jours d\'avance.' },
+  1: { label: 'Hybride GE', classe: 'bg-amber-100 text-amber-700', aide: 'Solaire + GE : le solaire amortit, pas de secteur.' },
+  2: { label: 'Solaire', classe: 'bg-green-100 text-green-700', aide: 'Solaire uniquement.' },
+  3: { label: 'Secouru CEET', classe: 'bg-gray-100 text-gray-600', aide: 'Cuve vide = risque seulement pendant les coupures secteur.' },
+};
 interface Anomalie { siteId: string; code: string; nom: string; region: string; consoReelleJour: number; consoTheoriqueJour: number; ecartPct: number; type: string; tendance: string; manquantAssocie: boolean; severite: string }
 interface Tournee { region: string; sites: Array<{ siteId: string; code: string; nom: string; quantite: number; passage?: number; nbPassages?: number }>; total: number; capacite: number; distanceKm: number; tauxRemplissage: number }
 interface ReapproData { sites: SiteForecast[]; tournees: Tournee[]; params: { horizonJours: number; capaciteCamion: number }; totaux: { nbSites: number; nbCritiques: number; volumeRecommande: number; nbTournees: number; totalKm: number; tauxRemplissageMoyen: number } }
@@ -86,6 +95,10 @@ export default function ReapprovisionnementPage() {
       return <Badge className={src.classe}><span title={src.aide}>{src.label}</span></Badge>;
     } },
     { key: 'tendance', header: 'Tend.', align: 'center', render: (s) => <span title={`Tendance ${s.tendance.toLowerCase()}`} className={s.tendance === 'HAUSSE' ? 'text-red-600' : s.tendance === 'BAISSE' ? 'text-green-600' : 'text-gray-400'}>{s.tendance === 'HAUSSE' ? '↗' : s.tendance === 'BAISSE' ? '↘' : '→'}</span> },
+    { key: 'dependance', header: 'Dépendance', align: 'center', render: (s) => {
+      const d = DEPENDANCE[s.rangEnergie ?? 3];
+      return d ? <Badge className={d.classe}><span title={d.aide}>{d.label}</span></Badge> : '—';
+    } },
     { key: 'autonomie', header: 'Autonomie', align: 'right', render: (s) => s.autonomieJours != null ? `${s.autonomieJours} j` : '—' },
     { key: 'livraison', header: 'À livrer le', render: (s) => s.dateLivraisonCible ? <span className={(s.joursAvantLivraison ?? 1) <= 0 ? 'text-red-600 font-medium' : ''}>{fmtDate(s.dateLivraisonCible)}</span> : '—' },
     { key: 'quantite', header: 'Quantité reco (L)', align: 'right', render: (s) => <span className="font-semibold text-gray-800">{fmtNumber(s.quantiteRecommandee)}</span> },

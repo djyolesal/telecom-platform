@@ -27,6 +27,23 @@ export interface SiteForecast {
   joursAvantLivraison: number | null;
   quantiteRecommandee: number;
   priorite: 'CRITIQUE' | 'URGENT' | 'A_PLANIFIER';
+  /** 0 = 100 % gasoil … 3 = secouru CEET (voir rangEnergie). */
+  rangEnergie: number;
+}
+
+/**
+ * Rang de DÉPENDANCE AU GASOIL (ordre validé par l'exploitant, 07/09/2026) :
+ * 0 = GE permanent / GE seul (cuve vide → site coupé immédiatement, aucun
+ *     secours) ; 1 = hybrides GE (le solaire amortit, pas de secteur) ;
+ * 2 = solaires ; 3 = sites secourus par la CEET (cuve vide → risque seulement
+ * pendant les coupures secteur). À priorité temporelle égale, le rang le plus
+ * bas passe devant — dans la liste comme dans les tournées.
+ */
+export function rangEnergie(powerConfig: string, statutGE: string | null): number {
+  if (statutGE === 'GE_PERMANENT' || powerConfig === 'GE_UNIQUEMENT') return 0;
+  if (powerConfig === 'HYBRIDE_GE') return 1;
+  if (powerConfig === 'SOLAIRE_UNIQUEMENT') return 2;
+  return 3; // CEET_GE, HYBRIDE_CEET_GE, CEET_UNIQUEMENT
 }
 
 export interface Tournee {
@@ -401,8 +418,13 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
     const cible = capacite ?? consoJour * (horizon + leadSec); // remplir la cuve, ou viser l'horizon
     const quantiteRecommandee = Math.max(0, Math.round(cible - stockALivraison));
 
+    // Seuil DURCI pour un site 100 % gasoil : sans secteur pour encaisser un
+    // retard de livraison, sa marge d'erreur est nulle — il passe Critique
+    // avec quelques jours d'avance (réglable, 0 = désactivé).
+    const rang = rangEnergie(site.powerConfig, site.statutGE);
+    const margeGasoil = rang === 0 ? getNum('appro.margeGePermanentJours', 2) : 0;
     const priorite: SiteForecast['priorite'] =
-      joursAvantLivraison <= 0 || autonomieJours <= leadSec ? 'CRITIQUE'
+      joursAvantLivraison <= 0 || autonomieJours <= leadSec + margeGasoil ? 'CRITIQUE'
       : autonomieJours <= horizon / 2 ? 'URGENT'
       : 'A_PLANIFIER';
 
@@ -424,11 +446,20 @@ async function forecastSitesImpl(opts: { region?: string; horizonJours?: number;
       joursAvantLivraison,
       quantiteRecommandee,
       priorite,
+      rangEnergie: rang,
     });
   }
 
-  // Plus urgent d'abord.
-  return out.sort((a, b) => (a.joursAvantLivraison ?? 0) - (b.joursAvantLivraison ?? 0));
+  // Plus urgent d'abord ; à urgence comparable (même jour de livraison
+  // requis), la dépendance au gasoil départage : un site sans secours passe
+  // devant un site secouru par la CEET.
+  return out.sort((a, b) => {
+    const ja = Math.ceil(a.joursAvantLivraison ?? 0);
+    const jb = Math.ceil(b.joursAvantLivraison ?? 0);
+    if (ja !== jb) return ja - jb;
+    if (a.rangEnergie !== b.rangEnergie) return a.rangEnergie - b.rangEnergie;
+    return (a.autonomieJours ?? 0) - (b.autonomieJours ?? 0);
+  });
 }
 
 /**

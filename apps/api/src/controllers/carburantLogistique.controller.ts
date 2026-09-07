@@ -1380,6 +1380,7 @@ export async function exportReapprovisionnement(req: Request, res: Response, nex
     const sites = sitesAll.filter((s) => s.autonomieJours != null && s.autonomieJours <= horizonJours);
     const L_PRIORITE: Record<string, string> = { CRITIQUE: 'Critique', URGENT: 'Urgent', A_PLANIFIER: 'À planifier' };
     const L_TENDANCE: Record<string, string> = { HAUSSE: 'Hausse', STABLE: 'Stable', BAISSE: 'Baisse' };
+    const L_DEPENDANCE: Record<number, string> = { 0: '100 % gasoil', 1: 'Hybride GE', 2: 'Solaire', 3: 'Secouru CEET' };
     const fmtJ = (d: string | null) => (d ? new Date(d).toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' }) : '');
     await auditLog(req.user!.id, 'EXPORT', 'reapprovisionnement', undefined, { sites: sites.length, format: req.params.format }, req);
     await sendTabular(res, req.params.format, 'reapprovisionnement', 'Sites à réapprovisionner',
@@ -1389,6 +1390,7 @@ export async function exportReapprovisionnement(req: Request, res: Response, nex
           { header: 'Site', key: 'site', width: 26 },
           { header: 'Région', key: 'region', width: 14 },
           { header: 'Priorité', key: 'priorite', width: 12 },
+          { header: 'Dépendance gasoil', key: 'dependance', width: 16 },
           { header: 'Autonomie (j)', key: 'autonomie', width: 13 },
           { header: 'Stock (L)', key: 'stock', width: 11 },
           { header: 'Conso/j (L)', key: 'conso', width: 12 },
@@ -1401,6 +1403,7 @@ export async function exportReapprovisionnement(req: Request, res: Response, nex
           site: s.nom,
           region: s.region,
           priorite: L_PRIORITE[s.priorite] ?? s.priorite,
+          dependance: L_DEPENDANCE[s.rangEnergie] ?? '',
           autonomie: s.autonomieJours,
           stock: Math.round(s.stockActuel),
           conso: Math.round(s.consoJour),
