@@ -66,8 +66,11 @@ function buildBriefing(sites: SiteForecast[], tournees: ReturnType<typeof sugges
     volumeRecommande: volume,
     nbTournees: tournees.length,
     totalKm: km,
-    topSites: sites.slice(0, 8).map((s) => ({ code: s.code, region: s.region, autonomieJours: s.autonomieJours, quantite: s.quantiteRecommandee, priorite: s.priorite, tendance: s.tendance })),
-    anomalies: anomalies.slice(0, 8).map((a) => ({ code: a.code, type: a.type, ecartPct: a.ecartPct, severite: a.severite, manquantAssocie: a.manquantAssocie })),
+    // NOM du site, jamais le code : la synthèse est lue par le manager (règle
+    // transverse de la plateforme) — et elle sert aussi de contexte à Claude,
+    // qui doit citer les sites comme l'exploitant les appelle.
+    topSites: sites.slice(0, 8).map((s) => ({ nom: s.nom, region: s.region, autonomieJours: s.autonomieJours, quantite: s.quantiteRecommandee, priorite: s.priorite, tendance: s.tendance })),
+    anomalies: anomalies.slice(0, 8).map((a) => ({ nom: a.nom, type: a.type, ecartPct: a.ecartPct, severite: a.severite, manquantAssocie: a.manquantAssocie })),
     manquants: manquantsTotaux,
   };
 }
@@ -78,10 +81,10 @@ function fallbackSynthese(b: ReturnType<typeof buildBriefing>): string {
   lignes.push(`${b.nbSites} site(s) à réapprovisionner sur l'horizon, dont ${b.nbCritiques} critique(s), pour ${L(b.volumeRecommande)} au total.`);
   lignes.push(`${b.nbTournees} tournée(s) suggérée(s) (≈ ${b.totalKm.toLocaleString('fr-FR')} km).`);
   if (b.topSites.length) {
-    lignes.push('Priorités : ' + b.topSites.filter((s) => s.priorite !== 'A_PLANIFIER').slice(0, 5).map((s) => `${s.code} (${s.autonomieJours} j, ${L(s.quantite)})`).join(', ') + '.');
+    lignes.push('Priorités : ' + b.topSites.filter((s) => s.priorite !== 'A_PLANIFIER').slice(0, 5).map((s) => `${s.nom} (${s.autonomieJours} j, ${L(s.quantite)})`).join(', ') + '.');
   }
   if (b.anomalies.length) {
-    lignes.push(`⚠ ${b.anomalies.length} anomalie(s) de consommation : ` + b.anomalies.slice(0, 5).map((a) => `${a.code} ${a.type === 'SURCONSOMMATION' ? '+' : ''}${a.ecartPct}%${a.manquantAssocie ? ' (manquant associé)' : ''}`).join(', ') + '. À vérifier : fuite, vol, ou heures GE mal déclarées.');
+    lignes.push(`⚠ ${b.anomalies.length} anomalie(s) de consommation : ` + b.anomalies.slice(0, 5).map((a) => `${a.nom} ${a.type === 'SURCONSOMMATION' ? '+' : ''}${a.ecartPct}%${a.manquantAssocie ? ' (manquant associé)' : ''}`).join(', ') + '. À vérifier : fuite, vol, ou heures GE mal déclarées.');
   }
   if (b.manquants.nbSitesManquants > 0) {
     lignes.push(`Manquants en cours : ${b.manquants.nbSitesManquants} site(s) pour ${L(b.manquants.manquantSitesLitres)}.`);
@@ -122,7 +125,7 @@ export async function generateSynthese(opts: { region?: string } = {}): Promise<
         "Tu es l'assistant logistique carburant d'un opérateur télécom en Afrique de l'Ouest (parc de sites BTS alimentés par groupes électrogènes). " +
         "À partir des données chiffrées fournies (prévisions de rupture, tournées suggérées, anomalies de consommation, manquants), rédige une synthèse opérationnelle pour le manager, en français, claire et actionnable. " +
         "Structure courte : 1) priorités de livraison, 2) anomalies à investiguer (fuite/vol probable si surconsommation + manquant), 3) recommandation de tournées. " +
-        "Sois factuel, cite les codes sites et les volumes. N'invente aucune donnée absente du briefing. 150 mots maximum.",
+        "Sois factuel, cite les sites par leur NOM et les volumes. N'invente aucune donnée absente du briefing. 150 mots maximum.",
       messages: [{ role: 'user', content: `Briefing du jour (JSON) :\n${JSON.stringify(briefing)}` }],
     });
     const texte = response.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n').trim();
