@@ -717,6 +717,9 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const [typeAlarme, setTypeAlarme] = useState(coupure.typeAlarme === 'NA' ? '' : coupure.typeAlarme ?? '');
   const [intervenants, setIntervenants] = useState(coupure.intervenants ?? '');
   const [technicienContacte, setTechnicienContacte] = useState(coupure.technicienContacte ?? '');
+  const [frequence, setFrequence] = useState(coupure.frequence ?? '');
+  const [secteur, setSecteur] = useState(coupure.secteur ?? '');
+  const [observations, setObservations] = useState(coupure.observations ?? '');
   const [causeCategorie, setCauseCategorie] = useState(coupure.causeCategorie ?? '');
   // Qualification NOC : l'OSS ne voit que l'eNodeB et classe « Site entier » —
   // quand seules certaines technologies sont tombées, l'opérateur requalifie
@@ -763,6 +766,9 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       typeAlarme: typeAlarme || null,
       intervenants: intervenants || null,
       technicienContacte: technicienContacte || null,
+      frequence: frequence || null,
+      secteur: secteur || null,
+      observations: observations || null,
       causeCategorie: causeCategorie || null,
     }),
     onSuccess: () => { onDone(); onClose(); },
@@ -815,6 +821,14 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           ))}
         </div>
       </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Fréquence / bande">
+          <Input value={frequence} onChange={(e) => setFrequence(e.target.value)} placeholder="ex. L800, U900" />
+        </Field>
+        <Field label="Secteur">
+          <Input value={secteur} onChange={(e) => setSecteur(e.target.value)} placeholder="ex. S2" />
+        </Field>
+      </div>
       {coupure.technologie === 'SITE' && !siteEntier && (
         <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Requalifier hors « Site entier » : la coupure devient <b>partielle</b> ({technoCanonique}) et ne
@@ -848,6 +862,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         </Field>
       </div>
       <Field label="Actions effectuées"><Input list="motifs-action" value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" className={aCompleter(actions)} /></Field>
+      <Field label="Observations"><Textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} /></Field>
       {coupure.incident && (
         <p className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
           Incident lié : <b>{coupure.incident.reference ?? coupure.incident.id.slice(0, 8)}</b> ({coupure.incident.statut})
