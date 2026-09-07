@@ -125,10 +125,19 @@ async function main() {
     // re-lancement voyait tous les jours « couverts », purgait l'ancien import
     // et ne recréait presque rien — perte de données au rejeu.
     where: { dateReleve: { gte: debut }, source: { in: ['GE', 'CEET'] }, NOT: { observations: MARQUEUR } },
-    select: { siteId: true, source: true, dateReleve: true },
+    select: { siteId: true, source: true, dateReleve: true, groupeId: true },
   });
   const jourKey = (siteId: string, source: string, d: Date) => `${siteId}|${source}|${d.toISOString().slice(0, 10)}`;
   const couverts = new Set(existants.map((e) => jourKey(e.siteId, e.source, e.dateReleve)));
+  // Clé EXACTE de l'index d'unicité prod (migration 0036) : (site, source,
+  // groupe, timestamp). Garde toutes les branches — le fichier contient une
+  // paire strictement dupliquée (AVEPOZO2 15/06 11:40:34 ×2) qui a fait
+  // échouer le premier passage réel, et un relevé plateforme au même instant
+  // exact ferait pareil. Sans elle, createMany tombe en P2002 et la
+  // transaction annule tout.
+  const exactKey = (siteId: string, source: string, groupeId: string | null, d: Date) =>
+    `${siteId}|${source}|${groupeId ?? '-'}|${d.toISOString()}`;
+  const exacts = new Set(existants.map((e) => exactKey(e.siteId, e.source, e.groupeId, e.dateReleve)));
 
   // ── Construction ──
   let crees = 0, sautesDoublon = 0, orphelins = 0, volumesEcartes = 0, geEcartes = 0, ceetEcartes = 0;
@@ -146,9 +155,15 @@ async function main() {
     let ceet = l.indexCEET;
     if (ceet != null && ceetSuspects.has(i)) { ceet = null; ceetEcartes++; }
 
+    // Le jour était-il déjà couvert AVANT cette ligne ? (évalué une fois : la
+    // branche principale ajoute la clé jour — le bi-GE de la MÊME ligne doit
+    // quand même passer.)
+    const geJourCouvert = couverts.has(jourKey(site.id, 'GE', l.dateFin));
+
     // Relevé GE (niveau et/ou index) — GE n°1 du site s'il existe.
     if (volume != null || heure != null) {
-      if (couverts.has(jourKey(site.id, 'GE', l.dateFin))) sautesDoublon++;
+      const cle = exactKey(site.id, 'GE', site.groupes[0]?.id ?? null, l.dateFin);
+      if (geJourCouvert || exacts.has(cle)) sautesDoublon++;
       else {
         (aCreer as unknown[]).push({
           siteId: site.id, dateReleve: l.dateFin, source: 'GE',
@@ -157,26 +172,34 @@ async function main() {
           observations: MARQUEUR,
         });
         couverts.add(jourKey(site.id, 'GE', l.dateFin));
+        exacts.add(cle);
         crees++;
       }
     }
-    // Second groupe (bi-GE) : index/niveau du GE n°2.
+    // Second groupe (bi-GE) : index/niveau du GE n°2 — mêmes gardes.
     if ((l.heureGE2 != null || l.volumeGasoil2 != null) && site.groupes[1]) {
-      (aCreer as unknown[]).push({
-        siteId: site.id, dateReleve: l.dateFin, source: 'GE',
-        volumeGasoilLitres: l.volumeGasoil2 != null && l.volumeGasoil2 <= 5000 ? l.volumeGasoil2 : null,
-        indexHeuresGE: l.heureGE2,
-        groupeId: site.groupes[1].id,
-        observations: MARQUEUR,
-      });
-      crees++;
+      const cle2 = exactKey(site.id, 'GE', site.groupes[1].id, l.dateFin);
+      if (geJourCouvert || exacts.has(cle2)) sautesDoublon++;
+      else {
+        (aCreer as unknown[]).push({
+          siteId: site.id, dateReleve: l.dateFin, source: 'GE',
+          volumeGasoilLitres: l.volumeGasoil2 != null && l.volumeGasoil2 <= 5000 ? l.volumeGasoil2 : null,
+          indexHeuresGE: l.heureGE2,
+          groupeId: site.groupes[1].id,
+          observations: MARQUEUR,
+        });
+        exacts.add(cle2);
+        crees++;
+      }
     }
     // Relevé CEET.
     if (ceet != null) {
-      if (couverts.has(jourKey(site.id, 'CEET', l.dateFin))) sautesDoublon++;
+      const cleC = exactKey(site.id, 'CEET', null, l.dateFin);
+      if (couverts.has(jourKey(site.id, 'CEET', l.dateFin)) || exacts.has(cleC)) sautesDoublon++;
       else {
         (aCreer as unknown[]).push({ siteId: site.id, dateReleve: l.dateFin, source: 'CEET', indexCompteur: ceet, observations: MARQUEUR });
         couverts.add(jourKey(site.id, 'CEET', l.dateFin));
+        exacts.add(cleC);
         crees++;
       }
     }
