@@ -75,12 +75,45 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
 
   Future<void> _startFlow(Incident inc) async {
     final repo = context.read<IncidentRepository>();
+
+    // ÉTAT DES LIEUX AVANT intervention (aligné sur les maintenances) : la
+    // panne se photographie à l'arrivée — après réparation il est trop tard.
+    // Caméra uniquement, minimum configurable (serveur : incident.minPhotosAvant).
+    final minAvant = AppConfig.minPhotosIncidentAvant;
+    final picker = ImagePicker();
+    final photoPaths = <String>[];
+    while (photoPaths.length < minAvant) {
+      if (!mounted) return;
+      final restant = minAvant - photoPaths.length;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('État des lieux'),
+          content: Text(
+              'Photographiez l\'état constaté AVANT de commencer ($restant photo(s) restante(s) sur $minAvant minimum).'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+            FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(120, 44)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Prendre la photo'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return; // démarrage abandonné
+      final shot = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+      if (shot == null) continue; // capture annulée : on redemande
+      photoPaths.add(await AttachmentStore.persistFile(shot.path));
+    }
+    if (!mounted) return;
+
     setState(() => _busy = true);
     try {
       final check = await _verifyOnSite(inc, 'le démarrage');
       if (!check.ok) return;
       final res = await repo.start(widget.id,
-          latitude: check.lat, longitude: check.lng);
+          latitude: check.lat, longitude: check.lng, photoPaths: photoPaths);
       if (!mounted) return;
       _snack(res.isQueued
           ? 'Démarrage mis en file - il partira à la reconnexion'

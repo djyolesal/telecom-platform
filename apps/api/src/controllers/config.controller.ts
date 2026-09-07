@@ -17,6 +17,8 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
       minPhotosPreventive: 6,
       minPhotosMouvement: getNum('maintenance.minPhotosMouvement', 2),
       minPhotosCurative: getNum('maintenance.minPhotosCurative', 2),
+      // État des lieux AVANT exigé au démarrage d'un incident (photos APRES à la clôture).
+      minPhotosIncidentAvant: getNum('incident.minPhotosAvant', 2),
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       // Référentiel des types de liaison de transmission (badges topologie, fiche site).
       typesLiaison: typesLiaison(),

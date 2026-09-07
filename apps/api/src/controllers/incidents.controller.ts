@@ -16,6 +16,7 @@ import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { io } from '../server';
 import { differenceInMinutes } from 'date-fns';
 import { assertOnSite } from '../utils/geofence';
+import { getNum } from '../services/settings.service';
 import { publicFileUrl } from '../services/storage.service';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
@@ -278,7 +279,10 @@ export async function assignIncident(req: Request, res: Response, next: NextFunc
  */
 export async function startIncident(req: Request, res: Response, next: NextFunction) {
   try {
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, photos } = req.body as {
+      latitude?: unknown; longitude?: unknown;
+      photos?: { url: string; key: string }[];
+    };
     const incident = await prisma.incident.findUnique({
       where: { id: req.params.id },
       include: { site: { select: { latitude: true, longitude: true, code: true, nom: true } } },
@@ -294,6 +298,23 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
 
     // Tout incident doit être DÉMARRÉ sur le site.
     assertOnSite(incident.site, latitude, longitude, 'le démarrage');
+
+    // État des lieux AVANT intervention (aligné sur les maintenances) : la
+    // panne se photographie À L'ARRIVÉE — après réparation il est trop tard
+    // pour prouver l'état constaté. Minimum configurable, phase AVANT.
+    const minAvant = getNum('incident.minPhotosAvant', 2);
+    const photosAvant = (photos ?? []).filter((p) => p && p.url && p.key);
+    if (photosAvant.length < minAvant) {
+      throw new AppError(
+        `Au moins ${minAvant} photo(s) de l'état constaté sont requises pour démarrer l'intervention (${photosAvant.length} fournie(s)).`,
+        422
+      );
+    }
+    if (photosAvant.length) {
+      await prisma.photo.createMany({
+        data: photosAvant.map((p) => ({ entityType: 'incident', entityId: incident.id, url: p.url, minioKey: p.key, phase: 'AVANT' })),
+      });
+    }
 
     const updated = await prisma.incident.update({
       where: { id: req.params.id },
@@ -380,7 +401,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
       await prisma.photo.createMany({
         data: photos
           .filter((p) => p && p.url && p.key)
-          .map((p) => ({ entityType: 'incident', entityId: incident.id, url: p.url, minioKey: p.key })),
+          .map((p) => ({ entityType: 'incident', entityId: incident.id, url: p.url, minioKey: p.key, phase: 'APRES' })),
       });
     }
 

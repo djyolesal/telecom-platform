@@ -105,7 +105,22 @@ export default function IncidentDetailPage() {
             </div>
           )}
 
-          <PhotoGallery photos={inc.photos ?? []} />
+          {(() => {
+            // Même groupage que les maintenances : l'état constaté à l'arrivée
+            // (AVANT, exigé au démarrage) séparé du rétablissement (APRES).
+            const photos = (inc.photos ?? []) as { id: string; url: string; phase?: string | null }[];
+            const avant = photos.filter((p) => p.phase === 'AVANT');
+            const apres = photos.filter((p) => p.phase === 'APRES');
+            const autres = photos.filter((p) => !p.phase);
+            if (!avant.length && !apres.length) return <PhotoGallery photos={photos} />;
+            return (
+              <>
+                {avant.length > 0 && <PhotoGallery photos={avant} title={`État constaté (${avant.length})`} />}
+                {apres.length > 0 && <PhotoGallery photos={apres} title={`Après intervention (${apres.length})`} />}
+                {autres.length > 0 && <PhotoGallery photos={autres} title={`Autres photos (${autres.length})`} />}
+              </>
+            );
+          })()}
 
           <SignatureBlock signatures={inc.signatures} />
 

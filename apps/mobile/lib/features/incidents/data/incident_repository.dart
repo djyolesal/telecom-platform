@@ -62,7 +62,7 @@ class IncidentRepository {
 
   /// Démarrage de l'intervention (offline-first) - vérifié SUR SITE côté serveur.
   Future<SubmitResult> start(String id,
-          {double? latitude, double? longitude}) =>
+          {double? latitude, double? longitude, List<String> photoPaths = const []}) =>
       _sync.submit(
         endpoint: '/incidents/$id/demarrer',
         entityType: 'incident_start',
