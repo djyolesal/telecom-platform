@@ -167,13 +167,17 @@ export function bilanMensuelSite(opts: {
     }
   }
 
-  // Stocks aux frontières, interpolés par la conso/j (report brut à défaut, signalé).
+  // Stocks aux frontières, interpolés par la conso/j (report brut à défaut,
+  // signalé) - toujours depuis le relevé LE PLUS PROCHE de la frontière : en
+  // fenêtre élargie, r1 peut être loin derrière alors qu'un relevé antérieur
+  // plus récent ancre mieux le 1er du mois.
   const interp = consoJour ?? 0;
   if (consoJour == null) drapeaux.push('frontières en report brut (conso incalculable)');
-  const jAvant = Math.max(0, (premier.getTime() - r1.date.getTime()) / JOUR_MS);
-  const stockDebut = r1.date < premier
-    ? Math.max(0, r1.volume! - interp * jAvant + sommeLivraisons(opts.livraisons, r1.date, premier))
-    : r1.volume!;
+  const ancreDebut = avant.length ? avant[avant.length - 1] : r1;
+  const jAvant = Math.max(0, (premier.getTime() - ancreDebut.date.getTime()) / JOUR_MS);
+  const stockDebut = ancreDebut.date < premier
+    ? Math.max(0, ancreDebut.volume! - interp * jAvant + sommeLivraisons(opts.livraisons, ancreDebut.date, premier))
+    : ancreDebut.volume!;
   const jApres = Math.max(0, (suivant.getTime() - r2.date.getTime()) / JOUR_MS);
   const stockFin = Math.max(0, r2.volume! - interp * jApres + sommeLivraisons(opts.livraisons, r2.date, suivant));
 

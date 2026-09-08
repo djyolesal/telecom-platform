@@ -33,6 +33,10 @@ describe('bilanMensuelSite - méthode validée 07/09/2026', () => {
     })!;
     expect(b.drapeaux).toContain('fenêtre élargie');
     expect(b.fenetreJours).toBe(35); // 01/07 → 05/08
+    // Frontière ancrée sur le relevé LE PLUS PROCHE (30/07, 1900 L), pas sur
+    // le début de la fenêtre élargie (01/07) : 1900 - conso/j × 2 j.
+    const consoJour = 200 / 35;
+    expect(b.stockDebut).toBe(Math.round(1900 - consoJour * 2));
   });
 
   it('conso négative : drapeau, frontières en report brut', () => {
