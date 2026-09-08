@@ -41,3 +41,4 @@ PV  SOLAIRE.docx
 
 # Configuration locale Claude (jamais versionnée)
 .claude/settings.local.json
+*.tsbuildinfo
