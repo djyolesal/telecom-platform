@@ -38,3 +38,6 @@ secrets/
 dump.rdb
 dump.rdb
 PV  SOLAIRE.docx
+
+# Configuration locale Claude (jamais versionnée)
+.claude/settings.local.json
