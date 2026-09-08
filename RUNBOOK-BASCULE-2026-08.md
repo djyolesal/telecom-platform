@@ -1,29 +1,45 @@
 # Runbook de bascule — mise en production grand public
-*(préparé le 05/08/2026 — mis à jour le 31/08/2026)*
+*(préparé le 05/08/2026 — mis à jour le 08/09/2026)*
 
 Ordre exact des opérations, points de contrôle et critères de retour arrière pour la mise en
 service d'E&M OpS. Chaque phase se termine par un **point de contrôle (✋)** : on ne passe à la
 suivante que s'il est vert. Les commandes serveur s'exécutent dans `/opt/telecom-platform`
 (connexion SSH par tes soins — les identifiants ne passent jamais par un tiers).
 
-**Contenu du train** : migrations `0038` → `0053` (54 au total). Depuis la préparation initiale
+**Contenu du train** : migrations `0038` → `0056` (57 au total). Depuis la préparation initiale
 se sont ajoutées : signature de l'agent de sécurité, gardiennage de nuit, synchronisation OSS et
 prise en charge des coupures, **cuves** (barémage hauteur → litres), **contrat solaire** complet
 (lots solaires distincts, checklist contractuelle), référentiels éditables (types d'incident,
 équipements de dépannage), rapport de **conformité ARCEP (DR1/DR2)**, **récap journalier par
 email**, mode **Topologie** de la carte, et le nettoyage des libellés (plus de jargon technique,
-sites désignés par leur **nom**). APK courant : **1.5.0+34** (versionCode 2034).
+sites désignés par leur **nom**).
 
-**Cinq ruptures de compatibilité à avoir en tête pendant toute la bascule :**
+Ajouts du 01-08/09 : **technicien contacté** sur les coupures (prise en charge + SMS), feuille
+d'**émargement** sur le PDF du plan de livraison, **garde GPS commun** sur les 6 saisies
+géofencées du mobile, **historique par coupure** + export supervision exhaustif (Début/Fin en
+**vraies dates Excel**), signal « **à compléter** » sur les coupures clôturées sans
+qualification + héritage affiché depuis la racine (**amont nommé**), **référentiel des motifs
+de coupure** (0055), SMS coupure avec **sites aval nommés** (≤ 3), **stabilité de
+rétablissement OSS** (une reconnexion ne clôt qu'après 10 min stables — fin du faux vert),
+**SMS à la livraison** (opt-in par contact, 0056), **anti-doublon dépotage** (le cas
+2 × 1000 L), priorité réappro par **dépendance gasoil**, rapport **stocks carburant mensuels**
+(méthode bilan matière validée), **photos AVANT/APRÈS incidents**. APK courant :
+**1.7.0+40** (versionCode 2040).
+
+**Six ruptures de compatibilité à avoir en tête pendant toute la bascule :**
 1. la création d'un BL **exige un chauffeur** → un APK antérieur est refusé ;
 2. le geofencing **bloque un dépotage sans GPS** sur un site géolocalisé ;
 3. l'auth WebSocket exige `sid`+`plt` → tous les clients doivent se **reconnecter** ;
 4. **🔴 NOUVEAU — signatures obligatoires** : le serveur refuse désormais TOUTE clôture sans
    **signature du technicien** (maintenance, incident) et tout dépotage sans **signature +
    nom du chauffeur** et signature du technicien. Un APK antérieur au b32 **ne peut plus rien
-   clôturer** : l'API et l'APK **b34** doivent partir dans la MÊME fenêtre, jamais étalés ;
+   clôturer** : l'API et l'APK **b40** doivent partir dans la MÊME fenêtre, jamais étalés ;
 5. **NOUVEAU — photos exigées sur les dépannages** : une curative se clôture avec au moins
    2 photos (réglable). Un APK ancien ne les impose pas côté saisie → refus serveur.
+6. **🔴 NOUVEAU — photos AVANT au démarrage d'incident** : le serveur refuse de démarrer une
+   intervention sans ≥ 2 photos de l'état constaté (`incident.minPhotosAvant`). Seul le
+   **b40** les joint correctement (le b39, jamais distribué, avait un bug qui les perdait) :
+   l'API et l'APK **b40** partent dans la MÊME fenêtre.
 
 **⚠️ SMS réels** : la passerelle Moov est ACTIVE en prod. Tout test qui déclenche une
 notification (création d'incident, coupure totale, alerte) **envoie de vrais SMS**. Pour la
@@ -38,7 +54,7 @@ automatique d'un événement pris en charge, si la coupure a duré ≥ 15 min
 
 - [ ] Annonce aux utilisateurs : coupure de service ~30 min, reconnexion obligatoire ensuite.
 - [ ] Fenêtre choisie hors heures de tournée carburant (éviter un transporteur en pleine saisie).
-- [ ] **APK b34 construit et testé sur un téléphone réel** AVANT la fenêtre (phase 4 ci-dessous —
+- [ ] **APK b40 construit et testé sur un téléphone réel** AVANT la fenêtre (phase 4 ci-dessous —
       le build peut se faire la veille, seule la distribution attend la bascule). Rappel : à
       cause de la rupture nº4 (signatures), la distribution ne peut PAS attendre le lendemain.
 - [ ] **SMTP configuré** sur le serveur (`SMTP_HOST`, `SMTP_FROM`…) : sans lui, le récap
@@ -46,11 +62,12 @@ automatique d'un événement pris en charge, si la coupure a duré ≥ 15 min
 - [ ] Vérifier l'espace disque serveur : `df -h` (les images Docker + le backup doivent tenir).
 - [ ] Confirmer l'état des migrations :
       `docker compose exec api npx prisma migrate status` → indique les migrations en attente.
-      Le train comporte **54 migrations** au total ; celles de `0043` à `0053` restent à
-      appliquer si la prod est encore au niveau du 05/08. Toute migration inattendue ici est
+      Le train comporte **57 migrations** au total ; `0055` (motifs de coupure) et `0056`
+      (opt-in SMS livraison) restent à appliquer si la prod est au niveau du 03/09 (`0054`
+      déjà passée avec l'audit nº2 sinon elle part aussi). Toute migration inattendue ici est
       une anomalie à comprendre AVANT la bascule.
 
-✋ **Contrôle** : APK b34 testé OK sur téléphone, fenêtre annoncée, disque > 5 Go libres,
+✋ **Contrôle** : APK b40 testé OK sur téléphone, fenêtre annoncée, disque > 5 Go libres,
 SMTP configuré.
 
 ---
@@ -92,7 +109,7 @@ dans `make update`, ne pas l'oublier : sans lui, les sessions web continueront d
       `docker compose exec api npx prisma migrate status` répond depuis l'image (la CLI est
       embarquée — plus de téléchargement npx) et sans erreur de configuration ; les logs API ne
       montrent aucune erreur d'adapter pg.
-- [ ] `migrate deploy` a listé toutes les migrations manquantes jusqu'à **0053**. Les backfills
+- [ ] `migrate deploy` a listé toutes les migrations manquantes jusqu'à **0056**. Les backfills
       0040 (véhicules/chauffeurs depuis l'existant) s'exécutent dans la migration : vérifier
       `docker compose exec postgres psql -U <user> -d <db> -c "SELECT count(*) FROM vehicules;"`
       → non nul si des BL existaient.
@@ -104,17 +121,22 @@ dans `make update`, ne pas l'oublier : sans lui, les sessions web continueront d
       antenne/FH).
 - [ ] **Contrat solaire** : `SELECT count(*) FROM lots WHERE contrat='SOLAIRE';` → la valeur
       attendue est 0 tant que les lots solaires n'ont pas été créés (phase 5), pas une erreur.
+- [ ] **Nouvelles tables du train** : `SELECT count(*) FROM motifs_coupure;` → 0 est normal
+      (référentiel à remplir par le NOC au fil de l'eau, Administration → Motifs de coupure) ;
+      `SELECT count(*) FROM contacts WHERE notif_livraisons;` → 0 est normal (opt-in à cocher
+      en phase 5 sur les contacts choisis — AUCUN SMS de livraison ne part tant que rien
+      n'est coché).
 - [ ] `docker compose logs --tail=100 api` → **10 cron jobs planifiés** (et non 9 : le récap
       journalier de 23 h s'est ajouté).
 - [ ] `curl -s https://emops.uk/api/v1/health` → OK.
 - [ ] `curl -s https://emops.uk/api/auth/session` → `null` HTTP 200 (Next répond).
 
 **Si `migrate deploy` échoue** : ne PAS improviser de SQL en prod. Restaurer le backup
-(phase R), revenir au commit noté, diagnostiquer à froid. Les migrations 0038-0053 sont
+(phase R), revenir au commit noté, diagnostiquer à froid. Les migrations 0038-0056 sont
 additives (`IF NOT EXISTS` partout) : un échec signalerait un état de base inattendu.
 
 **⚠️ Enchaîner immédiatement sur la phase 4 (APK)** : entre le déploiement de l'API et
-l'installation du b34, les mobiles en circulation **ne peuvent plus clôturer** (rupture nº4).
+l'installation du b40, les mobiles en circulation **ne peuvent plus clôturer** (rupture nº4).
 La recette (phase 3) peut se faire en parallèle de la distribution, pas avant.
 
 ✋ **Contrôle** : conteneurs stables 5 minutes, santé API et auth OK, migrations toutes passées.
@@ -201,13 +223,25 @@ couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
       fonctionne, les racines (anneau plein) et isolés (anneau pointillé) se distinguent.
 - [ ] **Coupures** : sur une détection auto DÉJÀ rétablie et non prise en charge, le bloc
       « Valider (compter dans la disponibilité) » apparaît ; une coupure < 5 min est refusée.
+- [ ] **Coupures — nouveautés 09/09** : la tuile « à compléter » compte les clôturées sans
+      qualification et le filtre les liste (champs manquants surlignés ambre dans le modal) ;
+      une héritée affiche la qualification de sa racine avec l'amont nommé (« Coupure du site
+      amont X : … ») ; le champ Cause propose les motifs du référentiel ; le bloc Historique
+      d'une ligne se déroule ; l'export xlsx s'ouvre dans Excel avec **Début/Fin triables
+      comme dates** (et « EN COURS » en rouge sur les ouvertes).
+- [ ] **Stocks carburant mensuels** (Rapports) : le mois courant se calcule, les 5 tuiles
+      tombent, une ligne suspecte (« Non expliqué ») ressort en rouge, l'export xlsx s'ouvre.
+      Les mois d'avant septembre resteront servis par le fichier d'étude (les livraisons
+      historiques ne sont pas en base) — ce n'est pas une anomalie.
+- [ ] **Réappro** : la synthèse s'exporte (colonne « Dépendance gasoil ») et l'ordre de
+      priorité suit GE permanent/seul → hybrides → solaires → CEET secourus.
 - [ ] **Solaire** (si des lots solaires existent) : un site hybride/solaire s'affecte à un lot
       solaire ; un site sans photovoltaïque est refusé avec un message clair.
 - [ ] **Récap journalier** : attendre 23 h GMT le soir de la bascule (ou régler `recap.actif`
       puis relancer le conteneur pour tester) → l'email arrive aux superviseurs et internes,
       chacun avec SON périmètre, sections par contrat, **sites désignés par leur nom**.
 
-**Mobile (téléphone réel, APK b34)**
+**Mobile (téléphone réel, APK b40)**
 - [ ] Connexion technicien (le verrou d'appareil accepte le téléphone).
 - [ ] Un dépotage complet de test : plan → jauges → 6 photos → **signatures chauffeur (avec son
       NOM) + technicien** → GPS → envoi. Sans le nom du chauffeur : refus explicite.
@@ -217,6 +251,12 @@ couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
       clôturer → au moins 2 photos exigées.
 - [ ] **Mesure de cuve** depuis la fiche site : 3 photos exigées, les litres calculés
       correspondent à ceux du web pour la même hauteur.
+- [ ] **Démarrage d'incident (b40)** : « Démarrer l'intervention » guide la prise de
+      **2 photos AVANT** puis la vérification GPS → l'incident passe EN COURS (c'était le
+      bug bloquant du b39 : photos capturées mais jamais envoyées).
+- [ ] **Anti-doublon dépotage** : ressaisir un dépotage de même volume sur le même site
+      dans les 2 h → avertissement « déjà enregistré … vérifiez qu'il ne s'agit pas d'un
+      double » avec la référence, confirmable si c'est bien une 2e livraison réelle.
 - [ ] Mode avion pendant la saisie → l'entrée part en file → repasse en ligne → synchronisée.
       Vérifier au passage qu'aucun message technique ne s'affiche (« NetworkException », un
       code brut de statut) : les libellés doivent être en français métier.
@@ -235,8 +275,9 @@ rustine en production.
 
 ## Phase 4 — APK
 
-L'APK **1.5.0+34** est déjà construit et déposé dans `~/Downloads/APK-emops/`
-(`emops-1.5.0-b34-arm64.apk` + `.aab`, versionCode **2034**, signature `4955c7cf…`).
+L'APK **1.7.0+40** est déjà construit et déposé dans `~/Downloads/APK-emops/`
+(`emops-1.7.0-b40-arm64-v8a.apk` + `-armeabi-v7a.apk` + `.aab`, versionCode **2040**,
+signature `4955c7cf…` inchangée — mise à jour par-dessus, pas de désinstallation).
 Pour le reconstruire à l'identique :
 
 ```bash
@@ -282,7 +323,17 @@ flutter build appbundle --release --dart-define=API_URL=https://emops.uk/api/v1
       · `oss.dureeMinValidationCloturee` (défaut **5 min**) — durée sous laquelle une détection
         auto déjà rétablie ne peut pas être validée pour la disponibilité ;
       · `oss.armementDelaiMin` (défaut **0** = adoption manuelle par le NOC — ne pas activer
-        sans décision explicite : l'armement automatique déclenche SMS et terrain).
+        sans décision explicite : l'armement automatique déclenche SMS et terrain) ;
+      · `oss.stabiliteRetablissementMin` (défaut **10**) — minutes de reconnexion STABLE
+        avant qu'une détection auto ne se clôture (le correctif du « faux vert ») ;
+      · `incident.minPhotosAvant` (défaut **2**) — photos de l'état constaté exigées au
+        démarrage d'une intervention ;
+      · `depotage.antiDoublonMinutes` (défaut **120**) — fenêtre de détection d'un double
+        enregistrement de la même livraison ;
+      · `appro.margeGePermanentJours` (défaut **2**) — marge de sécurité supplémentaire sur
+        le seuil de livraison des sites 100 % gasoil.
+- [ ] **SMS à la livraison** : cocher « Livraisons » sur les seuls contacts qui doivent
+      recevoir le SMS de dépotage (opt-in, aucun envoi par défaut).
 - [ ] **Lots solaires** (si le contrat solaire démarre) : créer les lots de contrat SOLAIRE,
       y attribuer les prestataires (scope SOLAIRE), puis rattacher les sites — seuls les sites
       **hybrides ou solaires** sont acceptés.
@@ -337,15 +388,15 @@ make restore    # choisir le backup de la phase 1
 ```
 
 Notes :
-- les migrations 0038-0053 sont **additives** : l'ancien code tourne sans problème sur une
+- les migrations 0038-0056 sont **additives** : l'ancien code tourne sans problème sur une
   base déjà migrée — dans la plupart des cas, restaurer la base est INUTILE (et fait perdre
   les saisies faites entre-temps). Ne restaurer que si la base elle-même est corrompue.
   Exception à connaître : `0052` a **supprimé l'enum** `TypeIncident` au profit d'un
   référentiel en table ; un retour au code d'avant 0052 est donc à éviter — préférer corriger
   en avant. Les migrations 0043-0051 et 0053 n'ont pas cette contrainte.
 - l'ancien APK redevient compatible avec l'ancien code : pas d'action mobile au rollback.
-  **Mais** si l'API est revenue en arrière alors que le b34 est déjà distribué, les mobiles
-  fonctionnent quand même (le b34 envoie les signatures, l'ancienne API les ignore).
+  **Mais** si l'API est revenue en arrière alors que le b40 est déjà distribué, les mobiles
+  fonctionnent quand même (le b40 envoie les signatures, l'ancienne API les ignore).
 - après tout retour arrière : diagnostiquer À FROID sur ce dépôt, jamais en direct en prod.
 
 ---
