@@ -61,6 +61,8 @@ class IncidentRepository {
   }
 
   /// Démarrage de l'intervention (offline-first) - vérifié SUR SITE côté serveur.
+  /// [photoPaths] : photos AVANT de l'état constaté (≥ 2 exigées par le serveur),
+  /// uploadées par le moteur de sync qui les injecte en `photos: [{url, key}]`.
   Future<SubmitResult> start(String id,
           {double? latitude, double? longitude, List<String> photoPaths = const []}) =>
       _sync.submit(
@@ -70,6 +72,9 @@ class IncidentRepository {
           if (latitude != null) 'latitude': latitude,
           if (longitude != null) 'longitude': longitude
         },
+        attachments: [
+          for (final p in photoPaths) {'path': p, 'kind': 'photo'},
+        ],
       );
 
   /// Clôture offline-first. [photoPaths] : chemins LOCAUX des photos prises sur
