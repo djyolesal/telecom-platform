@@ -587,7 +587,7 @@ async function chargerConformiteMaintenance(req: Request) {
   const sitesAvecDuPar = new Map<string, Set<string>>();
   const sitesConformesPar = new Map<string, Set<string>>();
   const evolutionDuPar = new Map<string, Map<string, { dues: number; realisees: number }>>();
-  interface LigneDue { site: string; region: string; prestataireId: string; tache: string; frequence: string; derniereLe: Date | null; realisee: boolean }
+  interface LigneDue { siteId: string; site: string; region: string; prestataireId: string; tache: string; frequence: string; derniereLe: Date | null; realisee: boolean }
   const detailDuMois: LigneDue[] = [];
   const bornesMois = moisListe.map(({ mois }) => {
     const [ba, bm] = mois.split('-').map(Number);
@@ -618,26 +618,21 @@ async function chargerConformiteMaintenance(req: Request) {
         if (b.mois !== cleMoisChoisi) continue;
         duesPar.set(pid, (duesPar.get(pid) ?? 0) + 1);
         (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
-        if (realisee) {
-          realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
-        } else {
-          sitesConformesPar.get(pid); // rien : le site sera exclu ci-dessous
-        }
+        if (realisee) realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
         detailDuMois.push({
-          site: site.nom, region: site.region, prestataireId: pid,
+          siteId: site.id, site: site.nom, region: site.region, prestataireId: pid,
           tache: t.libelle, frequence: FREQUENCE_LABEL[t.frequence],
           derniereLe: derniereAvant, realisee,
         });
       }
     }
   }
-  // Sites conformes = sites avec du dû dont TOUTES les tâches dues sont réalisées.
+  // La règle contractuelle : un site est CONFORME pour son prestataire si
+  // TOUTES ses maintenances dues du mois en cours sont réalisées (rapproché
+  // par identifiant de site - jamais par nom, deux homonymes sont possibles).
   for (const [pid, sites] of sitesAvecDuPar) {
-    const manquants = new Set(detailDuMois.filter((d) => d.prestataireId === pid && !d.realisee).map((d) => d.site));
-    sitesConformesPar.set(pid, new Set([...sites].filter((sid) => {
-      const nom = sitesContrat.find((x) => x.id === sid)?.nom ?? '';
-      return !manquants.has(nom);
-    })));
+    const sitesEnRetard = new Set(detailDuMois.filter((d) => d.prestataireId === pid && !d.realisee).map((d) => d.siteId));
+    sitesConformesPar.set(pid, new Set([...sites].filter((sid) => !sitesEnRetard.has(sid))));
   }
 
   const sitesCouvertsPar = new Map<string, Set<string>>();
