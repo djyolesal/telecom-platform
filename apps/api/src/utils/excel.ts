@@ -54,6 +54,9 @@ function styliserFeuille(ws: ExcelJS.Worksheet, nbCols: number): void {
       if (typeof cell.value === 'string' && /^[=+\-@\t\r]/.test(cell.value)) {
         cell.value = `'${cell.value}`;
       }
+      // Une Date JS devient une VRAIE cellule date (triable/filtrable),
+      // affichée au format français — pas un texte.
+      if (cell.value instanceof Date) cell.numFmt = 'dd/mm/yyyy hh:mm';
     }
   }
 }

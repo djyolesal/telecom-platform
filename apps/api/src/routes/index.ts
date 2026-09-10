@@ -421,6 +421,7 @@ router.get('/rapports/maintenance', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIREC
 // (la route répondait 403 à un rôle pourtant censé y accéder).
 router.get('/rapports/incidents', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC']), rapportsCtrl.getRapportIncidents);
 router.get('/rapports/conformite', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getConformiteMaintenance);
+router.get('/rapports/conformite/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.exportConformiteMaintenance);
 router.get('/rapports/sla-prestataires', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getSlaPrestataires);
 router.get('/rapports/gardiennage', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportGardiennage);
 router.get('/rapports/mensuel/:annee/:mois', rbac(['MANAGER','ADMIN','DIRECTION']), rapportsCtrl.getRapportMensuelPdf); // coûts complets non périmétrés : internes seulement

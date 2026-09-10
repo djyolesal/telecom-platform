@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable, Column } from '@/components/shared/DataTable';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { Loading, EmptyState } from '@/components/shared/states';
 
 interface Ligne {
@@ -59,6 +60,11 @@ export default function ConformitePage() {
         title="Conformité maintenances passives"
         subtitle="Maintenances passives clôturées avec relevés énergie, par prestataire"
         backHref="/rapports"
+        actions={
+          <ExportButtons base="/rapports/conformite/export"
+            name={`Conformité maintenances ${periode} jours`}
+            query={`periode=${periode}`} />
+        }
       />
 
       <FilterBar

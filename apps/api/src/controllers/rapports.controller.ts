@@ -505,6 +505,91 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
 }
 
 /**
+ * Export du rapport de conformité : la synthèse par prestataire ET le détail
+ * des maintenances non conformes (clôturées sans relevé énergie) — c'est la
+ * liste actionnable, celle des fiches à relancer auprès des prestataires.
+ */
+export async function exportConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { periode = '90', prestataire_id, region } = req.query as Record<string, string>;
+    const jours = parseInt(periode) || 90;
+    const since = new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
+
+    const maints = await prisma.maintenance.findMany({
+      where: {
+        statut: 'TERMINEE',
+        categorie: { in: PASSIVE_CATS as never[] },
+        dateFin: { gte: since },
+        ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
+        ...await (async () => { const pr = await sitePerimetre(req.user!.id); return (region || isRestreint(pr)) ? { site: { ...(region ? { region } : {}), ...pr } } : {}; })(),
+      },
+      select: {
+        reference: true, categorie: true, dateFin: true, prestataireId: true,
+        prestataire: { select: { nom: true } },
+        site: { select: { nom: true, region: true } },
+        technicien: { select: { nom: true, prenom: true } },
+        _count: { select: { releves: true } },
+      },
+      orderBy: { dateFin: 'desc' },
+      take: 5000,
+    });
+
+    const map = new Map<string, { prestataireNom: string; total: number; conformes: number }>();
+    for (const m of maints) {
+      const key = m.prestataireId ?? 'NON_ATTRIBUE';
+      if (!map.has(key)) map.set(key, { prestataireNom: m.prestataire?.nom ?? 'Non attribué', total: 0, conformes: 0 });
+      const e = map.get(key)!;
+      e.total++;
+      if (m._count.releves > 0) e.conformes++;
+    }
+    const parPrestataire = Array.from(map.values())
+      .map((e) => ({ ...e, nonConformes: e.total - e.conformes, taux: e.total ? Math.round((e.conformes / e.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total);
+    const nonConformes = maints.filter((m) => m._count.releves === 0);
+
+    await auditLog(req.user!.id, 'EXPORT', 'conformite_maintenance', undefined,
+      { periodeJours: jours, maintenances: maints.length, nonConformes: nonConformes.length, format: req.params.format }, req);
+    await sendTabular(res, req.params.format, `conformite-maintenances-${jours}j`, 'Conformité des maintenances passives',
+      [
+        {
+          name: 'Par prestataire',
+          columns: [
+            { header: 'Prestataire', key: 'prestataireNom', width: 30 },
+            { header: 'Passives clôturées', key: 'total', width: 17 },
+            { header: 'Avec relevés', key: 'conformes', width: 13 },
+            { header: 'Sans relevés', key: 'nonConformes', width: 13 },
+            { header: 'Conformité (%)', key: 'taux', width: 14 },
+          ],
+          rows: parPrestataire,
+        },
+        {
+          name: 'Non conformes',
+          columns: [
+            { header: 'Référence', key: 'reference', width: 17 },
+            { header: 'Site', key: 'site', width: 26 },
+            { header: 'Région', key: 'region', width: 14 },
+            { header: 'Prestataire', key: 'prestataire', width: 26 },
+            { header: 'Catégorie', key: 'categorie', width: 13 },
+            { header: 'Clôturée le', key: 'dateFin', width: 17 },
+            { header: 'Technicien', key: 'technicien', width: 24 },
+          ],
+          rows: nonConformes.map((m) => ({
+            reference: m.reference,
+            site: m.site?.nom ?? '',
+            region: m.site?.region ?? '',
+            prestataire: m.prestataire?.nom ?? 'Non attribué',
+            categorie: m.categorie,
+            dateFin: m.dateFin,
+            technicien: m.technicien ? `${m.technicien.prenom ?? ''} ${m.technicien.nom}`.trim() : '',
+          })),
+        },
+      ],
+      `${jours} derniers jours${region ? ` · ${region}` : ''} · ${maints.length} maintenance(s), dont ${nonConformes.length} sans relevé énergie`
+    );
+  } catch (err) { next(err); }
+}
+
+/**
  * Sites suspects de perte/vol de carburant, triés par score. S'appuie sur les
  * écarts déjà réconciliés à chaque dépotage (surconsommation, manquant livraison).
  */

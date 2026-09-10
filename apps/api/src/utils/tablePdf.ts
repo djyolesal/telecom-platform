@@ -82,7 +82,10 @@ export async function buildTablePdf(title: string, sections: PdfSection[], subti
           let x = left;
           s.columns.forEach((c, j) => {
             const v = r[c.key];
-            doc.text(v == null ? '' : String(v), x + 3, y, { width: colW[j] - 6, height: 10, ellipsis: true, lineBreak: false });
+            const txt = v == null ? ''
+              : v instanceof Date ? v.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'UTC' })
+              : String(v);
+            doc.text(txt, x + 3, y, { width: colW[j] - 6, height: 10, ellipsis: true, lineBreak: false });
             x += colW[j];
           });
           y += 13;
