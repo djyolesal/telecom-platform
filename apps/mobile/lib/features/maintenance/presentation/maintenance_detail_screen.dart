@@ -375,6 +375,37 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                   label: kStatutMaintenance[m.statut] ?? m.statut,
                   color: Colors.blue),
               const SizedBox(height: 16),
+              // Clôture contestée par le manager : le technicien voit le motif
+              // ici même - la fiche compte non conforme tant que ce n'est pas levé.
+              if (m.invalidee) ...[
+                Card(
+                  color: const Color(0xFFFDECEA),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(children: [
+                      const Icon(Icons.gpp_bad_outlined,
+                          color: Color(0xFFC0392B), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Clôture invalidée par le manager',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFC0392B))),
+                            if (m.motifInvalidation != null)
+                              Text(m.motifInvalidation!,
+                                  style: const TextStyle(fontSize: 12.5)),
+                          ],
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(14),

@@ -50,6 +50,10 @@ class Maintenance {
   final String? reference; // MNT/INC/DEP-année-numéro (lisible)
   final int dureeSuspendueMinutes; // pauses (urgences ailleurs) déjà décomptées
   final String? motifSuspension;
+  // Clôture contestée par un manager : la fiche reste TERMINEE mais compte
+  // non conforme - le technicien doit voir pourquoi.
+  final String? motifInvalidation;
+  final bool invalidee;
   final String? siteId;
   final String type;
   final String categorie;
@@ -90,6 +94,8 @@ class Maintenance {
     this.reference,
     this.dureeSuspendueMinutes = 0,
     this.motifSuspension,
+    this.motifInvalidation,
+    this.invalidee = false,
     this.siteId,
     required this.type,
     required this.categorie,
@@ -142,6 +148,8 @@ class Maintenance {
       reference: j['reference'] as String?,
       dureeSuspendueMinutes: (j['dureeSuspendueMinutes'] as num?)?.toInt() ?? 0,
       motifSuspension: j['motifSuspension'] as String?,
+      motifInvalidation: j['motifInvalidation'] as String?,
+      invalidee: j['invalideeLe'] != null,
       siteId: j['siteId'] as String?,
       type: j['type'] as String,
       categorie: j['categorie'] as String,

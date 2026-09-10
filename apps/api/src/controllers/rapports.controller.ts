@@ -472,6 +472,7 @@ async function chargerConformiteMaintenance(req: Request) {
     },
     select: {
       reference: true, categorie: true, dateFin: true, prestataireId: true, siteId: true,
+      invalideeLe: true, motifInvalidation: true,
       prestataire: { select: { nom: true } },
       site: { select: { nom: true, region: true } },
       technicien: { select: { nom: true, prenom: true } },
@@ -533,6 +534,7 @@ async function chargerConformiteMaintenance(req: Request) {
     }
   }
   const sitesCouvertsPar = new Map<string, Set<string>>();
+  const invalideesPar = new Map<string, number>();
   const evolutionPar = new Map<string, Map<string, { total: number; conformes: number }>>();
   for (const m of maints) {
     const key = m.prestataireId ?? 'NON_ATTRIBUE';
@@ -541,8 +543,11 @@ async function chargerConformiteMaintenance(req: Request) {
     }
     const e = map.get(key)!;
     e.total++;
-    const conforme = m._count.releves > 0;
+    // Une maintenance INVALIDÉE par le manager est non conforme quel que soit
+    // son contenu - une fiche contestée ne peut pas améliorer le taux.
+    const conforme = m._count.releves > 0 && !m.invalideeLe;
     if (conforme) e.conformes++;
+    if (m.invalideeLe) invalideesPar.set(key, (invalideesPar.get(key) ?? 0) + 1);
     (sitesCouvertsPar.get(key) ?? sitesCouvertsPar.set(key, new Set()).get(key)!).add(m.siteId);
     const evo = evolutionPar.get(key) ?? evolutionPar.set(key, new Map()).get(key)!;
     const mk = m.dateFin ? cleMois(m.dateFin) : moisListe[moisListe.length - 1].mois;
@@ -560,6 +565,7 @@ async function chargerConformiteMaintenance(req: Request) {
       return {
         ...e,
         nonConformes: e.total - e.conformes,
+        invalidees: invalideesPar.get(e.prestataireId) ?? 0,
         tauxConformite: e.total ? Math.round((e.conformes / e.total) * 100) : null,
         parcSites,
         sitesCouverts,
@@ -610,7 +616,7 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
 export async function exportConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
     const { jours, region, maints, parPrestataire } = await chargerConformiteMaintenance(req);
-    const nonConformes = maints.filter((m) => m._count.releves === 0);
+    const nonConformes = maints.filter((m) => m._count.releves === 0 || m.invalideeLe);
 
     await auditLog(req.user!.id, 'EXPORT', 'conformite_maintenance', undefined,
       { periodeJours: jours, maintenances: maints.length, nonConformes: nonConformes.length, format: req.params.format }, req);
@@ -623,6 +629,7 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
             { header: 'Passives clôturées', key: 'total', width: 17 },
             { header: 'Avec relevés', key: 'conformes', width: 13 },
             { header: 'Sans relevés', key: 'nonConformes', width: 13 },
+            { header: 'Invalidées', key: 'invalidees', width: 11 },
             { header: 'Conformité (%)', key: 'taux', width: 14 },
             { header: 'Parc (sites)', key: 'parc', width: 12 },
             { header: 'Sites couverts', key: 'couverts', width: 13 },
@@ -659,6 +666,7 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
             { header: 'Catégorie', key: 'categorie', width: 13 },
             { header: 'Clôturée le', key: 'dateFin', width: 17 },
             { header: 'Technicien', key: 'technicien', width: 24 },
+            { header: 'Motif de non-conformité', key: 'motif', width: 44 },
           ],
           rows: nonConformes.map((m) => ({
             reference: m.reference,
@@ -668,10 +676,13 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
             categorie: m.categorie,
             dateFin: m.dateFin,
             technicien: m.technicien ? `${m.technicien.prenom ?? ''} ${m.technicien.nom}`.trim() : '',
+            motif: m.invalideeLe
+              ? `Invalidée par le manager : ${m.motifInvalidation ?? 'sans motif enregistré'}`
+              : 'Aucun relevé énergie joint à la clôture',
           })),
         },
       ],
-      `${jours} derniers jours${region ? ` · ${region}` : ''} · ${maints.length} maintenance(s), dont ${nonConformes.length} sans relevé énergie`
+      `${jours} derniers jours${region ? ` · ${region}` : ''} · ${maints.length} maintenance(s), dont ${nonConformes.length} non conformes (sans relevé ou invalidées)`
     );
   } catch (err) { next(err); }
 }

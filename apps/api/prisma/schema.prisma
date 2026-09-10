@@ -358,6 +358,13 @@ model Maintenance {
   tachePreventiveKey         String?             @map("tache_preventive_key") @db.VarChar(40)
   // Travaux de cycle de vie d'un actif (installation / désinstallation / déplacement).
   natureTravaux              NatureTravaux       @default(ENTRETIEN) @map("nature_travaux")
+  // INVALIDATION par un manager/admin : la fiche reste TERMINEE (on ne
+  // réécrit pas l'histoire, on la conteste) mais compte NON CONFORME dans
+  // les rapports et exige une reprise. Réversible (champs remis à null),
+  // les deux gestes sont audités.
+  invalideePar               String?             @map("invalidee_par")
+  invalideeLe                DateTime?           @map("invalidee_le")
+  motifInvalidation          String?             @map("motif_invalidation") @db.VarChar(300)
   actifType                  String?             @map("actif_type") @db.VarChar(20) // 'GE'|'BATTERIE'|'CLIMATISEUR' (polymorphe)
   actifId                    String?             @map("actif_id")
   siteSourceId               String?             @map("site_source_id") // déplacement : site d'origine (siteId = destination)

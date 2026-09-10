@@ -27,6 +27,8 @@ interface Ligne {
   nonConformes: number;
   // null = rien de clôturé sur la période : conformité indéfinie, pas 0 %.
   tauxConformite: number | null;
+  // Clôtures contestées par un manager : non conformes quel que soit leur contenu.
+  invalidees: number;
   // Parc = sites actifs des lots passifs du prestataire (null : non titulaire).
   parcSites: number | null;
   sitesCouverts: number;
@@ -74,6 +76,12 @@ export default function ConformitePage() {
     { key: 'total', header: 'Passives clôturées', align: 'center' },
     { key: 'conformes', header: 'Avec relevés', align: 'center', render: (l) => <span className="text-green-600">{l.conformes}</span> },
     { key: 'nonConformes', header: 'Sans relevés', align: 'center', render: (l) => <span className={l.nonConformes > 0 ? 'text-red-600' : 'text-gray-400'}>{l.nonConformes}</span> },
+    {
+      key: 'invalidees', header: 'Invalidées', align: 'center',
+      render: (l) => l.invalidees > 0
+        ? <span className="font-semibold text-red-600" title="Clôtures contestées par un manager - non conformes quel que soit leur contenu.">{l.invalidees}</span>
+        : <span className="text-gray-400">0</span>,
+    },
     {
       key: 'parc', header: 'Parc couvert', render: (l) => l.parcSites == null ? (
         <span className="text-gray-400" title="Prestataire sans lot passif attribué.">—</span>

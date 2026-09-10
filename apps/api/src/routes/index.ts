@@ -295,6 +295,10 @@ router.post('/maintenances/:id/photos', rbac(['TECHNICIEN','SUPERVISEUR','MANAGE
 router.post('/maintenances/:id/suspend', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.suspendMaintenance);
 router.post('/maintenances/:id/resume', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.resumeMaintenance);
 router.post('/maintenances/:id/close', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.closeMaintenance);
+// Contestation d'une clôture : réservée au pilotage (jamais les superviseurs
+// prestataires, juges et parties).
+router.post('/maintenances/:id/invalider', rbac(['MANAGER','ADMIN']), maintenanceCtrl.invaliderMaintenance);
+router.post('/maintenances/:id/retablir', rbac(['MANAGER','ADMIN']), maintenanceCtrl.retablirMaintenance);
 router.get('/maintenances/:id/pdf', maintenanceCtrl.getMaintenancePdf);
 router.get('/maintenances/:id/bon-mouvement.pdf', maintenanceCtrl.getBonMouvementPdf);
 

@@ -417,6 +417,11 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
     });
     if (!maintenance) throw new AppError('Maintenance introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, maintenance.siteId);
+    // Nom lisible de l'invalidateur (la fiche affiche qui conteste, pas un id).
+    const invalideeParNom = maintenance.invalideePar
+      ? await prisma.user.findUnique({ where: { id: maintenance.invalideePar }, select: { nom: true, prenom: true } })
+          .then((u) => (u ? `${u.prenom ?? ''} ${u.nom}`.trim() : null))
+      : null;
 
     // Photos de l'incident lié, servies en repli quand la maintenance n'en a
     // aucune en propre (cas de la curative auto-créée).
@@ -427,6 +432,7 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
     // robuste si l'IP/domaine (APP_URL) change après l'upload.
     const data = {
       ...maintenance,
+      invalideeParNom,
       // Indique au client si la clôture exige les relevés énergie (selon la tâche).
       requiresEnergieReleve: requiresEnergieReleve(maintenance),
       // Dernières valeurs connues du site : repères affichés sous les champs de
@@ -843,6 +849,101 @@ export async function resumeMaintenance(req: Request, res: Response, next: NextF
     }
     const updated = await prisma.maintenance.findUnique({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', existing.id, { action: 'reprise', pauseMinutes: pauseMin }, req);
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+/**
+ * INVALIDATION d'une maintenance clôturée (manager/admin) : la fiche reste
+ * TERMINEE - on ne réécrit pas l'histoire, on la CONTESTE (travail non fait,
+ * preuves incohérentes...). Effets : non conforme dans les rapports quel que
+ * soit son contenu, badge sur la fiche, notification au technicien, et
+ * optionnellement une nouvelle maintenance PLANIFIEE (le travail reste dû).
+ * Réversible par « rétablir ». Les deux gestes sont audités.
+ */
+export async function invaliderMaintenance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { motif, replanifier } = req.body as { motif?: string; replanifier?: boolean };
+    if (!motif || !String(motif).trim()) {
+      throw new AppError("Le motif d'invalidation est obligatoire - il fonde la contestation en cas de litige.", 400);
+    }
+    const m = await prisma.maintenance.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true, reference: true, statut: true, invalideeLe: true, siteId: true,
+        type: true, categorie: true, equipement: true, equipementCode: true,
+        technicienId: true, prestataireId: true, tachePreventiveKey: true,
+        site: { select: { nom: true } },
+      },
+    });
+    if (!m) throw new AppError('Maintenance introuvable', 404);
+    if (m.statut !== 'TERMINEE') throw new AppError('Seule une maintenance clôturée peut être invalidée.', 400);
+    if (m.invalideeLe) throw new AppError('Cette maintenance est déjà invalidée.', 400);
+
+    const updated = await prisma.maintenance.update({
+      where: { id: m.id },
+      data: { invalideePar: req.user!.id, invalideeLe: new Date(), motifInvalidation: String(motif).trim().slice(0, 300) },
+    });
+
+    let nouvelle: { id: string; reference: string | null } | null = null;
+    if (replanifier === true) {
+      nouvelle = await prisma.$transaction(async (tx) => tx.maintenance.create({
+        data: {
+          reference: await genererReference(tx, 'MNT', new Date()),
+          siteId: m.siteId,
+          type: m.type,
+          categorie: m.categorie,
+          equipement: m.equipement,
+          equipementCode: m.equipementCode,
+          statut: 'PLANIFIEE',
+          datePlanifiee: new Date(),
+          technicienId: m.technicienId,
+          prestataireId: m.prestataireId,
+          tachePreventiveKey: m.tachePreventiveKey,
+          description: `Reprise de ${m.reference ?? m.id.slice(0, 8)} (invalidée : ${String(motif).trim().slice(0, 150)})`,
+        },
+        select: { id: true, reference: true },
+      }));
+    }
+
+    await auditLog(req.user!.id, 'UPDATE', 'maintenances', m.id,
+      { action: 'invalidation', motif: String(motif).trim().slice(0, 300), replanifiee: nouvelle?.reference ?? null }, req);
+    if (m.technicienId) {
+      void notificationService.sendToUser(m.technicienId, {
+        type: 'MAINTENANCE',
+        title: `Maintenance ${m.reference ?? ''} invalidée`,
+        body: `${m.site?.nom ?? 'Site'} : la clôture a été invalidée par le manager. Motif : ${String(motif).trim().slice(0, 150)}${nouvelle ? ` - une reprise est planifiée (${nouvelle.reference}).` : ''}`,
+        data: { maintenanceId: m.id },
+      }).catch(() => undefined);
+    }
+    res.json({ success: true, data: { ...updated, replanifiee: nouvelle } });
+  } catch (err) { next(err); }
+}
+
+/** Lève l'invalidation (manager/admin) - la fiche redevient pleinement valide. Audité. */
+export async function retablirMaintenance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const m = await prisma.maintenance.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, reference: true, invalideeLe: true, motifInvalidation: true, technicienId: true, site: { select: { nom: true } } },
+    });
+    if (!m) throw new AppError('Maintenance introuvable', 404);
+    if (!m.invalideeLe) throw new AppError("Cette maintenance n'est pas invalidée.", 400);
+
+    const updated = await prisma.maintenance.update({
+      where: { id: m.id },
+      data: { invalideePar: null, invalideeLe: null, motifInvalidation: null },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'maintenances', m.id,
+      { action: 'retablissement', motifLeve: m.motifInvalidation }, req);
+    if (m.technicienId) {
+      void notificationService.sendToUser(m.technicienId, {
+        type: 'MAINTENANCE',
+        title: `Maintenance ${m.reference ?? ''} rétablie`,
+        body: `${m.site?.nom ?? 'Site'} : l'invalidation a été levée, la clôture redevient valide.`,
+        data: { maintenanceId: m.id },
+      }).catch(() => undefined);
+    }
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }
 }

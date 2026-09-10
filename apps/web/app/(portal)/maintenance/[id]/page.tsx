@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, FileSignature, Trash2, Pencil, X } from 'lucide-react';
+import { FileText, FileSignature, Trash2, Pencil, X, ShieldAlert, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { downloadFile } from '@/lib/download';
@@ -116,11 +116,38 @@ export default function MaintenanceDetailPage() {
   const role = (session?.user as { role?: string })?.role ?? '';
   const isAdmin = role === 'ADMIN';
   const peutPlanifier = ['SUPERVISEUR', 'MANAGER', 'ADMIN'].includes(role);
+  // Contestation d'une clôture : pilotage seulement (jamais les superviseurs
+  // prestataires, juges et parties).
+  const peutInvalider = ['MANAGER', 'ADMIN'].includes(role);
   const [editOpen, setEditOpen] = useState(false);
+  const [invaliderOpen, setInvaliderOpen] = useState(false);
+  const [motifInvalidation, setMotifInvalidation] = useState('');
+  const [replanifier, setReplanifier] = useState(true);
 
   const { data: m, isLoading, isError } = useQuery({
     queryKey: ['maintenance', id],
     queryFn: () => api.get(`/maintenances/${id}`).then((r) => r.data.data),
+  });
+
+  const invalider = useMutation({
+    mutationFn: () => api.post(`/maintenances/${id}/invalider`, { motif: motifInvalidation, replanifier }),
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ['maintenance', id] });
+      queryClient.invalidateQueries({ queryKey: ['maintenances'] });
+      setInvaliderOpen(false); setMotifInvalidation('');
+      const rep = r.data?.data?.replanifiee?.reference;
+      toast(rep ? `Maintenance invalidée - reprise planifiée (${rep}).` : 'Maintenance invalidée.', 'success');
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => toast(e.response?.data?.error || 'Invalidation impossible', 'error'),
+  });
+  const retablir = useMutation({
+    mutationFn: () => api.post(`/maintenances/${id}/retablir`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maintenance', id] });
+      queryClient.invalidateQueries({ queryKey: ['maintenances'] });
+      toast('Invalidation levée - la clôture redevient valide.', 'success');
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => toast(e.response?.data?.error || 'Rétablissement impossible', 'error'),
   });
 
   const remove = useMutation({
@@ -155,6 +182,16 @@ export default function MaintenanceDetailPage() {
                 <FileSignature size={15} /> Bon de mouvement
               </button>
             )}
+            {/* Contestation d'une clôture (manager/admin) : la fiche reste TERMINEE mais compte non conforme. */}
+            {peutInvalider && m.statut === 'TERMINEE' && !m.invalideeLe && (
+              <Button variant="secondary" icon={ShieldAlert} onClick={() => setInvaliderOpen(true)}>Invalider</Button>
+            )}
+            {peutInvalider && m.invalideeLe && (
+              <Button variant="secondary" icon={RotateCcw} loading={retablir.isPending}
+                onClick={() => { if (confirm("Lever l'invalidation ? La clôture redeviendra pleinement valide.")) retablir.mutate(); }}>
+                Rétablir
+              </Button>
+            )}
             {/* Reprogrammation/réassignation : superviseur+, planning non encore exécuté. */}
             {peutPlanifier && m.statut === 'PLANIFIEE' && (
               <Button variant="secondary" icon={Pencil} onClick={() => setEditOpen(true)}>Modifier</Button>
@@ -173,6 +210,50 @@ export default function MaintenanceDetailPage() {
           </>
         }
       />
+
+      {/* ── Clôture contestée : bandeau bien visible, motif en toutes lettres ── */}
+      {m.invalideeLe && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+          <div className="flex items-center gap-2 font-semibold text-red-800 text-sm">
+            <ShieldAlert size={16} /> Clôture invalidée
+            {m.invalideeParNom ? ` par ${m.invalideeParNom}` : ''} le {fmtDateTime(m.invalideeLe)}
+          </div>
+          <p className="mt-1 text-sm text-red-700">
+            {m.motifInvalidation ?? 'Sans motif enregistré.'} - cette maintenance compte comme
+            <b> non conforme</b> dans les rapports tant que l&apos;invalidation n&apos;est pas levée.
+          </p>
+        </div>
+      )}
+
+      {invaliderOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setInvaliderOpen(false)}>
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-800">Invalider la clôture de {m.reference}</h3>
+              <button type="button" onClick={() => setInvaliderOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <p className="mb-3 text-sm text-gray-600">
+              La fiche reste clôturée mais devient <b>non conforme</b> dans les rapports, le technicien est notifié,
+              et le geste est tracé. Réversible via « Rétablir ».
+            </p>
+            <Field label="Motif (obligatoire)" required>
+              <Textarea rows={3} value={motifInvalidation} onChange={(e) => setMotifInvalidation(e.target.value)}
+                placeholder="Ex. : photos sans rapport avec le site, aucun relevé, GE manifestement non ouvert…" />
+            </Field>
+            <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={replanifier} onChange={(e) => setReplanifier(e.target.checked)} className="rounded border-gray-300" />
+              Planifier une reprise (le travail reste dû)
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setInvaliderOpen(false)}>Annuler</Button>
+              <Button icon={ShieldAlert} loading={invalider.isPending} disabled={!motifInvalidation.trim()}
+                onClick={() => invalider.mutate()}>
+                Invalider
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 p-5">
