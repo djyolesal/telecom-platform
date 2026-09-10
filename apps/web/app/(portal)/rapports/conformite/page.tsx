@@ -11,6 +11,14 @@ import { DataTable, Column } from '@/components/shared/DataTable';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { Loading, EmptyState } from '@/components/shared/states';
 
+interface PointEvolution {
+  mois: string;
+  label: string;
+  total: number;
+  conformes: number;
+  taux: number | null;
+}
+
 interface Ligne {
   prestataireId: string;
   prestataireNom: string;
@@ -19,12 +27,35 @@ interface Ligne {
   nonConformes: number;
   // null = rien de clôturé sur la période : conformité indéfinie, pas 0 %.
   tauxConformite: number | null;
+  // Parc = sites actifs des lots passifs du prestataire (null : non titulaire).
+  parcSites: number | null;
+  sitesCouverts: number;
+  couverturePct: number | null;
+  evolution: PointEvolution[];
 }
 
 function tauxColor(t: number) {
   if (t >= 90) return 'text-green-600';
   if (t >= 70) return 'text-orange-500';
   return 'text-red-600';
+}
+
+/** Mini-barres mensuelles : hauteur et couleur = taux de conformité du mois. */
+function Sparkline({ evolution }: { evolution: PointEvolution[] }) {
+  return (
+    <div className="flex items-end gap-[3px] h-7">
+      {evolution.map((e) => e.total === 0 ? (
+        <div key={e.mois} className="w-2 h-[3px] rounded-sm bg-gray-200" title={`${e.label} : aucune clôturée`} />
+      ) : (
+        <div
+          key={e.mois}
+          className={`w-2 rounded-t ${e.taux! >= 90 ? 'bg-green-500' : e.taux! >= 70 ? 'bg-orange-400' : 'bg-red-500'}`}
+          style={{ height: `${Math.max(18, e.taux!)}%` }}
+          title={`${e.label} : ${e.taux}% (${e.conformes}/${e.total} avec relevés)`}
+        />
+      ))}
+    </div>
+  );
 }
 
 export default function ConformitePage() {
@@ -43,6 +74,18 @@ export default function ConformitePage() {
     { key: 'total', header: 'Passives clôturées', align: 'center' },
     { key: 'conformes', header: 'Avec relevés', align: 'center', render: (l) => <span className="text-green-600">{l.conformes}</span> },
     { key: 'nonConformes', header: 'Sans relevés', align: 'center', render: (l) => <span className={l.nonConformes > 0 ? 'text-red-600' : 'text-gray-400'}>{l.nonConformes}</span> },
+    {
+      key: 'parc', header: 'Parc couvert', render: (l) => l.parcSites == null ? (
+        <span className="text-gray-400" title="Prestataire sans lot passif attribué.">—</span>
+      ) : (
+        <span title={`${l.sitesCouverts} site(s) avec au moins une passive clôturée, sur ${l.parcSites} site(s) actifs de ses lots.`}>
+          <b className={l.couverturePct != null && l.couverturePct >= 70 ? 'text-gray-800' : 'text-red-600'}>{l.sitesCouverts}</b>
+          <span className="text-gray-500">/{l.parcSites}</span>
+          {l.couverturePct != null && <span className="ml-1.5 text-xs text-gray-500">({l.couverturePct}%)</span>}
+        </span>
+      ),
+    },
+    { key: 'evolution', header: 'Évolution', render: (l) => <Sparkline evolution={l.evolution} /> },
     {
       key: 'taux', header: 'Conformité', render: (l) => l.tauxConformite == null ? (
         <span className="text-sm text-amber-600" title="Aucune maintenance passive clôturée sur la période - conformité non mesurable.">aucune clôturée</span>
@@ -83,11 +126,14 @@ export default function ConformitePage() {
         <Loading />
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <StatCard title="Passives clôturées" value={t.total ?? 0} icon={ClipboardCheck} color="bg-[#1B3F6B]" />
             <StatCard title="Conformes" value={t.conformes ?? 0} subtitle="avec relevés" icon={CheckCircle2} color="bg-[#0E7C6B]" />
             <StatCard title="Non conformes" value={t.nonConformes ?? 0} subtitle="sans relevés" icon={XCircle} color={t.nonConformes > 0 ? 'bg-red-500' : 'bg-gray-400'} />
             <StatCard title="Taux global" value={`${t.tauxConformite ?? 0}%`} icon={ClipboardCheck} color="bg-[#2471A3]" />
+            <StatCard title="Couverture parc" value={t.couverturePct != null ? `${t.couverturePct}%` : '—'}
+              subtitle={t.parcSites ? `${t.sitesCouverts}/${t.parcSites} sites visités` : 'aucun lot attribué'}
+              icon={ClipboardCheck} color={t.couverturePct != null && t.couverturePct < 70 ? 'bg-red-500' : 'bg-[#7D3C98]'} />
           </div>
 
           {lignes.length === 0 ? (

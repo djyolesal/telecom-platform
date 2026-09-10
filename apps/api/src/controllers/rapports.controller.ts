@@ -471,7 +471,7 @@ async function chargerConformiteMaintenance(req: Request) {
       ...((region || restreint) ? { site: { ...(region ? { region } : {}), ...pr } } : {}),
     },
     select: {
-      reference: true, categorie: true, dateFin: true, prestataireId: true,
+      reference: true, categorie: true, dateFin: true, prestataireId: true, siteId: true,
       prestataire: { select: { nom: true } },
       site: { select: { nom: true, region: true } },
       technicien: { select: { nom: true, prenom: true } },
@@ -480,6 +480,20 @@ async function chargerConformiteMaintenance(req: Request) {
     orderBy: { dateFin: 'desc' },
     take: 5000,
   });
+
+  // Mois calendaires couverts par la période (l'évolution s'y agrège).
+  const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const anneeCourante = new Date().getUTCFullYear();
+  const moisListe: { mois: string; label: string }[] = [];
+  const curseur = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), 1));
+  const finMois = new Date();
+  while (curseur <= finMois) {
+    const a = curseur.getUTCFullYear();
+    const m = curseur.getUTCMonth();
+    moisListe.push({ mois: `${a}-${String(m + 1).padStart(2, '0')}`, label: `${MOIS_COURT[m]}${a !== anneeCourante ? ` ${a}` : ''}` });
+    curseur.setUTCMonth(m + 1);
+  }
+  const cleMois = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 
   const map = new Map<string, { prestataireId: string; prestataireNom: string; total: number; conformes: number }>();
   // Amorçage : tous les prestataires actifs tenant un lot passif dont
@@ -497,13 +511,29 @@ async function chargerConformiteMaintenance(req: Request) {
       ...(region ? { lot: { region } } : {}),
       prestataire: { isActive: true },
     },
-    select: { prestataireId: true, prestataire: { select: { nom: true } } },
+    select: {
+      prestataireId: true, lotId: true,
+      prestataire: { select: { nom: true } },
+      lot: { select: { _count: { select: { sites: { where: { isActive: true } } } } } },
+    },
   });
+  // Parc de chaque prestataire = sites actifs de ses lots passifs (un lot
+  // n'est compté qu'une fois même en double scope).
+  const lotsVus = new Map<string, Set<string>>();
+  const parcParPrestataire = new Map<string, number>();
   for (const a of assignes) {
     if (!map.has(a.prestataireId)) {
       map.set(a.prestataireId, { prestataireId: a.prestataireId, prestataireNom: a.prestataire.nom, total: 0, conformes: 0 });
     }
+    const vus = lotsVus.get(a.prestataireId) ?? new Set<string>();
+    if (!vus.has(a.lotId)) {
+      vus.add(a.lotId);
+      lotsVus.set(a.prestataireId, vus);
+      parcParPrestataire.set(a.prestataireId, (parcParPrestataire.get(a.prestataireId) ?? 0) + a.lot._count.sites);
+    }
   }
+  const sitesCouvertsPar = new Map<string, Set<string>>();
+  const evolutionPar = new Map<string, Map<string, { total: number; conformes: number }>>();
   for (const m of maints) {
     const key = m.prestataireId ?? 'NON_ATTRIBUE';
     if (!map.has(key)) {
@@ -511,25 +541,47 @@ async function chargerConformiteMaintenance(req: Request) {
     }
     const e = map.get(key)!;
     e.total++;
-    if (m._count.releves > 0) e.conformes++;
+    const conforme = m._count.releves > 0;
+    if (conforme) e.conformes++;
+    (sitesCouvertsPar.get(key) ?? sitesCouvertsPar.set(key, new Set()).get(key)!).add(m.siteId);
+    const evo = evolutionPar.get(key) ?? evolutionPar.set(key, new Map()).get(key)!;
+    const mk = m.dateFin ? cleMois(m.dateFin) : moisListe[moisListe.length - 1].mois;
+    const b = evo.get(mk) ?? { total: 0, conformes: 0 };
+    b.total++;
+    if (conforme) b.conformes++;
+    evo.set(mk, b);
   }
 
   const parPrestataire = Array.from(map.values())
-    .map((e) => ({
-      ...e,
-      nonConformes: e.total - e.conformes,
-      tauxConformite: e.total ? Math.round((e.conformes / e.total) * 100) : null,
-    }))
+    .map((e) => {
+      const parcSites = parcParPrestataire.get(e.prestataireId) ?? null;
+      const sitesCouverts = sitesCouvertsPar.get(e.prestataireId)?.size ?? 0;
+      const evo = evolutionPar.get(e.prestataireId);
+      return {
+        ...e,
+        nonConformes: e.total - e.conformes,
+        tauxConformite: e.total ? Math.round((e.conformes / e.total) * 100) : null,
+        parcSites,
+        sitesCouverts,
+        couverturePct: parcSites ? Math.min(100, Math.round((sitesCouverts / parcSites) * 100)) : null,
+        evolution: moisListe.map(({ mois, label }) => {
+          const b = evo?.get(mois);
+          return { mois, label, total: b?.total ?? 0, conformes: b?.conformes ?? 0, taux: b?.total ? Math.round((b.conformes / b.total) * 100) : null };
+        }),
+      };
+    })
     .sort((a, b) => b.total - a.total || a.prestataireNom.localeCompare(b.prestataireNom));
 
-  return { jours, region, maints, parPrestataire };
+  return { jours, region, maints, parPrestataire, moisListe };
 }
 
 export async function getConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { jours, maints, parPrestataire } = await chargerConformiteMaintenance(req);
+    const { jours, maints, parPrestataire, moisListe } = await chargerConformiteMaintenance(req);
 
     const conformes = parPrestataire.reduce((s, x) => s + x.conformes, 0);
+    const parcSites = parPrestataire.reduce((s, x) => s + (x.parcSites ?? 0), 0);
+    const sitesCouverts = parPrestataire.reduce((s, x) => s + x.sitesCouverts, 0);
     res.json({
       success: true,
       data: {
@@ -539,7 +591,11 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
           conformes,
           nonConformes: maints.length - conformes,
           tauxConformite: maints.length ? Math.round((conformes / maints.length) * 100) : 0,
+          parcSites,
+          sitesCouverts,
+          couverturePct: parcSites ? Math.min(100, Math.round((sitesCouverts / parcSites) * 100)) : null,
         },
+        mois: moisListe,
         parPrestataire,
       },
     });
@@ -568,8 +624,30 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
             { header: 'Avec relevés', key: 'conformes', width: 13 },
             { header: 'Sans relevés', key: 'nonConformes', width: 13 },
             { header: 'Conformité (%)', key: 'taux', width: 14 },
+            { header: 'Parc (sites)', key: 'parc', width: 12 },
+            { header: 'Sites couverts', key: 'couverts', width: 13 },
+            { header: 'Couverture (%)', key: 'couverture', width: 14 },
           ],
-          rows: parPrestataire.map((p) => ({ ...p, taux: p.tauxConformite ?? '—' })),
+          rows: parPrestataire.map((p) => ({
+            ...p,
+            taux: p.tauxConformite ?? '—',
+            parc: p.parcSites ?? '—',
+            couverts: p.sitesCouverts,
+            couverture: p.couverturePct ?? '—',
+          })),
+        },
+        {
+          name: 'Évolution mensuelle',
+          columns: [
+            { header: 'Prestataire', key: 'prestataire', width: 30 },
+            { header: 'Mois', key: 'mois', width: 12 },
+            { header: 'Passives clôturées', key: 'total', width: 17 },
+            { header: 'Avec relevés', key: 'conformes', width: 13 },
+            { header: 'Conformité (%)', key: 'taux', width: 14 },
+          ],
+          rows: parPrestataire.flatMap((p) => p.evolution.map((e) => ({
+            prestataire: p.prestataireNom, mois: e.label, total: e.total, conformes: e.conformes, taux: e.taux ?? '—',
+          }))),
         },
         {
           name: 'Non conformes',
