@@ -448,50 +448,92 @@ export async function sendRapportMensuel(req: Request, res: Response, next: Next
 // Maintenances passives clôturées AVEC vs SANS relevés énergie, par prestataire.
 const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
 
+/**
+ * Charge et agrège la conformité des maintenances passives : la liste part des
+ * PRESTATAIRES TITULAIRES DE LOTS (scope passif), pas des maintenances — un
+ * prestataire qui n'a RIEN clôturé sur la période (le cas le plus grave)
+ * apparaît avec 0, au lieu de disparaître du rapport. tauxConformite est null
+ * quand rien n'est clôturé (conformité indéfinie, pas 0 %).
+ */
+async function chargerConformiteMaintenance(req: Request) {
+  const { periode = '90', prestataire_id, region } = req.query as Record<string, string>;
+  const jours = parseInt(periode) || 90;
+  const since = new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
+  const pr = await sitePerimetre(req.user!.id);
+  const restreint = isRestreint(pr);
+
+  const maints = await prisma.maintenance.findMany({
+    where: {
+      statut: 'TERMINEE',
+      categorie: { in: PASSIVE_CATS as never[] },
+      dateFin: { gte: since },
+      ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
+      ...((region || restreint) ? { site: { ...(region ? { region } : {}), ...pr } } : {}),
+    },
+    select: {
+      reference: true, categorie: true, dateFin: true, prestataireId: true,
+      prestataire: { select: { nom: true } },
+      site: { select: { nom: true, region: true } },
+      technicien: { select: { nom: true, prenom: true } },
+      _count: { select: { releves: true } },
+    },
+    orderBy: { dateFin: 'desc' },
+    take: 5000,
+  });
+
+  const map = new Map<string, { prestataireId: string; prestataireNom: string; total: number; conformes: number }>();
+  // Amorçage : tous les prestataires actifs tenant un lot passif dont
+  // l'attribution recouvre la période. Un utilisateur restreint (superviseur
+  // prestataire) n'amorce que le sien - pas de fuite du reste du parc.
+  const monPrestataireId = restreint
+    ? (await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } }))?.prestataireId
+    : null;
+  const assignes = await prisma.lotAssignment.findMany({
+    where: {
+      scope: { in: ['PASSIVE', 'LES_DEUX'] },
+      OR: [{ dateFin: null }, { dateFin: { gte: since } }],
+      ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
+      ...(restreint ? { prestataireId: monPrestataireId ?? '∅' } : {}),
+      ...(region ? { lot: { region } } : {}),
+      prestataire: { isActive: true },
+    },
+    select: { prestataireId: true, prestataire: { select: { nom: true } } },
+  });
+  for (const a of assignes) {
+    if (!map.has(a.prestataireId)) {
+      map.set(a.prestataireId, { prestataireId: a.prestataireId, prestataireNom: a.prestataire.nom, total: 0, conformes: 0 });
+    }
+  }
+  for (const m of maints) {
+    const key = m.prestataireId ?? 'NON_ATTRIBUE';
+    if (!map.has(key)) {
+      map.set(key, { prestataireId: key, prestataireNom: m.prestataire?.nom ?? 'Non attribué', total: 0, conformes: 0 });
+    }
+    const e = map.get(key)!;
+    e.total++;
+    if (m._count.releves > 0) e.conformes++;
+  }
+
+  const parPrestataire = Array.from(map.values())
+    .map((e) => ({
+      ...e,
+      nonConformes: e.total - e.conformes,
+      tauxConformite: e.total ? Math.round((e.conformes / e.total) * 100) : null,
+    }))
+    .sort((a, b) => b.total - a.total || a.prestataireNom.localeCompare(b.prestataireNom));
+
+  return { jours, region, maints, parPrestataire };
+}
+
 export async function getConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { periode = '90', prestataire_id, region } = req.query as Record<string, string>;
-    const since = new Date(Date.now() - parseInt(periode) * 24 * 60 * 60 * 1000);
-
-    const maints = await prisma.maintenance.findMany({
-      where: {
-        statut: 'TERMINEE',
-        categorie: { in: PASSIVE_CATS as never[] },
-        dateFin: { gte: since },
-        ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
-        ...await (async () => { const pr = await sitePerimetre(req.user!.id); return (region || isRestreint(pr)) ? { site: { ...(region ? { region } : {}), ...pr } } : {}; })(),
-      },
-      select: {
-        prestataireId: true,
-        prestataire: { select: { nom: true } },
-        _count: { select: { releves: true } },
-      },
-    });
-
-    const map = new Map<string, { prestataireId: string; prestataireNom: string; total: number; conformes: number }>();
-    for (const m of maints) {
-      const key = m.prestataireId ?? 'NON_ATTRIBUE';
-      if (!map.has(key)) {
-        map.set(key, { prestataireId: key, prestataireNom: m.prestataire?.nom ?? 'Non attribué', total: 0, conformes: 0 });
-      }
-      const e = map.get(key)!;
-      e.total++;
-      if (m._count.releves > 0) e.conformes++;
-    }
-
-    const parPrestataire = Array.from(map.values())
-      .map((e) => ({
-        ...e,
-        nonConformes: e.total - e.conformes,
-        tauxConformite: e.total ? Math.round((e.conformes / e.total) * 100) : 0,
-      }))
-      .sort((a, b) => b.total - a.total);
+    const { jours, maints, parPrestataire } = await chargerConformiteMaintenance(req);
 
     const conformes = parPrestataire.reduce((s, x) => s + x.conformes, 0);
     res.json({
       success: true,
       data: {
-        periodeJours: parseInt(periode),
+        periodeJours: jours,
         totaux: {
           total: maints.length,
           conformes,
@@ -511,40 +553,7 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
  */
 export async function exportConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { periode = '90', prestataire_id, region } = req.query as Record<string, string>;
-    const jours = parseInt(periode) || 90;
-    const since = new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
-
-    const maints = await prisma.maintenance.findMany({
-      where: {
-        statut: 'TERMINEE',
-        categorie: { in: PASSIVE_CATS as never[] },
-        dateFin: { gte: since },
-        ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
-        ...await (async () => { const pr = await sitePerimetre(req.user!.id); return (region || isRestreint(pr)) ? { site: { ...(region ? { region } : {}), ...pr } } : {}; })(),
-      },
-      select: {
-        reference: true, categorie: true, dateFin: true, prestataireId: true,
-        prestataire: { select: { nom: true } },
-        site: { select: { nom: true, region: true } },
-        technicien: { select: { nom: true, prenom: true } },
-        _count: { select: { releves: true } },
-      },
-      orderBy: { dateFin: 'desc' },
-      take: 5000,
-    });
-
-    const map = new Map<string, { prestataireNom: string; total: number; conformes: number }>();
-    for (const m of maints) {
-      const key = m.prestataireId ?? 'NON_ATTRIBUE';
-      if (!map.has(key)) map.set(key, { prestataireNom: m.prestataire?.nom ?? 'Non attribué', total: 0, conformes: 0 });
-      const e = map.get(key)!;
-      e.total++;
-      if (m._count.releves > 0) e.conformes++;
-    }
-    const parPrestataire = Array.from(map.values())
-      .map((e) => ({ ...e, nonConformes: e.total - e.conformes, taux: e.total ? Math.round((e.conformes / e.total) * 100) : 0 }))
-      .sort((a, b) => b.total - a.total);
+    const { jours, region, maints, parPrestataire } = await chargerConformiteMaintenance(req);
     const nonConformes = maints.filter((m) => m._count.releves === 0);
 
     await auditLog(req.user!.id, 'EXPORT', 'conformite_maintenance', undefined,
@@ -560,7 +569,7 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
             { header: 'Sans relevés', key: 'nonConformes', width: 13 },
             { header: 'Conformité (%)', key: 'taux', width: 14 },
           ],
-          rows: parPrestataire,
+          rows: parPrestataire.map((p) => ({ ...p, taux: p.tauxConformite ?? '—' })),
         },
         {
           name: 'Non conformes',

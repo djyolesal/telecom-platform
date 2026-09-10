@@ -17,7 +17,8 @@ interface Ligne {
   total: number;
   conformes: number;
   nonConformes: number;
-  tauxConformite: number;
+  // null = rien de clôturé sur la période : conformité indéfinie, pas 0 %.
+  tauxConformite: number | null;
 }
 
 function tauxColor(t: number) {
@@ -43,7 +44,9 @@ export default function ConformitePage() {
     { key: 'conformes', header: 'Avec relevés', align: 'center', render: (l) => <span className="text-green-600">{l.conformes}</span> },
     { key: 'nonConformes', header: 'Sans relevés', align: 'center', render: (l) => <span className={l.nonConformes > 0 ? 'text-red-600' : 'text-gray-400'}>{l.nonConformes}</span> },
     {
-      key: 'taux', header: 'Conformité', render: (l) => (
+      key: 'taux', header: 'Conformité', render: (l) => l.tauxConformite == null ? (
+        <span className="text-sm text-amber-600" title="Aucune maintenance passive clôturée sur la période - conformité non mesurable.">aucune clôturée</span>
+      ) : (
         <div className="flex items-center gap-2">
           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-16">
             <div className={`h-full ${l.tauxConformite >= 90 ? 'bg-green-500' : l.tauxConformite >= 70 ? 'bg-orange-400' : 'bg-red-500'}`} style={{ width: `${l.tauxConformite}%` }} />
