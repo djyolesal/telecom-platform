@@ -839,19 +839,26 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
       // OUVERTES pour la même technologie à fréquence égale doublaient le SMS
       // actif et les lignes du rapport NOC ; une coupure SITE ouverte couvre
       // déjà toutes les technologies. La même techno sur une AUTRE fréquence
-      // (L800 vs U900) reste une panne distincte, donc autorisée.
+      // (L800 vs U900) reste une panne distincte, donc autorisée - et il en va
+      // de MÊME pour un AUTRE secteur (S1 coupé n'empêche pas de saisir S2).
+      // Une ligne SANS secteur couvre toute la couche : elle reste bloquante.
       const freq = b.frequence ? String(b.frequence).slice(0, 30) : null;
+      const sect = b.secteur ? String(b.secteur).slice(0, 20) : null;
       const ouvertes = await prisma.coupureReseau.findMany({
         where: { siteId, dateFin: null },
-        select: { id: true, technologie: true, frequence: true, dateDebut: true, source: true },
+        select: { id: true, technologie: true, frequence: true, secteur: true, dateDebut: true, source: true },
       });
       const deja = ouvertes.find((c) =>
         c.technologie === 'SITE'
           ? true
-          : (c.frequence ?? null) === freq && c.technologie.split('/').some((t) => technologies.includes(t))
+          : (c.frequence ?? null) === freq
+            && c.technologie.split('/').some((t) => technologies.includes(t))
+            && (c.secteur == null || sect == null || c.secteur === sect)
       );
       if (deja) {
-        const quoi = deja.technologie === 'SITE' ? 'site entier (toutes technologies)' : deja.technologie;
+        const quoi = deja.technologie === 'SITE'
+          ? 'site entier (toutes technologies)'
+          : [deja.technologie, deja.frequence, deja.secteur].filter(Boolean).join(' ');
         throw new AppError(
           `Une coupure ${quoi} est déjà EN COURS sur ce site (${deja.source === 'OSS' ? 'détection AUTO' : 'saisie manuelle'} du ${deja.dateDebut.toLocaleString('fr-FR', { timeZone: 'Africa/Lome' })}) - complétez ou clôturez-la plutôt que d'en créer une seconde.`,
           422,
