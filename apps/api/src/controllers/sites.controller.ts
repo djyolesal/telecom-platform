@@ -334,9 +334,10 @@ export async function updateCuveSite(req: Request, res: Response, next: NextFunc
 
 /**
  * Remplace la table de barémage de la cuve d'un site (couples hauteur cm →
- * litres du certificat de jaugeage). Remplacement complet : la table est
- * courte (quelques dizaines de points) et l'édition partielle multiplierait
- * les incohérences (points orphelins d'un ancien barème).
+ * litres du certificat de jaugeage). Remplacement complet : l'édition
+ * partielle multiplierait les incohérences (points orphelins d'un ancien
+ * barème). Certains certificats sont au centimètre voire au demi-centimètre
+ * sur de grandes cuves → jusqu'à 1000 points.
  */
 export async function replaceBaremage(req: Request, res: Response, next: NextFunction) {
   try {
@@ -344,7 +345,7 @@ export async function replaceBaremage(req: Request, res: Response, next: NextFun
     if (!site) throw new AppError('Site introuvable', 404);
 
     const brut = (req.body as { points?: unknown }).points;
-    if (!Array.isArray(brut) || brut.length > 500) throw new AppError('Barème invalide : 500 points maximum.', 400);
+    if (!Array.isArray(brut) || brut.length > 1000) throw new AppError('Barème invalide : 1000 points maximum.', 400);
     const points = brut.map((p, i) => {
       const hauteurCm = Number((p as { hauteurCm?: unknown }).hauteurCm);
       const litres = Number((p as { litres?: unknown }).litres);
