@@ -6,10 +6,12 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams, getNum } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
-import { tachesPlanifiables, FREQUENCE_MOIS, FREQUENCE_LABEL, SiteEligibilite } from '../utils/tachesPreventives';
+import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, FREQUENCE_LABEL, SiteEligibilite } from '../utils/tachesPreventives';
 import { bilanCarburant } from '../services/bilanCarburant.service';
 import { bilanEnergie } from '../services/bilanEnergie.service';
 import { sendTabular } from '../utils/exporter';
+import { setXlsxHeaders } from '../utils/excel';
+import { buildConformiteXlsx, buildConformitePdf } from '../services/conformiteExport.service';
 import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
 import { geReliabilityByMarque } from '../services/geReliability.service';
 import { computeSla } from '../services/slaCompliance.service';
@@ -589,15 +591,24 @@ async function chargerConformiteMaintenance(req: Request) {
   const evolutionDuPar = new Map<string, Map<string, { dues: number; realisees: number }>>();
   interface LigneDue { siteId: string; site: string; region: string; prestataireId: string; tache: string; frequence: string; derniereLe: Date | null; realisee: boolean }
   const detailDuMois: LigneDue[] = [];
+  // Catalogue passif planifiable : les COLONNES de la matrice sites × tâches.
+  const tachesCatalogue = CONTRACTUAL_TASKS.filter((t) => t.categorie !== 'SOLAIRE' && FREQUENCE_MOIS[t.frequence] != null);
+  // Matrice du mois choisi : pour chaque site, l'état de CHAQUE tâche du
+  // catalogue - OK (à jour ou réalisée), NOK (due non réalisée), NA (le site
+  // n'est pas concerné : pas de clim, pas de cuve, pylône exclu...).
+  type StatutTache = 'OK' | 'NOK' | 'NA';
+  const matriceSites: { siteId: string; site: string; region: string; prestataireId: string; statuts: Record<string, StatutTache>; conforme: boolean }[] = [];
   const bornesMois = moisListe.map(({ mois }) => {
     const [ba, bm] = mois.split('-').map(Number);
     return { mois, debut: new Date(Date.UTC(ba, bm - 1, 1)), fin: new Date(Date.UTC(ba, bm, 1)) };
   });
   for (const site of sitesContrat) {
     const pid = passifByLot.get(site.lotId!)!;
+    const statuts: Record<string, StatutTache> = {};
     // La conformité passive ne juge pas le contrat solaire (rapport dédié).
-    const taches = tachesPlanifiables(site as unknown as SiteEligibilite).filter((t) => t.categorie !== 'SOLAIRE');
-    for (const t of taches) {
+    for (const t of tachesCatalogue) {
+      if (!t.eligible(site as unknown as SiteEligibilite)) { statuts[t.key] = 'NA'; continue; }
+      statuts[t.key] = 'OK'; // à jour par défaut ; NOK si un dû du mois n'est pas réalisé
       const freq = FREQUENCE_MOIS[t.frequence]!;
       const histo = execsParCle.get(`${site.id}:${t.key}`) ?? [];
       for (const b of bornesMois) {
@@ -619,6 +630,7 @@ async function chargerConformiteMaintenance(req: Request) {
         duesPar.set(pid, (duesPar.get(pid) ?? 0) + 1);
         (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
         if (realisee) realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
+        else statuts[t.key] = 'NOK';
         detailDuMois.push({
           siteId: site.id, site: site.nom, region: site.region, prestataireId: pid,
           tache: t.libelle, frequence: FREQUENCE_LABEL[t.frequence],
@@ -626,7 +638,12 @@ async function chargerConformiteMaintenance(req: Request) {
         });
       }
     }
+    matriceSites.push({
+      siteId: site.id, site: site.nom, region: site.region, prestataireId: pid,
+      statuts, conforme: !Object.values(statuts).includes('NOK'),
+    });
   }
+  matriceSites.sort((x, y) => x.site.localeCompare(y.site));
   // La règle contractuelle : un site est CONFORME pour son prestataire si
   // TOUTES ses maintenances dues du mois en cours sont réalisées (rapproché
   // par identifiant de site - jamais par nom, deux homonymes sont possibles).
@@ -694,7 +711,7 @@ async function chargerConformiteMaintenance(req: Request) {
     .sort((a, b) => b.dues - a.dues || a.prestataireNom.localeCompare(b.prestataireNom));
 
   const MOIS_PLEIN = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  return { annee: a, mois: mo, labelMois: `${MOIS_PLEIN[mo]} ${a}`, region, duMois, parPrestataire, moisListe, detailDuMois };
+  return { annee: a, mois: mo, labelMois: `${MOIS_PLEIN[mo]} ${a}`, region, duMois, parPrestataire, moisListe, detailDuMois, matriceSites, tachesCatalogue };
 }
 
 export async function getConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
@@ -745,100 +762,32 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
  */
 export async function exportConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { annee, mois, labelMois, region, duMois, parPrestataire, detailDuMois } = await chargerConformiteMaintenance(req);
-    const nonConformes = duMois.filter((m) => m._count.releves === 0 || m.invalideeLe);
-    const nomsPrestataires = new Map(parPrestataire.map((p) => [p.prestataireId, p.prestataireNom]));
-    const duNonRealise = detailDuMois.filter((d) => !d.realisee);
+    // Export dessiné (mois seul) : plus de sélecteur de colonnes ici.
+    if (req.query.colonnes === '?') return res.json({ success: true, data: [] });
 
+    const { annee, mois, labelMois, region, parPrestataire, matriceSites, tachesCatalogue } = await chargerConformiteMaintenance(req);
+    const nomsPrestataires = new Map(parPrestataire.map((p) => [p.prestataireId, p.prestataireNom]));
+    const donnees = {
+      labelMois,
+      region: region || undefined,
+      parPrestataire,
+      taches: tachesCatalogue.map((t) => ({ numero: t.numero, key: t.key, libelle: t.libelle })),
+      sites: matriceSites,
+      nomsPrestataires,
+    };
     await auditLog(req.user!.id, 'EXPORT', 'conformite_maintenance', undefined,
-      { annee, mois, maintenances: duMois.length, nonConformes: nonConformes.length, format: req.params.format }, req);
-    await sendTabular(res, req.params.format, `conformite-maintenances-${annee}-${String(mois).padStart(2, '0')}`,
-      `Conformité des maintenances passives - ${labelMois}`,
-      [
-        {
-          name: 'Par prestataire',
-          columns: [
-            { header: 'Prestataire', key: 'prestataireNom', width: 30 },
-            { header: 'Passives clôturées', key: 'total', width: 17 },
-            { header: 'Avec relevés', key: 'conformes', width: 13 },
-            { header: 'Sans relevés', key: 'nonConformes', width: 13 },
-            { header: 'Invalidées', key: 'invalidees', width: 11 },
-            { header: 'Tâches dues', key: 'dues', width: 12 },
-            { header: 'Dues réalisées', key: 'realisees', width: 13 },
-            { header: 'Conformité contractuelle (%)', key: 'tauxC', width: 24 },
-            { header: 'Sites avec dû', key: 'sitesAvecDu', width: 13 },
-            { header: 'Sites conformes', key: 'sitesConf', width: 14 },
-            { header: 'Qualité relevés (%)', key: 'taux', width: 17 },
-            { header: 'Parc (sites)', key: 'parc', width: 12 },
-          ],
-          rows: parPrestataire.map((p) => ({
-            ...p,
-            tauxC: p.tauxContractuel ?? '—',
-            sitesConf: p.sitesConformes,
-            taux: p.tauxQualite ?? '—',
-            parc: p.parcSites ?? '—',
-          })),
-        },
-        {
-          name: 'Évolution mensuelle',
-          columns: [
-            { header: 'Prestataire', key: 'prestataire', width: 30 },
-            { header: 'Mois', key: 'mois', width: 12 },
-            { header: 'Tâches dues', key: 'dues', width: 12 },
-            { header: 'Réalisées', key: 'realisees', width: 11 },
-            { header: 'Conformité contractuelle (%)', key: 'taux', width: 24 },
-          ],
-          rows: parPrestataire.flatMap((p) => p.evolution.map((e) => ({
-            prestataire: p.prestataireNom, mois: e.label, dues: e.dues, realisees: e.realisees, taux: e.taux ?? '—',
-          }))),
-        },
-        {
-          name: 'Dû non réalisé',
-          columns: [
-            { header: 'Site', key: 'site', width: 26 },
-            { header: 'Région', key: 'region', width: 14 },
-            { header: 'Prestataire', key: 'prestataire', width: 26 },
-            { header: 'Tâche contractuelle due', key: 'tache', width: 44 },
-            { header: 'Fréquence', key: 'frequence', width: 15 },
-            { header: 'Dernière exécution valide', key: 'derniere', width: 21 },
-          ],
-          rows: duNonRealise.map((d) => ({
-            site: d.site,
-            region: d.region,
-            prestataire: nomsPrestataires.get(d.prestataireId) ?? d.prestataireId,
-            tache: d.tache,
-            frequence: d.frequence,
-            derniere: d.derniereLe ?? 'jamais faite',
-          })),
-        },
-        {
-          name: 'Non conformes',
-          columns: [
-            { header: 'Référence', key: 'reference', width: 17 },
-            { header: 'Site', key: 'site', width: 26 },
-            { header: 'Région', key: 'region', width: 14 },
-            { header: 'Prestataire', key: 'prestataire', width: 26 },
-            { header: 'Catégorie', key: 'categorie', width: 13 },
-            { header: 'Clôturée le', key: 'dateFin', width: 17 },
-            { header: 'Technicien', key: 'technicien', width: 24 },
-            { header: 'Motif de non-conformité', key: 'motif', width: 44 },
-          ],
-          rows: nonConformes.map((m) => ({
-            reference: m.reference,
-            site: m.site?.nom ?? '',
-            region: m.site?.region ?? '',
-            prestataire: m.prestataire?.nom ?? 'Non attribué',
-            categorie: m.categorie,
-            dateFin: m.dateFin,
-            technicien: m.technicien ? `${m.technicien.prenom ?? ''} ${m.technicien.nom}`.trim() : '',
-            motif: m.invalideeLe
-              ? `Invalidée par le manager : ${m.motifInvalidation ?? 'sans motif enregistré'}`
-              : 'Aucun relevé énergie joint à la clôture',
-          })),
-        },
-      ],
-      `Mois de ${labelMois}${region ? ` · ${region}` : ''} · dû contractuel : ${detailDuMois.length} tâche(s), ${duNonRealise.length} non réalisée(s) · ${duMois.length} clôture(s), dont ${nonConformes.length} sans relevé ou invalidée(s)`
-    );
+      { annee, mois, sites: matriceSites.length, prestataires: parPrestataire.length, format: req.params.format }, req);
+
+    const base = `conformite-maintenances-${annee}-${String(mois).padStart(2, '0')}`;
+    if (req.params.format === 'pdf') {
+      const buffer = await buildConformitePdf(donnees);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${base}.pdf"`);
+      return res.send(buffer);
+    }
+    const buffer = await buildConformiteXlsx(donnees);
+    setXlsxHeaders(res, `${base}.xlsx`);
+    res.send(buffer);
   } catch (err) { next(err); }
 }
 
