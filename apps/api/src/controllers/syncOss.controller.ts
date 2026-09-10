@@ -84,14 +84,20 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       if (l) l.push(s.id); else enfantsDe.set(s.parentTransmissionId, [s.id]);
     }
     interface CoupureOuverte {
-      id: string; siteId: string; dateDebut: Date; origine: string;
+      id: string; siteId: string; dateDebut: Date; origine: string; technologie: string;
       coupureOrigineId: string | null; source: string; incidentId: string | null;
       priseEnChargePar: string | null;
     }
+    // TOUTES les SITE ouvertes + toute coupure OSS ouverte même PARTIELLE :
+    // quand le NOC requalifie une détection SITE en partielle (seule la 4G
+    // était réellement tombée), elle reste LA coupure de cet événement — la
+    // filtrer sur technologie='SITE' la rendait invisible, le passage suivant
+    // recréait la même coupure SITE (même site, même début) et la reconnexion
+    // ne clôturait plus rien.
     const ouvertesInit = await prisma.coupureReseau.findMany({
-      where: { technologie: 'SITE', dateFin: null },
+      where: { dateFin: null, OR: [{ technologie: 'SITE' }, { source: 'OSS' }] },
       select: {
-        id: true, siteId: true, dateDebut: true, origine: true,
+        id: true, siteId: true, dateDebut: true, origine: true, technologie: true,
         coupureOrigineId: true, source: true, incidentId: true, priseEnChargePar: true,
       },
     });
@@ -99,10 +105,22 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     // une OSS coexistent (données d'avant la règle un-site-une-coupure) et que
     // la manuelle gagnait la place, la branche « connected » ne clôturait
     // JAMAIS l'OSS (elle exige source OSS) - coupure fantôme éternelle.
+    // ouverteParSite reste réservée aux coupures SITE : c'est elle qui pilote
+    // l'entraînement amont/aval, et une partielle n'explique pas une chute
+    // totale en aval.
     const ouverteParSite = new Map<string, CoupureOuverte>();
+    // Détections OSS ouvertes par site, TOUTES technologies (SITE préférée) :
+    // sert au « déjà couverte » de la création et à la clôture sur reconnexion.
+    const ossOuverteParSite = new Map<string, CoupureOuverte>();
     for (const c of ouvertesInit) {
-      const prev = ouverteParSite.get(c.siteId);
-      if (!prev || (prev.source !== 'OSS' && c.source === 'OSS')) ouverteParSite.set(c.siteId, c);
+      if (c.technologie === 'SITE') {
+        const prev = ouverteParSite.get(c.siteId);
+        if (!prev || (prev.source !== 'OSS' && c.source === 'OSS')) ouverteParSite.set(c.siteId, c);
+      }
+      if (c.source === 'OSS') {
+        const prev = ossOuverteParSite.get(c.siteId);
+        if (!prev || (prev.technologie !== 'SITE' && c.technologie === 'SITE')) ossOuverteParSite.set(c.siteId, c);
+      }
     }
     const ouverteParId = new Map<string, CoupureOuverte>(ouvertesInit.map((c) => [c.id, c]));
     // Entraînement plausible : l'aval tombe APRÈS (ou quasi en même temps que)
@@ -163,7 +181,9 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
 
       if (l.etat === 'disconnected') {
         // Une coupure SITE déjà ouverte (humaine ou OSS) → rien à créer.
-        if (ouverteParSite.has(site.id)) { dejaOuvertes++; continue; }
+        // Idem si une détection OSS requalifiée en PARTIELLE couvre déjà ce
+        // site : l'OSS ne voit que l'eNodeB, c'est le même événement.
+        if (ouverteParSite.has(site.id) || ossOuverteParSite.has(site.id)) { dejaOuvertes++; continue; }
 
         // Classement automatique AMONT : si un site de la chaîne de transmission
         // amont est déjà coupé (le plus HAUT gagne), cette détection naît
@@ -200,7 +220,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
               : 'Détection automatique OSS - en attente de prise en charge NOC.',
           },
           select: {
-            id: true, siteId: true, dateDebut: true, origine: true,
+            id: true, siteId: true, dateDebut: true, origine: true, technologie: true,
             coupureOrigineId: true, source: true, incidentId: true, priseEnChargePar: true,
           },
         });
@@ -209,6 +229,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
           throw e;
         }
         ouverteParSite.set(site.id, creee); ouverteParId.set(creee.id, creee);
+        ossOuverteParSite.set(site.id, creee);
         creees++; if (entrainee) creeesHeritees++;
 
         // Classement automatique AVAL (l'amont peut être parsé APRÈS ses aval) :
@@ -257,8 +278,11 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         }
       } else {
         // connected : clôturer la coupure OSS ouverte — la date de la ligne est
-        // l'heure de reconnexion. Les coupures MANUELLES restent à la main du NOC.
-        const ouverte = ouverteParSite.get(site.id);
+        // l'heure de reconnexion. Les coupures MANUELLES restent à la main du
+        // NOC. Une détection requalifiée en partielle par le NOC reste source
+        // OSS : elle se clôt aussi à la reconnexion de l'eNodeB.
+        const surSite = ouverteParSite.get(site.id);
+        const ouverte = surSite?.source === 'OSS' ? surSite : ossOuverteParSite.get(site.id);
         if (!ouverte || ouverte.source !== 'OSS') continue;
         // RÉTABLISSEMENT STABLE SEULEMENT (incident du 04/09/2026, zone nord) :
         // lors d'un rebond de transmission régional, l'OSS a montré tout un
@@ -283,7 +307,8 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
             actions: 'Rétablissement constaté par l\'OSS (reconnexion eNodeB).',
           },
         });
-        ouverteParSite.delete(site.id); ouverteParId.delete(ouverte.id);
+        if (ouverteParSite.get(site.id)?.id === ouverte.id) ouverteParSite.delete(site.id);
+        ossOuverteParSite.delete(site.id); ouverteParId.delete(ouverte.id);
         cloturees++;
 
         // Coupure armée (incident créé à la prise en charge) : le rétablissement
@@ -314,6 +339,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
             },
           });
           ouverteParSite.delete(h.siteId); ouverteParId.delete(h.id);
+          if (ossOuverteParSite.get(h.siteId)?.id === h.id) ossOuverteParSite.delete(h.siteId);
           clotureesHeritees++;
         }
       }
