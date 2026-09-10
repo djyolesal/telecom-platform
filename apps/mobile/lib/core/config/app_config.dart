@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import '../network/dio_client.dart';
 
 /// Règles terrain configurables côté serveur, récupérées via GET /config.
@@ -63,17 +67,53 @@ class AppConfig {
 }
 
 /// Charge la configuration applicative depuis l'API et met à jour [AppConfig].
+///
+/// La dernière configuration reçue est PERSISTÉE : au démarrage hors-ligne
+/// (ou si /config échoue), l'app repart des dernières règles synchronisées au
+/// lieu des replis codés en dur - sinon un technicien sans réseau voyait
+/// « 60 min avant clôture » alors que la plateforme est réglée à 30.
 class ConfigService {
   final DioClient _client;
   ConfigService(this._client);
 
+  static const _kCache = 'config_cache';
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+  bool _cacheRestaure = false;
+
   Future<void> load() async {
+    // 1. Dernière config connue d'abord (une seule fois par session) : les
+    //    règles restent justes même si le réseau ne répond jamais.
+    if (!_cacheRestaure) {
+      _cacheRestaure = true;
+      try {
+        final brut = await _storage.read(key: _kCache);
+        if (brut != null) {
+          final d = jsonDecode(brut);
+          if (d is Map) _appliquer(d);
+        }
+      } catch (_) {/* cache illisible → replis codés en dur */}
+    }
+    // 2. Puis le serveur, qui fait foi et rafraîchit le cache.
     try {
       await _client.request<void>(
         (dio) => dio.get('/config'),
         (data) {
           final d = data is Map ? data['data'] as Map? : null;
           if (d != null) {
+            _appliquer(d);
+            _storage.write(key: _kCache, value: jsonEncode(d));
+          }
+        },
+      );
+    } catch (_) {
+      // Hors-ligne / non authentifié → dernières valeurs connues (ou replis).
+    }
+  }
+
+  void _appliquer(Map d) {
+    {
             AppConfig.minDureeClotureMin =
                 (d['minDureeClotureMin'] as num?)?.toInt() ??
                     AppConfig.minDureeClotureMin;
@@ -117,11 +157,6 @@ class ConfigService {
                     },
               ];
             }
-          }
-        },
-      );
-    } catch (_) {
-      // Hors-ligne / non authentifié → on garde les valeurs par défaut.
     }
   }
 }
