@@ -454,11 +454,22 @@ const PASSIVE_CATS = ['GE', 'BATTERIE', 'CLIMATISEUR', 'CABLE'];
  * prestataire qui n'a RIEN clôturé sur la période (le cas le plus grave)
  * apparaît avec 0, au lieu de disparaître du rapport. tauxConformite est null
  * quand rien n'est clôturé (conformité indéfinie, pas 0 %).
+ *
+ * Période CALENDAIRE : un MOIS précis (annee + mois, défaut : mois courant) —
+ * c'est le pas des obligations contractuelles. L'évolution couvre les
+ * EVOLUTION_MOIS mois qui se terminent au mois choisi.
  */
+const EVOLUTION_MOIS = 6;
 async function chargerConformiteMaintenance(req: Request) {
-  const { periode = '90', prestataire_id, region } = req.query as Record<string, string>;
-  const jours = parseInt(periode) || 90;
-  const since = new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
+  const { annee, mois, prestataire_id, region } = req.query as Record<string, string>;
+  const maintenant = new Date();
+  const a = parseInt(annee) || maintenant.getUTCFullYear();
+  const mo = parseInt(mois) || maintenant.getUTCMonth() + 1;
+  if (mo < 1 || mo > 12) throw new AppError('Mois invalide.', 400);
+  const debutMois = new Date(Date.UTC(a, mo - 1, 1));
+  const finMois = new Date(Date.UTC(a, mo, 1));
+  // Fenêtre élargie pour la série d'évolution (le mois choisi inclus).
+  const since = new Date(Date.UTC(a, mo - EVOLUTION_MOIS, 1));
   const pr = await sitePerimetre(req.user!.id);
   const restreint = isRestreint(pr);
 
@@ -466,7 +477,7 @@ async function chargerConformiteMaintenance(req: Request) {
     where: {
       statut: 'TERMINEE',
       categorie: { in: PASSIVE_CATS as never[] },
-      dateFin: { gte: since },
+      dateFin: { gte: since, lt: finMois },
       ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
       ...((region || restreint) ? { site: { ...(region ? { region } : {}), ...pr } } : {}),
     },
@@ -482,19 +493,19 @@ async function chargerConformiteMaintenance(req: Request) {
     take: 5000,
   });
 
-  // Mois calendaires couverts par la période (l'évolution s'y agrège).
+  // Les EVOLUTION_MOIS mois calendaires qui se terminent au mois choisi.
   const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-  const anneeCourante = new Date().getUTCFullYear();
   const moisListe: { mois: string; label: string }[] = [];
-  const curseur = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), 1));
-  const finMois = new Date();
-  while (curseur <= finMois) {
-    const a = curseur.getUTCFullYear();
-    const m = curseur.getUTCMonth();
-    moisListe.push({ mois: `${a}-${String(m + 1).padStart(2, '0')}`, label: `${MOIS_COURT[m]}${a !== anneeCourante ? ` ${a}` : ''}` });
-    curseur.setUTCMonth(m + 1);
+  for (let i = EVOLUTION_MOIS - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(a, mo - 1 - i, 1));
+    const ma = d.getUTCFullYear();
+    const mm = d.getUTCMonth();
+    moisListe.push({ mois: `${ma}-${String(mm + 1).padStart(2, '0')}`, label: `${MOIS_COURT[mm]}${ma !== a ? ` ${ma}` : ''}` });
   }
   const cleMois = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  const cleMoisChoisi = `${a}-${String(mo).padStart(2, '0')}`;
+  // Le mois choisi porte les chiffres du rapport ; le reste nourrit l'évolution.
+  const duMois = maints.filter((m) => m.dateFin && cleMois(m.dateFin) === cleMoisChoisi);
 
   const map = new Map<string, { prestataireId: string; prestataireNom: string; total: number; conformes: number }>();
   // Amorçage : tous les prestataires actifs tenant un lot passif dont
@@ -506,7 +517,9 @@ async function chargerConformiteMaintenance(req: Request) {
   const assignes = await prisma.lotAssignment.findMany({
     where: {
       scope: { in: ['PASSIVE', 'LES_DEUX'] },
-      OR: [{ dateFin: null }, { dateFin: { gte: since } }],
+      // Attribution couvrant le MOIS CHOISI (pas la fenêtre d'évolution).
+      OR: [{ dateFin: null }, { dateFin: { gte: debutMois } }],
+      AND: [{ OR: [{ dateDebut: null }, { dateDebut: { lt: finMois } }] }],
       ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
       ...(restreint ? { prestataireId: monPrestataireId ?? '∅' } : {}),
       ...(region ? { lot: { region } } : {}),
@@ -538,23 +551,26 @@ async function chargerConformiteMaintenance(req: Request) {
   const evolutionPar = new Map<string, Map<string, { total: number; conformes: number }>>();
   for (const m of maints) {
     const key = m.prestataireId ?? 'NON_ATTRIBUE';
+    // Une maintenance INVALIDÉE par le manager est non conforme quel que soit
+    // son contenu - une fiche contestée ne peut pas améliorer le taux.
+    const conforme = m._count.releves > 0 && !m.invalideeLe;
+    // Toute la fenêtre nourrit la série d'évolution…
+    const evo = evolutionPar.get(key) ?? evolutionPar.set(key, new Map()).get(key)!;
+    const mk = m.dateFin ? cleMois(m.dateFin) : cleMoisChoisi;
+    const b = evo.get(mk) ?? { total: 0, conformes: 0 };
+    b.total++;
+    if (conforme) b.conformes++;
+    evo.set(mk, b);
+    // …mais seul le MOIS CHOISI porte les chiffres du tableau.
+    if (mk !== cleMoisChoisi) continue;
     if (!map.has(key)) {
       map.set(key, { prestataireId: key, prestataireNom: m.prestataire?.nom ?? 'Non attribué', total: 0, conformes: 0 });
     }
     const e = map.get(key)!;
     e.total++;
-    // Une maintenance INVALIDÉE par le manager est non conforme quel que soit
-    // son contenu - une fiche contestée ne peut pas améliorer le taux.
-    const conforme = m._count.releves > 0 && !m.invalideeLe;
     if (conforme) e.conformes++;
     if (m.invalideeLe) invalideesPar.set(key, (invalideesPar.get(key) ?? 0) + 1);
     (sitesCouvertsPar.get(key) ?? sitesCouvertsPar.set(key, new Set()).get(key)!).add(m.siteId);
-    const evo = evolutionPar.get(key) ?? evolutionPar.set(key, new Map()).get(key)!;
-    const mk = m.dateFin ? cleMois(m.dateFin) : moisListe[moisListe.length - 1].mois;
-    const b = evo.get(mk) ?? { total: 0, conformes: 0 };
-    b.total++;
-    if (conforme) b.conformes++;
-    evo.set(mk, b);
   }
 
   const parPrestataire = Array.from(map.values())
@@ -578,12 +594,13 @@ async function chargerConformiteMaintenance(req: Request) {
     })
     .sort((a, b) => b.total - a.total || a.prestataireNom.localeCompare(b.prestataireNom));
 
-  return { jours, region, maints, parPrestataire, moisListe };
+  const MOIS_PLEIN = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  return { annee: a, mois: mo, labelMois: `${MOIS_PLEIN[mo]} ${a}`, region, duMois, parPrestataire, moisListe };
 }
 
 export async function getConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { jours, maints, parPrestataire, moisListe } = await chargerConformiteMaintenance(req);
+    const { annee, mois, labelMois, duMois, parPrestataire, moisListe } = await chargerConformiteMaintenance(req);
 
     const conformes = parPrestataire.reduce((s, x) => s + x.conformes, 0);
     const parcSites = parPrestataire.reduce((s, x) => s + (x.parcSites ?? 0), 0);
@@ -591,12 +608,14 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
     res.json({
       success: true,
       data: {
-        periodeJours: jours,
+        annee,
+        moisChoisi: mois,
+        labelMois,
         totaux: {
-          total: maints.length,
+          total: duMois.length,
           conformes,
-          nonConformes: maints.length - conformes,
-          tauxConformite: maints.length ? Math.round((conformes / maints.length) * 100) : 0,
+          nonConformes: duMois.length - conformes,
+          tauxConformite: duMois.length ? Math.round((conformes / duMois.length) * 100) : 0,
           parcSites,
           sitesCouverts,
           couverturePct: parcSites ? Math.min(100, Math.round((sitesCouverts / parcSites) * 100)) : null,
@@ -615,12 +634,13 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
  */
 export async function exportConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { jours, region, maints, parPrestataire } = await chargerConformiteMaintenance(req);
-    const nonConformes = maints.filter((m) => m._count.releves === 0 || m.invalideeLe);
+    const { annee, mois, labelMois, region, duMois, parPrestataire } = await chargerConformiteMaintenance(req);
+    const nonConformes = duMois.filter((m) => m._count.releves === 0 || m.invalideeLe);
 
     await auditLog(req.user!.id, 'EXPORT', 'conformite_maintenance', undefined,
-      { periodeJours: jours, maintenances: maints.length, nonConformes: nonConformes.length, format: req.params.format }, req);
-    await sendTabular(res, req.params.format, `conformite-maintenances-${jours}j`, 'Conformité des maintenances passives',
+      { annee, mois, maintenances: duMois.length, nonConformes: nonConformes.length, format: req.params.format }, req);
+    await sendTabular(res, req.params.format, `conformite-maintenances-${annee}-${String(mois).padStart(2, '0')}`,
+      `Conformité des maintenances passives - ${labelMois}`,
       [
         {
           name: 'Par prestataire',
@@ -682,7 +702,7 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
           })),
         },
       ],
-      `${jours} derniers jours${region ? ` · ${region}` : ''} · ${maints.length} maintenance(s), dont ${nonConformes.length} non conformes (sans relevé ou invalidées)`
+      `Mois de ${labelMois}${region ? ` · ${region}` : ''} · ${duMois.length} maintenance(s), dont ${nonConformes.length} non conformes (sans relevé ou invalidées) · évolution sur ${EVOLUTION_MOIS} mois`
     );
   } catch (err) { next(err); }
 }

@@ -60,12 +60,21 @@ function Sparkline({ evolution }: { evolution: PointEvolution[] }) {
   );
 }
 
+const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
 export default function ConformitePage() {
-  const [periode, setPeriode] = useState('90');
+  // Période CALENDAIRE : un mois précis - le pas des obligations contractuelles.
+  const maintenant = new Date();
+  const [mois, setMois] = useState(String(maintenant.getMonth() + 1));
+  const [annee, setAnnee] = useState(String(maintenant.getFullYear()));
 
   const { data, isLoading } = useQuery({
-    queryKey: ['conformite', periode],
-    queryFn: () => api.get('/rapports/conformite', { params: { periode } }).then((r) => r.data.data),
+    queryKey: ['conformite', annee, mois],
+    queryFn: () => api.get('/rapports/conformite', { params: { annee, mois } }).then((r) => r.data.data),
+  });
+  const anneesOptions = [0, 1].map((i) => {
+    const a = String(maintenant.getFullYear() - i);
+    return { value: a, label: a };
   });
 
   const t = data?.totaux ?? {};
@@ -93,10 +102,10 @@ export default function ConformitePage() {
         </span>
       ),
     },
-    { key: 'evolution', header: 'Évolution', render: (l) => <Sparkline evolution={l.evolution} /> },
+    { key: 'evolution', header: 'Évolution (6 mois)', render: (l) => <Sparkline evolution={l.evolution} /> },
     {
       key: 'taux', header: 'Conformité', render: (l) => l.tauxConformite == null ? (
-        <span className="text-sm text-amber-600" title="Aucune maintenance passive clôturée sur la période - conformité non mesurable.">aucune clôturée</span>
+        <span className="text-sm text-amber-600" title="Aucune maintenance passive clôturée sur le mois - conformité non mesurable.">aucune clôturée</span>
       ) : (
         <div className="flex items-center gap-2">
           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-16">
@@ -116,17 +125,17 @@ export default function ConformitePage() {
         backHref="/rapports"
         actions={
           <ExportButtons base="/rapports/conformite/export"
-            name={`Conformité maintenances ${periode} jours`}
-            query={`periode=${periode}`} />
+            name={`Conformité maintenances ${MOIS[Number(mois)] ?? mois} ${annee}`}
+            query={`annee=${annee}&mois=${mois}`} />
         }
       />
 
       <FilterBar
         filters={[
-          { key: 'periode', label: 'Période', sansVide: true, value: periode, options: [
-            { value: '30', label: '30 jours' }, { value: '90', label: '90 jours' },
-            { value: '180', label: '6 mois' }, { value: '365', label: '12 mois' },
-          ], onChange: setPeriode },
+          { key: 'mois', label: 'Mois', sansVide: true, value: mois,
+            options: MOIS.slice(1).map((m, i) => ({ value: String(i + 1), label: m })), onChange: setMois },
+          { key: 'annee', label: 'Année', sansVide: true, value: annee,
+            options: anneesOptions, onChange: setAnnee },
         ]}
       />
 
@@ -145,7 +154,7 @@ export default function ConformitePage() {
           </div>
 
           {lignes.length === 0 ? (
-            <EmptyState title="Aucune maintenance passive clôturée sur la période" />
+            <EmptyState title="Aucune maintenance passive clôturée sur ce mois" />
           ) : (
             <DataTable columns={columns} data={lignes} rowKey={(l) => l.prestataireId} />
           )}
