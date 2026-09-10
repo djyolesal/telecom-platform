@@ -88,6 +88,10 @@ export function construireClasseurCoupures(opts: {
   periodeTexte: string;
   perimetreTexte: string;
   colonnes?: Set<string> | null; // sous-ensemble des clés de COLONNES_DETAIL
+  // Feuille Synthèse (KPIs, répartitions, top sites) : outil de PILOTAGE,
+  // réservée aux managers/admins - les profils opérationnels (NOC,
+  // superviseur) n'exportent que le Détail.
+  avecSynthese?: boolean;
 }): ExcelJS.Workbook {
   const { lignes, periodeTexte, perimetreTexte } = opts;
   const maintenant = new Date();
@@ -99,7 +103,8 @@ export function construireClasseurCoupures(opts: {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'E&M OpS';
 
-  /* ── Synthèse ─────────────────────────────────────────────── */
+  /* ── Synthèse (si le rôle y a droit) ──────────────────────── */
+  if (opts.avecSynthese !== false) {
   const sy = wb.addWorksheet('Synthèse', { views: [{ showGridLines: false }] });
   sy.columns = [{ width: 3 }, { width: 26 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 3 }];
 
@@ -199,6 +204,7 @@ export function construireClasseurCoupures(opts: {
   tableau('Top 10 sites par downtime', ['Site', 'Région', 'Coupures', 'Downtime (h)'],
     agrege((l) => `${l.siteNom}|${l.region}`).slice(0, 10)
       .map(([k, a]) => { const [nom, region] = k.split('|'); return [nom, region, a.coupures, Math.round(a.dt / 60)]; }));
+  }
 
   /* ── Détail ───────────────────────────────────────────────── */
   const visibles = COLONNES_DETAIL.filter((c) => !opts.colonnes || opts.colonnes.has(c.key) || opts.colonnes.has(c.header));

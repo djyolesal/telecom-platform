@@ -2418,6 +2418,9 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         periodeTexte,
         perimetreTexte: restreint ? 'vos lots' : 'réseau entier',
         colonnes: colonnesQ && colonnesQ.size ? colonnesQ : null,
+        // La Synthèse est un outil de pilotage : NOC et superviseurs
+        // exportent le Détail seul.
+        avecSynthese: ['MANAGER', 'ADMIN'].includes(req.user!.role),
       });
       await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { count: rows.length, format: 'xlsx' }, req);
       setXlsxHeaders(res, 'coupures-reseau.xlsx');
