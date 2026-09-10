@@ -338,7 +338,9 @@ flutter build appbundle --release --dart-define=API_URL=https://emops.uk/api/v1
       · `depotage.antiDoublonMinutes` (défaut **120**) — fenêtre de détection d'un double
         enregistrement de la même livraison ;
       · `appro.margeGePermanentJours` (défaut **2**) — marge de sécurité supplémentaire sur
-        le seuil de livraison des sites 100 % gasoil.
+        le seuil de livraison des sites 100 % gasoil ;
+      · `sla.penaliteInvalidationFCFA` (défaut **100 000**) — pénalité par maintenance
+        invalidée par un manager (en plus de la chute du taux préventif qu'elle provoque).
 - [ ] **SMS à la livraison** : cocher « Livraisons » sur les seuls contacts qui doivent
       recevoir le SMS de dépotage (opt-in, aucun envoi par défaut).
 - [ ] **Lots solaires** (si le contrat solaire démarre) : créer les lots de contrat SOLAIRE,

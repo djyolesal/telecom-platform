@@ -26,6 +26,10 @@ export interface SlaPrestataire {
   nbSites: number;
   downtimePassifHeures: number;
   dispoPassivePct: number;        // % à une décimale
+  // Clôtures contestées par un manager sur la période (préventives ou
+  // curatives) : chacune coûte sla.penaliteInvalidationFCFA et casse la
+  // conformité - un travail invalidé est un travail non fait, facturé.
+  maintenancesInvalidees: number;
   // Synthèse
   scoreSla: number;               // 0-100 (moyenne préventif + résolution + dispo passive)
   penaliteFCFA: number;
@@ -50,6 +54,7 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
   const penalitePreventif = getNum('sla.penalitePreventifFCFA', 100000);
   const dispoMin = getNum('sla.dispoPassiveMinPct', 99);
   const penaliteDispo = getNum('sla.penaliteDispoDixiemeFCFA', 50000);
+  const penaliteInvalidation = getNum('sla.penaliteInvalidationFCFA', 100000);
 
   // site → prestataire (via lot → attribution passive/les-deux).
   const [assignments, sites] = await Promise.all([
@@ -71,9 +76,9 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
 
   // Le downtime passif passe par une UNION D'INTERVALLES par site : le rapport
   // NOC liste une ligne par technologie, les sommer facturait 4× la même panne.
-  type Acc = { nom: string; prevPlan: number; prevTemps: number; incResolus: number; incHorsDelai: number; sommeDelaiMin: number; nbSites: number; ivPassif: Map<string, Intervalle[]> };
+  type Acc = { nom: string; prevPlan: number; prevTemps: number; incResolus: number; incHorsDelai: number; sommeDelaiMin: number; nbSites: number; invalidees: number; ivPassif: Map<string, Intervalle[]> };
   const acc = new Map<string, Acc>();
-  const ensure = (id: string, nom: string) => acc.get(id) ?? acc.set(id, { nom, prevPlan: 0, prevTemps: 0, incResolus: 0, incHorsDelai: 0, sommeDelaiMin: 0, nbSites: 0, ivPassif: new Map() }).get(id)!;
+  const ensure = (id: string, nom: string) => acc.get(id) ?? acc.set(id, { nom, prevPlan: 0, prevTemps: 0, incResolus: 0, incHorsDelai: 0, sommeDelaiMin: 0, nbSites: 0, invalidees: 0, ivPassif: new Map() }).get(id)!;
 
   // Tout prestataire passif entre dans l'évaluation, même sans activité sur la
   // période (dispo 100 %, conforme) — l'absence de données n'est pas un angle mort.
@@ -89,7 +94,7 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
       datePlanifiee: { gte: since, lte: new Date(Date.now() - toleranceJours * 86400000) },
       prestataireId: { not: null },
     },
-    select: { prestataireId: true, prestataire: { select: { nom: true } }, statut: true, datePlanifiee: true, dateFin: true, dureeSuspendueMinutes: true },
+    select: { prestataireId: true, prestataire: { select: { nom: true } }, statut: true, datePlanifiee: true, dateFin: true, dureeSuspendueMinutes: true, invalideeLe: true },
   });
   for (const m of prevs) {
     if (!m.prestataireId) continue;
@@ -98,8 +103,24 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
     const limite = new Date(m.datePlanifiee.getTime() + toleranceJours * 86400000);
     // Le temps SUSPENDU (urgence ordonnée ailleurs) ne compte pas contre le
     // prestataire : on le retranche de la date de fin avant de juger « à temps ».
+    // Une clôture INVALIDÉE ne compte jamais « à temps » : le travail est
+    // réputé non fait tant que la contestation n'est pas levée.
     const finEffective = m.dateFin ? new Date(m.dateFin.getTime() - (m.dureeSuspendueMinutes ?? 0) * 60000) : null;
-    if (m.statut === 'TERMINEE' && finEffective && finEffective <= limite) a.prevTemps += 1;
+    if (m.statut === 'TERMINEE' && !m.invalideeLe && finEffective && finEffective <= limite) a.prevTemps += 1;
+  }
+
+  // ── Invalidations : toute maintenance (préventive OU curative) dont la
+  //    clôture, tombée dans la fenêtre, a été contestée par un manager. ──
+  const invalidees = await prisma.maintenance.groupBy({
+    by: ['prestataireId'],
+    where: { invalideeLe: { not: null }, dateFin: { gte: since }, prestataireId: { not: null } },
+    _count: { _all: true },
+  });
+  for (const g of invalidees) {
+    if (!g.prestataireId) continue;
+    const nom = acc.get(g.prestataireId)?.nom
+      ?? (await prisma.prestataire.findUnique({ where: { id: g.prestataireId }, select: { nom: true } }))?.nom ?? '—';
+    ensure(g.prestataireId, nom).invalidees += g._count._all;
   }
 
   // ── Incidents résolus : délai de résolution vs seuil ──
@@ -151,7 +172,8 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
     const penalite =
       a.incHorsDelai * penaliteResolution +
       Math.max(0, tauxMin - tauxPreventif) * penalitePreventif +
-      dixiemesManquants * penaliteDispo;
+      dixiemesManquants * penaliteDispo +
+      a.invalidees * penaliteInvalidation;
     return {
       prestataireId: id,
       prestataireNom: a.nom,
@@ -164,9 +186,10 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
       nbSites: a.nbSites,
       downtimePassifHeures: Math.round(downtimePassifMin / 60),
       dispoPassivePct,
+      maintenancesInvalidees: a.invalidees,
       scoreSla,
       penaliteFCFA: Math.round(penalite),
-      conforme: tauxPreventif >= tauxMin && a.incHorsDelai === 0 && dispoPassivePct >= dispoMin,
+      conforme: tauxPreventif >= tauxMin && a.incHorsDelai === 0 && dispoPassivePct >= dispoMin && a.invalidees === 0,
     };
   }).sort((x, y) => y.penaliteFCFA - x.penaliteFCFA || x.scoreSla - y.scoreSla);
 

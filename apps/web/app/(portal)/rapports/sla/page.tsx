@@ -15,7 +15,7 @@ interface Sla {
   preventivesPlanifiees: number; preventivesATemps: number; tauxPreventif: number;
   incidentsResolus: number; incidentsHorsDelai: number; delaiResolutionMoyenH: number | null;
   nbSites: number; downtimePassifHeures: number; dispoPassivePct: number;
-  scoreSla: number; penaliteFCFA: number; conforme: boolean;
+  maintenancesInvalidees: number; scoreSla: number; penaliteFCFA: number; conforme: boolean;
 }
 interface Report {
   periodeJours: number;
@@ -70,6 +70,7 @@ export default function SlaPage() {
               <th className="px-3 py-3 text-right font-medium">Incidents (hors délai)</th>
               <th className="px-3 py-3 text-right font-medium">Résolution moy.</th>
               <th className="px-3 py-3 text-right font-medium">Dispo passive</th>
+              <th className="px-3 py-3 text-right font-medium">Invalidées</th>
               <th className="px-3 py-3 text-right font-medium">Score SLA</th>
               <th className="px-3 py-3 pr-5 text-right font-medium">Pénalité</th>
             </tr></thead>
@@ -95,6 +96,11 @@ export default function SlaPage() {
                     <span className={(p.dispoPassivePct ?? 100) >= data.seuils.dispoPassiveMinPct ? 'text-gray-700' : 'font-semibold text-red-600'}>{p.dispoPassivePct ?? 100}%</span>
                     <span className="ml-1 text-xs text-gray-400">({p.downtimePassifHeures ?? 0} h / {p.nbSites ?? 0} sites)</span>
                   </td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    {(p.maintenancesInvalidees ?? 0) > 0
+                      ? <span className="font-semibold text-red-600" title="Clôtures contestées par un manager : chacune est pénalisée et casse la conformité.">{p.maintenancesInvalidees}</span>
+                      : <span className="text-gray-300">—</span>}
+                  </td>
                   <td className={`px-3 py-3 text-right tabular-nums font-semibold ${scoreColor(p.scoreSla)}`}>{p.scoreSla}</td>
                   <td className="px-3 py-3 pr-5 text-right tabular-nums">{p.penaliteFCFA > 0 ? <span className="font-semibold text-amber-700">{fmtFCFA(p.penaliteFCFA)}</span> : <span className="text-gray-300">—</span>}</td>
                 </tr>
@@ -104,7 +110,7 @@ export default function SlaPage() {
         </div>
       )}
       <p className="mt-3 text-xs text-gray-400">
-        Pénalité = (incidents résolus hors délai × pénalité unitaire) + (points de préventif sous le seuil × pénalité/point). Seuils configurables dans Administration → Paramètres (groupe SLA).
+        Pénalité = (incidents hors délai × pénalité unitaire) + (points de préventif sous le seuil × pénalité/point) + (dixièmes de dispo manquants × pénalité) + (maintenances invalidées × pénalité). Une préventive invalidée ne compte pas « à temps ». Seuils configurables dans Administration → Paramètres (groupe SLA).
       </p>
     </div>
   );
