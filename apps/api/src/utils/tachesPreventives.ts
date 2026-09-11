@@ -96,8 +96,11 @@ export const CONTRACTUAL_TASKS: TachePreventive[] = [
   },
   {
     numero: 10, key: 'ge_secours', libelle: 'Entretien et vidange GE (secours, connecté CEET)', categorie: 'GE',
-    frequence: 'MENSUELLE', cible: 'Sites à statut GE secours',
-    eligible: (s) => s.statutGE === 'GE_SECOURS',
+    // Assise sur la CONFIGURATION d'énergie (structurelle), pas sur le champ
+    // statutGE (déclaratif, corrigeable) : la tâche ne vaut que là où un GE
+    // de secours est branché derrière la CEET - CEET_GE et HYBRIDE_CEET_GE.
+    frequence: 'MENSUELLE', cible: 'Sites CEET + GE (GE de secours)',
+    eligible: (s) => s.powerConfig === 'CEET_GE' || s.powerConfig === 'HYBRIDE_CEET_GE',
   },
   {
     numero: 11, key: 'depotage', libelle: 'Suivi des livraisons et relevé carburant (dépotage)', categorie: 'GE',
