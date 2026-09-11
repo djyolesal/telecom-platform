@@ -29,11 +29,6 @@ export interface SiteEligibilite {
 
 const hasCuve = (s: SiteEligibilite) => s.cuveVolumeLitres != null && Number(s.cuveVolumeLitres) > 0;
 const hasGE = (s: SiteEligibilite) => s.statutGE !== 'PAS_DE_GE';
-// Site SUR TOIT : le référentiel des types de pylône est éditable en admin -
-// l'égalité stricte avec « ROOFTOP » laissait passer toute variante ajoutée
-// (ROOF_TOP, SUR_TOIT, TERRASSE…) et le désherbage redevenait « dû » sur des
-// sites sans le moindre mètre carré de sol.
-const surToit = (s: SiteEligibilite) => /ROOF|TOIT|TERRASSE/.test(s.typePylone ?? '');
 // Sites équipés de solaire : solaire pur ou hybrides (le rapport contractuel
 // « maintenance des sites hybrides » couvre ces configurations).
 const aDuSolaire = (s: SiteEligibilite) =>
@@ -63,8 +58,11 @@ export const CONTRACTUAL_TASKS: TachePreventive[] = [
   },
   {
     numero: 3, key: 'desherbage', libelle: 'Désherbage et nettoyage du site', categorie: 'AUTRE',
-    frequence: 'MENSUELLE', cible: 'Tous sauf sites sur toit (rooftop/terrasse)',
-    eligible: (s) => !surToit(s),
+    // Décision exploitant (11/09/2026) : due AUSSI sur les sites sur toit -
+    // le « nettoyage du site » vaut pour une terrasse, l'ancienne exclusion
+    // Rooftop les privait de tout entretien mensuel de propreté.
+    frequence: 'MENSUELLE', cible: 'Tous les sites (rooftop compris)',
+    eligible: () => true,
   },
   {
     numero: 4, key: 'extincteurs', libelle: 'Contrôle et entretien des extincteurs', categorie: 'AUTRE',

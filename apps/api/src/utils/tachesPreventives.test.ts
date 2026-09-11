@@ -12,16 +12,8 @@ const site = (typePylone: string | null): SiteEligibilite => ({
 const cles = (s: SiteEligibilite) => tachesPlanifiables(s).map((t) => t.key);
 
 describe('tachesPreventives - éligibilité par type de site', () => {
-  it('désherbage exclu sur TOUT site sur toit, y compris les variantes admin', () => {
-    // Le référentiel des types de pylône est éditable : la règle doit couvrir
-    // les codes ajoutés après coup, pas seulement le ROOFTOP semé.
-    for (const t of ['ROOFTOP', 'ROOF_TOP', 'SUR_TOIT', 'TERRASSE', 'TOITURE_3']) {
-      expect(cles(site(t))).not.toContain('desherbage');
-    }
-  });
-
-  it('désherbage dû sur les sites au sol (et sans type renseigné)', () => {
-    for (const t of ['GREENFIELD', 'RURAL', 'TROTTOIR', null]) {
+  it('désherbage/nettoyage dû sur TOUS les sites, rooftop compris (décision exploitant 11/09/2026)', () => {
+    for (const t of ['ROOFTOP', 'ROOF_TOP', 'TERRASSE', 'GREENFIELD', 'RURAL', 'TROTTOIR', null]) {
       expect(cles(site(t))).toContain('desherbage');
     }
   });
