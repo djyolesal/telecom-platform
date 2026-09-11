@@ -20,6 +20,7 @@ import { carboneFactors } from '../services/settings.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 import { sitePerimetre, isRestreint, estPrestataire } from '../utils/perimetre';
+import { sourcesForConfig } from '../utils/energy';
 import { stockCourantParSite } from '../services/stockCourant.service';
 import { bucketsHoraires, compterParHeure, niveauAgitation } from '../utils/pouls';
 
@@ -604,6 +605,37 @@ async function chargerConformiteMaintenance(req: Request) {
       _max: { dateFin: true },
     }),
   ]);
+  // Données de SUIVI du mois (tâche « dépotage » validée par les données) :
+  // un relevé complet - GE avec carburant + CEET selon la config - OU un
+  // dépotage valide le mois. Préchargées sur la fenêtre d'évolution.
+  const [depotagesFenetre, relevesFenetre] = await Promise.all([
+    prisma.depotage.findMany({
+      where: { siteId: { in: idsSites }, dateDepotage: { gte: since, lt: finMois } },
+      select: { siteId: true, dateDepotage: true },
+    }),
+    prisma.releveEnergie.findMany({
+      where: { siteId: { in: idsSites }, dateReleve: { gte: since, lt: finMois }, source: { in: ['GE', 'CEET'] } },
+      select: { siteId: true, dateReleve: true, source: true, volumeGasoilLitres: true },
+    }),
+  ]);
+  const suiviParCle = new Map<string, Set<string>>(); // `site:mois` → jetons vus
+  const jeton = (siteId: string, d: Date, tok: string) => {
+    const k = `${siteId}:${cleMois(d)}`;
+    (suiviParCle.get(k) ?? suiviParCle.set(k, new Set()).get(k)!).add(tok);
+  };
+  for (const d of depotagesFenetre) jeton(d.siteId, d.dateDepotage, 'LIV');
+  for (const r of relevesFenetre) {
+    if (r.source === 'GE') { if (r.volumeGasoilLitres != null) jeton(r.siteId, r.dateReleve, 'GE'); }
+    else jeton(r.siteId, r.dateReleve, 'CEET');
+  }
+  const suiviOk = (site: { id: string; powerConfig: string }, mois: string): boolean => {
+    const vus = suiviParCle.get(`${site.id}:${mois}`);
+    if (!vus) return false;
+    if (vus.has('LIV')) return true;
+    const requises = sourcesForConfig(site.powerConfig).filter((x) => x === 'GE' || x === 'CEET');
+    return requises.length > 0 && requises.every((x) => vus.has(x));
+  };
+
   const execsParCle = new Map<string, Date[]>();
   for (const g of dernieresAvant) {
     if (g._max.dateFin) execsParCle.set(`${g.siteId}:${g.tachePreventiveKey}`, [g._max.dateFin]);
@@ -639,6 +671,28 @@ async function chargerConformiteMaintenance(req: Request) {
     for (const t of tachesCatalogue) {
       if (!t.eligible(site as unknown as SiteEligibilite)) { statuts[t.key] = 'NA'; continue; }
       statuts[t.key] = 'OK'; // à jour par défaut ; NOK si un dû du mois n'est pas réalisé
+      // Suivi validé par les DONNÉES : dû chaque mois, réalisé si relevé
+      // complet ou dépotage dans le mois - pas de ticket de maintenance.
+      if (t.suiviParDonnees) {
+        for (const b of bornesMois) {
+          const ok = suiviOk(site, b.mois);
+          const evo = evolutionDuPar.get(pid) ?? evolutionDuPar.set(pid, new Map()).get(pid)!;
+          const eb = evo.get(b.mois) ?? { dues: 0, realisees: 0 };
+          eb.dues++;
+          if (ok) eb.realisees++;
+          evo.set(b.mois, eb);
+          if (b.mois !== cleMoisChoisi) continue;
+          duesPar.set(pid, (duesPar.get(pid) ?? 0) + 1);
+          (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
+          if (ok) {
+            realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
+          } else {
+            statuts[t.key] = 'NOK';
+            (sitesEnRetardPar.get(pid) ?? sitesEnRetardPar.set(pid, new Set()).get(pid)!).add(site.id);
+          }
+        }
+        continue;
+      }
       const freq = FREQUENCE_MOIS[t.frequence]!;
       const histo = execsParCle.get(`${site.id}:${t.key}`) ?? [];
       for (const b of bornesMois) {

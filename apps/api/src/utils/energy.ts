@@ -67,3 +67,23 @@ export function analyseLivraison(opts: {
   }
   return `⚠ Surplus livraison : ${reel} L mesurés en cuve contre ${ann} L annoncés (${signe}${pct}%). À vérifier : jauge avant erronée ou stock résiduel sous-estimé.`;
 }
+
+
+/** Sources de relevés exigées par la configuration d'énergie d'un site. */
+export function sourcesForConfig(powerConfig: string): Array<'CEET' | 'GE' | 'SOLAIRE'> {
+  switch (powerConfig) {
+    case 'CEET_GE':
+    case 'HYBRIDE_CEET_GE':
+      return ['CEET', 'GE'];
+    case 'CEET_UNIQUEMENT':
+      return ['CEET'];
+    case 'GE_UNIQUEMENT':
+      return ['GE'];
+    case 'HYBRIDE_GE':
+      return ['GE', 'SOLAIRE'];
+    case 'SOLAIRE_UNIQUEMENT':
+      return ['SOLAIRE'];
+    default:
+      return [];
+  }
+}

@@ -64,6 +64,8 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
 
   for (const site of sites) {
     for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
+      // Suivi par les données (relevés/dépotages) : jamais de ticket généré.
+      if (t.suiviParDonnees) continue;
       const prestataireId = t.categorie === 'SOLAIRE'
         ? (site.lotSolaireId ? solaireByLot.get(site.lotSolaireId) : undefined)
         : (site.lotId ? passifByLot.get(site.lotId) : undefined);

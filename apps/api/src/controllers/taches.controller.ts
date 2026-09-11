@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
+import { sourcesForConfig } from '../utils/energy';
 import { ScopeMaintenance } from '@prisma/client';
 import { addMonths } from 'date-fns';
 import { prisma } from '../config/database';
@@ -35,6 +36,37 @@ import {
 } from '../utils/tachesPreventives';
 
 const SCOPES_PASSIFS: ScopeMaintenance[] = ['PASSIVE', 'LES_DEUX'];
+
+/**
+ * Suivi « validé par les données » (tâche dépotage) : jetons du MOIS COURANT
+ * par site - 'LIV' (un dépotage), 'GE' (relevé GE avec carburant), 'CEET'.
+ * Le mois est validé par une livraison OU un relevé complet selon la config.
+ */
+async function jetonsSuiviMoisCourant(siteIds: string[]): Promise<Map<string, Set<string>>> {
+  const debut = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+  const [deps, rels] = await Promise.all([
+    prisma.depotage.findMany({ where: { siteId: { in: siteIds }, dateDepotage: { gte: debut } }, select: { siteId: true } }),
+    prisma.releveEnergie.findMany({
+      where: { siteId: { in: siteIds }, dateReleve: { gte: debut }, source: { in: ['GE', 'CEET'] } },
+      select: { siteId: true, source: true, volumeGasoilLitres: true },
+    }),
+  ]);
+  const vus = new Map<string, Set<string>>();
+  const poser = (id: string, tok: string) => (vus.get(id) ?? vus.set(id, new Set()).get(id)!).add(tok);
+  for (const d of deps) poser(d.siteId, 'LIV');
+  for (const r of rels) {
+    if (r.source === 'GE') { if (r.volumeGasoilLitres != null) poser(r.siteId, 'GE'); }
+    else poser(r.siteId, 'CEET');
+  }
+  return vus;
+}
+
+function suiviMoisValide(vus: Set<string> | undefined, powerConfig: string): boolean {
+  if (!vus) return false;
+  if (vus.has('LIV')) return true;
+  const requises = sourcesForConfig(powerConfig).filter((x) => x === 'GE' || x === 'CEET');
+  return requises.length > 0 && requises.every((x) => vus.has(x));
+}
 
 /** Statut d'échéance d'une tâche pour un site. */
 type StatutEcheance = 'JAMAIS' | 'EN_RETARD' | 'A_JOUR';
@@ -80,10 +112,24 @@ export async function getTachesForSite(req: Request, res: Response, next: NextFu
     });
     const lastByKey = new Map(done.map((d) => [d.tachePreventiveKey, d._max.dateFin]));
     const now = new Date();
+    const jetons = applicables.some((t) => t.suiviParDonnees)
+      ? await jetonsSuiviMoisCourant([site.id])
+      : new Map<string, Set<string>>();
 
     res.json({
       success: true,
       data: applicables.map((t) => {
+        // Suivi par les données : le statut du mois vient des relevés/dépotages.
+        if (t.suiviParDonnees) {
+          const ok = suiviMoisValide(jetons.get(site.id), site.powerConfig);
+          return {
+            numero: t.numero, key: t.key, libelle: t.libelle, categorie: t.categorie,
+            frequence: t.frequence, frequenceLabel: FREQUENCE_LABEL[t.frequence],
+            derniereExecution: null, prochaineEcheance: null,
+            statut: ok ? 'A_JOUR' : 'EN_RETARD',
+            suiviParDonnees: true,
+          };
+        }
         // Jamais enregistrée : mensuelle → réputée faite à la date de
         // référence ; trim./sem. → à planifier À LA MAIN (statut JAMAIS).
         const last = lastByKey.get(t.key)
@@ -152,6 +198,7 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
 
     const lignes: Array<Record<string, unknown>> = [];
     let aJour = 0, enRetard = 0, jamais = 0;
+    const jetonsParc = await jetonsSuiviMoisCourant(sites.map((s) => s.id));
 
     for (const site of sites) {
       const prestaPassif = site.lot?.assignments?.[0]?.prestataire ?? null;
@@ -159,9 +206,18 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
       for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
         const presta = t.categorie === 'SOLAIRE' ? prestaSolaire : prestaPassif;
         if (prestataire_id && presta?.id !== prestataire_id) continue;
-        const last = lastByKey.get(`${site.id}:${t.key}`)
-          ?? (exigePremiereManuelle(t.frequence) ? null : dateReferenceTaches());
-        const { statut, prochaine } = statutEcheance(last, FREQUENCE_MOIS[t.frequence], now);
+        let last: Date | null;
+        let statut: 'A_JOUR' | 'EN_RETARD' | 'JAMAIS';
+        let prochaine: Date | null;
+        if (t.suiviParDonnees) {
+          // Suivi par les données : validé si relevé complet ou dépotage ce mois.
+          last = null; prochaine = null;
+          statut = suiviMoisValide(jetonsParc.get(site.id), site.powerConfig) ? 'A_JOUR' : 'EN_RETARD';
+        } else {
+          last = lastByKey.get(`${site.id}:${t.key}`)
+            ?? (exigePremiereManuelle(t.frequence) ? null : dateReferenceTaches());
+          ({ statut, prochaine } = statutEcheance(last, FREQUENCE_MOIS[t.frequence], now));
+        }
         if (statut === 'A_JOUR') aJour++; else if (statut === 'EN_RETARD') enRetard++; else jamais++;
         if (filtreStatut && statut !== filtreStatut) continue;
         lignes.push({
@@ -229,6 +285,34 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
   }
   const realisesParKey: Record<string, number> = {};
   for (const [k, set] of byKey) realisesParKey[k] = set.size;
+
+  // Tâche « dépotage » : validée par les DONNÉES du mois de la fiche (une
+  // livraison OU un relevé complet), pas par un ticket - sinon la ligne
+  // resterait à zéro pour toujours.
+  if (contrat !== 'SOLAIRE') {
+    const ids = sites.map((x) => x.id);
+    const [depsMois, relsMois] = await Promise.all([
+      prisma.depotage.findMany({
+        where: { siteId: { in: ids }, dateDepotage: { gte: monthStart, lt: monthEnd } },
+        select: { siteId: true },
+      }),
+      prisma.releveEnergie.findMany({
+        where: { siteId: { in: ids }, dateReleve: { gte: monthStart, lt: monthEnd }, source: { in: ['GE', 'CEET'] } },
+        select: { siteId: true, source: true, volumeGasoilLitres: true },
+      }),
+    ]);
+    const vusFiche = new Map<string, Set<string>>();
+    const poserF = (id: string, tok: string) => (vusFiche.get(id) ?? vusFiche.set(id, new Set()).get(id)!).add(tok);
+    for (const x of depsMois) poserF(x.siteId, 'LIV');
+    for (const x of relsMois) {
+      if (x.source === 'GE') { if (x.volumeGasoilLitres != null) poserF(x.siteId, 'GE'); }
+      else poserF(x.siteId, 'CEET');
+    }
+    realisesParKey['depotage'] = sites.filter((x) =>
+      TASK_BY_KEY['depotage'].eligible(x as unknown as SiteEligibilite)
+      && suiviMoisValide(vusFiche.get(x.id), x.powerConfig)
+    ).length;
+  }
 
   let zone: string;
   if (lotId) {

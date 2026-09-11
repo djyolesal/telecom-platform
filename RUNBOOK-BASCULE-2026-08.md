@@ -345,7 +345,11 @@ flutter build appbundle --release --dart-define=API_URL=https://emops.uk/api/v1
         MENSUELLES jamais enregistrées (AAAAMMJJ) : réputées faites à cette date, dues à
         date + 1 mois. Les TRIMESTRIELLES et SEMESTRIELLES jamais exécutées, elles, ne sont
         JAMAIS générées ni dues automatiquement : première planification À LA MAIN, c'est la
-        première clôture qui amorce leur cycle (décision exploitant 12/09) ;
+        première clôture qui amorce leur cycle. Exception : « Suivi des livraisons et
+        relevé carburant (dépotage) » est un suivi MENSUEL validé par les DONNÉES du mois
+        (relevé complet - GE avec carburant + CEET selon la config - OU un dépotage) :
+        jamais de ticket généré, la fiche de validation mensuelle le compte depuis les
+        données (décisions exploitant 12/09) ;
       · `sla.penaliteInvalidationFCFA` (défaut **100 000**) — pénalité par maintenance
         invalidée par un manager (en plus de la chute du taux préventif qu'elle provoque).
 - [ ] **SMS à la livraison** : cocher « Livraisons » sur les seuls contacts qui doivent

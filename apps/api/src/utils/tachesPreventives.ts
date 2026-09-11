@@ -52,6 +52,10 @@ export interface TachePreventive {
   frequence: Frequence;
   cible: string; // description des sites concernés
   eligible: (s: SiteEligibilite) => boolean;
+  // Suivi VALIDÉ PAR LES DONNÉES d'exploitation (relevés/dépotages du mois),
+  // pas par un ticket de maintenance : jamais généré au planning, réalisé au
+  // rapport de conformité dès que les données du mois existent.
+  suiviParDonnees?: boolean;
 }
 
 /** Catalogue contractuel des tâches préventives (prestataire passif). */
@@ -114,8 +118,12 @@ export const CONTRACTUAL_TASKS: TachePreventive[] = [
   },
   {
     numero: 11, key: 'depotage', libelle: 'Suivi des livraisons et relevé carburant (dépotage)', categorie: 'GE',
-    frequence: 'AU_BESOIN', cible: 'Sites avec GE et cuve',
+    // Décision exploitant (12/09/2026) : suivi MENSUEL validé par les DONNÉES
+    // du mois - un relevé complet (GE avec carburant + CEET selon la config)
+    // OU un dépotage suffit. Aucun ticket de maintenance n'est généré.
+    frequence: 'MENSUELLE', cible: 'Sites avec GE et cuve - validé par relevé complet ou dépotage du mois',
     eligible: (s) => hasGE(s) && hasCuve(s),
+    suiviParDonnees: true,
   },
   {
     numero: 12, key: 'curage_cuve', libelle: 'Curage et nettoyage des cuves à gasoil', categorie: 'GE',

@@ -32,6 +32,7 @@ import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
 import { dateBornee } from '../utils/dates';
+import { sourcesForConfig } from '../utils/energy';
 import { paginate } from '../utils/paginator';
 import { triListe } from '../utils/triListe';
 import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
@@ -136,23 +137,6 @@ async function applyMouvementActif(
 }
 
 /** Sources d'énergie présentes selon la configuration du site. */
-function sourcesForConfig(powerConfig: string): SourceEnergie[] {
-  switch (powerConfig) {
-    case 'CEET_GE':
-    case 'HYBRIDE_CEET_GE':
-      return ['CEET', 'GE'];
-    case 'CEET_UNIQUEMENT':
-      return ['CEET'];
-    case 'GE_UNIQUEMENT':
-      return ['GE'];
-    case 'HYBRIDE_GE':
-      return ['GE', 'SOLAIRE'];
-    case 'SOLAIRE_UNIQUEMENT':
-      return ['SOLAIRE'];
-    default:
-      return [];
-  }
-}
 
 /**
  * Détermine le prestataire responsable d'une maintenance à partir du lot du site
