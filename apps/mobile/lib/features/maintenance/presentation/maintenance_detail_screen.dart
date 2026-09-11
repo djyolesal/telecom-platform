@@ -291,6 +291,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
             checklist:
                 (result['checklist'] as List?)?.cast<Map<String, dynamic>>() ??
                     const [],
+            pieces:
+                (result['pieces'] as List?)?.cast<Map<String, dynamic>>() ??
+                    const [],
             photoPaths: photoPaths,
             latitude: check.lat,
             longitude: check.lng,
@@ -689,6 +692,9 @@ class _CloseSheetState extends State<_CloseSheet> {
   final Map<String, String> _ckResultats = {};
   final Map<String, TextEditingController> _ckValeurs = {};
   final Map<String, TextEditingController> _ckComms = {};
+  // Pièces remplacées : lignes libres (nom + quantité), suggestions du
+  // catalogue serveur (AppConfig.pieces) - la frappe libre reste possible.
+  final List<({TextEditingController nom, TextEditingController qte})> _pieces = [];
   // Déclaration obligatoire : agent de gardiennage présent sur site ?
   bool? _agentPresent;
   // Présent ⇒ il signe (exigé par le serveur, comme au dépotage).
@@ -719,10 +725,14 @@ class _CloseSheetState extends State<_CloseSheet> {
       _puissance,
       _nomAgent,
       ..._geCtrls.values,
+      for (final l in _pieces) ...[l.nom, l.qte],
       ..._ckValeurs.values,
       ..._ckComms.values,
     ]) {
       c.dispose();
+    }
+    for (final f in _focusPieces) {
+      f.dispose();
     }
     super.dispose();
   }
@@ -1123,6 +1133,14 @@ class _CloseSheetState extends State<_CloseSheet> {
             }
         ],
       'photos': _photos,
+      'pieces': [
+        for (final l in _pieces)
+          if (l.nom.text.trim().isNotEmpty)
+            {
+              'nom': l.nom.text.trim(),
+              'quantite': int.tryParse(l.qte.text.trim()) ?? 1,
+            }
+      ],
       'agentPresent': _agentPresent,
       if (_nomAgent.text.trim().isNotEmpty)
         'nomAgentSecurite': _nomAgent.text.trim(),
@@ -1133,6 +1151,117 @@ class _CloseSheetState extends State<_CloseSheet> {
 
   /// Choix obligatoire Présent/Absent (sans valeur par défaut : une case
   /// pré-cochée serait validée machinalement et la donnée ne vaudrait rien).
+
+  /// Pièces remplacées : lignes nom + quantité, suggestions du catalogue
+  /// serveur (frappe libre toujours possible - le serveur rapproche).
+  Widget _sectionPieces() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Expanded(
+            child: Text('Pièces remplacées (optionnel)',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                    fontSize: 13)),
+          ),
+          TextButton.icon(
+            onPressed: () => setState(() => _pieces.add((
+                  nom: TextEditingController(),
+                  qte: TextEditingController(text: '1'),
+                ))),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Ajouter'),
+          ),
+        ]),
+        for (var i = 0; i < _pieces.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: RawAutocomplete<String>(
+                    textEditingController: _pieces[i].nom,
+                    focusNode: _focusPiece(i),
+                    optionsBuilder: (v) {
+                      final q = v.text.trim().toLowerCase();
+                      if (q.isEmpty) return const Iterable<String>.empty();
+                      return AppConfig.pieces
+                          .map((e) => e['libelle']!)
+                          .where((l) => l.toLowerCase().contains(q))
+                          .take(6);
+                    },
+                    fieldViewBuilder: (context, ctrl, focus, onSubmit) =>
+                        TextField(
+                      controller: ctrl,
+                      focusNode: focus,
+                      decoration:
+                          const InputDecoration(labelText: 'Pièce (nom)'),
+                    ),
+                    optionsViewBuilder: (context, onSelected, options) =>
+                        Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                              maxHeight: 200, maxWidth: 280),
+                          child: ListView(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            children: [
+                              for (final o in options)
+                                ListTile(
+                                    dense: true,
+                                    title: Text(o,
+                                        style: const TextStyle(fontSize: 13)),
+                                    onTap: () => onSelected(o)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 64,
+                  child: TextField(
+                    controller: _pieces[i].qte,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Qté'),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => setState(() {
+                    final l = _pieces.removeAt(i);
+                    l.nom.dispose();
+                    l.qte.dispose();
+                    _focusPieces.removeAt(i).dispose();
+                  }),
+                  icon: const Icon(Icons.delete_outline,
+                      size: 20, color: Colors.redAccent),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  // Un FocusNode stable par ligne (RawAutocomplete l'exige avec un contrôleur externe).
+  final List<FocusNode> _focusPieces = [];
+  FocusNode _focusPiece(int i) {
+    while (_focusPieces.length <= i) {
+      _focusPieces.add(FocusNode());
+    }
+    return _focusPieces[i];
+  }
+
   Widget _agentSelector() {
     Widget bouton(bool value, String label, IconData icon, Color color) {
       final selected = _agentPresent == value;
@@ -1486,6 +1615,7 @@ class _CloseSheetState extends State<_CloseSheet> {
                         ),
                         const SizedBox(height: 12),
                       ],
+                      _sectionPieces(),
                       TextField(
                           controller: _obs,
                           maxLines: 3,

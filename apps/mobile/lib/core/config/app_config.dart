@@ -15,6 +15,11 @@ class AppConfig {
   static int minPhotosIncidentAvant = 2;
   static int intervalleVidangeHeures = 250;
 
+  /// Catalogue des pièces de rechange (code → libellé/unité), servi par
+  /// /config : suggestions à la clôture de maintenance. Vide tant que rien
+  /// n'est chargé - la saisie libre reste toujours possible.
+  static List<Map<String, String>> pieces = [];
+
   /// Référentiel des types d'incident (code → libellé), éditable en admin et
   /// servi par /config : une évolution ne demande pas de nouvelle version de
   /// l'application. Repli sur la liste historique tant que rien n'est chargé.
@@ -143,6 +148,18 @@ class ConfigService {
                     t['code'].toString():
                         t['libelle']?.toString() ?? t['code'].toString(),
               };
+            }
+            final pcs = d['pieces'];
+            if (pcs is List && pcs.isNotEmpty) {
+              AppConfig.pieces = [
+                for (final e in pcs)
+                  if (e is Map && e['libelle'] != null)
+                    {
+                      'code': e['code']?.toString() ?? '',
+                      'libelle': e['libelle'].toString(),
+                      'unite': e['unite']?.toString() ?? 'unité',
+                    },
+              ];
             }
             final equips = d['equipements'];
             if (equips is List && equips.isNotEmpty) {
