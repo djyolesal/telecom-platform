@@ -6,7 +6,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams, getNum, dateReferenceTaches } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
-import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, SiteEligibilite } from '../utils/tachesPreventives';
+import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, exigePremiereManuelle, SiteEligibilite } from '../utils/tachesPreventives';
 import { bilanCarburant } from '../services/bilanCarburant.service';
 import { bilanEnergie } from '../services/bilanEnergie.service';
 import { sendTabular } from '../utils/exporter';
@@ -649,9 +649,13 @@ async function chargerConformiteMaintenance(req: Request) {
           else if (d < b.fin) realisee = true;
           else break;
         }
-        // Jamais enregistrée avant ce mois : réputée faite à la date de
-        // référence du suivi (le dû ne remonte pas avant la plateforme).
-        // <= : une référence posée AU 1er du mois vaut pour ce mois-là.
+        // Trim./sem. jamais exécutée avant ce mois : première planification
+        // MANUELLE - aucun dû automatique tant que le cycle n'est pas amorcé.
+        // (Une exécution dans le mois même amorce le cycle pour la suite.)
+        if (!derniereAvant && exigePremiereManuelle(t.frequence)) continue;
+        // Mensuelle jamais enregistrée avant ce mois : réputée faite à la
+        // date de référence du suivi (le dû ne remonte pas avant la
+        // plateforme). <= : une référence AU 1er du mois vaut pour ce mois-là.
         if (!derniereAvant && refTaches && refTaches <= b.debut) derniereAvant = refTaches;
         const due = !derniereAvant || addMonths(derniereAvant, freq) < b.fin;
         if (!due) continue;

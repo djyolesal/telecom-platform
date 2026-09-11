@@ -341,11 +341,11 @@ flutter build appbundle --release --dart-define=API_URL=https://emops.uk/api/v1
         enregistrement de la même livraison ;
       · `appro.margeGePermanentJours` (défaut **2**) — marge de sécurité supplémentaire sur
         le seuil de livraison des sites 100 % gasoil ;
-      · `taches.dateReferenceJamaisFaites` (défaut **0**) — ⚠️ à poser à la date de mise en
-        service (AAAAMMJJ, ex. 20260915) AVANT la première génération de planning : sans elle,
-        TOUTES les tâches jamais enregistrées (l'historique papier n'est pas importé) sont
-        dues immédiatement → des centaines de tickets et un rapport de conformité tout NOK
-        dès le premier jour. Avec elle, chaque tâche redevient due à date + fréquence ;
+      · `taches.dateReferenceJamaisFaites` (défaut **0**) — point de départ des tâches
+        MENSUELLES jamais enregistrées (AAAAMMJJ) : réputées faites à cette date, dues à
+        date + 1 mois. Les TRIMESTRIELLES et SEMESTRIELLES jamais exécutées, elles, ne sont
+        JAMAIS générées ni dues automatiquement : première planification À LA MAIN, c'est la
+        première clôture qui amorce leur cycle (décision exploitant 12/09) ;
       · `sla.penaliteInvalidationFCFA` (défaut **100 000**) — pénalité par maintenance
         invalidée par un manager (en plus de la chute du taux préventif qu'elle provoque).
 - [ ] **SMS à la livraison** : cocher « Livraisons » sur les seuls contacts qui doivent

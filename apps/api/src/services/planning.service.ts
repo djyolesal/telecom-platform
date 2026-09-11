@@ -2,7 +2,7 @@ import { addMonths } from 'date-fns';
 import { ScopeMaintenance } from '@prisma/client';
 import { genererReference } from './reference.service';
 import { prisma } from '../config/database';
-import { FREQUENCE_MOIS, tachesPlanifiables, SiteEligibilite } from '../utils/tachesPreventives';
+import { FREQUENCE_MOIS, tachesPlanifiables, exigePremiereManuelle, SiteEligibilite } from '../utils/tachesPreventives';
 import { dateReferenceTaches } from './settings.service';
 
 const SCOPES_PASSIFS: ScopeMaintenance[] = ['PASSIVE', 'LES_DEUX'];
@@ -70,10 +70,14 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
       const mapKey = `${site.id}:${t.key}`;
       if (ouvertSet.has(mapKey)) continue;
       const freq = FREQUENCE_MOIS[t.frequence]!;
-      // Jamais enregistrée : réputée faite à la date de référence du suivi
-      // (l'historique papier d'avant la plateforme n'est pas importé) - due à
-      // référence + fréquence. Sans référence configurée : due tout de suite.
-      const last = lastByKey.get(mapKey) ?? dateReferenceTaches();
+      const derniere = lastByKey.get(mapKey) ?? null;
+      // Trimestrielles/semestrielles jamais exécutées : PREMIÈRE planification
+      // à la main - le générateur n'invente pas leur point de départ ; la
+      // première clôture amorce le cycle automatique.
+      if (!derniere && exigePremiereManuelle(t.frequence)) continue;
+      // Mensuelles jamais enregistrées : réputées faites à la date de
+      // référence du suivi (l'historique papier n'est pas importé).
+      const last = derniere ?? dateReferenceTaches();
       const prochaine = last ? addMonths(last, freq) : now;
       if (prochaine > limite) continue;
       if (!prestataireId) { ignoresSansPrestataire++; continue; }

@@ -10,6 +10,16 @@ export const FREQUENCE_MOIS: Record<Frequence, number | null> = {
   AU_BESOIN: null,
 };
 
+/**
+ * Première planification MANUELLE exigée (décision exploitant 12/09/2026) :
+ * les tâches trimestrielles et semestrielles ne sont JAMAIS générées ni dues
+ * automatiquement tant qu'aucune exécution valide n'est enregistrée - c'est
+ * la première exécution qui amorce le cycle (dernière + fréquence). Les
+ * mensuelles, elles, suivent la date de référence du suivi.
+ */
+export const exigePremiereManuelle = (f: Frequence): boolean =>
+  f === 'TRIMESTRIELLE' || f === 'SEMESTRIELLE';
+
 export const FREQUENCE_LABEL: Record<Frequence, string> = {
   MENSUELLE: 'Tous les mois',
   TRIMESTRIELLE: '1 fois / 3 mois',

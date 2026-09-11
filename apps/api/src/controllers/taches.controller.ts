@@ -31,6 +31,7 @@ import {
   tachesPlanifiables,
   effectiveCatalogue,
   SiteEligibilite,
+  exigePremiereManuelle,
 } from '../utils/tachesPreventives';
 
 const SCOPES_PASSIFS: ScopeMaintenance[] = ['PASSIVE', 'LES_DEUX'];
@@ -83,8 +84,10 @@ export async function getTachesForSite(req: Request, res: Response, next: NextFu
     res.json({
       success: true,
       data: applicables.map((t) => {
-        // Jamais enregistrée = réputée faite à la date de référence du suivi.
-        const last = lastByKey.get(t.key) ?? dateReferenceTaches();
+        // Jamais enregistrée : mensuelle → réputée faite à la date de
+        // référence ; trim./sem. → à planifier À LA MAIN (statut JAMAIS).
+        const last = lastByKey.get(t.key)
+          ?? (exigePremiereManuelle(t.frequence) ? null : dateReferenceTaches());
         const { statut, prochaine } = statutEcheance(last, FREQUENCE_MOIS[t.frequence], now);
         return {
           numero: t.numero,
@@ -156,7 +159,8 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
       for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
         const presta = t.categorie === 'SOLAIRE' ? prestaSolaire : prestaPassif;
         if (prestataire_id && presta?.id !== prestataire_id) continue;
-        const last = lastByKey.get(`${site.id}:${t.key}`) ?? dateReferenceTaches();
+        const last = lastByKey.get(`${site.id}:${t.key}`)
+          ?? (exigePremiereManuelle(t.frequence) ? null : dateReferenceTaches());
         const { statut, prochaine } = statutEcheance(last, FREQUENCE_MOIS[t.frequence], now);
         if (statut === 'A_JOUR') aJour++; else if (statut === 'EN_RETARD') enRetard++; else jamais++;
         if (filtreStatut && statut !== filtreStatut) continue;
