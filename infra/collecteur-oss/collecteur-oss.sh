@@ -5,8 +5,10 @@
 #
 #   noeud1 (internet) ──ssh──▶ noeud2 ──ssh──▶ nœud OSS (commande)
 #
-# Cron (toutes les 5 min) :
-#   */5 * * * * /opt/collecteur-oss/collecteur-oss.sh >> /var/log/collecteur-oss.log 2>&1
+# Cron (toutes les minutes - décision exploitant 12/09/2026, détection quasi
+# temps réel ; le verrou ci-dessous empêche deux passages de se chevaucher si
+# la cascade SSH traîne) :
+#   * * * * * /opt/collecteur-oss/collecteur-oss.sh >> /var/log/collecteur-oss.log 2>&1
 #
 # Configuration par variables d'environnement (ou éditer ci-dessous) :
 #   OSS_HOST     hôte SSH du nœud final (ex. user@10.x.x.x)
@@ -21,6 +23,11 @@
 #   mode jump    : la clé de noeud1 acceptée par noeud2 ET par le nœud OSS
 #   mode cascade : noeud1 → noeud2, puis noeud2 → nœud OSS
 set -euo pipefail
+
+# Anti-chevauchement : à la cadence 1 min, un passage lent (SSH en cascade,
+# réseau chargé) ne doit pas s'empiler sur le suivant - on saute simplement.
+exec 9>"/tmp/collecteur-oss.lock"
+flock -n 9 || { echo "passage précédent encore en cours - sauté"; exit 0; }
 
 : "${OSS_HOST:?OSS_HOST requis}"
 : "${OSS_COMMANDE:?OSS_COMMANDE requise}"

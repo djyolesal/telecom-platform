@@ -46,7 +46,14 @@ Commencer par `jump` ; si le saut final échoue (timeout), basculer `cascade`.
    `.env` du serveur E&M OpS (`OSS_SYNC_TOKEN=…`, puis `docker compose up -d api`)
    ET dans l'environnement du cron (`EMOPS_TOKEN=…`) ;
 4. cron :
-   `*/5 * * * * OSS_JUMP=user@noeud2 OSS_HOST=user@oss OSS_COMMANDE='…' EMOPS_TOKEN=… /opt/collecteur-oss/collecteur-oss.sh >> /var/log/collecteur-oss.log 2>&1`
+   `* * * * * OSS_JUMP=user@noeud2 OSS_HOST=user@oss OSS_COMMANDE='…' EMOPS_TOKEN=… /opt/collecteur-oss/collecteur-oss.sh >> /var/log/collecteur-oss.log 2>&1`
+
+   Cadence : **toutes les minutes** (décision exploitant 12/09/2026) - détection
+   quasi temps réel ; le script porte un verrou anti-chevauchement (flock), un
+   passage lent fait simplement sauter le suivant. Le serveur accepte jusqu'à
+   10 appels/min sur la route. Avec la garde de stabilité de 10 min
+   (`oss.stabiliteRetablissementMin`), un rétablissement réel se clôture
+   désormais à ~10-11 min au lieu de 10-15.
 
 Test manuel : d'abord la chaîne SSH seule
 (`OSS_JUMP=… OSS_HOST=… ssh -J "$OSS_JUMP" "$OSS_HOST" '<commande>' | head`),
