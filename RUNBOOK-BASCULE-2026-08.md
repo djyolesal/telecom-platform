@@ -31,8 +31,9 @@ conforme + reprise planifiable, bandeau web/mobile), **export conformité** (par
 l'export coupures réservée manager/admin, **barémage 1000 points**, correctif OSS
 (**requalification en partielle** ne recrée plus la détection), **config mobile persistée**
 (fin des « 60 min » fantômes hors-ligne), **catalogue des pièces de rechange** (0058 -
-rapprochement serveur de la saisie libre, compatible APK antérieurs). APK courant :
-**1.7.0+41** (versionCode 2041).
+rapprochement serveur de la saisie libre, compatible APK antérieurs) + saisie mobile des pièces à la clôture (b42,
+optionnelle - b40/b41 restent valides). APK courant :
+**1.7.0+42** (versionCode 2042).
 
 **Six ruptures de compatibilité à avoir en tête pendant toute la bascule :**
 1. la création d'un BL **exige un chauffeur** → un APK antérieur est refusé ;
@@ -41,13 +42,13 @@ rapprochement serveur de la saisie libre, compatible APK antérieurs). APK coura
 4. **🔴 NOUVEAU — signatures obligatoires** : le serveur refuse désormais TOUTE clôture sans
    **signature du technicien** (maintenance, incident) et tout dépotage sans **signature +
    nom du chauffeur** et signature du technicien. Un APK antérieur au b32 **ne peut plus rien
-   clôturer** : l'API et l'APK **b41** doivent partir dans la MÊME fenêtre, jamais étalés ;
+   clôturer** : l'API et l'APK **b42** doivent partir dans la MÊME fenêtre, jamais étalés ;
 5. **NOUVEAU — photos exigées sur les dépannages** : une curative se clôture avec au moins
    2 photos (réglable). Un APK ancien ne les impose pas côté saisie → refus serveur.
 6. **🔴 NOUVEAU — photos AVANT au démarrage d'incident** : le serveur refuse de démarrer une
    intervention sans ≥ 2 photos de l'état constaté (`incident.minPhotosAvant`). Seul le
-   **b41** les joint correctement (le b39, jamais distribué, avait un bug qui les perdait) :
-   l'API et l'APK **b41** partent dans la MÊME fenêtre.
+   **b42** les joint correctement (le b39, jamais distribué, avait un bug qui les perdait) :
+   l'API et l'APK **b42** partent dans la MÊME fenêtre.
 
 **⚠️ SMS réels** : la passerelle Moov est ACTIVE en prod. Tout test qui déclenche une
 notification (création d'incident, coupure totale, alerte) **envoie de vrais SMS**. Pour la
@@ -62,7 +63,7 @@ automatique d'un événement pris en charge, si la coupure a duré ≥ 15 min
 
 - [ ] Annonce aux utilisateurs : coupure de service ~30 min, reconnexion obligatoire ensuite.
 - [ ] Fenêtre choisie hors heures de tournée carburant (éviter un transporteur en pleine saisie).
-- [ ] **APK b41 construit et testé sur un téléphone réel** AVANT la fenêtre (phase 4 ci-dessous —
+- [ ] **APK b42 construit et testé sur un téléphone réel** AVANT la fenêtre (phase 4 ci-dessous —
       le build peut se faire la veille, seule la distribution attend la bascule). Rappel : à
       cause de la rupture nº4 (signatures), la distribution ne peut PAS attendre le lendemain.
 - [ ] **SMTP configuré** sur le serveur (`SMTP_HOST`, `SMTP_FROM`…) : sans lui, le récap
@@ -75,7 +76,7 @@ automatique d'un événement pris en charge, si la coupure a duré ≥ 15 min
       la prod est au niveau du 03/09 (`0054` déjà passée avec l'audit nº2 sinon elle part aussi). Toute migration inattendue ici est
       une anomalie à comprendre AVANT la bascule.
 
-✋ **Contrôle** : APK b41 testé OK sur téléphone, fenêtre annoncée, disque > 5 Go libres,
+✋ **Contrôle** : APK b42 testé OK sur téléphone, fenêtre annoncée, disque > 5 Go libres,
 SMTP configuré.
 
 ---
@@ -144,7 +145,7 @@ dans `make update`, ne pas l'oublier : sans lui, les sessions web continueront d
 additives (`IF NOT EXISTS` partout) : un échec signalerait un état de base inattendu.
 
 **⚠️ Enchaîner immédiatement sur la phase 4 (APK)** : entre le déploiement de l'API et
-l'installation du b41, les mobiles en circulation **ne peuvent plus clôturer** (rupture nº4).
+l'installation du b42, les mobiles en circulation **ne peuvent plus clôturer** (rupture nº4).
 La recette (phase 3) peut se faire en parallèle de la distribution, pas avant.
 
 ✋ **Contrôle** : conteneurs stables 5 minutes, santé API et auth OK, migrations toutes passées.
@@ -249,7 +250,7 @@ couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
       puis relancer le conteneur pour tester) → l'email arrive aux superviseurs et internes,
       chacun avec SON périmètre, sections par contrat, **sites désignés par leur nom**.
 
-**Mobile (téléphone réel, APK b41)**
+**Mobile (téléphone réel, APK b42)**
 - [ ] Connexion technicien (le verrou d'appareil accepte le téléphone).
 - [ ] Un dépotage complet de test : plan → jauges → 6 photos → **signatures chauffeur (avec son
       NOM) + technicien** → GPS → envoi. Sans le nom du chauffeur : refus explicite.
@@ -259,7 +260,7 @@ couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
       clôturer → au moins 2 photos exigées.
 - [ ] **Mesure de cuve** depuis la fiche site : 3 photos exigées, les litres calculés
       correspondent à ceux du web pour la même hauteur.
-- [ ] **Démarrage d'incident (b41)** : « Démarrer l'intervention » guide la prise de
+- [ ] **Démarrage d'incident (b42)** : « Démarrer l'intervention » guide la prise de
       **2 photos AVANT** puis la vérification GPS → l'incident passe EN COURS (c'était le
       bug bloquant du b39 : photos capturées mais jamais envoyées).
 - [ ] **Anti-doublon dépotage** : ressaisir un dépotage de même volume sur le même site
@@ -283,8 +284,8 @@ rustine en production.
 
 ## Phase 4 — APK
 
-L'APK **1.7.0+41** est déjà construit et déposé dans `~/Downloads/APK-emops/`
-(`emops-1.7.0-b41-arm64-v8a.apk` + `-armeabi-v7a.apk` + `.aab`, versionCode **2041**,
+L'APK **1.7.0+42** est déjà construit et déposé dans `~/Downloads/APK-emops/`
+(`emops-1.7.0-b42-arm64-v8a.apk` + `-armeabi-v7a.apk` + `.aab`, versionCode **2042**,
 signature `4955c7cf…` inchangée — mise à jour par-dessus, pas de désinstallation).
 Pour le reconstruire à l'identique :
 
@@ -405,8 +406,8 @@ Notes :
   référentiel en table ; un retour au code d'avant 0052 est donc à éviter — préférer corriger
   en avant. Les migrations 0043-0051 et 0053 n'ont pas cette contrainte.
 - l'ancien APK redevient compatible avec l'ancien code : pas d'action mobile au rollback.
-  **Mais** si l'API est revenue en arrière alors que le b41 est déjà distribué, les mobiles
-  fonctionnent quand même (le b41 envoie les signatures, l'ancienne API les ignore).
+  **Mais** si l'API est revenue en arrière alors que le b42 est déjà distribué, les mobiles
+  fonctionnent quand même (le b42 envoie les signatures, l'ancienne API les ignore).
 - après tout retour arrière : diagnostiquer À FROID sur ce dépôt, jamais en direct en prod.
 
 ---
