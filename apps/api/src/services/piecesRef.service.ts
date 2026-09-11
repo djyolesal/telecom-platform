@@ -31,7 +31,7 @@ export const normaliserPiece = (s: string): string =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '');
 
-async function indexCatalogue(): Promise<Map<string, string>> {
+async function indexCatalogue(): Promise<{ idx: Map<string, string>; idsActifs: Set<string> }> {
   const refs = await prisma.pieceRef.findMany({ where: { actif: true }, select: { id: true, code: true, libelle: true } });
   const idx = new Map<string, string>();
   // Une clé normalisée revendiquée par DEUX références est ambiguë : on la
@@ -47,7 +47,7 @@ async function indexCatalogue(): Promise<Map<string, string>> {
     poser(normaliserPiece(r.libelle), r.id);
   }
   for (const cle of doublons) idx.delete(cle);
-  return idx;
+  return { idx, idsActifs: new Set(refs.map((r) => r.id)) };
 }
 
 /** Assainit et rapproche une liste de pièces saisies (création/clôture). */
@@ -63,15 +63,15 @@ export async function rapprocherPieces(brutes: PieceSaisie[]): Promise<PieceRapp
     .filter((p) => p.nom);
   if (!lignes.length) return [];
 
-  const idx = await indexCatalogue();
-  // Un pieceRefId explicite n'est retenu que s'il existe et est actif.
-  const idsValides = new Set(idx.values());
+  const { idx, idsActifs } = await indexCatalogue();
   return lignes.map((p) => ({
     nom: p.nom,
     reference: p.reference,
     quantite: p.quantite,
     coutUnitaire: p.coutUnitaire,
-    pieceRefId: (p.pieceRefIdClient && idsValides.has(p.pieceRefIdClient) ? p.pieceRefIdClient : null)
+    // Un pieceRefId explicite prime s'il désigne une référence ACTIVE - même
+    // une référence dont les clés textuelles sont ambiguës reste ciblable.
+    pieceRefId: (p.pieceRefIdClient && idsActifs.has(p.pieceRefIdClient) ? p.pieceRefIdClient : null)
       ?? idx.get(normaliserPiece(p.nom))
       ?? (p.reference ? idx.get(normaliserPiece(p.reference)) : undefined)
       ?? null,
@@ -84,17 +84,22 @@ export async function rapprocherPieces(brutes: PieceSaisie[]): Promise<PieceRapp
  * (à relancer après chaque enrichissement du référentiel).
  */
 export async function rapprocherHistorique(): Promise<{ examinees: number; rapprochees: number }> {
-  const idx = await indexCatalogue();
+  const { idx } = await indexCatalogue();
   const libres = await prisma.pieceRechange.findMany({
     where: { pieceRefId: null },
     select: { id: true, nom: true, reference: true },
   });
-  let rapprochees = 0;
+  // Groupé par référence cible : quelques updateMany au lieu d'un UPDATE par ligne.
+  const parRef = new Map<string, string[]>();
   for (const p of libres) {
     const refId = idx.get(normaliserPiece(p.nom)) ?? (p.reference ? idx.get(normaliserPiece(p.reference)) : undefined);
     if (!refId) continue;
-    await prisma.pieceRechange.update({ where: { id: p.id }, data: { pieceRefId: refId } });
-    rapprochees++;
+    (parRef.get(refId) ?? parRef.set(refId, []).get(refId)!).push(p.id);
+  }
+  let rapprochees = 0;
+  for (const [refId, ids] of parRef) {
+    await prisma.pieceRechange.updateMany({ where: { id: { in: ids } }, data: { pieceRefId: refId } });
+    rapprochees += ids.length;
   }
   return { examinees: libres.length, rapprochees };
 }

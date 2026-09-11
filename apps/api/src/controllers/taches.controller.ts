@@ -71,7 +71,9 @@ export async function getTachesForSite(req: Request, res: Response, next: NextFu
     // Dernières exécutions terminées par clé de tâche pour ce site.
     const done = await prisma.maintenance.groupBy({
       by: ['tachePreventiveKey'],
-      where: { siteId: site.id, statut: 'TERMINEE', tachePreventiveKey: { in: applicables.map((t) => t.key) } },
+      // Une clôture invalidée n'est pas une exécution valide (cohérent avec
+      // le rapport de conformité et le planificateur).
+      where: { siteId: site.id, statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { in: applicables.map((t) => t.key) } },
       _max: { dateFin: true },
     });
     const lastByKey = new Map(done.map((d) => [d.tachePreventiveKey, d._max.dateFin]));
@@ -137,7 +139,7 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
 
     const done = await prisma.maintenance.groupBy({
       by: ['siteId', 'tachePreventiveKey'],
-      where: { statut: 'TERMINEE', tachePreventiveKey: { not: null } },
+      where: { statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null } },
       _max: { dateFin: true },
     });
     const lastByKey = new Map<string, Date>();
@@ -207,7 +209,7 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
   const monthEnd = new Date(an, mo, 1);
   const done = await prisma.maintenance.findMany({
     where: {
-      prestataireId: presta.id, statut: 'TERMINEE', tachePreventiveKey: { not: null },
+      prestataireId: presta.id, statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
       dateFin: { gte: monthStart, lt: monthEnd },
       ...(lotId ? { site: contrat === 'SOLAIRE' ? { lotSolaireId: lotId } : { lotId } } : {}),
     },

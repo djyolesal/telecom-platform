@@ -9,9 +9,10 @@ import { prisma } from '../config/database';
  *    au dernier relevé antérieur, ÉLARGIE vers l'arrière si < 10 jours (une
  *    fenêtre courte extrapolée au mois amplifie n'importe quel accident) ;
  *    conso = niveau₁ + livraisons − niveau₂ ; conso/j × jours calendaires.
- *  - STOCKS AUX FRONTIÈRES : interpolés par la conso/j depuis le relevé le
- *    plus proche (livraisons de l'intervalle comptées) — jamais de report
- *    brut, qui surestimait systématiquement (la cuve ne fait que descendre).
+ *  - STOCKS AUX FRONTIÈRES : interpolés par la conso/j depuis les bornes de
+ *    la fenêtre (livraisons de l'intervalle comptées) — jamais de report brut,
+ *    qui surestimait systématiquement ; le bilan publié BOUCLE ainsi
+ *    (début + livraisons − fin = conso).
  *  - GARDES : delta d'index GE rejeté si négatif ou > 25 h/j (compteur
  *    changé/aberrant) ; L/h publié seulement dans [0,5 – 60] — hors plage,
  *    l'index ment (bloqué) et le site est signalé.
@@ -167,17 +168,18 @@ export function bilanMensuelSite(opts: {
     }
   }
 
-  // Stocks aux frontières, interpolés par la conso/j (report brut à défaut,
-  // signalé) - toujours depuis le relevé LE PLUS PROCHE de la frontière : en
-  // fenêtre élargie, r1 peut être loin derrière alors qu'un relevé antérieur
-  // plus récent ancre mieux le 1er du mois.
+  // Stocks aux frontières, interpolés par la conso/j depuis les BORNES DE LA
+  // FENÊTRE (report brut à défaut, signalé). Ancrer sur un relevé intermédiaire
+  // « plus proche » semblait plus précis, mais cassait le bouclage du bilan
+  // publié (stockDebut + livraisons − stockFin ≠ conso) dès que ce relevé
+  // s'écartait de la droite d'interpolation - un rapport de réconciliation
+  // doit boucler ; le bruit de jauge est le travail de la contre-épreuve.
   const interp = consoJour ?? 0;
   if (consoJour == null) drapeaux.push('frontières en report brut (conso incalculable)');
-  const ancreDebut = avant.length ? avant[avant.length - 1] : r1;
-  const jAvant = Math.max(0, (premier.getTime() - ancreDebut.date.getTime()) / JOUR_MS);
-  const stockDebut = ancreDebut.date < premier
-    ? Math.max(0, ancreDebut.volume! - interp * jAvant + sommeLivraisons(opts.livraisons, ancreDebut.date, premier))
-    : ancreDebut.volume!;
+  const jAvant = Math.max(0, (premier.getTime() - r1.date.getTime()) / JOUR_MS);
+  const stockDebut = r1.date < premier
+    ? Math.max(0, r1.volume! - interp * jAvant + sommeLivraisons(opts.livraisons, r1.date, premier))
+    : r1.volume!;
   const jApres = Math.max(0, (suivant.getTime() - r2.date.getTime()) / JOUR_MS);
   const stockFin = Math.max(0, r2.volume! - interp * jApres + sommeLivraisons(opts.livraisons, r2.date, suivant));
 

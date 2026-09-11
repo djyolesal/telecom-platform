@@ -9,6 +9,25 @@ import { getNum, getRaw, typesLiaison } from '../services/settings.service';
  */
 export async function getAppConfig(_req: Request, res: Response, next: NextFunction) {
   try {
+  // Référentiels indépendants chargés EN PARALLÈLE : cette route est appelée
+  // à chaque démarrage d'application sur toute la flotte.
+  const [typesIncident, equipements, pieces] = await Promise.all([
+    prisma.typeIncidentRef.findMany({
+      where: { actif: true },
+      select: { code: true, libelle: true },
+      orderBy: [{ systeme: 'desc' }, { libelle: 'asc' }],
+    }),
+    prisma.equipementRef.findMany({
+      where: { actif: true },
+      select: { code: true, libelle: true, categorie: true },
+      orderBy: { libelle: 'asc' },
+    }),
+    prisma.pieceRef.findMany({
+      where: { actif: true },
+      select: { code: true, libelle: true, unite: true },
+      orderBy: { libelle: 'asc' },
+    }),
+  ]);
   res.json({
     success: true,
     data: {
@@ -25,25 +44,13 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
       // Référentiel des types d'incident (éditable en admin) : le mobile le
       // met en cache hors-ligne avec le reste de la config — les évolutions ne
       // demandent pas de nouvelle version d'application.
-      typesIncident: await prisma.typeIncidentRef.findMany({
-        where: { actif: true },
-        select: { code: true, libelle: true },
-        orderBy: [{ systeme: 'desc' }, { libelle: 'asc' }],
-      }),
+      typesIncident,
       // Référentiel des équipements de dépannage (même mécanique : le mobile
       // le met en cache avec sa config, aucune mise à jour d'app requise).
-      equipements: await prisma.equipementRef.findMany({
-        where: { actif: true },
-        select: { code: true, libelle: true, categorie: true },
-        orderBy: { libelle: 'asc' },
-      }),
+      equipements,
       // Catalogue des pièces de rechange (même mécanique) : un APK futur
       // proposera la liste à la saisie ; les APK actuels l'ignorent sans mal.
-      pieces: await prisma.pieceRef.findMany({
-        where: { actif: true },
-        select: { code: true, libelle: true, unite: true },
-        orderBy: { libelle: 'asc' },
-      }),
+      pieces,
       // Colonnes optionnelles par tableau que l'admin autorise à l'affichage
       // (null = toutes celles du catalogue web).
       colonnesOptionnelles: (() => {

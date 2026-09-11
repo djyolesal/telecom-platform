@@ -6,7 +6,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams, getNum } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
-import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, FREQUENCE_LABEL, SiteEligibilite } from '../utils/tachesPreventives';
+import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, SiteEligibilite } from '../utils/tachesPreventives';
 import { bilanCarburant } from '../services/bilanCarburant.service';
 import { bilanEnergie } from '../services/bilanEnergie.service';
 import { sendTabular } from '../utils/exporter';
@@ -467,8 +467,10 @@ async function chargerConformiteMaintenance(req: Request) {
   const { annee, mois, prestataire_id, region } = req.query as Record<string, string>;
   const maintenant = new Date();
   const a = parseInt(annee) || maintenant.getUTCFullYear();
-  const mo = parseInt(mois) || maintenant.getUTCMonth() + 1;
-  if (mo < 1 || mo > 12) throw new AppError('Mois invalide.', 400);
+  // `mois` explicite mais invalide (0, texte) → refus franc plutôt qu'un
+  // repli silencieux sur le mois courant (incohérent avec le refus de 13).
+  const mo = mois != null && mois !== '' ? parseInt(mois) : maintenant.getUTCMonth() + 1;
+  if (!Number.isFinite(mo) || mo < 1 || mo > 12) throw new AppError('Mois invalide.', 400);
   const debutMois = new Date(Date.UTC(a, mo - 1, 1));
   const finMois = new Date(Date.UTC(a, mo, 1));
   // Fenêtre élargie pour la série d'évolution (le mois choisi inclus).
@@ -484,16 +486,14 @@ async function chargerConformiteMaintenance(req: Request) {
       ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
       ...((region || restreint) ? { site: { ...(region ? { region } : {}), ...pr } } : {}),
     },
+    // Sélection minimale (agrégats seulement) et AUCUN plafond : la fenêtre de
+    // 6 mois borne le volume, et un take tronquerait silencieusement les mois
+    // anciens de la série d'évolution sur un gros parc.
     select: {
-      reference: true, categorie: true, dateFin: true, prestataireId: true, siteId: true,
-      invalideeLe: true, motifInvalidation: true,
+      dateFin: true, prestataireId: true, siteId: true, invalideeLe: true,
       prestataire: { select: { nom: true } },
-      site: { select: { nom: true, region: true } },
-      technicien: { select: { nom: true, prenom: true } },
       _count: { select: { releves: true } },
     },
-    orderBy: { dateFin: 'desc' },
-    take: 5000,
   });
 
   // Les EVOLUTION_MOIS mois calendaires qui se terminent au mois choisi.
@@ -529,12 +529,24 @@ async function chargerConformiteMaintenance(req: Request) {
       prestataire: { isActive: true },
     },
     select: {
-      prestataireId: true, lotId: true, scope: true,
+      prestataireId: true, lotId: true, scope: true, dateFin: true,
       prestataire: { select: { nom: true } },
       lot: { select: { _count: { select: { sites: { where: { isActive: true } } } } } },
     },
     orderBy: { scope: 'asc' }, // PASSIVE avant LES_DEUX
   });
+  // Titulaire du lot pour le mois : en cas de PASSATION en cours de mois (deux
+  // attributions recouvrant le mois), c'est celui qui tient le lot en FIN de
+  // mois qui porte le dû - déterministe, et le parc n'est compté qu'une fois.
+  const passifByLot = new Map<string, string>();
+  const finAssign = new Map<string, number>();
+  for (const a of assignes) {
+    const fin = (a as { dateFin?: Date | null }).dateFin?.getTime() ?? Number.POSITIVE_INFINITY;
+    if (!passifByLot.has(a.lotId) || fin > (finAssign.get(a.lotId) ?? -1)) {
+      passifByLot.set(a.lotId, a.prestataireId);
+      finAssign.set(a.lotId, fin);
+    }
+  }
   // Parc de chaque prestataire = sites actifs de ses lots passifs (un lot
   // n'est compté qu'une fois même en double scope).
   const lotsVus = new Map<string, Set<string>>();
@@ -543,8 +555,10 @@ async function chargerConformiteMaintenance(req: Request) {
     if (!map.has(a.prestataireId)) {
       map.set(a.prestataireId, { prestataireId: a.prestataireId, prestataireNom: a.prestataire.nom, total: 0, conformes: 0 });
     }
+    // Parc : le lot n'est compté que chez son TITULAIRE du mois (sinon une
+    // passation en cours de mois comptait les mêmes sites chez les deux).
     const vus = lotsVus.get(a.prestataireId) ?? new Set<string>();
-    if (!vus.has(a.lotId)) {
+    if (!vus.has(a.lotId) && passifByLot.get(a.lotId) === a.prestataireId) {
       vus.add(a.lotId);
       lotsVus.set(a.prestataireId, vus);
       parcParPrestataire.set(a.prestataireId, (parcParPrestataire.get(a.prestataireId) ?? 0) + a.lot._count.sites);
@@ -556,8 +570,6 @@ async function chargerConformiteMaintenance(req: Request) {
   //    le prestataire a bien voulu clôturer. Une tâche est due sur un mois si
   //    jamais faite, ou si dernière exécution VALIDE + fréquence tombe avant
   //    la fin du mois ; réalisée si une exécution valide tombe dans le mois.
-  const passifByLot = new Map<string, string>();
-  for (const a of assignes) if (!passifByLot.has(a.lotId)) passifByLot.set(a.lotId, a.prestataireId);
   const sitesContrat = await prisma.site.findMany({
     where: {
       isActive: true, lotId: { in: [...passifByLot.keys()] },
@@ -570,15 +582,33 @@ async function chargerConformiteMaintenance(req: Request) {
       powerConfig: true, statutGE: true, cuveVolumeLitres: true,
     },
   });
-  const execs = await prisma.maintenance.findMany({
-    where: {
-      statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
-      siteId: { in: sitesContrat.map((x) => x.id) }, dateFin: { lt: finMois, not: null },
-    },
-    select: { siteId: true, tachePreventiveKey: true, dateFin: true },
-  });
+  // Exécutions VALIDES : la fenêtre d'évolution en détail, et l'antériorité
+  // réduite à la DERNIÈRE exécution par (site, tâche) - seule elle compte pour
+  // la dueness. Sans cette borne, tout l'historique (des années) était chargé
+  // et trié en mémoire à chaque affichage ET chaque export.
+  const idsSites = sitesContrat.map((x) => x.id);
+  const [execsFenetre, dernieresAvant] = await Promise.all([
+    prisma.maintenance.findMany({
+      where: {
+        statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
+        siteId: { in: idsSites }, dateFin: { gte: since, lt: finMois },
+      },
+      select: { siteId: true, tachePreventiveKey: true, dateFin: true },
+    }),
+    prisma.maintenance.groupBy({
+      by: ['siteId', 'tachePreventiveKey'],
+      where: {
+        statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
+        siteId: { in: idsSites }, dateFin: { lt: since, not: null },
+      },
+      _max: { dateFin: true },
+    }),
+  ]);
   const execsParCle = new Map<string, Date[]>();
-  for (const x of execs) {
+  for (const g of dernieresAvant) {
+    if (g._max.dateFin) execsParCle.set(`${g.siteId}:${g.tachePreventiveKey}`, [g._max.dateFin]);
+  }
+  for (const x of execsFenetre) {
     const k = `${x.siteId}:${x.tachePreventiveKey}`;
     (execsParCle.get(k) ?? execsParCle.set(k, []).get(k)!).push(x.dateFin!);
   }
@@ -587,10 +617,9 @@ async function chargerConformiteMaintenance(req: Request) {
   const duesPar = new Map<string, number>();
   const realiseesPar = new Map<string, number>();
   const sitesAvecDuPar = new Map<string, Set<string>>();
+  const sitesEnRetardPar = new Map<string, Set<string>>();
   const sitesConformesPar = new Map<string, Set<string>>();
   const evolutionDuPar = new Map<string, Map<string, { dues: number; realisees: number }>>();
-  interface LigneDue { siteId: string; site: string; region: string; prestataireId: string; tache: string; frequence: string; derniereLe: Date | null; realisee: boolean }
-  const detailDuMois: LigneDue[] = [];
   // Catalogue passif planifiable : les COLONNES de la matrice sites × tâches.
   const tachesCatalogue = CONTRACTUAL_TASKS.filter((t) => t.categorie !== 'SOLAIRE' && FREQUENCE_MOIS[t.frequence] != null);
   // Matrice du mois choisi : pour chaque site, l'état de CHAQUE tâche du
@@ -629,13 +658,12 @@ async function chargerConformiteMaintenance(req: Request) {
         if (b.mois !== cleMoisChoisi) continue;
         duesPar.set(pid, (duesPar.get(pid) ?? 0) + 1);
         (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
-        if (realisee) realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
-        else statuts[t.key] = 'NOK';
-        detailDuMois.push({
-          siteId: site.id, site: site.nom, region: site.region, prestataireId: pid,
-          tache: t.libelle, frequence: FREQUENCE_LABEL[t.frequence],
-          derniereLe: derniereAvant, realisee,
-        });
+        if (realisee) {
+          realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
+        } else {
+          statuts[t.key] = 'NOK';
+          (sitesEnRetardPar.get(pid) ?? sitesEnRetardPar.set(pid, new Set()).get(pid)!).add(site.id);
+        }
       }
     }
     matriceSites.push({
@@ -648,8 +676,8 @@ async function chargerConformiteMaintenance(req: Request) {
   // TOUTES ses maintenances dues du mois en cours sont réalisées (rapproché
   // par identifiant de site - jamais par nom, deux homonymes sont possibles).
   for (const [pid, sites] of sitesAvecDuPar) {
-    const sitesEnRetard = new Set(detailDuMois.filter((d) => d.prestataireId === pid && !d.realisee).map((d) => d.siteId));
-    sitesConformesPar.set(pid, new Set([...sites].filter((sid) => !sitesEnRetard.has(sid))));
+    const enRetard = sitesEnRetardPar.get(pid) ?? new Set<string>();
+    sitesConformesPar.set(pid, new Set([...sites].filter((sid) => !enRetard.has(sid))));
   }
 
   const sitesCouvertsPar = new Map<string, Set<string>>();
@@ -711,7 +739,7 @@ async function chargerConformiteMaintenance(req: Request) {
     .sort((a, b) => b.dues - a.dues || a.prestataireNom.localeCompare(b.prestataireNom));
 
   const MOIS_PLEIN = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  return { annee: a, mois: mo, labelMois: `${MOIS_PLEIN[mo]} ${a}`, region, duMois, parPrestataire, moisListe, detailDuMois, matriceSites, tachesCatalogue };
+  return { annee: a, mois: mo, labelMois: `${MOIS_PLEIN[mo]} ${a}`, region, duMois, parPrestataire, moisListe, matriceSites, tachesCatalogue };
 }
 
 export async function getConformiteMaintenance(req: Request, res: Response, next: NextFunction) {

@@ -366,23 +366,45 @@ export async function listPiecesRef(req: Request, res: Response, next: NextFunct
 
 export async function upsertPieceRef(req: Request, res: Response, next: NextFunction) {
   try {
-    const { id, code, libelle, categorie, unite, coutStandard, actif } = req.body as
-      { id?: string; code?: string; libelle?: string; categorie?: string; unite?: string; coutStandard?: number; actif?: boolean };
-    if (!libelle?.trim()) throw new AppError('Libellé requis.', 422);
-    const cleanCode = String(code ?? libelle).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
-    if (!cleanCode) throw new AppError('Code requis.', 422);
-    const data = {
-      code: cleanCode,
-      libelle: libelle.trim().slice(0, 120),
-      categorie: categorie?.trim() ? String(categorie).trim().toUpperCase().slice(0, 20) : null,
-      unite: (unite?.trim() || 'unité').slice(0, 20),
-      coutStandard: coutStandard != null && Number.isFinite(Number(coutStandard)) ? Number(coutStandard) : null,
-      actif: actif !== false,
-    };
-    const piece = id
-      ? await prisma.pieceRef.update({ where: { id }, data })
-      : await prisma.pieceRef.upsert({ where: { code: cleanCode }, create: data, update: data });
-    await auditLog(req.user!.id, 'UPDATE', 'pieces_ref', piece.id, data, req);
+    const b = req.body as
+      { id?: string; code?: string; libelle?: string; categorie?: string; unite?: string; coutStandard?: number | null; actif?: boolean };
+    const { id } = b;
+    const cleanCode = (v: string) => v.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+    let piece;
+    if (id) {
+      // Mise à jour PARTIELLE : seuls les champs présents changent - le bouton
+      // Actif (ou l'édition du libellé) ne doit pas réécrire le code ni effacer
+      // le coût standard.
+      const data: Record<string, unknown> = {};
+      if ('libelle' in b) {
+        if (!b.libelle?.trim()) throw new AppError('Libellé requis.', 422);
+        data.libelle = b.libelle.trim().slice(0, 120);
+      }
+      if ('code' in b && b.code?.trim()) {
+        const c = cleanCode(b.code);
+        if (!c) throw new AppError('Code requis.', 422);
+        data.code = c;
+      }
+      if ('categorie' in b) data.categorie = b.categorie?.trim() ? String(b.categorie).trim().toUpperCase().slice(0, 20) : null;
+      if ('unite' in b) data.unite = (b.unite?.trim() || 'unité').slice(0, 20);
+      if ('coutStandard' in b) data.coutStandard = b.coutStandard != null && Number.isFinite(Number(b.coutStandard)) ? Number(b.coutStandard) : null;
+      if ('actif' in b) data.actif = b.actif !== false;
+      piece = await prisma.pieceRef.update({ where: { id }, data });
+    } else {
+      if (!b.libelle?.trim()) throw new AppError('Libellé requis.', 422);
+      const code = cleanCode(String(b.code ?? b.libelle));
+      if (!code) throw new AppError('Code requis.', 422);
+      const data = {
+        code,
+        libelle: b.libelle.trim().slice(0, 120),
+        categorie: b.categorie?.trim() ? String(b.categorie).trim().toUpperCase().slice(0, 20) : null,
+        unite: (b.unite?.trim() || 'unité').slice(0, 20),
+        coutStandard: b.coutStandard != null && Number.isFinite(Number(b.coutStandard)) ? Number(b.coutStandard) : null,
+        actif: b.actif !== false,
+      };
+      piece = await prisma.pieceRef.upsert({ where: { code }, create: data, update: data });
+    }
+    await auditLog(req.user!.id, 'UPDATE', 'pieces_ref', piece.id, req.body as object, req);
     // Le catalogue vient de bouger : les lignes libres de l'historique qui
     // correspondent maintenant se rattachent (asynchrone, best-effort).
     void rapprocherHistorique().catch(() => undefined);

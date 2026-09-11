@@ -450,7 +450,7 @@ router.get('/types-incident', adminCtrl.listTypesIncident);
 router.get('/motifs-coupure', adminCtrl.listMotifsCoupure);
 // Catalogue des pièces de rechange : lecture ouverte (sélecteurs mobile/web),
 // gestion réservée à l'admin ; le rapprochement de l'historique se relance à la main.
-router.get('/pieces-ref', adminCtrl.listPiecesRef);
+router.get('/pieces-ref', rbac(['MANAGER','ADMIN']), adminCtrl.listPiecesRef);
 router.post('/admin/pieces-ref', rbac(['ADMIN']), adminCtrl.upsertPieceRef);
 router.delete('/admin/pieces-ref/:id', rbac(['ADMIN']), adminCtrl.deletePieceRef);
 router.post('/admin/pieces-ref/rapprocher', rbac(['ADMIN']), adminCtrl.rapprocherPiecesHistorique);

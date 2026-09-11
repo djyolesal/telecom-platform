@@ -1381,8 +1381,8 @@ export async function getStocksMensuels(req: Request, res: Response, next: NextF
   try {
     const { annee, mois, region } = req.query as Record<string, string>;
     const a = parseInt(annee) || new Date().getFullYear();
-    const m = parseInt(mois) || new Date().getMonth() + 1;
-    if (m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
+    const m = mois != null && mois !== '' ? parseInt(mois) : new Date().getMonth() + 1;
+    if (!Number.isFinite(m) || m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
     const lignes = await stocksMensuels({ annee: a, mois: m, region: region || undefined });
     res.json({
       success: true,
@@ -1405,8 +1405,8 @@ export async function exportStocksMensuels(req: Request, res: Response, next: Ne
   try {
     const { annee, mois, region } = req.query as Record<string, string>;
     const a = parseInt(annee) || new Date().getFullYear();
-    const m = parseInt(mois) || new Date().getMonth() + 1;
-    if (m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
+    const m = mois != null && mois !== '' ? parseInt(mois) : new Date().getMonth() + 1;
+    if (!Number.isFinite(m) || m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
     const lignes = await stocksMensuels({ annee: a, mois: m, region: region || undefined });
     await auditLog(req.user!.id, 'EXPORT', 'stocks_mensuels', undefined, { annee: a, mois: m, sites: lignes.length, format: req.params.format }, req);
     await sendTabular(res, req.params.format, `stocks-${a}-${String(m).padStart(2, '0')}`, `Stocks carburant - ${MOIS[m]} ${a}`,

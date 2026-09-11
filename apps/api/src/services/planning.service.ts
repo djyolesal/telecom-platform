@@ -42,7 +42,9 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
   // Dernières exécutions terminées (site+clé).
   const done = await prisma.maintenance.groupBy({
     by: ['siteId', 'tachePreventiveKey'],
-    where: { statut: 'TERMINEE', tachePreventiveKey: { not: null } },
+    // Exécution VALIDE seulement : une clôture invalidée par le manager ne
+    // remet pas le compteur de fréquence à zéro - la tâche reste due.
+    where: { statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null } },
     _max: { dateFin: true },
   });
   const lastByKey = new Map<string, Date>();

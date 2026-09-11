@@ -694,7 +694,11 @@ class _CloseSheetState extends State<_CloseSheet> {
   final Map<String, TextEditingController> _ckComms = {};
   // Pièces remplacées : lignes libres (nom + quantité), suggestions du
   // catalogue serveur (AppConfig.pieces) - la frappe libre reste possible.
-  final List<({TextEditingController nom, TextEditingController qte})> _pieces = [];
+  // Le FocusNode vit DANS la ligne (pas de liste parallèle à garder alignée),
+  // et une ligne supprimée n'est pas libérée tout de suite : ses widgets sont
+  // encore montés pendant le rebuild - dispose() du sheet s'en charge.
+  final List<({TextEditingController nom, TextEditingController qte, FocusNode focus})> _pieces = [];
+  final List<({TextEditingController nom, TextEditingController qte, FocusNode focus})> _piecesRetirees = [];
   // Déclaration obligatoire : agent de gardiennage présent sur site ?
   bool? _agentPresent;
   // Présent ⇒ il signe (exigé par le serveur, comme au dépotage).
@@ -725,14 +729,14 @@ class _CloseSheetState extends State<_CloseSheet> {
       _puissance,
       _nomAgent,
       ..._geCtrls.values,
-      for (final l in _pieces) ...[l.nom, l.qte],
+      for (final l in [..._pieces, ..._piecesRetirees]) ...[l.nom, l.qte],
       ..._ckValeurs.values,
       ..._ckComms.values,
     ]) {
       c.dispose();
     }
-    for (final f in _focusPieces) {
-      f.dispose();
+    for (final l in [..._pieces, ..._piecesRetirees]) {
+      l.focus.dispose();
     }
     super.dispose();
   }
@@ -1170,6 +1174,7 @@ class _CloseSheetState extends State<_CloseSheet> {
             onPressed: () => setState(() => _pieces.add((
                   nom: TextEditingController(),
                   qte: TextEditingController(text: '1'),
+                  focus: FocusNode(),
                 ))),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Ajouter'),
@@ -1184,7 +1189,7 @@ class _CloseSheetState extends State<_CloseSheet> {
                 Expanded(
                   child: RawAutocomplete<String>(
                     textEditingController: _pieces[i].nom,
-                    focusNode: _focusPiece(i),
+                    focusNode: _pieces[i].focus,
                     optionsBuilder: (v) {
                       final q = v.text.trim().toLowerCase();
                       if (q.isEmpty) return const Iterable<String>.empty();
@@ -1237,10 +1242,9 @@ class _CloseSheetState extends State<_CloseSheet> {
                 ),
                 IconButton(
                   onPressed: () => setState(() {
-                    final l = _pieces.removeAt(i);
-                    l.nom.dispose();
-                    l.qte.dispose();
-                    _focusPieces.removeAt(i).dispose();
+                    // Pas de dispose ici : les widgets de la ligne sont encore
+                    // montés jusqu'au rebuild (crash « used after disposed »).
+                    _piecesRetirees.add(_pieces.removeAt(i));
                   }),
                   icon: const Icon(Icons.delete_outline,
                       size: 20, color: Colors.redAccent),
@@ -1251,15 +1255,6 @@ class _CloseSheetState extends State<_CloseSheet> {
         const SizedBox(height: 4),
       ],
     );
-  }
-
-  // Un FocusNode stable par ligne (RawAutocomplete l'exige avec un contrôleur externe).
-  final List<FocusNode> _focusPieces = [];
-  FocusNode _focusPiece(int i) {
-    while (_focusPieces.length <= i) {
-      _focusPieces.add(FocusNode());
-    }
-    return _focusPieces[i];
   }
 
   Widget _agentSelector() {

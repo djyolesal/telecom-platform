@@ -885,14 +885,17 @@ export async function invaliderMaintenance(req: Request, res: Response, next: Ne
     if (m.statut !== 'TERMINEE') throw new AppError('Seule une maintenance clôturée peut être invalidée.', 400);
     if (m.invalideeLe) throw new AppError('Cette maintenance est déjà invalidée.', 400);
 
-    const updated = await prisma.maintenance.update({
-      where: { id: m.id },
-      data: { invalideePar: req.user!.id, invalideeLe: new Date(), motifInvalidation: String(motif).trim().slice(0, 300) },
-    });
-
-    let nouvelle: { id: string; reference: string | null } | null = null;
-    if (replanifier === true) {
-      nouvelle = await prisma.$transaction(async (tx) => tx.maintenance.create({
+    // Invalidation ET reprise dans UNE transaction : un échec de la création
+    // de la reprise (collision de référence...) ne doit pas laisser une fiche
+    // invalidée sans audit, sans notification et sans reprise planifiée.
+    const { updated, nouvelle } = await prisma.$transaction(async (tx) => {
+      const upd = await tx.maintenance.update({
+        where: { id: m.id },
+        data: { invalideePar: req.user!.id, invalideeLe: new Date(), motifInvalidation: String(motif).trim().slice(0, 300) },
+      });
+      let rep: { id: string; reference: string | null } | null = null;
+      if (replanifier === true) {
+        rep = await tx.maintenance.create({
         data: {
           reference: await genererReference(tx, 'MNT', new Date()),
           siteId: m.siteId,
@@ -908,8 +911,10 @@ export async function invaliderMaintenance(req: Request, res: Response, next: Ne
           description: `Reprise de ${m.reference ?? m.id.slice(0, 8)} (invalidée : ${String(motif).trim().slice(0, 150)})`,
         },
         select: { id: true, reference: true },
-      }));
-    }
+        });
+      }
+      return { updated: upd, nouvelle: rep };
+    });
 
     await auditLog(req.user!.id, 'UPDATE', 'maintenances', m.id,
       { action: 'invalidation', motif: String(motif).trim().slice(0, 300), replanifiee: nouvelle?.reference ?? null }, req);
@@ -1167,6 +1172,10 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       avertissements.length && confirmeVraisemblance ? traceConfirmation(avertissements) : '',
     ].filter(Boolean).join('\n') || undefined;
 
+    // Pièces assainies + rapprochées AVANT d'ouvrir la transaction : la lecture
+    // du catalogue n'a rien à faire sous le verrou consultatif du site.
+    const piecesPropres = pieces?.length ? await rapprocherPieces(pieces as PieceSaisie[]) : [];
+
     // Écritures ATOMIQUES : pièces, photos, passage TERMINEE, relevés énergie ET
     // mouvement d'actif dans une seule transaction → tout réussit ou tout est annulé
     // (plus de maintenance TERMINEE avec actif non déplacé). Retry sur collision de
@@ -1193,7 +1202,6 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         });
         if (verrou.count === 0) throw Object.assign(new Error('ALREADY_CLOSED'), { alreadyClosed: true });
 
-        const piecesPropres = pieces?.length ? await rapprocherPieces(pieces as PieceSaisie[]) : [];
         if (piecesPropres.length) {
           await tx.pieceRechange.createMany({
             data: piecesPropres.map((p) => ({ ...p, maintenanceId: existing.id })),

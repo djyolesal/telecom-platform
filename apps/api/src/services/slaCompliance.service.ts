@@ -109,18 +109,28 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
     if (m.statut === 'TERMINEE' && !m.invalideeLe && finEffective && finEffective <= limite) a.prevTemps += 1;
   }
 
-  // ── Invalidations : toute maintenance (préventive OU curative) dont la
-  //    clôture, tombée dans la fenêtre, a été contestée par un manager. ──
+  // ── Invalidations : maintenance (préventive OU curative) contestée par un
+  //    manager dans la fenêtre. PÉRIMÈTRE DU RAPPORT : le solaire (contrat
+  //    séparé) est exclu, et seuls les prestataires déjà évalués ici
+  //    (titulaires passifs) sont pénalisés - une invalidation hors périmètre
+  //    n'injecte pas une ligne « non conforme » dans le mauvais rapport. ──
+  // Fenêtrée sur invalideeLe (pas dateFin) : une clôture frauduleuse contestée
+  // lors d'un audit tardif est pénalisée sur la période de la contestation -
+  // sinon elle échappait à toute pénalité dès que la clôture sortait de la
+  // fenêtre.
   const invalidees = await prisma.maintenance.groupBy({
     by: ['prestataireId'],
-    where: { invalideeLe: { not: null }, dateFin: { gte: since }, prestataireId: { not: null } },
+    where: {
+      invalideeLe: { gte: since }, prestataireId: { not: null },
+      categorie: { not: 'SOLAIRE' },
+    },
     _count: { _all: true },
   });
   for (const g of invalidees) {
-    if (!g.prestataireId) continue;
-    const nom = acc.get(g.prestataireId)?.nom
-      ?? (await prisma.prestataire.findUnique({ where: { id: g.prestataireId }, select: { nom: true } }))?.nom ?? '—';
-    ensure(g.prestataireId, nom).invalidees += g._count._all;
+    // Un prestataire absent de l'évaluation passive (pas de lot passif) n'est
+    // pas ajouté ici : ses invalidations relèvent d'un autre contrat.
+    if (!g.prestataireId || !acc.has(g.prestataireId)) continue;
+    acc.get(g.prestataireId)!.invalidees += g._count._all;
   }
 
   // ── Incidents résolus : délai de résolution vs seuil ──

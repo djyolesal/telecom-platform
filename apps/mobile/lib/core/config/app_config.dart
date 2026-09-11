@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../constants/app_constants.dart';
 import '../network/dio_client.dart';
 
 /// Règles terrain configurables côté serveur, récupérées via GET /config.
@@ -81,7 +82,9 @@ class ConfigService {
   final DioClient _client;
   ConfigService(this._client);
 
-  static const _kCache = 'config_cache';
+  // Clé PAR SERVEUR : un téléphone qui a servi contre le banc de test ne doit
+  // pas restaurer hors-ligne les règles de démo une fois rebâti pour la prod.
+  static const _kCache = 'config_cache:${AppConstants.apiBaseUrl}';
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
@@ -118,62 +121,55 @@ class ConfigService {
   }
 
   void _appliquer(Map d) {
-    {
-            AppConfig.minDureeClotureMin =
-                (d['minDureeClotureMin'] as num?)?.toInt() ??
-                    AppConfig.minDureeClotureMin;
-            AppConfig.geofenceRadiusM =
-                (d['geofenceRadiusM'] as num?)?.toDouble() ??
-                    AppConfig.geofenceRadiusM;
-            AppConfig.minPhotosPreventive =
-                (d['minPhotosPreventive'] as num?)?.toInt() ??
-                    AppConfig.minPhotosPreventive;
-            AppConfig.minPhotosMouvement =
-                (d['minPhotosMouvement'] as num?)?.toInt() ??
-                    AppConfig.minPhotosMouvement;
-            AppConfig.minPhotosCurative =
-                (d['minPhotosCurative'] as num?)?.toInt() ??
-                    AppConfig.minPhotosCurative;
-            AppConfig.minPhotosIncidentAvant =
-                (d['minPhotosIncidentAvant'] as num?)?.toInt() ??
-                    AppConfig.minPhotosIncidentAvant;
-            AppConfig.intervalleVidangeHeures =
-                (d['intervalleVidangeHeures'] as num?)?.toInt() ??
-                    AppConfig.intervalleVidangeHeures;
-            final types = d['typesIncident'];
-            if (types is List && types.isNotEmpty) {
-              AppConfig.typesIncident = {
-                for (final t in types)
-                  if (t is Map && t['code'] != null)
-                    t['code'].toString():
-                        t['libelle']?.toString() ?? t['code'].toString(),
-              };
-            }
-            final pcs = d['pieces'];
-            if (pcs is List && pcs.isNotEmpty) {
-              AppConfig.pieces = [
-                for (final e in pcs)
-                  if (e is Map && e['libelle'] != null)
-                    {
-                      'code': e['code']?.toString() ?? '',
-                      'libelle': e['libelle'].toString(),
-                      'unite': e['unite']?.toString() ?? 'unité',
-                    },
-              ];
-            }
-            final equips = d['equipements'];
-            if (equips is List && equips.isNotEmpty) {
-              AppConfig.equipements = [
-                for (final e in equips)
-                  if (e is Map && e['code'] != null)
-                    {
-                      'code': e['code'].toString(),
-                      'libelle':
-                          e['libelle']?.toString() ?? e['code'].toString(),
-                      'categorie': e['categorie']?.toString() ?? 'AUTRE',
-                    },
-              ];
-            }
+    AppConfig.minDureeClotureMin = (d['minDureeClotureMin'] as num?)?.toInt() ??
+        AppConfig.minDureeClotureMin;
+    AppConfig.geofenceRadiusM =
+        (d['geofenceRadiusM'] as num?)?.toDouble() ?? AppConfig.geofenceRadiusM;
+    AppConfig.minPhotosPreventive =
+        (d['minPhotosPreventive'] as num?)?.toInt() ??
+            AppConfig.minPhotosPreventive;
+    AppConfig.minPhotosMouvement = (d['minPhotosMouvement'] as num?)?.toInt() ??
+        AppConfig.minPhotosMouvement;
+    AppConfig.minPhotosCurative = (d['minPhotosCurative'] as num?)?.toInt() ??
+        AppConfig.minPhotosCurative;
+    AppConfig.minPhotosIncidentAvant =
+        (d['minPhotosIncidentAvant'] as num?)?.toInt() ??
+            AppConfig.minPhotosIncidentAvant;
+    AppConfig.intervalleVidangeHeures =
+        (d['intervalleVidangeHeures'] as num?)?.toInt() ??
+            AppConfig.intervalleVidangeHeures;
+    final types = d['typesIncident'];
+    if (types is List && types.isNotEmpty) {
+      AppConfig.typesIncident = {
+        for (final t in types)
+          if (t is Map && t['code'] != null)
+            t['code'].toString():
+                t['libelle']?.toString() ?? t['code'].toString(),
+      };
+    }
+    final pcs = d['pieces'];
+    if (pcs is List && pcs.isNotEmpty) {
+      AppConfig.pieces = [
+        for (final e in pcs)
+          if (e is Map && e['libelle'] != null)
+            {
+              'code': e['code']?.toString() ?? '',
+              'libelle': e['libelle'].toString(),
+              'unite': e['unite']?.toString() ?? 'unité',
+            },
+      ];
+    }
+    final equips = d['equipements'];
+    if (equips is List && equips.isNotEmpty) {
+      AppConfig.equipements = [
+        for (final e in equips)
+          if (e is Map && e['code'] != null)
+            {
+              'code': e['code'].toString(),
+              'libelle': e['libelle']?.toString() ?? e['code'].toString(),
+              'categorie': e['categorie']?.toString() ?? 'AUTRE',
+            },
+      ];
     }
   }
 }

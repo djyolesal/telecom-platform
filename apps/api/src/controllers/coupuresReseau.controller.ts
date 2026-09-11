@@ -817,6 +817,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     const dateDebut = b.dateDebut ? new Date(String(b.dateDebut)) : null;
     if (!dateDebut || Number.isNaN(dateDebut.getTime())) throw new AppError('Date de début invalide', 400);
 
+    const avertissementsPreCreation: string[] = [];
     // UN site = UNE coupure SITE ouverte, quelle que soit la source. Deux
     // lignes ouvertes pour la même panne (OSS + saisie NOC à des heures
     // différentes) faisaient compter le site deux fois dans les héritées.
@@ -834,6 +835,20 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
           { coupureExistanteId: deja.id }
         );
       }
+      // Des PARTIELLES encore ouvertes sous un SITE entier : parfois légitime
+      // (panne 2G au long cours + chute totale), mais si elles couvrent le
+      // même événement le downtime sera compté deux fois - on AVERTIT sans
+      // bloquer, la clôture des partielles reste un geste NOC.
+      const partiellesOuvertes = await prisma.coupureReseau.findMany({
+        where: { siteId, dateFin: null, technologie: { not: 'SITE' } },
+        select: { technologie: true, frequence: true, secteur: true },
+      });
+      if (partiellesOuvertes.length) {
+        const libs = partiellesOuvertes.map((c) => [c.technologie, c.frequence, c.secteur].filter(Boolean).join(' ')).join(', ');
+        avertissementsPreCreation.push(
+          `${partiellesOuvertes.length} coupure(s) partielle(s) encore EN COURS sur ce site (${libs}) : si le site entier est tombé, clôturez-les pour ne pas compter le même downtime deux fois.`
+        );
+      }
     } else {
       // Coupure PARTIELLE : même règle, techno par techno. Deux lignes
       // OUVERTES pour la même technologie à fréquence égale doublaient le SMS
@@ -848,13 +863,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
         where: { siteId, dateFin: null },
         select: { id: true, technologie: true, frequence: true, secteur: true, dateDebut: true, source: true },
       });
-      const deja = ouvertes.find((c) =>
-        c.technologie === 'SITE'
-          ? true
-          : (c.frequence ?? null) === freq
-            && c.technologie.split('/').some((t) => technologies.includes(t))
-            && (c.secteur == null || sect == null || c.secteur === sect)
-      );
+      const deja = ligneOuvranteRecouvrante(ouvertes, technologies, freq, sect);
       if (deja) {
         const quoi = deja.technologie === 'SITE'
           ? 'site entier (toutes technologies)'
@@ -887,7 +896,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
     // des héritées fictives sur tout l'aval (règle vérifiée ici, pas seulement
     // dans le formulaire web).
     let sitesImpactes = 0;
-    const avertissements: string[] = [];
+    const avertissements: string[] = [...avertissementsPreCreation];
     if (b.propagerAval === true && siteEntier) {
       const aval = await descendantsTransmission(siteId);
       if (aval.length) {
@@ -988,6 +997,25 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
   } catch (err) { next(err); }
 }
 
+
+/** Ligne ouverte recouvrant le périmètre demandé (techno/fréquence/secteur).
+ *  Règles : SITE couvre tout ; même techno + même fréquence + (secteurs égaux
+ *  OU l'un des deux absent = toute la couche) = recouvrement. Utilisé à la
+ *  CRÉATION et à la REQUALIFICATION - sinon l'édition recréait les doublons
+ *  que la création refuse. */
+function ligneOuvranteRecouvrante<T extends { technologie: string; frequence: string | null; secteur: string | null }>(
+  ouvertes: T[], technologies: string[], freq: string | null, sect: string | null
+): T | undefined {
+  if (technologies.includes('SITE')) return ouvertes.find((c) => c.technologie === 'SITE');
+  return ouvertes.find((c) =>
+    c.technologie === 'SITE'
+      ? true
+      : (c.frequence ?? null) === freq
+        && c.technologie.split('/').some((t) => technologies.includes(t))
+        && (c.secteur == null || sect == null || c.secteur === sect)
+  );
+}
+
 /** Mise à jour / clôture : dateFin renseignée → downtime calculé automatiquement. */
 export async function updateCoupure(req: Request, res: Response, next: NextFunction) {
   try {
@@ -1053,6 +1081,31 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
         : ['2G', '3G', '4G', '5G'].filter((t) => uniques.includes(t)).join('/');
       if (valeur !== existing.technologie) data.technologie = valeur;
     }
+    // Re-contrôle de recouvrement : une requalification (techno, fréquence,
+    // secteur, site) d'une ligne encore OUVERTE ne doit pas recréer le doublon
+    // que la création refuse (S2 renommé S1, secteur effacé = toute la couche…).
+    const resteOuverte = 'dateFin' in data ? data.dateFin == null : existing.dateFin == null;
+    const perimetreChange = 'technologie' in data || 'frequence' in data || 'secteur' in data || 'siteId' in data;
+    if (resteOuverte && perimetreChange) {
+      const technoFinale = (data.technologie as string | undefined) ?? existing.technologie;
+      const freqFinale = ('frequence' in data ? data.frequence : existing.frequence) as string | null;
+      const sectFinale = ('secteur' in data ? data.secteur : existing.secteur) as string | null;
+      const siteFinal = (data.siteId as string | undefined) ?? existing.siteId;
+      const autresOuvertes = await prisma.coupureReseau.findMany({
+        where: { siteId: siteFinal, dateFin: null, id: { not: existing.id } },
+        select: { id: true, technologie: true, frequence: true, secteur: true, dateDebut: true, source: true },
+      });
+      const deja = ligneOuvranteRecouvrante(autresOuvertes, technoFinale === 'SITE' ? ['SITE'] : technoFinale.split('/'), freqFinale, sectFinale);
+      if (deja) {
+        const quoi = deja.technologie === 'SITE' ? 'site entier (toutes technologies)' : [deja.technologie, deja.frequence, deja.secteur].filter(Boolean).join(' ');
+        throw new AppError(
+          `Cette requalification recouvrirait la coupure ${quoi} déjà EN COURS sur ce site (${deja.source === 'OSS' ? 'détection AUTO' : 'saisie manuelle'} du ${deja.dateDebut.toLocaleString('fr-FR', { timeZone: 'Africa/Lome' })}) - complétez ou clôturez l'une des deux.`,
+          422,
+          { coupureExistanteId: deja.id }
+        );
+      }
+    }
+
     // Clôture (ou ré-ouverture) → downtime recalculé, jamais saisi à la main.
     // Les saisies web sont à la MINUTE alors que le début stocké garde les
     // secondes : « début 09:09:32, fin saisie 09:09 » était refusé à tort.
