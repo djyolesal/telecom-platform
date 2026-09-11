@@ -1006,13 +1006,19 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
 function ligneOuvranteRecouvrante<T extends { technologie: string; frequence: string | null; secteur: string | null }>(
   ouvertes: T[], technologies: string[], freq: string | null, sect: string | null
 ): T | undefined {
+  // Fréquence et secteur sont du texte LIBRE : la comparaison ignore casse et
+  // espaces (« s1 » = « S1 », « l 800 » = « L800 ») - sinon une variante de
+  // frappe recréait le doublon que la garde existe pour empêcher.
+  const cle = (v: string | null) => (v == null ? null : v.toUpperCase().replace(/\s+/g, '') || null);
+  const freqCle = cle(freq);
+  const sectCle = cle(sect);
   if (technologies.includes('SITE')) return ouvertes.find((c) => c.technologie === 'SITE');
   return ouvertes.find((c) =>
     c.technologie === 'SITE'
       ? true
-      : (c.frequence ?? null) === freq
+      : cle(c.frequence) === freqCle
         && c.technologie.split('/').some((t) => technologies.includes(t))
-        && (c.secteur == null || sect == null || c.secteur === sect)
+        && (c.secteur == null || sectCle == null || cle(c.secteur) === sectCle)
   );
 }
 
