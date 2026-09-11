@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { L_TYPE_MAINTENANCE, L_STATUT_MAINTENANCE, L_CATEGORIE_EQUIPEMENT, libelle } from '../utils/libelles';
-import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables } from '../utils/perimetre';
+import { sitePerimetre, isRestreint, assertSiteInPerimetre, assertTechnicienAssignable, techniciensAssignables, contratMaintenancePerimetre } from '../utils/perimetre';
 import { notificationService } from '../services/notifications.service';
 
 /** Triple canal vers le technicien AFFECTÉ (jamais celui qui s'auto-assigne) :
@@ -262,6 +262,9 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
     // — contredisant la promesse du scope ci-dessus.
     if (isRestreint(perimetreListe) && req.user!.role !== 'TECHNICIEN') {
       where.site = { ...(where.site as object ?? {}), ...perimetreListe };
+      // Cloisonnement par CONTRAT : sur un site partagé passif + solaire,
+      // chacun ne voit que les maintenances de son contrat.
+      where.AND = [...((where.AND as unknown[]) ?? []), await contratMaintenancePerimetre(req.user!.id)];
     }
 
     const include = {
@@ -418,6 +421,16 @@ export async function getMaintenanceById(req: Request, res: Response, next: Next
     });
     if (!maintenance) throw new AppError('Maintenance introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, maintenance.siteId);
+    // Cloisonnement par contrat : même réponse qu'un id inexistant (pas
+    // d'énumération). Le technicien ASSIGNÉ passe toujours (déplacements,
+    // sites hors lots - promesse de sa liste).
+    if (maintenance.technicienId !== req.user!.id) {
+      const contrat = await contratMaintenancePerimetre(req.user!.id);
+      if (isRestreint(contrat)) {
+        const ok = await prisma.maintenance.findFirst({ where: { id: maintenance.id, ...contrat }, select: { id: true } });
+        if (!ok) throw new AppError('Maintenance introuvable', 404);
+      }
+    }
     // Nom lisible de l'invalidateur (la fiche affiche qui conteste, pas un id).
     const invalideeParNom = maintenance.invalideePar
       ? await prisma.user.findUnique({ where: { id: maintenance.invalideePar }, select: { nom: true, prenom: true } })
@@ -1512,6 +1525,8 @@ export async function getPlanning(req: Request, res: Response, next: NextFunctio
       where: {
         datePlanifiee: { gte: debut, lte: fin },
         ...((region || isRestreint(perimetre)) ? { site: { ...(region ? { region } : {}), ...perimetre } } : {}),
+        // Même cloisonnement par contrat que la liste.
+        ...(isRestreint(perimetre) ? { AND: [await contratMaintenancePerimetre(req.user!.id)] } : {}),
       },
       orderBy: { datePlanifiee: 'asc' },
       include: {
@@ -1532,7 +1547,10 @@ export async function exportMaintenances(req: Request, res: Response, next: Next
     if (statut) where.statut = statut;
     if (site_id) where.siteId = site_id;
     const perimetreExp = await sitePerimetre(req.user!.id);
-    if (isRestreint(perimetreExp)) where.site = perimetreExp;
+    if (isRestreint(perimetreExp)) {
+      where.site = perimetreExp;
+      where.AND = [...((where.AND as unknown[]) ?? []), await contratMaintenancePerimetre(req.user!.id)];
+    }
 
     const rows = await prisma.maintenance.findMany({
       where,

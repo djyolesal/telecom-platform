@@ -24,6 +24,35 @@ export async function sitePerimetre(userId: string): Promise<Record<string, unkn
     : {};
 }
 
+/**
+ * Périmètre par CONTRAT sur le modèle MAINTENANCE : sur un site partagé
+ * (lot passif + lot solaire), chaque prestataire ne voit que les maintenances
+ * de SON contrat - les siennes, plus les non-attribuées des catégories de son
+ * périmètre contractuel (SOLAIRE s'il tient un lot solaire, les autres s'il
+ * tient un lot passif/actif). Un interne n'est jamais restreint ({}).
+ * À combiner en ET avec sitePerimetre (qui borne les sites).
+ */
+export async function contratMaintenancePerimetre(userId: string): Promise<Record<string, unknown>> {
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { prestataireId: true } });
+  if (!me?.prestataireId) return {};
+  const scopes = await prisma.lotAssignment.findMany({
+    where: { prestataireId: me.prestataireId },
+    select: { scope: true },
+    distinct: ['scope'],
+  });
+  const tientSolaire = scopes.some((a) => a.scope === 'SOLAIRE');
+  const tientPassifActif = scopes.some((a) => a.scope !== 'SOLAIRE');
+  const nonAttribuees: Record<string, unknown>[] = [];
+  if (tientSolaire) nonAttribuees.push({ categorie: 'SOLAIRE' });
+  if (tientPassifActif) nonAttribuees.push({ categorie: { not: 'SOLAIRE' } });
+  return {
+    OR: [
+      { prestataireId: me.prestataireId },
+      ...(nonAttribuees.length ? [{ prestataireId: null, OR: nonAttribuees }] : []),
+    ],
+  };
+}
+
 /** true si le périmètre est restreint (utilisateur rattaché à un prestataire). */
 export function isRestreint(p: Record<string, unknown>): boolean {
   return Object.keys(p).length > 0;
