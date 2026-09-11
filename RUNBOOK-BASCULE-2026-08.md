@@ -31,9 +31,9 @@ conforme + reprise planifiable, bandeau web/mobile), **export conformité** (par
 l'export coupures réservée manager/admin, **barémage 1000 points**, correctif OSS
 (**requalification en partielle** ne recrée plus la détection), **config mobile persistée**
 (fin des « 60 min » fantômes hors-ligne), **catalogue des pièces de rechange** (0058 -
-rapprochement serveur de la saisie libre, compatible APK antérieurs) + saisie mobile des pièces à la clôture (b42,
+rapprochement serveur de la saisie libre, compatible APK antérieurs) + saisie mobile des pièces à la clôture (b43,
 optionnelle - b40/b41 restent valides). APK courant :
-**1.7.0+42** (versionCode 2042).
+**1.7.0+43** (versionCode 2043).
 
 **Six ruptures de compatibilité à avoir en tête pendant toute la bascule :**
 1. la création d'un BL **exige un chauffeur** → un APK antérieur est refusé ;
@@ -42,13 +42,13 @@ optionnelle - b40/b41 restent valides). APK courant :
 4. **🔴 NOUVEAU — signatures obligatoires** : le serveur refuse désormais TOUTE clôture sans
    **signature du technicien** (maintenance, incident) et tout dépotage sans **signature +
    nom du chauffeur** et signature du technicien. Un APK antérieur au b32 **ne peut plus rien
-   clôturer** : l'API et l'APK **b42** doivent partir dans la MÊME fenêtre, jamais étalés ;
+   clôturer** : l'API et l'APK **b43** doivent partir dans la MÊME fenêtre, jamais étalés ;
 5. **NOUVEAU — photos exigées sur les dépannages** : une curative se clôture avec au moins
    2 photos (réglable). Un APK ancien ne les impose pas côté saisie → refus serveur.
 6. **🔴 NOUVEAU — photos AVANT au démarrage d'incident** : le serveur refuse de démarrer une
    intervention sans ≥ 2 photos de l'état constaté (`incident.minPhotosAvant`). Seul le
-   **b42** les joint correctement (le b39, jamais distribué, avait un bug qui les perdait) :
-   l'API et l'APK **b42** partent dans la MÊME fenêtre.
+   **b43** les joint correctement (le b39, jamais distribué, avait un bug qui les perdait) :
+   l'API et l'APK **b43** partent dans la MÊME fenêtre.
 
 **⚠️ SMS réels** : la passerelle Moov est ACTIVE en prod. Tout test qui déclenche une
 notification (création d'incident, coupure totale, alerte) **envoie de vrais SMS**. Pour la
@@ -63,7 +63,7 @@ automatique d'un événement pris en charge, si la coupure a duré ≥ 15 min
 
 - [ ] Annonce aux utilisateurs : coupure de service ~30 min, reconnexion obligatoire ensuite.
 - [ ] Fenêtre choisie hors heures de tournée carburant (éviter un transporteur en pleine saisie).
-- [ ] **APK b42 construit et testé sur un téléphone réel** AVANT la fenêtre (phase 4 ci-dessous —
+- [ ] **APK b43 construit et testé sur un téléphone réel** AVANT la fenêtre (phase 4 ci-dessous —
       le build peut se faire la veille, seule la distribution attend la bascule). Rappel : à
       cause de la rupture nº4 (signatures), la distribution ne peut PAS attendre le lendemain.
 - [ ] **SMTP configuré** sur le serveur (`SMTP_HOST`, `SMTP_FROM`…) : sans lui, le récap
@@ -76,7 +76,7 @@ automatique d'un événement pris en charge, si la coupure a duré ≥ 15 min
       la prod est au niveau du 03/09 (`0054` déjà passée avec l'audit nº2 sinon elle part aussi). Toute migration inattendue ici est
       une anomalie à comprendre AVANT la bascule.
 
-✋ **Contrôle** : APK b42 testé OK sur téléphone, fenêtre annoncée, disque > 5 Go libres,
+✋ **Contrôle** : APK b43 testé OK sur téléphone, fenêtre annoncée, disque > 5 Go libres,
 SMTP configuré.
 
 ---
@@ -250,7 +250,7 @@ couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
       puis relancer le conteneur pour tester) → l'email arrive aux superviseurs et internes,
       chacun avec SON périmètre, sections par contrat, **sites désignés par leur nom**.
 
-**Mobile (téléphone réel, APK b42)**
+**Mobile (téléphone réel, APK b43)**
 - [ ] Connexion technicien (le verrou d'appareil accepte le téléphone).
 - [ ] Un dépotage complet de test : plan → jauges → 6 photos → **signatures chauffeur (avec son
       NOM) + technicien** → GPS → envoi. Sans le nom du chauffeur : refus explicite.
@@ -260,7 +260,7 @@ couvre ce que l'automate ne voit pas (contenus métier, mobile, charge NAT) :
       clôturer → au moins 2 photos exigées.
 - [ ] **Mesure de cuve** depuis la fiche site : 3 photos exigées, les litres calculés
       correspondent à ceux du web pour la même hauteur.
-- [ ] **Démarrage d'incident (b42)** : « Démarrer l'intervention » guide la prise de
+- [ ] **Démarrage d'incident (b43)** : « Démarrer l'intervention » guide la prise de
       **2 photos AVANT** puis la vérification GPS → l'incident passe EN COURS (c'était le
       bug bloquant du b39 : photos capturées mais jamais envoyées).
 - [ ] **Anti-doublon dépotage** : ressaisir un dépotage de même volume sur le même site
@@ -284,8 +284,8 @@ rustine en production.
 
 ## Phase 4 — APK
 
-L'APK **1.7.0+42** est déjà construit et déposé dans `~/Downloads/APK-emops/`
-(`emops-1.7.0-b42-arm64-v8a.apk` + `-armeabi-v7a.apk` + `.aab`, versionCode **2042**,
+L'APK **1.7.0+43** est déjà construit et déposé dans `~/Downloads/APK-emops/`
+(`emops-1.7.0-b43-arm64-v8a.apk` + `-armeabi-v7a.apk` + `.aab`, versionCode **2043**,
 signature `4955c7cf…` inchangée — mise à jour par-dessus, pas de désinstallation).
 Pour le reconstruire à l'identique :
 
