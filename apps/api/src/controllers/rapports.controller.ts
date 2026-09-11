@@ -3,7 +3,7 @@ import { startOfMonth, endOfMonth, subMonths, addMonths, format } from 'date-fns
 import { prisma } from '../config/database';
 import { auditLog } from '../services/audit.service';
 import { calculerStockSite } from '../utils/calculator';
-import { geParams, getNum } from '../services/settings.service';
+import { geParams, getNum, dateReferenceTaches } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
 import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, SiteEligibilite } from '../utils/tachesPreventives';
@@ -631,6 +631,7 @@ async function chargerConformiteMaintenance(req: Request) {
     const [ba, bm] = mois.split('-').map(Number);
     return { mois, debut: new Date(Date.UTC(ba, bm - 1, 1)), fin: new Date(Date.UTC(ba, bm, 1)) };
   });
+  const refTaches = dateReferenceTaches();
   for (const site of sitesContrat) {
     const pid = passifByLot.get(site.lotId!)!;
     const statuts: Record<string, StatutTache> = {};
@@ -648,6 +649,10 @@ async function chargerConformiteMaintenance(req: Request) {
           else if (d < b.fin) realisee = true;
           else break;
         }
+        // Jamais enregistrée avant ce mois : réputée faite à la date de
+        // référence du suivi (le dû ne remonte pas avant la plateforme).
+        // <= : une référence posée AU 1er du mois vaut pour ce mois-là.
+        if (!derniereAvant && refTaches && refTaches <= b.debut) derniereAvant = refTaches;
         const due = !derniereAvant || addMonths(derniereAvant, freq) < b.fin;
         if (!due) continue;
         const evo = evolutionDuPar.get(pid) ?? evolutionDuPar.set(pid, new Map()).get(pid)!;

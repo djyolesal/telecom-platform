@@ -74,6 +74,11 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'maintenance.seuilEcartGasoilPct', label: 'Tolérance écart gasoil', groupe: 'Maintenance', unite: '%', defaut: env.SEUIL_ECART_GASOIL_PCT },
     { key: 'maintenance.minPhotosMouvement', label: 'Photos min. mouvement d’actif', groupe: 'Maintenance', unite: 'photos', defaut: 2 },
     { key: 'maintenance.minPhotosCurative', label: 'Photos min. dépannage curatif', groupe: 'Maintenance', unite: 'photos', defaut: 2 },
+    // Point de départ du suivi préventif : une tâche JAMAIS enregistrée sur la
+    // plateforme est réputée faite à cette date (l'historique papier d'avant
+    // la mise en service n'est pas importé) - elle redevient due à date +
+    // fréquence. 0 = comportement d'origine : jamais enregistrée = due tout de suite.
+    { key: 'taches.dateReferenceJamaisFaites', label: 'Tâches jamais enregistrées réputées faites le (AAAAMMJJ, 0 = dues immédiatement)', groupe: 'Maintenance', unite: '', defaut: 0 },
     { key: 'ge.intervalleVidangeHeures', label: 'Intervalle vidange GE', groupe: 'Maintenance', unite: 'h', defaut: 250 },
     // Fenêtre d'entraînement amont/aval de la détection OSS : un aval tombé
     // jusqu'à N minutes AVANT sa racine est classé hérité (batteries inégales).
@@ -152,6 +157,20 @@ export const TYPES_LIAISON_DEFAULTS = [
   { code: 'ML', libelle: 'FH - Microwave Link', famille: 'FH', constructeur: 'ERICSSON' },
   { code: 'RTN', libelle: 'FH - RTN', famille: 'FH', constructeur: 'HUAWEI' },
 ];
+
+/**
+ * Date de référence des tâches préventives jamais enregistrées (AAAAMMJJ en
+ * réglage, null si 0/invalide) : le point de départ du cycle de fréquence
+ * quand la plateforme n'a pas l'historique d'avant sa mise en service.
+ */
+export function dateReferenceTaches(): Date | null {
+  const v = getNum('taches.dateReferenceJamaisFaites', 0);
+  if (!v) return null;
+  const a = Math.floor(v / 10000), m = Math.floor((v % 10000) / 100), j = v % 100;
+  if (a < 2000 || m < 1 || m > 12 || j < 1 || j > 31) return null;
+  const d = new Date(Date.UTC(a, m - 1, j));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 export function typesLiaison(): typeof TYPES_LIAISON_DEFAULTS {
   const v = getRaw('topologie.typesLiaison');

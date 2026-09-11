@@ -6,6 +6,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { auditLog } from '../services/audit.service';
 import { genererPlanningPreventif } from '../services/planning.service';
+import { dateReferenceTaches } from '../services/settings.service';
 import JSZip from 'jszip';
 import { buildFicheValidationXlsx, FicheLogo } from '../services/ficheValidation.service';
 import { getObjectBuffer } from '../services/storage.service';
@@ -82,7 +83,8 @@ export async function getTachesForSite(req: Request, res: Response, next: NextFu
     res.json({
       success: true,
       data: applicables.map((t) => {
-        const last = lastByKey.get(t.key) ?? null;
+        // Jamais enregistrée = réputée faite à la date de référence du suivi.
+        const last = lastByKey.get(t.key) ?? dateReferenceTaches();
         const { statut, prochaine } = statutEcheance(last, FREQUENCE_MOIS[t.frequence], now);
         return {
           numero: t.numero,
@@ -154,7 +156,7 @@ export async function getEcheancier(req: Request, res: Response, next: NextFunct
       for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
         const presta = t.categorie === 'SOLAIRE' ? prestaSolaire : prestaPassif;
         if (prestataire_id && presta?.id !== prestataire_id) continue;
-        const last = lastByKey.get(`${site.id}:${t.key}`) ?? null;
+        const last = lastByKey.get(`${site.id}:${t.key}`) ?? dateReferenceTaches();
         const { statut, prochaine } = statutEcheance(last, FREQUENCE_MOIS[t.frequence], now);
         if (statut === 'A_JOUR') aJour++; else if (statut === 'EN_RETARD') enRetard++; else jamais++;
         if (filtreStatut && statut !== filtreStatut) continue;
