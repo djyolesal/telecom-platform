@@ -5,6 +5,10 @@ jest.mock('../services/email.service', () => ({ sendEmail: jest.fn() }));
 jest.mock('../services/settings.service', () => ({ getNum: jest.fn(() => 1) }));
 
 const blocs = {
+  conformite: {
+    dues: 40, realisees: 31, taux: 78, sitesAvecDu: 10, sitesConformes: 6,
+    enRetard: [{ site: 'MAR-004', manquantes: 3 }, { site: 'PLA-002', manquantes: 1 }],
+  },
   passif: {
     terminees: 12, terminesAujourdhui: 2, enCours: 3, planifiees: 5,
     enRetard: [{ site: 'MAR-004', equipement: 'GE n°1 (planifiée)', datePlanifiee: new Date('2026-08-20') }],
@@ -28,6 +32,10 @@ describe('rendreEmail (récap journalier)', () => {
     expect(html).toContain('Parc entier');
     expect(html).toContain('Maintenance passive / active');
     expect(html).toContain('Maintenance solaire');
+    expect(html).toContain('Conformité contractuelle du mois');
+    expect(html).toContain('78%');
+    expect(html).toContain('6/10');
+    expect(html).toContain('MAR-004 (3 tâches)');
     // avancement passif : 12 terminées / (12+3+5) = 60 %
     expect(html).toContain('60 %');
     expect(html).toContain("+2 aujourd'hui");

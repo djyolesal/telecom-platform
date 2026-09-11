@@ -1,5 +1,6 @@
 import { startOfMonth, startOfDay } from 'date-fns';
 import { prisma } from '../config/database';
+import { calculerDuParSite } from '../services/conformiteTaches.service';
 import { sendEmail } from '../services/email.service';
 import { getNum } from '../services/settings.service';
 import { logger } from '../utils/logger';
@@ -27,9 +28,21 @@ interface BlocMaintenances {
   enRetard: { site: string; equipement: string; datePlanifiee: Date }[];
 }
 
+interface BlocConformite {
+  dues: number;
+  realisees: number;
+  taux: number | null; // null = aucun dû ce mois
+  sitesAvecDu: number;
+  sitesConformes: number;
+  enRetard: { site: string; manquantes: number }[]; // top sites, tâches NOK
+}
+
 interface RecapData {
   passif: BlocMaintenances | null; // null = contrat non détenu par ce périmètre
   solaire: BlocMaintenances | null;
+  // Conformité CONTRACTUELLE du mois (contrat passif) : moteur partagé avec le
+  // rapport - dû par site vs réalisé, mêmes règles.
+  conformite: BlocConformite | null;
   depotages: { nombre: number; litres: number; aujourdhui: number } | null;
   incidents: {
     ouvertsPeriode: number;
@@ -158,7 +171,43 @@ export async function calculerRecap(prestataireId: string | null, debutMois: Dat
     })(),
   ]);
 
-  return { passif, solaire, depotages, incidents };
+  // Conformité contractuelle du mois (contrat passif) via le moteur partagé.
+  let conformite: BlocConformite | null = null;
+  if (detientPassif) {
+    const sitesContrat = await prisma.site.findMany({
+      where: {
+        isActive: true, lotId: { not: null },
+        ...(passifIds ? { id: { in: passifIds } } : {}),
+      },
+      select: {
+        id: true, nom: true, typePylone: true, hasClimatiseur: true,
+        hasExtincteurs: true, powerConfig: true, statutGE: true, cuveVolumeLitres: true,
+      },
+    });
+    const mois = `${debutMois.getUTCFullYear()}-${String(debutMois.getUTCMonth() + 1).padStart(2, '0')}`;
+    const duParSite = await calculerDuParSite(sitesContrat, [mois], mois);
+    let dues = 0, realisees = 0, sitesAvecDu = 0, sitesConformes = 0;
+    const retards: { site: string; manquantes: number }[] = [];
+    for (const site of sitesContrat) {
+      const du = duParSite.get(site.id);
+      const c = du?.parMois.get(mois);
+      if (!du || !c || !c.dues) continue;
+      dues += c.dues;
+      realisees += c.realisees;
+      sitesAvecDu++;
+      if (du.conforme) sitesConformes++;
+      else retards.push({ site: site.nom, manquantes: Object.values(du.statuts).filter((x) => x === 'NOK').length });
+    }
+    retards.sort((a, b) => b.manquantes - a.manquantes);
+    conformite = {
+      dues, realisees,
+      taux: dues ? Math.round((realisees / dues) * 100) : null,
+      sitesAvecDu, sitesConformes,
+      enRetard: retards.slice(0, 5),
+    };
+  }
+
+  return { passif, solaire, conformite, depotages, incidents };
 }
 
 function versLignePrestataire(nom: string, d: RecapData): LignePrestataire {
@@ -234,6 +283,24 @@ function celluleDetail(v: string, opts?: { gauche?: boolean; accent?: boolean })
   return `<td style="padding:6px ${opts?.gauche ? '8px' : '4px'};text-align:${opts?.gauche ? 'left' : 'center'};border-bottom:1px solid #eef1f5;${opts?.accent ? `font-weight:700;color:${NAVY};` : ''}">${v}</td>`;
 }
 
+function sectionConformite(b: BlocConformite): string {
+  const couleur = b.taux == null ? '#6B7280' : b.taux >= 90 ? '#0E7C6B' : b.taux >= 70 ? '#E67E22' : '#C0392B';
+  const retards = b.enRetard.length
+    ? `<tr><td colspan="2" style="padding:8px 12px;color:#8a6d3b;background:#fdf6e3;font-size:12px;">
+        Sites en retard : ${b.enRetard.map((r) => `${r.site} (${r.manquantes} tâche${r.manquantes > 1 ? 's' : ''})`).join(' · ')}
+       </td></tr>`
+    : '';
+  return `
+  <h3 style="margin:20px 0 8px;font-size:15px;color:${NAVY};">Conformité contractuelle du mois (passif)</h3>
+  <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e6eaf0;border-radius:6px;">
+    ${ligne('Tâches dues au contrat', String(b.dues))}
+    ${ligne('Réalisées', String(b.realisees))}
+    ${ligne('Taux de conformité', b.taux == null ? 'aucun dû ce mois' : `<span style="color:${couleur};">${b.taux}%</span>`, true)}
+    ${ligne('Sites conformes (tout leur dû réalisé)', `${b.sitesConformes}/${b.sitesAvecDu}`)}
+    ${retards}
+  </table>`;
+}
+
 function sectionDetailPrestataires(lignes: LignePrestataire[]): string {
   if (!lignes.length) return '';
   const th = (t: string, gauche = false) =>
@@ -271,6 +338,7 @@ export function rendreEmail(d: RecapData, jour: Date, perimetreLabel: string, de
     </div>
     <div style="background:#f7f9fc;border:1px solid #e3e8ef;border-top:0;padding:12px 16px 18px;border-radius:0 0 8px 8px;">
       ${d.passif ? sectionMaintenances('Maintenance passive / active', d.passif) : ''}
+      ${d.conformite ? sectionConformite(d.conformite) : ''}
       ${d.solaire ? sectionMaintenances('Maintenance solaire', d.solaire) : ''}
       <h3 style="margin:18px 0 6px;color:${NAVY};font-size:15px;">Incidents</h3>
       <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e8ef;border-radius:6px;font-size:13px;">

@@ -6,7 +6,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams, getNum, dateReferenceTaches } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
-import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, exigePremiereManuelle, SiteEligibilite } from '../utils/tachesPreventives';
+import { calculerDuParSite, tachesCataloguePassif } from '../services/conformiteTaches.service';
 import { bilanCarburant } from '../services/bilanCarburant.service';
 import { bilanEnergie } from '../services/bilanEnergie.service';
 import { sendTabular } from '../utils/exporter';
@@ -565,12 +565,10 @@ async function chargerConformiteMaintenance(req: Request) {
       parcParPrestataire.set(a.prestataireId, (parcParPrestataire.get(a.prestataireId) ?? 0) + a.lot._count.sites);
     }
   }
-  // ── DÛ CONTRACTUEL : le catalogue des tâches préventives (fréquence +
-  //    éligibilité par site) définit, site par site, ce que le contrat EXIGE
-  //    sur le mois - la conformité se mesure contre ce dû, pas contre ce que
-  //    le prestataire a bien voulu clôturer. Une tâche est due sur un mois si
-  //    jamais faite, ou si dernière exécution VALIDE + fréquence tombe avant
-  //    la fin du mois ; réalisée si une exécution valide tombe dans le mois.
+  // ── DÛ CONTRACTUEL : moteur PARTAGÉ (conformiteTaches.service) - mêmes
+  //    règles que le récap journalier : dueness par fréquence, première
+  //    planification manuelle des trim./sem., date de référence des
+  //    mensuelles, suivi « dépotage » validé par les données. ──
   const sitesContrat = await prisma.site.findMany({
     where: {
       isActive: true, lotId: { in: [...passifByLot.keys()] },
@@ -583,68 +581,8 @@ async function chargerConformiteMaintenance(req: Request) {
       powerConfig: true, statutGE: true, cuveVolumeLitres: true,
     },
   });
-  // Exécutions VALIDES : la fenêtre d'évolution en détail, et l'antériorité
-  // réduite à la DERNIÈRE exécution par (site, tâche) - seule elle compte pour
-  // la dueness. Sans cette borne, tout l'historique (des années) était chargé
-  // et trié en mémoire à chaque affichage ET chaque export.
-  const idsSites = sitesContrat.map((x) => x.id);
-  const [execsFenetre, dernieresAvant] = await Promise.all([
-    prisma.maintenance.findMany({
-      where: {
-        statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
-        siteId: { in: idsSites }, dateFin: { gte: since, lt: finMois },
-      },
-      select: { siteId: true, tachePreventiveKey: true, dateFin: true },
-    }),
-    prisma.maintenance.groupBy({
-      by: ['siteId', 'tachePreventiveKey'],
-      where: {
-        statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
-        siteId: { in: idsSites }, dateFin: { lt: since, not: null },
-      },
-      _max: { dateFin: true },
-    }),
-  ]);
-  // Données de SUIVI du mois (tâche « dépotage » validée par les données) :
-  // un relevé complet - GE avec carburant + CEET selon la config - OU un
-  // dépotage valide le mois. Préchargées sur la fenêtre d'évolution.
-  const [depotagesFenetre, relevesFenetre] = await Promise.all([
-    prisma.depotage.findMany({
-      where: { siteId: { in: idsSites }, dateDepotage: { gte: since, lt: finMois } },
-      select: { siteId: true, dateDepotage: true },
-    }),
-    prisma.releveEnergie.findMany({
-      where: { siteId: { in: idsSites }, dateReleve: { gte: since, lt: finMois }, source: { in: ['GE', 'CEET'] } },
-      select: { siteId: true, dateReleve: true, source: true, volumeGasoilLitres: true },
-    }),
-  ]);
-  const suiviParCle = new Map<string, Set<string>>(); // `site:mois` → jetons vus
-  const jeton = (siteId: string, d: Date, tok: string) => {
-    const k = `${siteId}:${cleMois(d)}`;
-    (suiviParCle.get(k) ?? suiviParCle.set(k, new Set()).get(k)!).add(tok);
-  };
-  for (const d of depotagesFenetre) jeton(d.siteId, d.dateDepotage, 'LIV');
-  for (const r of relevesFenetre) {
-    if (r.source === 'GE') { if (r.volumeGasoilLitres != null) jeton(r.siteId, r.dateReleve, 'GE'); }
-    else jeton(r.siteId, r.dateReleve, 'CEET');
-  }
-  const suiviOk = (site: { id: string; powerConfig: string }, mois: string): boolean => {
-    const vus = suiviParCle.get(`${site.id}:${mois}`);
-    if (!vus) return false;
-    if (vus.has('LIV')) return true;
-    const requises = sourcesForConfig(site.powerConfig).filter((x) => x === 'GE' || x === 'CEET');
-    return requises.length > 0 && requises.every((x) => vus.has(x));
-  };
-
-  const execsParCle = new Map<string, Date[]>();
-  for (const g of dernieresAvant) {
-    if (g._max.dateFin) execsParCle.set(`${g.siteId}:${g.tachePreventiveKey}`, [g._max.dateFin]);
-  }
-  for (const x of execsFenetre) {
-    const k = `${x.siteId}:${x.tachePreventiveKey}`;
-    (execsParCle.get(k) ?? execsParCle.set(k, []).get(k)!).push(x.dateFin!);
-  }
-  for (const l of execsParCle.values()) l.sort((x, y) => x.getTime() - y.getTime());
+  const duParSite = await calculerDuParSite(sitesContrat, moisListe.map((m) => m.mois), cleMoisChoisi);
+  const tachesCatalogue = tachesCataloguePassif();
 
   const duesPar = new Map<string, number>();
   const realiseesPar = new Map<string, number>();
@@ -652,86 +590,28 @@ async function chargerConformiteMaintenance(req: Request) {
   const sitesEnRetardPar = new Map<string, Set<string>>();
   const sitesConformesPar = new Map<string, Set<string>>();
   const evolutionDuPar = new Map<string, Map<string, { dues: number; realisees: number }>>();
-  // Catalogue passif planifiable : les COLONNES de la matrice sites × tâches.
-  const tachesCatalogue = CONTRACTUAL_TASKS.filter((t) => t.categorie !== 'SOLAIRE' && FREQUENCE_MOIS[t.frequence] != null);
-  // Matrice du mois choisi : pour chaque site, l'état de CHAQUE tâche du
-  // catalogue - OK (à jour ou réalisée), NOK (due non réalisée), NA (le site
-  // n'est pas concerné : pas de clim, pas de cuve, pylône exclu...).
-  type StatutTache = 'OK' | 'NOK' | 'NA';
-  const matriceSites: { siteId: string; site: string; region: string; prestataireId: string; statuts: Record<string, StatutTache>; conforme: boolean }[] = [];
-  const bornesMois = moisListe.map(({ mois }) => {
-    const [ba, bm] = mois.split('-').map(Number);
-    return { mois, debut: new Date(Date.UTC(ba, bm - 1, 1)), fin: new Date(Date.UTC(ba, bm, 1)) };
-  });
-  const refTaches = dateReferenceTaches();
+  const matriceSites: { siteId: string; site: string; region: string; prestataireId: string; statuts: Record<string, 'OK' | 'NOK' | 'NA'>; conforme: boolean }[] = [];
   for (const site of sitesContrat) {
     const pid = passifByLot.get(site.lotId!)!;
-    const statuts: Record<string, StatutTache> = {};
-    // La conformité passive ne juge pas le contrat solaire (rapport dédié).
-    for (const t of tachesCatalogue) {
-      if (!t.eligible(site as unknown as SiteEligibilite)) { statuts[t.key] = 'NA'; continue; }
-      statuts[t.key] = 'OK'; // à jour par défaut ; NOK si un dû du mois n'est pas réalisé
-      // Suivi validé par les DONNÉES : dû chaque mois, réalisé si relevé
-      // complet ou dépotage dans le mois - pas de ticket de maintenance.
-      if (t.suiviParDonnees) {
-        for (const b of bornesMois) {
-          const ok = suiviOk(site, b.mois);
-          const evo = evolutionDuPar.get(pid) ?? evolutionDuPar.set(pid, new Map()).get(pid)!;
-          const eb = evo.get(b.mois) ?? { dues: 0, realisees: 0 };
-          eb.dues++;
-          if (ok) eb.realisees++;
-          evo.set(b.mois, eb);
-          if (b.mois !== cleMoisChoisi) continue;
-          duesPar.set(pid, (duesPar.get(pid) ?? 0) + 1);
-          (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
-          if (ok) {
-            realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
-          } else {
-            statuts[t.key] = 'NOK';
-            (sitesEnRetardPar.get(pid) ?? sitesEnRetardPar.set(pid, new Set()).get(pid)!).add(site.id);
-          }
-        }
-        continue;
-      }
-      const freq = FREQUENCE_MOIS[t.frequence]!;
-      const histo = execsParCle.get(`${site.id}:${t.key}`) ?? [];
-      for (const b of bornesMois) {
-        let derniereAvant: Date | null = null;
-        let realisee = false;
-        for (const d of histo) {
-          if (d < b.debut) derniereAvant = d;
-          else if (d < b.fin) realisee = true;
-          else break;
-        }
-        // Trim./sem. jamais exécutée avant ce mois : première planification
-        // MANUELLE - aucun dû automatique tant que le cycle n'est pas amorcé.
-        // (Une exécution dans le mois même amorce le cycle pour la suite.)
-        if (!derniereAvant && exigePremiereManuelle(t.frequence)) continue;
-        // Mensuelle jamais enregistrée avant ce mois : réputée faite à la
-        // date de référence du suivi (le dû ne remonte pas avant la
-        // plateforme). <= : une référence AU 1er du mois vaut pour ce mois-là.
-        if (!derniereAvant && refTaches && refTaches <= b.debut) derniereAvant = refTaches;
-        const due = !derniereAvant || addMonths(derniereAvant, freq) < b.fin;
-        if (!due) continue;
-        const evo = evolutionDuPar.get(pid) ?? evolutionDuPar.set(pid, new Map()).get(pid)!;
-        const eb = evo.get(b.mois) ?? { dues: 0, realisees: 0 };
-        eb.dues++;
-        if (realisee) eb.realisees++;
-        evo.set(b.mois, eb);
-        if (b.mois !== cleMoisChoisi) continue;
-        duesPar.set(pid, (duesPar.get(pid) ?? 0) + 1);
-        (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
-        if (realisee) {
-          realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + 1);
-        } else {
-          statuts[t.key] = 'NOK';
-          (sitesEnRetardPar.get(pid) ?? sitesEnRetardPar.set(pid, new Set()).get(pid)!).add(site.id);
-        }
-      }
+    const du = duParSite.get(site.id)!;
+    const evo = evolutionDuPar.get(pid) ?? evolutionDuPar.set(pid, new Map()).get(pid)!;
+    for (const [mois, c] of du.parMois) {
+      if (!c.dues) continue;
+      const eb = evo.get(mois) ?? { dues: 0, realisees: 0 };
+      eb.dues += c.dues;
+      eb.realisees += c.realisees;
+      evo.set(mois, eb);
+    }
+    const cible = du.parMois.get(cleMoisChoisi) ?? { dues: 0, realisees: 0 };
+    if (cible.dues > 0) {
+      duesPar.set(pid, (duesPar.get(pid) ?? 0) + cible.dues);
+      realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + cible.realisees);
+      (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
+      if (!du.conforme) (sitesEnRetardPar.get(pid) ?? sitesEnRetardPar.set(pid, new Set()).get(pid)!).add(site.id);
     }
     matriceSites.push({
       siteId: site.id, site: site.nom, region: site.region, prestataireId: pid,
-      statuts, conforme: !Object.values(statuts).includes('NOK'),
+      statuts: du.statuts, conforme: du.conforme,
     });
   }
   matriceSites.sort((x, y) => x.site.localeCompare(y.site));
