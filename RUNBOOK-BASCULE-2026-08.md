@@ -6,7 +6,7 @@ service d'E&M OpS. Chaque phase se termine par un **point de contrôle (✋)** :
 suivante que s'il est vert. Les commandes serveur s'exécutent dans `/opt/telecom-platform`
 (connexion SSH par tes soins — les identifiants ne passent jamais par un tiers).
 
-**Contenu du train** : migrations `0038` → `0057` (58 au total). Depuis la préparation initiale
+**Contenu du train** : migrations `0038` → `0058` (59 au total). Depuis la préparation initiale
 se sont ajoutées : signature de l'agent de sécurité, gardiennage de nuit, synchronisation OSS et
 prise en charge des coupures, **cuves** (barémage hauteur → litres), **contrat solaire** complet
 (lots solaires distincts, checklist contractuelle), référentiels éditables (types d'incident,
@@ -30,7 +30,8 @@ conforme + reprise planifiable, bandeau web/mobile), **export conformité** (par
 évolution mensuelle, tous les prestataires titulaires listés), feuille **Synthèse** de
 l'export coupures réservée manager/admin, **barémage 1000 points**, correctif OSS
 (**requalification en partielle** ne recrée plus la détection), **config mobile persistée**
-(fin des « 60 min » fantômes hors-ligne). APK courant :
+(fin des « 60 min » fantômes hors-ligne), **catalogue des pièces de rechange** (0058 -
+rapprochement serveur de la saisie libre, compatible APK antérieurs). APK courant :
 **1.7.0+41** (versionCode 2041).
 
 **Six ruptures de compatibilité à avoir en tête pendant toute la bascule :**
@@ -70,7 +71,7 @@ automatique d'un événement pris en charge, si la coupure a duré ≥ 15 min
 - [ ] Confirmer l'état des migrations :
       `docker compose exec api npx prisma migrate status` → indique les migrations en attente.
       Le train comporte **58 migrations** au total ; `0055` (motifs de coupure), `0056`
-      (opt-in SMS livraison) et `0057` (invalidation de maintenance) restent à appliquer si
+      (opt-in SMS livraison) `0057` (invalidation de maintenance) et `0058` (catalogue pièces de rechange) restent à appliquer si
       la prod est au niveau du 03/09 (`0054` déjà passée avec l'audit nº2 sinon elle part aussi). Toute migration inattendue ici est
       une anomalie à comprendre AVANT la bascule.
 
@@ -116,7 +117,7 @@ dans `make update`, ne pas l'oublier : sans lui, les sessions web continueront d
       `docker compose exec api npx prisma migrate status` répond depuis l'image (la CLI est
       embarquée — plus de téléchargement npx) et sans erreur de configuration ; les logs API ne
       montrent aucune erreur d'adapter pg.
-- [ ] `migrate deploy` a listé toutes les migrations manquantes jusqu'à **0057**. Les backfills
+- [ ] `migrate deploy` a listé toutes les migrations manquantes jusqu'à **0058**. Les backfills
       0040 (véhicules/chauffeurs depuis l'existant) s'exécutent dans la migration : vérifier
       `docker compose exec postgres psql -U <user> -d <db> -c "SELECT count(*) FROM vehicules;"`
       → non nul si des BL existaient.
@@ -139,7 +140,7 @@ dans `make update`, ne pas l'oublier : sans lui, les sessions web continueront d
 - [ ] `curl -s https://emops.uk/api/auth/session` → `null` HTTP 200 (Next répond).
 
 **Si `migrate deploy` échoue** : ne PAS improviser de SQL en prod. Restaurer le backup
-(phase R), revenir au commit noté, diagnostiquer à froid. Les migrations 0038-0057 sont
+(phase R), revenir au commit noté, diagnostiquer à froid. Les migrations 0038-0058 sont
 additives (`IF NOT EXISTS` partout) : un échec signalerait un état de base inattendu.
 
 **⚠️ Enchaîner immédiatement sur la phase 4 (APK)** : entre le déploiement de l'API et
@@ -397,7 +398,7 @@ make restore    # choisir le backup de la phase 1
 ```
 
 Notes :
-- les migrations 0038-0057 sont **additives** : l'ancien code tourne sans problème sur une
+- les migrations 0038-0058 sont **additives** : l'ancien code tourne sans problème sur une
   base déjà migrée — dans la plupart des cas, restaurer la base est INUTILE (et fait perdre
   les saisies faites entre-temps). Ne restaurer que si la base elle-même est corrompue.
   Exception à connaître : `0052` a **supprimé l'enum** `TypeIncident` au profit d'un

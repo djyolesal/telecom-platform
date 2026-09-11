@@ -8,6 +8,7 @@ import { paginate } from '../utils/paginator';
 import { AppError } from '../utils/AppError';
 import { sendEmail } from '../services/email.service';
 import { auditLog } from '../services/audit.service';
+import { rapprocherHistorique } from '../services/piecesRef.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
 import { SMS_TEMPLATES } from '../services/sms.service';
@@ -346,6 +347,64 @@ export async function deleteMotifCoupure(req: Request, res: Response, next: Next
     await prisma.motifCoupureRef.delete({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'DELETE', 'motifs_coupure', req.params.id, {}, req);
     res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+// ── Catalogue des pièces de rechange (traçabilité niveau 1) ──
+export async function listPiecesRef(req: Request, res: Response, next: NextFunction) {
+  try {
+    const pieces = await prisma.pieceRef.findMany({
+      orderBy: [{ libelle: 'asc' }],
+      include: { _count: { select: { pieces: true } } },
+    });
+    res.json({
+      success: true,
+      data: pieces.map((p) => ({ ...p, utilisations: p._count.pieces, _count: undefined })),
+    });
+  } catch (err) { next(err); }
+}
+
+export async function upsertPieceRef(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id, code, libelle, categorie, unite, coutStandard, actif } = req.body as
+      { id?: string; code?: string; libelle?: string; categorie?: string; unite?: string; coutStandard?: number; actif?: boolean };
+    if (!libelle?.trim()) throw new AppError('Libellé requis.', 422);
+    const cleanCode = String(code ?? libelle).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+    if (!cleanCode) throw new AppError('Code requis.', 422);
+    const data = {
+      code: cleanCode,
+      libelle: libelle.trim().slice(0, 120),
+      categorie: categorie?.trim() ? String(categorie).trim().toUpperCase().slice(0, 20) : null,
+      unite: (unite?.trim() || 'unité').slice(0, 20),
+      coutStandard: coutStandard != null && Number.isFinite(Number(coutStandard)) ? Number(coutStandard) : null,
+      actif: actif !== false,
+    };
+    const piece = id
+      ? await prisma.pieceRef.update({ where: { id }, data })
+      : await prisma.pieceRef.upsert({ where: { code: cleanCode }, create: data, update: data });
+    await auditLog(req.user!.id, 'UPDATE', 'pieces_ref', piece.id, data, req);
+    // Le catalogue vient de bouger : les lignes libres de l'historique qui
+    // correspondent maintenant se rattachent (asynchrone, best-effort).
+    void rapprocherHistorique().catch(() => undefined);
+    res.json({ success: true, data: piece });
+  } catch (err) { next(err); }
+}
+
+export async function deletePieceRef(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Les consommations historiques gardent leur texte libre (piece_ref_id
+    // repasse à null par la contrainte) : rien ne casse.
+    await prisma.pieceRef.delete({ where: { id: req.params.id } });
+    await auditLog(req.user!.id, 'DELETE', 'pieces_ref', req.params.id, {}, req);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+export async function rapprocherPiecesHistorique(req: Request, res: Response, next: NextFunction) {
+  try {
+    const bilan = await rapprocherHistorique();
+    await auditLog(req.user!.id, 'UPDATE', 'pieces_ref', undefined, { action: 'rapprochement historique', ...bilan }, req);
+    res.json({ success: true, data: bilan });
   } catch (err) { next(err); }
 }
 

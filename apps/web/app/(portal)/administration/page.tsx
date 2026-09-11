@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList, RadioTower, MessageSquareText, Columns3, Database, AlertTriangle, Wrench , WifiOff } from 'lucide-react';
+import {Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList, RadioTower, MessageSquareText, Columns3, Database, AlertTriangle, Wrench, WifiOff, Cog } from 'lucide-react';
 
 const SECTIONS = [
   { href: '/administration/utilisateurs', icon: Users, title: 'Utilisateurs', desc: 'Créer, modifier et désactiver les comptes.' },
@@ -17,6 +17,7 @@ const SECTIONS = [
   { href: '/administration/types-incident', icon: AlertTriangle, title: "Types d'incident", desc: 'Référentiel des formulaires de déclaration (web et mobile).' },
   { href: '/administration/motifs-coupure', icon: WifiOff, title: 'Motifs de coupure', desc: 'Formulations suggérées au NOC (cause, actions) pour unifier les saisies.' },
   { href: '/administration/equipements', icon: Wrench, title: 'Équipements de dépannage', desc: 'ATS, TGBT, GE… — la catégorie route vers le bon contrat.' },
+  { href: '/administration/pieces', icon: Cog, title: 'Pièces de rechange', desc: 'Catalogue de rapprochement — la saisie terrain reste libre, la conso devient agrégeable.' },
   { href: '/administration/audit', icon: ScrollText, title: 'Journal d\'audit', desc: 'Historique des actions sensibles.' },
   { href: '/administration/serveur', icon: ServerCog, title: 'Santé serveur', desc: 'État des services, métriques et monitoring.' },
   { href: '/administration/base-de-donnees', icon: Database, title: 'Base de données', desc: 'Consulter et corriger les données de toutes les tables.' },

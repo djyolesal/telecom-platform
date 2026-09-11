@@ -47,6 +47,7 @@ import { assertOnSite } from '../utils/geofence';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
+import { rapprocherPieces, PieceSaisie } from '../services/piecesRef.service';
 import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite } from '../services/vraisemblance.service';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
@@ -463,7 +464,11 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
   try {
     // Liste blanche stricte : statut/dateFin/dureeMinutes/reference… sont fixés
     // par le workflow, jamais par le client (anti mass-assignment).
-    const pieces = req.body?.pieces as Prisma.PieceRechangeCreateWithoutMaintenanceInput[] | undefined;
+    // Pièces assainies + rapprochées au catalogue (la saisie libre du mobile
+    // reste acceptée telle quelle - compatibilité APK).
+    const pieces = Array.isArray(req.body?.pieces)
+      ? await rapprocherPieces(req.body.pieces as PieceSaisie[])
+      : undefined;
     const data = pick<Prisma.MaintenanceUncheckedCreateInput>(req.body, [
       'siteId', 'type', 'categorie', 'equipement', 'description', 'datePlanifiee',
       'tachePreventiveKey', 'natureTravaux', 'actifType', 'actifId', 'siteSourceId', 'technicienId',
@@ -1188,9 +1193,10 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         });
         if (verrou.count === 0) throw Object.assign(new Error('ALREADY_CLOSED'), { alreadyClosed: true });
 
-        if (pieces?.length) {
+        const piecesPropres = pieces?.length ? await rapprocherPieces(pieces as PieceSaisie[]) : [];
+        if (piecesPropres.length) {
           await tx.pieceRechange.createMany({
-            data: pieces.map((p) => ({ ...p, maintenanceId: existing.id })) as unknown as Prisma.PieceRechangeCreateManyInput[],
+            data: piecesPropres.map((p) => ({ ...p, maintenanceId: existing.id })),
           });
         }
         // Photos prises sur place (carte GE, compteur CEET, activités)

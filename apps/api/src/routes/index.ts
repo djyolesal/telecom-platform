@@ -448,6 +448,12 @@ router.post('/users/:id/delier-appareil', rbac(['ADMIN']), usersCtrl.delierAppar
 router.get('/types-pylone', adminCtrl.listTypesPylone);
 router.get('/types-incident', adminCtrl.listTypesIncident);
 router.get('/motifs-coupure', adminCtrl.listMotifsCoupure);
+// Catalogue des pièces de rechange : lecture ouverte (sélecteurs mobile/web),
+// gestion réservée à l'admin ; le rapprochement de l'historique se relance à la main.
+router.get('/pieces-ref', adminCtrl.listPiecesRef);
+router.post('/admin/pieces-ref', rbac(['ADMIN']), adminCtrl.upsertPieceRef);
+router.delete('/admin/pieces-ref/:id', rbac(['ADMIN']), adminCtrl.deletePieceRef);
+router.post('/admin/pieces-ref/rapprocher', rbac(['ADMIN']), adminCtrl.rapprocherPiecesHistorique);
 router.post('/admin/motifs-coupure', rbac(['ADMIN']), adminCtrl.upsertMotifCoupure);
 router.delete('/admin/motifs-coupure/:id', rbac(['ADMIN']), adminCtrl.deleteMotifCoupure);
 router.get('/equipements', adminCtrl.listEquipements);

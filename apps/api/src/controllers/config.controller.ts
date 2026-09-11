@@ -37,6 +37,13 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
         select: { code: true, libelle: true, categorie: true },
         orderBy: { libelle: 'asc' },
       }),
+      // Catalogue des pièces de rechange (même mécanique) : un APK futur
+      // proposera la liste à la saisie ; les APK actuels l'ignorent sans mal.
+      pieces: await prisma.pieceRef.findMany({
+        where: { actif: true },
+        select: { code: true, libelle: true, unite: true },
+        orderBy: { libelle: 'asc' },
+      }),
       // Colonnes optionnelles par tableau que l'admin autorise à l'affichage
       // (null = toutes celles du catalogue web).
       colonnesOptionnelles: (() => {

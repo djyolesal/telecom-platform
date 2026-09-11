@@ -403,10 +403,34 @@ model PieceRechange {
   reference     String?  @db.VarChar(50)
   quantite      Int
   coutUnitaire  Decimal? @map("cout_unitaire") @db.Decimal(10, 2)
+  // Rattachement au catalogue : posé par le rapprochement automatique du
+  // serveur (le mobile envoie du texte libre) ou par l'admin a posteriori.
+  pieceRefId    String?  @map("piece_ref_id")
 
   maintenance Maintenance @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
+  pieceRef    PieceRef?   @relation(fields: [pieceRefId], references: [id], onDelete: SetNull)
 
+  @@index([pieceRefId])
   @@map("pieces_rechange")
+}
+
+// Catalogue des pièces de rechange (traçabilité niveau 1) : rend la
+// consommation agrégeable par pièce × site × prestataire. La saisie terrain
+// reste LIBRE - un rapprochement serveur (code ou libellé normalisé) fait le
+// lien, jamais un blocage.
+model PieceRef {
+  id           String   @id @default(uuid())
+  code         String   @unique @db.VarChar(40)
+  libelle      String   @db.VarChar(120)
+  categorie    String?  @db.VarChar(20) // CategorieEquipement (statistique, pas contrainte)
+  unite        String   @default("unité") @db.VarChar(20)
+  coutStandard Decimal? @map("cout_standard") @db.Decimal(12, 2)
+  actif        Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  pieces PieceRechange[]
+
+  @@map("pieces_ref")
 }
 
 model Photo {
