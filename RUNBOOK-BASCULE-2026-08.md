@@ -333,6 +333,10 @@ flutter build appbundle --release --dart-define=API_URL=https://emops.uk/api/v1
         auto déjà rétablie ne peut pas être validée pour la disponibilité ;
       · `oss.armementDelaiMin` (défaut **0** = adoption manuelle par le NOC — ne pas activer
         sans décision explicite : l'armement automatique déclenche SMS et terrain) ;
+      · `coupure.escaladePartielleHeures` (défaut **0** = désactivé) — une coupure PARTIELLE
+        ouverte depuis plus de N heures sans incident part au terrain toute seule (incident
+        MAJEUR + SMS). À activer seulement après avoir observé le volume réel de partielles
+        (4 h est un point de départ raisonnable) : chaque escalade coûte un SMS ;
       · `oss.stabiliteRetablissementMin` (défaut **10**) — minutes de reconnexion STABLE
         avant qu'une détection auto ne se clôture (le correctif du « faux vert ») ;
       · `incident.minPhotosAvant` (défaut **2**) — photos de l'état constaté exigées au

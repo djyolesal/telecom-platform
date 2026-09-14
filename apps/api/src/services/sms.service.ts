@@ -48,6 +48,12 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     variables: ['site', 'technos', 'technicien'],
   },
   {
+    key: 'sms.tpl.partielleTerrain',
+    label: 'Coupure partielle escaladée au terrain',
+    defaut: '[E&M OpS] NOC : coupure {technos} toujours en cours sur {site} (site alimenté) - incident {reference}, intervention terrain requise.{technicien}',
+    variables: ['site', 'technos', 'reference', 'technicien'],
+  },
+  {
     key: 'sms.tpl.incidentRouvert',
     label: 'Incident rouvert par le NOC',
     defaut: '[E&M OpS] NOC : coupure toujours constatée sur {site} - incident {reference} ROUVERT, merci de repasser.{technicien}',

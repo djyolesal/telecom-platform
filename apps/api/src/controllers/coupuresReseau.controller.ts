@@ -520,20 +520,72 @@ export async function resoudreIncidentSiPlusDeCoupure(
 }
 
 /**
- * Déclenche le TERRAIN pour une coupure racine SITE ouverte : incident critique
- * (ou incident ouvert du site réutilisé — pas de double SMS) ouvert au début
- * RÉEL de la panne, SMS aux contacts passifs du lot + push aux techniciens.
- * Utilisé par la prise en charge NOC et par l'armement automatique.
+ * ESCALADE EXPLICITE au terrain d'une coupure déjà prise en charge et encore
+ * ouverte (typiquement une PARTIELLE : la 4G d'un secteur est tombée, le NOC a
+ * tenté un reset à distance, sans succès — il envoie quelqu'un). Crée
+ * l'incident (MAJEUR pour une partielle) et prévient le terrain.
+ *
+ * Volontairement MANUEL : une partielle se répare le plus souvent à distance,
+ * ouvrir un incident pour chacune noierait la liste et fausserait le MTTR.
+ */
+export async function escaladerTerrain(req: Request, res: Response, next: NextFunction) {
+  try {
+    const coupure = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, siteId: true, dateFin: true, origine: true, incidentId: true, priseEnChargePar: true },
+    });
+    if (!coupure) throw new AppError('Coupure introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, coupure.siteId);
+    if (coupure.dateFin) throw new AppError('Cette coupure est rétablie - rien à envoyer au terrain.', 422);
+    if (coupure.origine === 'HERITEE') {
+      throw new AppError("Cette coupure est l'impact d'une panne amont : escaladez la coupure du site amont.", 422);
+    }
+    if (!coupure.priseEnChargePar) {
+      throw new AppError('Prenez la coupure en charge avant de l\'envoyer au terrain.', 422);
+    }
+    if (coupure.incidentId) {
+      throw new AppError('Un incident terrain est déjà rattaché à cette coupure.', 422, { incidentId: coupure.incidentId });
+    }
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+    const nom = [moi?.prenom, moi?.nom].filter(Boolean).join(' ') || 'NOC';
+    const info = await declencherTerrainRacine(coupure.id, { nom, declarePar: req.user!.id });
+    if (!info) throw new AppError('Escalade impossible sur cette coupure.', 422);
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', coupure.id, {
+      action: 'escalade_terrain',
+      incidentCree: info.reutilise ? undefined : info.id,
+      incidentReutilise: info.reutilise ? info.id : undefined,
+    }, req);
+    emettreCoupuresChangees({ action: 'escalade', coupureId: coupure.id });
+    res.json({ success: true, data: info });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Déclenche le TERRAIN pour une coupure racine ouverte : incident (ou incident
+ * ouvert du site réutilisé — pas de double SMS) ouvert au début RÉEL de la
+ * panne, SMS aux contacts passifs du lot + push aux techniciens.
+ *
+ * Site ENTIER → incident CRITIQUE (escalade manager à 30 min) ; coupure
+ * PARTIELLE escaladée → MAJEUR (2 h) : une partie du site est à terre, mais le
+ * site est alimenté et reste desservi - ce n'est pas la même urgence.
+ * Utilisé par la prise en charge NOC, l'armement automatique, l'escalade
+ * explicite d'une partielle et le filet de durée.
  */
 export async function declencherTerrainRacine(
   racineId: string,
-  opts: { nom: string; declarePar: string | null }
+  opts: { nom: string; declarePar: string | null; motif?: string }
 ): Promise<{ id: string; reference: string | null; reutilise: boolean } | null> {
   const racineFull = await prisma.coupureReseau.findUnique({
     where: { id: racineId },
-    select: { siteId: true, dateDebut: true, dateFin: true, technologie: true, technicienContacte: true, site: { select: { nom: true } } },
+    select: {
+      siteId: true, dateDebut: true, dateFin: true, technologie: true, frequence: true,
+      secteur: true, technicienContacte: true, site: { select: { nom: true } },
+    },
   });
-  if (!racineFull || racineFull.dateFin || racineFull.technologie !== 'SITE') return null;
+  if (!racineFull || racineFull.dateFin) return null;
+  const siteEntier = racineFull.technologie === 'SITE';
+  // Libellé du périmètre réellement coupé (« 4G L800 S1 ») pour les messages.
+  const perimetre = [racineFull.technologie, racineFull.frequence, racineFull.secteur].filter(Boolean).join(' ');
   const { incident, cree } = await avecRattrapageReferenceInc(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'inc:' + racineFull.siteId})::bigint)`;
     const existant = await tx.incident.findFirst({
@@ -548,11 +600,13 @@ export async function declencherTerrainRacine(
       data: {
         reference: await genererReference(tx, 'INC', new Date()),
         siteId: racineFull.siteId,
-        type: 'COUPURE_TOTALE',
-        severite: 'CRITIQUE',
-        description: opts.declarePar
-          ? `Site entier hors service - détection OSS prise en charge par ${opts.nom}.`
-          : `Site entier hors service - détection OSS armée automatiquement (panne confirmée dans la durée).`,
+        type: siteEntier ? 'COUPURE_TOTALE' : 'ALARME',
+        severite: siteEntier ? 'CRITIQUE' : 'MAJEUR',
+        description: opts.motif ?? (siteEntier
+          ? (opts.declarePar
+              ? `Site entier hors service - détection OSS prise en charge par ${opts.nom}.`
+              : `Site entier hors service - détection OSS armée automatiquement (panne confirmée dans la durée).`)
+          : `Coupure ${perimetre} (site alimenté) - intervention terrain demandée par ${opts.nom}.`),
         declarePar: opts.declarePar,
         // L'incident s'ouvre au début RÉEL de la panne (la détection peut
         // précéder l'armement) — MTTR honnête, résolution ≥ ouverture.
@@ -573,12 +627,19 @@ export async function declencherTerrainRacine(
     });
     await notifierIncidentCoupure(
       racineFull.siteId,
-      rendreTemplate('sms.tpl.siteHorsService', {
-        site: racineFull.site.nom,
-        reference: incident.reference ?? '',
-        impactes: fragmentAval(avalTerrain.map((a) => a.site.nom), 'impactes'),
-        technicien: fragmentTechnicien(racineFull.technicienContacte),
-      }),
+      siteEntier
+        ? rendreTemplate('sms.tpl.siteHorsService', {
+            site: racineFull.site.nom,
+            reference: incident.reference ?? '',
+            impactes: fragmentAval(avalTerrain.map((a) => a.site.nom), 'impactes'),
+            technicien: fragmentTechnicien(racineFull.technicienContacte),
+          })
+        : rendreTemplate('sms.tpl.partielleTerrain', {
+            site: racineFull.site.nom,
+            technos: perimetre,
+            reference: incident.reference ?? '',
+            technicien: fragmentTechnicien(racineFull.technicienContacte),
+          }),
       'INCIDENT_COUPURE_NOC',
       'PASSIVE'
     );
@@ -595,7 +656,9 @@ export async function declencherTerrainRacine(
           select: { id: true },
         });
         await Promise.all(techs.map((t) => notificationService.sendToUser(t.id, {
-          title: `🔴 ${racineFull.site.nom} hors service`,
+          title: siteEntier
+            ? `🔴 ${racineFull.site.nom} hors service`
+            : `🟠 ${racineFull.site.nom} - coupure ${perimetre}`,
           body: `Incident ${incident.reference ?? ''} - intervention terrain requise.`,
           data: { incidentId: incident.id, type: 'incident' },
         })));
@@ -1137,6 +1200,82 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     }
     const updated = await prisma.coupureReseau.update({ where: { id: existing.id }, data });
 
+    // ── REQUALIFICATION : réaligner l'incident déjà déclenché ───────────────
+    // Cas réel : l'OSS classe « SITE » (il ne voit que l'eNodeB), le NOC prend
+    // en charge - incident CRITIQUE, SMS et push partis - puis requalifie en
+    // partielle. Sans ce réalignement, l'incident restait CRITIQUE avec une
+    // description fausse : escalade manager toutes les 30 min, comptage dans
+    // « incidents critiques », MTTR faussé. On ne supprime JAMAIS l'incident
+    // (le terrain est déjà en route) et on ne renotifie pas les contacts :
+    // on corrige la sévérité, le libellé, et on prévient le technicien assigné.
+    let incidentRealigne: string | null = null;
+    if ('technologie' in data && typeof data.technologie === 'string' && existing.incidentId) {
+      const avantEntier = existing.technologie === 'SITE';
+      const apresEntier = data.technologie === 'SITE';
+      if (avantEntier !== apresEntier) {
+        const inc = await prisma.incident.findUnique({
+          where: { id: existing.incidentId },
+          select: { id: true, statut: true, severite: true, technicienId: true, reference: true },
+        });
+        // Un incident déjà résolu/clos garde son histoire telle quelle.
+        if (inc && ['OUVERT', 'EN_COURS'].includes(inc.statut)) {
+          const [siteInc, moiInc] = await Promise.all([
+            prisma.site.findUnique({ where: { id: existing.siteId }, select: { nom: true } }),
+            prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } }),
+          ]);
+          const nomSite = siteInc?.nom ?? 'Site';
+          const nomAuteur = [moiInc?.prenom, moiInc?.nom].filter(Boolean).join(' ') || 'le NOC';
+          const perimetreApres = apresEntier
+            ? 'site entier'
+            : [data.technologie, 'frequence' in data ? data.frequence : existing.frequence, 'secteur' in data ? data.secteur : existing.secteur]
+                .filter(Boolean).join(' ');
+          await prisma.incident.update({
+            where: { id: inc.id },
+            data: {
+              severite: apresEntier ? 'CRITIQUE' : 'MAJEUR',
+              // Le TYPE suit aussi : un incident requalifié qui reste
+              // « COUPURE_TOTALE » ment dans les statistiques par type.
+              type: apresEntier ? 'COUPURE_TOTALE' : 'ALARME',
+              description: apresEntier
+                ? `Site entier hors service - requalifié depuis « ${existing.technologie} » par ${nomAuteur}.`
+                : `Coupure ${perimetreApres} (site alimenté) - requalifiée depuis « site entier » par ${nomAuteur}.`,
+            },
+          });
+          incidentRealigne = inc.id;
+          await auditLog(req.user!.id, 'UPDATE', 'incidents', inc.id, {
+            action: 'realignement_requalification',
+            de: existing.technologie, vers: data.technologie,
+            severite: apresEntier ? 'CRITIQUE' : 'MAJEUR',
+          }, req);
+          // Le technicien en route doit savoir que le périmètre a changé.
+          if (inc.technicienId) {
+            void notificationService.sendToUser(inc.technicienId, {
+              type: 'INCIDENT',
+              title: `Incident ${inc.reference ?? ''} requalifié`,
+              body: apresEntier
+                ? `${nomSite} : la panne est finalement un SITE ENTIER hors service.`
+                : `${nomSite} : seule la coupure ${perimetreApres} est confirmée (le site est alimenté).`,
+              data: { incidentId: inc.id, type: 'incident' },
+            }).catch(() => undefined);
+          }
+        }
+      }
+    }
+    // Aggravation partielle → SITE sur une coupure PRISE EN CHARGE sans
+    // incident : c'est exactement le cas qui déclenche le terrain à la prise en
+    // charge - on l'applique ici aussi plutôt que d'attendre un second geste.
+    if ('technologie' in data && data.technologie === 'SITE' && !existing.incidentId
+        && existing.priseEnChargePar && !existing.dateFin && !('dateFin' in data && data.dateFin)) {
+      const moiAgg = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+      const nomAgg = [moiAgg?.prenom, moiAgg?.nom].filter(Boolean).join(' ') || 'NOC';
+      const info = await declencherTerrainRacine(existing.id, {
+        nom: nomAgg,
+        declarePar: req.user!.id,
+        motif: `Site entier hors service - requalifié depuis « ${existing.technologie} » par ${nomAgg}.`,
+      });
+      if (info) incidentRealigne = info.id;
+    }
+
 
     // Clôture en cascade : rétablir la racine rétablit les coupures héritées
     // encore ouvertes (même heure de fin, downtime calculé pour chacune).
@@ -1209,14 +1348,14 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     }
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, {
-      cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu,
+      cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu, incidentRealigne,
       // Corrections sensibles : l'ancienne valeur est consignée.
       ...(data.dateDebut instanceof Date ? { ancienDebut: existing.dateDebut, nouveauDebut: data.dateDebut } : {}),
       ...(data.siteId ? { ancienSiteId: existing.siteId, nouveauSiteId: data.siteId } : {}),
       ...(data.technologie ? { ancienneTechnologie: existing.technologie, nouvelleTechnologie: data.technologie } : {}),
     }, req);
     emettreCoupuresChangees({ action: 'maj', coupureId: existing.id });
-    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu } });
+    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu, incidentRealigne } });
   } catch (err) { next(err); }
 }
 

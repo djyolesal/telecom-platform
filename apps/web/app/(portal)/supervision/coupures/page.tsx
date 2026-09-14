@@ -803,6 +803,11 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       {coupure.priseEnChargePar && (
         <AnnulationPriseEnChargeBloc coupureId={coupure.id} priseEnChargePar={coupure.priseEnChargePar} onDone={onDone} />
       )}
+      {/* Coupure prise en charge, encore en cours, sans incident : le NOC peut
+          l'envoyer au terrain quand le dépannage à distance n'a rien donné. */}
+      {coupure.priseEnChargePar && !coupure.dateFin && !coupure.incident && coupure.origine !== 'HERITEE' && (
+        <EscaladeTerrainBloc coupureId={coupure.id} siteEntier={coupure.technologie === 'SITE'} onDone={onDone} />
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Début">
           <Input type="datetime-local" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
@@ -833,7 +838,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Requalifier hors « Site entier » : la coupure devient <b>partielle</b> ({technoCanonique}) et ne
           compte plus que contre {technos.size > 1 ? 'ces technologies' : 'cette technologie'}.
-          {coupure.incident ? " L'incident lié reste tel quel - ajustez sa sévérité si besoin." : ''}
+          {coupure.incident ? " L'incident lié passe automatiquement en MAJEUR, son libellé est corrigé et le technicien assigné est prévenu." : ''}
           {nbHeritees > 0 ? ` Les ${nbHeritees} héritée(s) restent rattachées et ne seront PAS clôturées en cascade - supprimez celles qui n'ont pas lieu d'être.` : ''}
         </p>
       )}
@@ -1064,6 +1069,47 @@ function ValidationClotureeBloc({ coupureId, technicienInitial, onDone }: { coup
           </Button>
           {errMsg && <p className="mt-2 text-xs text-red-600">{errMsg}</p>}
         </>
+      )}
+    </div>
+  );
+}
+
+// ── Escalade terrain d'une coupure prise en charge ──────────────────────────
+// Geste MANUEL et assumé : une coupure partielle se répare le plus souvent à
+// distance (reset, reconfiguration). Quand ce n'est pas le cas, ce bouton crée
+// l'incident (MAJEUR pour une partielle, CRITIQUE pour un site entier) et
+// prévient le terrain - SMS aux contacts passifs + push aux techniciens.
+
+function EscaladeTerrainBloc({ coupureId, siteEntier, onDone }: {
+  coupureId: string; siteEntier: boolean; onDone: () => void;
+}) {
+  const [ref, setRef] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/coupures-reseau/${coupureId}/escalader-terrain`).then((r) => r.data.data),
+    onSuccess: (d: { reference?: string | null }) => { setRef(d?.reference ?? '—'); onDone(); },
+  });
+  const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+
+  return (
+    <div className="mb-3 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-900">
+      {ref ? (
+        <p>Incident <b>{ref}</b> ouvert - SMS et notification partis au terrain.</p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p>
+            {siteEntier
+              ? 'Aucun incident terrain sur cette coupure.'
+              : "Dépannage à distance sans succès ? Envoyez quelqu'un sur place."}
+          </p>
+          <button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending}
+            title={siteEntier
+              ? 'Crée un incident CRITIQUE, notifie les contacts passifs et les techniciens du lot.'
+              : 'Crée un incident MAJEUR (le site reste alimenté), notifie les contacts passifs et les techniciens du lot.'}
+            className="font-medium text-orange-700 hover:underline disabled:opacity-50">
+            {mutation.isPending ? 'Envoi…' : 'Envoyer au terrain'}
+          </button>
+          {errMsg && <p className="w-full text-red-600">{errMsg}</p>}
+        </div>
       )}
     </div>
   );

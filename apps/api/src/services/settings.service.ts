@@ -84,6 +84,10 @@ export function settingsCatalog(): SettingMeta[] {
     // jusqu'à N minutes AVANT sa racine est classé hérité (batteries inégales).
     { key: 'oss.fenetreEntrainementMin', label: 'Fenêtre entraînement amont/aval (OSS)', groupe: 'Supervision', unite: 'min', defaut: 60 },
     { key: 'oss.armementDelaiMin', label: 'Armement auto des détections (0 = désactivé, l\'adoption reste au NOC)', groupe: 'Supervision', unite: 'min', defaut: 0 },
+    // Filet de durée sur les coupures PARTIELLES : au-delà de N heures ouvertes
+    // sans incident, la coupure est escaladée au terrain (incident MAJEUR +
+    // notification). 0 = désactivé : l'escalade reste alors un geste NOC.
+    { key: 'coupure.escaladePartielleHeures', label: 'Escalade auto d\'une coupure partielle (0 = désactivée)', groupe: 'Supervision', unite: 'h', defaut: 0 },
     // Durée minimale pour VALIDER a posteriori une détection auto déjà rétablie
     // (la faire entrer dans la disponibilité) — filtre les micro-battements OSS.
     { key: 'oss.dureeMinValidationCloturee', label: 'Durée min. pour valider une détection auto-clôturée (dispo)', groupe: 'Supervision', unite: 'min', defaut: 5 },

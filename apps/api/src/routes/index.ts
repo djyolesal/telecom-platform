@@ -233,6 +233,9 @@ router.get('/coupures-reseau/:id/historique', rbac(['NOC','SUPERVISEUR','MANAGER
 router.post('/coupures-reseau', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.createCoupure);
 router.post('/coupures-reseau/import', rbac(['NOC','MANAGER','ADMIN']), uploadSpreadsheet.single('file'), coupuresCtrl.importCoupures);
 router.post('/coupures-reseau/:id/prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.prendreEnChargeCoupure);
+// Escalade explicite d'une coupure prise en charge vers le terrain (incident) :
+// le geste reste MANUEL, une partielle se répare le plus souvent à distance.
+router.post('/coupures-reseau/:id/escalader-terrain', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.escaladerTerrain);
 router.post('/coupures-reseau/:id/annuler-prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.annulerPriseEnCharge);
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
 // Saisie erronée du NOC : suppression ouverte au NOC/manager mais limitée aux
