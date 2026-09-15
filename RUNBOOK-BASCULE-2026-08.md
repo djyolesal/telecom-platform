@@ -99,6 +99,22 @@ make backup
 
 ## Phase 2 — Déploiement du code
 
+> **⚠️ Détection OSS — 15/09/2026.** Trois correctifs à déployer ensemble.
+> (1) Le verrou anti-chevauchement du collecteur pouvait le tuer en silence :
+> `ConnectTimeout` ne borne que l'ouverture de session, donc une commande OSS
+> figée retenait le verrou et tous les passages suivants sortaient sans un mot,
+> figeant les coupures AUTO. Le script est borné par `timeout` et **doit être
+> recopié sur noeud1**. (2) Un nom OSS à préfixe « L » seul (LGAME, LWARKA)
+> n'était jamais rapproché. (3) Le délai anti « faux vert » de 10 min était payé
+> sur CHAQUE clôture ; il ne s'applique plus qu'en cas de rebond régional
+> (plusieurs sites reconnectés au même passage). Nouveaux réglages en
+> Administration → Paramètres : `oss.stabiliteRetablissementMin` (20 min, 0 =
+> clôture immédiate toujours) et `oss.rebondSeuilSites` (5).
+> Contrôle : la page coupures affiche un bandeau rouge si le collecteur se tait
+> plus de 15 min, si un NodeID est en conflit, ou si une coupure AUTO n'a plus
+> aucun signal.
+
+
 > **⚠️ Panne de connexion du 15/09/2026 — corrigée, à déployer.** Des comptes
 > aux identifiants VALIDES se voyaient refuser la connexion avec « Email ou mot
 > de passe incorrect », puis le problème disparaissait seul au bout d'un quart

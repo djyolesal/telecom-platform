@@ -84,6 +84,12 @@ export function settingsCatalog(): SettingMeta[] {
     // jusqu'à N minutes AVANT sa racine est classé hérité (batteries inégales).
     { key: 'oss.fenetreEntrainementMin', label: 'Fenêtre entraînement amont/aval (OSS)', groupe: 'Supervision', unite: 'min', defaut: 60 },
     { key: 'oss.armementDelaiMin', label: 'Armement auto des détections (0 = désactivé, l\'adoption reste au NOC)', groupe: 'Supervision', unite: 'min', defaut: 0 },
+    // Anti « faux vert » sur rebond de transmission régional (incident du
+    // 04/09/2026). Ce délai ne s'applique PLUS à chaque rétablissement — il ne
+    // se déclenche que si un PAQUET de sites se reconnaît reconnecté au même
+    // passage, signature du rebond. Une reconnexion isolée clôture aussitôt.
+    { key: 'oss.stabiliteRetablissementMin', label: 'Attente avant clôture lors d\'un rebond régional (0 = clôture immédiate)', groupe: 'Supervision', unite: 'min', defaut: 20 },
+    { key: 'oss.rebondSeuilSites', label: 'Nombre de sites reconnectés au même passage qui fait suspecter un rebond', groupe: 'Supervision', unite: 'sites', defaut: 5 },
     // Filet de durée sur les coupures PARTIELLES : au-delà de N heures ouvertes
     // sans incident, la coupure est escaladée au terrain (incident MAJEUR +
     // notification). 0 = désactivé : l'escalade reste alors un geste NOC.

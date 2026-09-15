@@ -209,6 +209,28 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     let incidentsResolus = 0;
     let dejaOuvertes = 0;
 
+    // ── Signature d'un REBOND RÉGIONAL ───────────────────────
+    // Le délai anti « faux vert » (incident du 04/09/2026) était payé sur
+    // CHAQUE clôture. Il avait été calibré quand le collecteur passait toutes
+    // les 5 min (10 min = « confirmé au passage suivant ») ; à la cadence 1 min
+    // il coûte dix minutes d'indisponibilité affichée en trop sur des
+    // rétablissements parfaitement francs — et, tel quel, il n'aurait même pas
+    // couvert l'incident d'origine (connecté 09:32, re-chute 09:51 = 19 min).
+    //
+    // Ce qui distingue un rebond, ce n'est pas la durée : c'est le NOMBRE. Un
+    // paquet de sites qui se reconnectent au même passage est un rebond de
+    // transmission ; un site isolé qui revient est un vrai rétablissement. On
+    // n'attend donc QUE dans le premier cas, et on peut alors se permettre une
+    // fenêtre réellement protectrice.
+    let retablissementsVus = 0;
+    for (const l of lignes) {
+      if (l.etat !== 'connected') continue;
+      const s = parNodeId.get(l.nodeId);
+      if (s && ossOuverteParSite.has(s.id)) retablissementsVus++;
+    }
+    const seuilRebond = getNum('oss.rebondSeuilSites', 5);
+    const rebondSuspecte = seuilRebond > 0 && retablissementsVus >= seuilRebond;
+
     // Une ligne fautive ne doit PAS emporter le passage entier : la boucle est
     // séquentielle et une exception inattendue faisait sortir en 500, laissant
     // TOUTES les lignes suivantes non traitées — donc des coupures qui ne se
@@ -346,8 +368,8 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         // depuis au moins N minutes ; l'heure de FIN enregistrée reste la
         // vraie heure de reconnexion, seule la décision est différée. Un vrai
         // rétablissement n'attend donc que le passage suivant du collecteur.
-        const stabiliteMin = getNum('oss.stabiliteRetablissementMin', 10);
-        if (stabiliteMin > 0 && Date.now() - l.quand.getTime() < stabiliteMin * 60_000) {
+        const stabiliteMin = getNum('oss.stabiliteRetablissementMin', 20);
+        if (rebondSuspecte && stabiliteMin > 0 && Date.now() - l.quand.getTime() < stabiliteMin * 60_000) {
           retablissementsEnAttente++;
           return;
         }
@@ -431,6 +453,8 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       reclasseesHeriteesAval: reclasseesAval,
       coupuresCloturees: cloturees,
       retablissementsEnAttenteDeStabilite: retablissementsEnAttente,
+      rebondRegionalSuspecte: rebondSuspecte,
+      retablissementsVus,
       heriteesAveuglesCloturees: clotureesHeritees,
       incidentsResolus,
       coupuresDejaOuvertes: dejaOuvertes,
