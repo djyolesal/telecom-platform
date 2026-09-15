@@ -119,7 +119,14 @@ class AuthInterceptor extends Interceptor {
           (e.type == DioExceptionType.unknown && e.error is SocketException)) {
         throw const NetworkException();
       }
-      return null; // 4xx/5xx (refresh révoqué/invalide) → session morte
+      // SEUL un refus explicite du serveur tue la session. Un 429 (débit) ou un
+      // 5xx (API en cours de redémarrage) est TRANSITOIRE : les prendre pour un
+      // refus déconnectait le technicien en pleine tournée, qui devait se
+      // reconnecter — et sa reconnexion se heurtait au même plafond.
+      // 400 = jeton absent/illisible, 401/403 = refus explicite : irrécupérable.
+      final code = e.response?.statusCode ?? 0;
+      if (code == 400 || code == 401 || code == 403) return null; // session morte
+      throw const NetworkException();
     }
   }
 }

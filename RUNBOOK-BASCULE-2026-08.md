@@ -99,6 +99,24 @@ make backup
 
 ## Phase 2 — Déploiement du code
 
+> **⚠️ Panne de connexion du 15/09/2026 — corrigée, à déployer.** Des comptes
+> aux identifiants VALIDES se voyaient refuser la connexion avec « Email ou mot
+> de passe incorrect », puis le problème disparaissait seul au bout d'un quart
+> d'heure. Cause : `/auth/refresh-token` partageait le seau du login. Sa clé
+> contenait l'email — absent d'un refresh — donc TOUTES les sessions d'une même
+> IP tombaient dans un unique seau de 10 jetons/15 min : le conteneur web pour
+> l'ensemble du portail, une IP opérateur pour tout le terrain. Une fois ce seau
+> vide, les refresh refusés repartaient en boucle et épuisaient le plafond de 60
+> par IP — et les CONNEXIONS du même point sortaient alors en 429, que la page
+> de login affichait comme des identifiants incorrects. Correctifs :
+> le refresh a son propre compteur par empreinte de jeton ; le login ne compte
+> plus que les ÉCHECS et une connexion réussie efface l'ardoise ; la page de
+> login nomme la vraie cause. **API + web, aucune migration ; b43 reste valable
+> sur le terrain.** Contrôle après déploiement : se connecter/déconnecter 12
+> fois d'affilée — aucun refus. En cas de verrouillage résiduel :
+> `docker compose exec redis redis-cli --scan --pattern 'rl:login:*' | xargs -r docker compose exec -T redis redis-cli DEL`
+
+
 ```bash
 git pull origin develop
 docker compose build api web        # long : Next 15 se compile

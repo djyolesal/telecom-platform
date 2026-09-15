@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { AppError } from '../utils/AppError';
 import { rbac } from '../middlewares/rbac';
-import { rateLimit } from '../middlewares/rateLimit';
+import { rateLimit, empreinteJeton } from '../middlewares/rateLimit';
 import { validate } from '../middlewares/validate';
 import {
   loginSchema, forgotPasswordSchema, resetPasswordSchema, refreshTokenSchema, updatePasswordSchema,
@@ -41,13 +41,32 @@ export const router = Router();
 
 // ── Auth (public) ─────────────────────────────────────────────
 // Anti-bruteforce : limite le débit des routes sensibles (par IP + email).
-const loginLimit = rateLimit({ windowSec: 900, max: 10, ipMax: 60, keyPrefix: 'login', failClosed: true }); // 10/compte + 60/IP par 15 min (anti-spraying)
+// 10 ÉCHECS/compte + 60 ÉCHECS/IP par 15 min. On ne compte QUE les échecs et une
+// connexion réussie efface l'ardoise : les clients légitimes arrivent souvent tous
+// par une seule IP (conteneur web en SSR, NAT de l'opérateur mobile) et se
+// verrouillaient mutuellement alors que leurs identifiants étaient bons.
+const loginLimit = rateLimit({ windowSec: 900, max: 10, ipMax: 60, keyPrefix: 'login', failClosed: true, countOnlyFailures: true });
 const resetLimit = rateLimit({ windowSec: 3600, max: 5, keyPrefix: 'pwreset', failClosed: true });      // 5 / h
 // Génération lourde (PDF, exports xlsx/pdf, rapport mensuel) : plafond par IP anti-DoS applicatif.
 const heavyLimit = rateLimit({ windowSec: 60, max: 20, keyPrefix: 'heavy' });
 router.post('/auth/login', loginLimit, validate({ body: loginSchema }), authCtrl.login);
-// Limiteur AUSSI sur le refresh : c'était la seule route d'auth sans plafond.
-router.post('/auth/refresh-token', loginLimit, validate({ body: refreshTokenSchema }), authCtrl.refreshToken);
+// Le refresh a SON PROPRE compteur, par EMPREINTE DE JETON (une session = un
+// quota). Il partageait celui du login : sans champ `email`, toutes les sessions
+// d'une même IP tombaient dans un unique seau de 10/15 min — le conteneur web
+// pour tout le portail, une IP opérateur pour tout le terrain — et, une fois ce
+// seau vide, les refresh refusés en boucle épuisaient le plafond par IP, si bien
+// que les CONNEXIONS du même point sortaient en 429. Fail-open volontaire : une
+// panne Redis ne doit pas tuer les sessions en cours.
+const refreshLimit = rateLimit({
+  windowSec: 900,
+  max: 60,
+  keyPrefix: 'refresh',
+  identite: (req) => {
+    const jeton = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '';
+    return jeton ? empreinteJeton(jeton) : '';
+  },
+});
+router.post('/auth/refresh-token', refreshLimit, validate({ body: refreshTokenSchema }), authCtrl.refreshToken);
 router.post('/auth/forgot-password', resetLimit, validate({ body: forgotPasswordSchema }), authCtrl.forgotPassword);
 router.post('/auth/reset-password', resetLimit, validate({ body: resetPasswordSchema }), authCtrl.resetPassword);
 
