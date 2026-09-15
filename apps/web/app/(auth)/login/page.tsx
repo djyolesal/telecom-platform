@@ -61,7 +61,9 @@ function LoginForm() {
 
     setLoading(false);
     if (res?.error) {
-      setError('Email ou mot de passe incorrect');
+      // Le code vient de `authorize` : ne JAMAIS annoncer « mot de passe
+      // incorrect » quand la cause est ailleurs (API tombée, limiteur...).
+      setError(MESSAGES_ECHEC[res.code ?? ''] ?? 'Email ou mot de passe incorrect');
     } else {
       // Navigation COMPLÈTE (pas router.push) : après un signIn sans
       // rechargement, la session du SessionProvider n'est pas propagée
@@ -142,6 +144,18 @@ function LoginForm() {
     </div>
   );
 }
+
+/** Messages d'échec de connexion, par code remonté par `authorize`. */
+const MESSAGES_ECHEC: Record<string, string> = {
+  api_injoignable:
+    "Le serveur d'application ne répond pas. Vos identifiants n'ont pas pu être vérifiés - prévenez l'administrateur (ce n'est pas votre mot de passe).",
+  trop_de_tentatives:
+    'Trop de tentatives de connexion. Patientez quelques minutes avant de réessayer.',
+  acces_refuse:
+    "Connexion refusée pour ce compte sur le portail web. Contactez votre administrateur.",
+  erreur_serveur:
+    "Erreur du serveur d'authentification. Réessayez dans un instant, puis prévenez l'administrateur.",
+};
 
 export default function LoginPage() {
   return (

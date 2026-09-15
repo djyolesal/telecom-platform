@@ -1,5 +1,16 @@
-import NextAuth, { type DefaultSession } from 'next-auth';
+import NextAuth, { CredentialsSignin, type DefaultSession } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+
+/**
+ * Échec de connexion dont la CAUSE est connue (API injoignable, limiteur,
+ * refus explicite du serveur). Le `code` remonte jusqu'à la page de login, qui
+ * affiche un message honnête : afficher « mot de passe incorrect » quand
+ * l'API est tombée a déjà coûté une matinée de diagnostic en production.
+ * Codes volontairement grossiers : ils transitent par l'URL.
+ */
+class EchecConnexion extends CredentialsSignin {
+  constructor(public code: string) { super(code); }
+}
 
 // URL interne de l'API (réseau Docker) ou publique en dev
 const API_URL =
@@ -45,26 +56,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
+        let res: Response;
         try {
-          const res = await fetch(`${API_URL}/auth/login`, {
+          res = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: credentials.email, password: credentials.password, platform: 'WEB' }),
           });
-          if (!res.ok) return null;
-          const json = await res.json();
-          const { user, accessToken, refreshToken } = json.data;
-          return {
-            id: user.id,
-            name: `${user.prenom} ${user.nom}`,
-            email: user.email,
-            role: user.role,
-            accessToken,
-            refreshToken,
-          };
-        } catch {
-          return null;
+        } catch (e) {
+          // L'API n'a pas répondu du tout : conteneur arrêté, API_INTERNAL_URL
+          // erronée, réseau Docker cassé. Trace serveur explicite - c'est elle
+          // qu'on lit dans `docker compose logs web`.
+          console.error(`[auth] API injoignable sur ${API_URL} :`, (e as Error).message);
+          throw new EchecConnexion('api_injoignable');
         }
+        if (!res.ok) {
+          // 401 = vrais mauvais identifiants (le serveur ne distingue pas
+          // volontairement mot de passe faux et compte désactivé).
+          if (res.status === 401) return null;
+          const detail = await res.json().catch(() => null);
+          console.error(`[auth] refus de l'API (${res.status}) :`, detail?.error ?? res.statusText);
+          if (res.status === 429) throw new EchecConnexion('trop_de_tentatives');
+          if (res.status === 403) throw new EchecConnexion('acces_refuse');
+          throw new EchecConnexion('erreur_serveur');
+        }
+        const json = await res.json();
+        const { user, accessToken, refreshToken } = json.data;
+        return {
+          id: user.id,
+          name: `${user.prenom} ${user.nom}`,
+          email: user.email,
+          role: user.role,
+          accessToken,
+          refreshToken,
+        };
       },
     }),
   ],
