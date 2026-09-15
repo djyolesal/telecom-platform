@@ -27,24 +27,34 @@ set -euo pipefail
 
 # Anti-chevauchement : à la cadence 1 min, un passage lent (SSH en cascade,
 # réseau chargé) ne doit pas s'empiler sur le suivant - on saute simplement.
-exec 9>"/tmp/collecteur-oss.lock"
-# Si le verrou est pris, on regarde DEPUIS QUAND. Un passage lent est normal ;
-# un verrou vieux de plusieurs minutes signifie qu'un ssh est bloqué et retient
-# le verrou - à la cadence 1 min, tous les passages suivants sortaient alors en
-# silence et le collecteur restait mort sans une seule erreur. On le CRIE.
+#
+# `9>>` et NON `9>` : « > » tronque le fichier à CHAQUE invocation, y compris
+# quand on n'obtient pas le verrou. Cela effaçait l'identité du détenteur et
+# remettait la date du fichier à maintenant - l'âge calculé valait donc
+# toujours 0 s et l'alerte « verrou coincé » ne pouvait JAMAIS se déclencher.
+LOCK="${OSS_LOCK:-/tmp/collecteur-oss.lock}"
+exec 9>>"$LOCK"
 if ! flock -n 9; then
-  horo=$(stat -c %Y "/tmp/collecteur-oss.lock" 2>/dev/null || stat -f %m "/tmp/collecteur-oss.lock" 2>/dev/null || date +%s)
-  age=$(( $(date +%s) - horo ))
-  if [ "$age" -gt "${OSS_ALERTE_VERROU_S:-600}" ]; then
-    echo "ALERTE: verrou détenu depuis ${age}s - un passage est BLOQUÉ, le collecteur ne remonte plus rien." >&2
+  # Le détenteur s'inscrit dans le fichier (PID + horodatage de début), seule
+  # source fiable : la date du fichier, elle, ne dit rien.
+  detenteur=$(head -n1 "$LOCK" 2>/dev/null || true)
+  pid=${detenteur%% *}
+  depuis=${detenteur##* }
+  age=0
+  case "${depuis:-}" in (*[!0-9]*|'') : ;; (*) age=$(( $(date +%s) - depuis )) ;; esac
+  vivant="disparu"; kill -0 "${pid:-0}" 2>/dev/null && vivant="vivant"
+  if [ "$age" -gt "${OSS_ALERTE_VERROU_S:-600}" ] || [ "$vivant" = "disparu" ]; then
+    echo "ALERTE: verrou tenu par le PID ${pid:-?} ($vivant) depuis ${age}s - le collecteur ne remonte plus rien." >&2
+    echo "        Débloquer : kill -9 ${pid:-<pid>} ; sinon identifier le porteur avec : fuser -v $LOCK" >&2
   else
-    echo "passage précédent encore en cours (${age}s) - sauté"
+    echo "passage précédent encore en cours (PID ${pid:-?}, ${age}s) - sauté"
   fi
   exit 0
 fi
-# Le verrou nous appartient : on l'horodate pour que le calcul ci-dessus mesure
-# l'âge du passage EN COURS et non celui du fichier.
-touch "/tmp/collecteur-oss.lock" 
+# Le verrou nous appartient : on s'inscrit comme détenteur (le tronquage passe
+# par un AUTRE descripteur, sans relâcher notre verrou).
+: > "$LOCK"
+printf '%s %s\n' "$$" "$(date +%s)" >&9
 
 : "${OSS_HOST:?OSS_HOST requis}"
 : "${OSS_COMMANDE:?OSS_COMMANDE requise}"
@@ -67,17 +77,22 @@ if command -v timeout >/dev/null 2>&1; then BORNE=(timeout -k 10 "$OSS_TIMEOUT")
 elif command -v gtimeout >/dev/null 2>&1; then BORNE=(gtimeout -k 10 "$OSS_TIMEOUT")
 else BORNE=(); echo "ATTENTION: ni timeout ni gtimeout - un ssh figé ne sera pas interrompu." >&2; fi
 
+# `9>&-` sur CHAQUE enfant : sans cela ssh, timeout et curl héritent du
+# descripteur du verrou. Un ssh orphelin (session morte, processus resté en
+# arrière-plan) continuait alors de tenir le verrou APRÈS la fin de son parent,
+# et tous les passages suivants sortaient en « passage précédent encore en
+# cours » pour toujours - le collecteur mort sans que rien ne tourne.
 recolter() {
   if [ -z "$OSS_JUMP" ]; then
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" "$OSS_HOST" "$OSS_COMMANDE"
+    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" "$OSS_HOST" "$OSS_COMMANDE" 9>&-
   elif [ "$OSS_MODE" = "cascade" ]; then
     # ssh dans ssh : la commande transite par noeud2, qui ouvre lui-même la
     # session vers le nœud final (sa propre clé fait foi sur ce dernier saut).
     ${BORNE[@]+"${BORNE[@]}"} ssh -o ConnectTimeout=15 -o BatchMode=yes \
       -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$OSS_JUMP" \
-      "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'"
+      "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'" 9>&-
   else
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$OSS_JUMP" "$OSS_HOST" "$OSS_COMMANDE"
+    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$OSS_JUMP" "$OSS_HOST" "$OSS_COMMANDE" 9>&-
   fi
 }
 
@@ -119,5 +134,5 @@ echo "$lignes" > "$ETAT"
 curl -sS --max-time 60 -X POST "$EMOPS_URL" \
   -H "Authorization: Bearer $EMOPS_TOKEN" \
   -H "Content-Type: text/plain" \
-  --data-binary @"$RECOLTE"
+  --data-binary @"$RECOLTE" 9>&-
 echo  # saut de ligne dans le log
