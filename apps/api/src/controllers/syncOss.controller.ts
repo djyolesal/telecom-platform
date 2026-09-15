@@ -209,12 +209,26 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     let incidentsResolus = 0;
     let dejaOuvertes = 0;
 
+    // Une ligne fautive ne doit PAS emporter le passage entier : la boucle est
+    // séquentielle et une exception inattendue faisait sortir en 500, laissant
+    // TOUTES les lignes suivantes non traitées — donc des coupures qui ne se
+    // clôturaient jamais, et pas même un bilan écrit pour le dire.
+    let lignesEnErreur = 0;
     for (const l of lignes) {
+      try {
+        await traiterLigne(l);
+      } catch (e) {
+        lignesEnErreur++;
+        logger.error(`[sync-oss] ligne ${l.nodeId} (${l.name}) ignorée : ${(e as Error).message}`);
+      }
+    }
+
+    async function traiterLigne(l: LigneOss) {
       const site = await resoudre(l);
       if (!site) {
         if (l.etat === 'disconnected') nonRapproches.push(`${l.nodeId} (${l.name})`);
         else connectedNonRapproches.push(`${l.nodeId} (${l.name})`);
-        continue;
+        return;
       }
       sitesVus.add(site.id);
 
@@ -222,7 +236,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         // Une coupure SITE déjà ouverte (humaine ou OSS) → rien à créer.
         // Idem si une détection OSS requalifiée en PARTIELLE couvre déjà ce
         // site : l'OSS ne voit que l'eNodeB, c'est le même événement.
-        if (ouverteParSite.has(site.id) || ossOuverteParSite.has(site.id)) { dejaOuvertes++; continue; }
+        if (ouverteParSite.has(site.id) || ossOuverteParSite.has(site.id)) { dejaOuvertes++; return; }
 
         // Classement automatique AMONT : si un site de la chaîne de transmission
         // amont est déjà coupé (le plus HAUT gagne), cette détection naît
@@ -264,7 +278,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
           },
         });
         } catch (e) {
-          if ((e as { code?: string })?.code === 'P2002') { dejaOuvertes++; continue; }
+          if ((e as { code?: string })?.code === 'P2002') { dejaOuvertes++; return; }
           throw e;
         }
         ouverteParSite.set(site.id, creee); ouverteParId.set(creee.id, creee);
@@ -322,7 +336,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         // OSS : elle se clôt aussi à la reconnexion de l'eNodeB.
         const surSite = ouverteParSite.get(site.id);
         const ouverte = surSite?.source === 'OSS' ? surSite : ossOuverteParSite.get(site.id);
-        if (!ouverte || ouverte.source !== 'OSS') continue;
+        if (!ouverte || ouverte.source !== 'OSS') return;
         // RÉTABLISSEMENT STABLE SEULEMENT (incident du 04/09/2026, zone nord) :
         // lors d'un rebond de transmission régional, l'OSS a montré tout un
         // paquet d'eNodeB « connected » quelques minutes (09:32) avant la
@@ -335,7 +349,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         const stabiliteMin = getNum('oss.stabiliteRetablissementMin', 10);
         if (stabiliteMin > 0 && Date.now() - l.quand.getTime() < stabiliteMin * 60_000) {
           retablissementsEnAttente++;
-          continue;
+          return;
         }
         const fin = l.quand > ouverte.dateDebut ? l.quand : new Date();
         await prisma.coupureReseau.update({
@@ -408,6 +422,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
 
     const bilan = {
       lignesAnalysees: lignes.length,
+      lignesEnErreur,
       detectionsArmees,
       sitesRapproches: lignes.length - nonRapproches.length,
       rapprochementsAdoptes: adoptes,

@@ -406,6 +406,26 @@ export default function CoupuresReseauPage() {
         </div>
       )}
 
+      {/* COLLECTEUR MUET : le bilan n'est écrit qu'à la fin d'un passage réussi.
+          S'il date, c'est que plus rien n'arrive — cron arrêté, verrou retenu
+          par un ssh figé, clé SSH expirée. Symptôme trompeur : les coupures
+          AUTO restent « EN COURS » indéfiniment alors que les sites sont
+          revenus, ce qui ressemble à une panne réelle qui dure. */}
+      {stats?.syncOss?.quand && (Date.now() - new Date(stats.syncOss.quand).getTime()) > 15 * 60_000 && (
+        <div className="mb-4 rounded-xl border border-red-300 bg-red-100 p-4 text-sm text-red-900">
+          <p className="font-semibold">
+            Le collecteur OSS ne remonte plus rien depuis{' '}
+            {Math.floor((Date.now() - new Date(stats.syncOss.quand).getTime()) / 60_000)} minutes.
+          </p>
+          <p className="mt-1 text-xs">
+            Les détections automatiques sont figées : aucune nouvelle coupure ne sera vue, et celles en cours ne se
+            clôtureront pas — même si les sites sont déjà rétablis. Vérifiez le collecteur sur noeud1
+            (<code>tail /var/log/collecteur-oss.log</code>) : un passage bloqué retient le verrou et fait sortir en
+            silence tous les suivants.
+          </p>
+        </div>
+      )}
+
       {/* CONFLIT DE NodeID : le nom OSS désigne un site qui porte un AUTRE
           identifiant réseau. Le site suit alors un nœud qui n'est pas le sien —
           il tombe quand l'autre tombe et ne se relève jamais quand le sien
