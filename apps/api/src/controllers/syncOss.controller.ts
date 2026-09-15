@@ -165,6 +165,13 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     // coupure OSS ouverte, plus rien ne peut la clôturer — la plateforme
     // affiche une panne éternelle alors que l'OSS voit le nœud connecté.
     const connectedNonRapproches: string[] = [];
+    // CONFLIT DE NodeID : le nom OSS désigne sans ambiguïté un site, mais ce
+    // site porte DÉJÀ un autre identifiant réseau. C'est la signature d'une
+    // fiche mal renseignée — et le pire des cas, car le site suit alors un
+    // nœud qui n'est pas le sien : il « tombe » quand l'autre tombe et ne se
+    // relève jamais quand le sien revient. Le rapprochement par nom refuse
+    // (à raison) d'écraser un identifiant existant, mais se taisait.
+    const conflitsNodeId: string[] = [];
     // Sites effectivement vus (dans un sens ou dans l'autre) à ce passage.
     const sitesVus = new Set<string>();
 
@@ -176,6 +183,10 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         for (const v of variantesNom(l.name)) {
           candidat = parNomNormalise.get(v) ?? parCodeNormalise.get(v);
           if (candidat) break;
+        }
+        if (candidat?.nodeId && candidat.nodeId !== l.nodeId) {
+          const msg = `${l.nodeId} (${l.name}) → ${candidat.nom} porte le NodeID ${candidat.nodeId}`;
+          if (!conflitsNodeId.includes(msg)) conflitsNodeId.push(msg);
         }
         if (candidat && !candidat.nodeId) {
           await prisma.site.update({ where: { id: candidat.id }, data: { nodeId: l.nodeId } });
@@ -414,6 +425,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       // Un « connected » orphelin peut laisser une coupure ouverte à vie.
       connectedNonRapproches,
       coupuresOssSansSignal: sansSignal,
+      conflitsNodeId,
     };
     // BILAN PERSISTÉ : jusqu'ici les « down non rapprochés » ne vivaient que
     // dans la réponse machine et les logs — le NOC ne voyait JAMAIS qu'un
@@ -423,10 +435,10 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       where: { key: 'oss.dernierBilan' },
       create: {
         key: 'oss.dernierBilan',
-        value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50), connectedNonRapproches: connectedNonRapproches.slice(0, 50), coupuresOssSansSignal: sansSignal.slice(0, 50) },
+        value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50), connectedNonRapproches: connectedNonRapproches.slice(0, 50), coupuresOssSansSignal: sansSignal.slice(0, 50), conflitsNodeId: conflitsNodeId.slice(0, 50) },
         description: 'Dernier passage de synchronisation OSS (écrit par sync-oss).',
       },
-      update: { value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50), connectedNonRapproches: connectedNonRapproches.slice(0, 50), coupuresOssSansSignal: sansSignal.slice(0, 50) } },
+      update: { value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50), connectedNonRapproches: connectedNonRapproches.slice(0, 50), coupuresOssSansSignal: sansSignal.slice(0, 50), conflitsNodeId: conflitsNodeId.slice(0, 50) } },
     });
 
     // Push temps réel : un passage qui a changé quelque chose invalide les
@@ -435,6 +447,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       chargerRebouclage().emettreCoupuresChangees({ action: 'syncOss', creees, cloturees });
     }
     logger.info(`[sync-oss] ${lignes.length} lignes · ${creees} coupure(s) créée(s) · ${cloturees} clôturée(s) · ${nonRapproches.length} down non rapproché(s) · ${connectedNonRapproches.length} up non rapproché(s) · ${sansSignal.length} coupure(s) sans signal`);
+    if (conflitsNodeId.length) logger.warn(`[sync-oss] NodeID en conflit (fiche site à corriger) : ${conflitsNodeId.slice(0, 20).join(' · ')}`);
     if (sansSignal.length) logger.warn(`[sync-oss] coupures OSS sans signal (jamais clôturables en l'état) : ${sansSignal.slice(0, 20).join(', ')}`);
     res.json({ success: true, data: bilan });
   } catch (err) { next(err); }

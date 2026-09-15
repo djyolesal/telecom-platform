@@ -113,7 +113,7 @@ export default function CoupuresReseauPage() {
   interface CoupuresStats {
     enCours: number; enCoursSiteEntier: number; enCoursHeritees: number; terminees: number;
     nouvellesDerniereHeure: number; aQualifier: number; enCoursAuto: number; enCoursManuel: number;
-    syncOss?: { quand: string; lignesAnalysees: number; disconnectedNonRapproches: string[]; coupuresOssSansSignal?: string[]; connectedNonRapproches?: string[] } | null;
+    syncOss?: { quand: string; lignesAnalysees: number; disconnectedNonRapproches: string[]; coupuresOssSansSignal?: string[]; connectedNonRapproches?: string[]; conflitsNodeId?: string[] } | null;
     plusAncienne?: { dateDebut: string; technologie: string; site?: { nom: string } } | null;
     perimetreRestreint?: boolean;
   }
@@ -402,6 +402,27 @@ export default function CoupuresReseauPage() {
             Pour les couvrir : renseignez le champ <b>Identifiant réseau (NodeID)</b> de la fiche du site avec le numéro indiqué
             (chiffres seuls, ex. « 5159 » pour Macro-5159). Si la fiche porte déjà un autre NodeID, corrigez-le — le rapprochement
             par nom refuse d&apos;écraser un identifiant existant.
+          </p>
+        </div>
+      )}
+
+      {/* CONFLIT DE NodeID : le nom OSS désigne un site qui porte un AUTRE
+          identifiant réseau. Le site suit alors un nœud qui n'est pas le sien —
+          il tombe quand l'autre tombe et ne se relève jamais quand le sien
+          revient. Diagnostic le plus précis : on peut nommer la correction. */}
+      {(stats?.syncOss?.conflitsNodeId?.length ?? 0) > 0 && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          <p className="font-semibold">
+            {stats!.syncOss!.conflitsNodeId!.length} fiche(s) site portent un NodeID qui ne correspond pas à l&apos;eNodeB réel.
+          </p>
+          <p className="mt-1 text-xs">
+            {stats!.syncOss!.conflitsNodeId!.slice(0, 8).join(' · ')}
+            {stats!.syncOss!.conflitsNodeId!.length > 8 ? ' · …' : ''}
+          </p>
+          <p className="mt-1 text-xs">
+            Ces sites suivent l&apos;état d&apos;un nœud qui n&apos;est pas le leur : ils se coupent quand l&apos;autre tombe et ne se
+            rétablissent jamais quand le leur revient. Corrigez le champ <b>Identifiant réseau (NodeID)</b> de la fiche
+            avec le numéro indiqué à gauche de la flèche, puis clôturez à la main la coupure restée ouverte.
           </p>
         </div>
       )}
