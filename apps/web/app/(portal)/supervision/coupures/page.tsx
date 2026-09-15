@@ -113,7 +113,7 @@ export default function CoupuresReseauPage() {
   interface CoupuresStats {
     enCours: number; enCoursSiteEntier: number; enCoursHeritees: number; terminees: number;
     nouvellesDerniereHeure: number; aQualifier: number; enCoursAuto: number; enCoursManuel: number;
-    syncOss?: { quand: string; lignesAnalysees: number; disconnectedNonRapproches: string[] } | null;
+    syncOss?: { quand: string; lignesAnalysees: number; disconnectedNonRapproches: string[]; coupuresOssSansSignal?: string[]; connectedNonRapproches?: string[] } | null;
     plusAncienne?: { dateDebut: string; technologie: string; site?: { nom: string } } | null;
     perimetreRestreint?: boolean;
   }
@@ -402,6 +402,28 @@ export default function CoupuresReseauPage() {
             Pour les couvrir : renseignez le champ <b>Identifiant réseau (NodeID)</b> de la fiche du site avec le numéro indiqué
             (chiffres seuls, ex. « 5159 » pour Macro-5159). Si la fiche porte déjà un autre NodeID, corrigez-le — le rapprochement
             par nom refuse d&apos;écraser un identifiant existant.
+          </p>
+        </div>
+      )}
+
+      {/* COUPURES SANS SIGNAL : détections AUTO encore ouvertes dont le site
+          n'apparaît nulle part dans le dernier passage OSS — ni tombé, ni
+          reconnecté. Rien ne pourra les clôturer automatiquement, et elles
+          vieillissaient jusqu'ici en silence en se faisant passer pour de
+          vraies pannes. */}
+      {(stats?.syncOss?.coupuresOssSansSignal?.length ?? 0) > 0 && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          <p className="font-semibold">
+            {stats!.syncOss!.coupuresOssSansSignal!.length} coupure(s) automatique(s) en cours sans aucun signal OSS — elles ne se clôtureront pas toutes seules.
+          </p>
+          <p className="mt-1 text-xs">
+            {stats!.syncOss!.coupuresOssSansSignal!.slice(0, 8).join(' · ')}
+            {stats!.syncOss!.coupuresOssSansSignal!.length > 8 ? ' · …' : ''}
+          </p>
+          <p className="mt-1 text-xs">
+            Le site n&apos;est apparu ni en panne ni reconnecté au dernier passage : son <b>NodeID</b> ne correspond
+            probablement plus à l&apos;eNodeB réel (fiche du site), ou le nœud a quitté le flux OSS. Vérifiez le NodeID,
+            puis clôturez la coupure à la main si le site est effectivement en service.
           </p>
         </div>
       )}

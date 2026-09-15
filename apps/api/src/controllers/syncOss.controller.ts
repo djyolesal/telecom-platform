@@ -55,6 +55,26 @@ export function parserSortieOss(texte: string): LigneOss[] {
 /** Normalise un nom pour le rapprochement (majuscules, sans espaces/tirets). */
 const normaliser = (s: string) => s.toUpperCase().replace(/[\s\-_]/g, '');
 
+/**
+ * Noms candidats pour rapprocher une ligne OSS d'un site, du plus sûr au moins
+ * sûr : le nom EXACT d'abord (un site réellement nommé « LGAME » garde la
+ * priorité), puis les préfixes de nommage de l'OSS retirés — « GL » (GLTOKOI),
+ * « L » SEUL (LWARKA, LGAME) et « G » seul.
+ *
+ * Le `^GL?` d'origine n'enlevait que « G » ou « GL » : un nom en « L » seul,
+ * pourtant courant dans le flux réel, n'était JAMAIS rapproché. Le site
+ * n'était donc jamais détecté en panne et, s'il avait été mappé par ailleurs,
+ * sa reconnexion ne clôturait plus rien — coupure « site entier » éternelle.
+ */
+export function variantesNom(nomOss: string): string[] {
+  const brut = normaliser(nomOss);
+  const out = [brut];
+  for (const p of ['GL', 'L', 'G']) {
+    if (brut.startsWith(p) && brut.length > p.length) out.push(brut.slice(p.length));
+  }
+  return out;
+}
+
 export async function syncOss(req: Request, res: Response, next: NextFunction) {
   try {
     const token = process.env.OSS_SYNC_TOKEN;
@@ -133,24 +153,30 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     const TOLERANCE_MS = getNum('oss.fenetreEntrainementMin', 60) * 60_000;
     const resoudreRacine = (c: CoupureOuverte): CoupureOuverte =>
       (c.origine === 'HERITEE' && c.coupureOrigineId && ouverteParId.get(c.coupureOrigineId)) || c;
-    // Adoption automatique STRICTE : nom OSS (préfixe GL/L retiré) exactement
-    // égal au nom OU au code du site normalisé (l'OSS mélange les deux, ex.
-    // « LTG111 »). Un rapprochement douteux ne s'invente pas.
+    // Adoption automatique STRICTE : nom OSS exactement égal au nom OU au code
+    // du site normalisé (l'OSS mélange les deux, ex. « LTG111 »), à préfixe de
+    // nommage près. Un rapprochement douteux ne s'invente pas.
     const parNomNormalise = new Map(sites.map((s) => [normaliser(s.nom), s]));
     const parCodeNormalise = new Map(sites.map((s) => [normaliser(s.code), s]));
     let adoptes = 0;
     const nonRapproches: string[] = [];
+    // Un « connected » non rapproché était jusqu'ici ignoré SANS AUCUNE TRACE.
+    // C'est pourtant le cas le plus grave : si le site a par ailleurs une
+    // coupure OSS ouverte, plus rien ne peut la clôturer — la plateforme
+    // affiche une panne éternelle alors que l'OSS voit le nœud connecté.
+    const connectedNonRapproches: string[] = [];
+    // Sites effectivement vus (dans un sens ou dans l'autre) à ce passage.
+    const sitesVus = new Set<string>();
 
     const resoudre = async (l: LigneOss) => {
       const direct = parNodeId.get(l.nodeId);
       if (direct) return direct;
       if (l.name && l.name !== 'undefined') {
-        const brut = normaliser(l.name);
-        const sansPrefixe = normaliser(l.name.replace(/^GL?/, ''));
-        const candidat = parNomNormalise.get(sansPrefixe)
-          ?? parNomNormalise.get(brut)
-          ?? parCodeNormalise.get(brut)
-          ?? parCodeNormalise.get(sansPrefixe);
+        let candidat: typeof sites[number] | undefined;
+        for (const v of variantesNom(l.name)) {
+          candidat = parNomNormalise.get(v) ?? parCodeNormalise.get(v);
+          if (candidat) break;
+        }
         if (candidat && !candidat.nodeId) {
           await prisma.site.update({ where: { id: candidat.id }, data: { nodeId: l.nodeId } });
           candidat.nodeId = l.nodeId;
@@ -176,8 +202,10 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       const site = await resoudre(l);
       if (!site) {
         if (l.etat === 'disconnected') nonRapproches.push(`${l.nodeId} (${l.name})`);
+        else connectedNonRapproches.push(`${l.nodeId} (${l.name})`);
         continue;
       }
+      sitesVus.add(site.id);
 
       if (l.etat === 'disconnected') {
         // Une coupure SITE déjà ouverte (humaine ou OSS) → rien à créer.
@@ -355,6 +383,18 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       logger.warn('[sync-oss] armement automatique échoué:', e);
     }
 
+    // COUPURES OSS SANS SIGNAL : détections encore ouvertes dont le site n'est
+    // apparu NULLE PART dans ce passage — ni tombé, ni reconnecté. Rien ne
+    // pourra jamais les clôturer automatiquement (nœud retiré du flux, NodeID
+    // erroné sur la fiche, nom OSS non rapproché). Sans ce relevé, elles
+    // vieillissaient en silence et le NOC les prenait pour de vraies pannes.
+    const sansSignal: string[] = [];
+    for (const c of ossOuverteParSite.values()) {
+      if (sitesVus.has(c.siteId)) continue;
+      const s = siteParId.get(c.siteId);
+      sansSignal.push(`${s?.nom ?? c.siteId}${s?.nodeId ? ` [NodeID ${s.nodeId}]` : ' [sans NodeID]'}`);
+    }
+
     const bilan = {
       lignesAnalysees: lignes.length,
       detectionsArmees,
@@ -371,6 +411,9 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       // Seuls les DISCONNECTED non rapprochés sont listés : ce sont eux qui
       // échappent à la détection — à mapper en priorité (fiche site → NodeID).
       disconnectedNonRapproches: nonRapproches,
+      // Un « connected » orphelin peut laisser une coupure ouverte à vie.
+      connectedNonRapproches,
+      coupuresOssSansSignal: sansSignal,
     };
     // BILAN PERSISTÉ : jusqu'ici les « down non rapprochés » ne vivaient que
     // dans la réponse machine et les logs — le NOC ne voyait JAMAIS qu'un
@@ -380,10 +423,10 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       where: { key: 'oss.dernierBilan' },
       create: {
         key: 'oss.dernierBilan',
-        value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50) },
+        value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50), connectedNonRapproches: connectedNonRapproches.slice(0, 50), coupuresOssSansSignal: sansSignal.slice(0, 50) },
         description: 'Dernier passage de synchronisation OSS (écrit par sync-oss).',
       },
-      update: { value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50) } },
+      update: { value: { quand: new Date().toISOString(), ...bilan, disconnectedNonRapproches: nonRapproches.slice(0, 50), connectedNonRapproches: connectedNonRapproches.slice(0, 50), coupuresOssSansSignal: sansSignal.slice(0, 50) } },
     });
 
     // Push temps réel : un passage qui a changé quelque chose invalide les
@@ -391,7 +434,8 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     if (creees + cloturees + clotureesHeritees + reclasseesAval + incidentsResolus > 0) {
       chargerRebouclage().emettreCoupuresChangees({ action: 'syncOss', creees, cloturees });
     }
-    logger.info(`[sync-oss] ${lignes.length} lignes · ${creees} coupure(s) créée(s) · ${cloturees} clôturée(s) · ${nonRapproches.length} down non rapproché(s)`);
+    logger.info(`[sync-oss] ${lignes.length} lignes · ${creees} coupure(s) créée(s) · ${cloturees} clôturée(s) · ${nonRapproches.length} down non rapproché(s) · ${connectedNonRapproches.length} up non rapproché(s) · ${sansSignal.length} coupure(s) sans signal`);
+    if (sansSignal.length) logger.warn(`[sync-oss] coupures OSS sans signal (jamais clôturables en l'état) : ${sansSignal.slice(0, 20).join(', ')}`);
     res.json({ success: true, data: bilan });
   } catch (err) { next(err); }
 }

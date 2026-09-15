@@ -1,4 +1,4 @@
-import { parserSortieOss } from './syncOss.controller';
+import { parserSortieOss, variantesNom } from './syncOss.controller';
 
 // Extrait réel (anonymisé) de la sortie de la commande d'état des eNodeB.
 const EXTRAIT = `
@@ -27,5 +27,41 @@ describe('parserSortieOss', () => {
 
   it('ignore les en-têtes et le bruit sans lever', () => {
     expect(parserSortieOss('rien de valable\n---\n')).toEqual([]);
+  });
+});
+
+/**
+ * Rapprochement du NOM OSS (incident du 15/09/2026, site GAME) : la plateforme
+ * affichait « site entier » coupé depuis 1 h 33 alors que l'OSS listait
+ * « LGAME connected ». Le déprefixage `^GL?` n'enlevait que « G » ou « GL », si
+ * bien qu'un nom en « L » seul — forme courante du flux réel, déjà présente
+ * dans l'échantillon ci-dessus avec LWARKA — n'était jamais rapproché : jamais
+ * détecté en panne, et jamais clôturé si le site avait été mappé par ailleurs.
+ */
+describe('variantesNom - rapprochement du nom OSS', () => {
+  it('retire le préfixe « L » SEUL (le cas qui a produit la coupure fantôme)', () => {
+    expect(variantesNom('LGAME')).toContain('GAME');
+    expect(variantesNom('LWARKA')).toContain('WARKA');
+  });
+
+  it('retire toujours le préfixe « GL »', () => {
+    expect(variantesNom('GLTOKOI')).toContain('TOKOI');
+  });
+
+  it('propose le nom EXACT en premier : un site vraiment nommé « LGAME » gagne', () => {
+    expect(variantesNom('LGAME')[0]).toBe('LGAME');
+    expect(variantesNom('GLTOKOI')[0]).toBe('GLTOKOI');
+  });
+
+  it('normalise casse, espaces et tirets', () => {
+    expect(variantesNom('l game')).toContain('GAME');
+    expect(variantesNom('GL-TOKOI')).toContain('TOKOI');
+  });
+
+  it('ne réduit jamais un nom à du vide', () => {
+    for (const n of ['L', 'G', 'GL', '']) {
+      expect(variantesNom(n).every((v) => v === '' || v.length > 0)).toBe(true);
+      expect(variantesNom(n).filter((v) => v === '').length).toBeLessThanOrEqual(1);
+    }
   });
 });
