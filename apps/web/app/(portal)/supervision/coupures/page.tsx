@@ -80,6 +80,11 @@ export default function CoupuresReseauPage() {
   // Écriture réservée au NOC/manager/admin - les techniciens passent par les
   // incidents, les superviseurs et prestataires consultent.
   const peutEcrire = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
+  // Alertes de MAINTENANCE du référentiel (NodeID à corriger sur la fiche) :
+  // réservées à l'administrateur, seul à pouvoir agir dessus. L'API ne les
+  // envoie d'ailleurs qu'à lui. Le bandeau « collecteur muet » reste visible
+  // de tous : il dit que l'écran ne reflète plus la réalité du réseau.
+  const voitAlertesReferentiel = role === 'ADMIN';
   const peutImporter = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
 
   const queryClient = useQueryClient();
@@ -388,7 +393,7 @@ export default function CoupuresReseauPage() {
       {/* eNodeB DOWN non rapprochés à un site : ils échappent totalement à la
           détection automatique — le NOC doit le savoir, avec la marche à
           suivre (NodeID sur la fiche). Invisible tant que tout est rapproché. */}
-      {(stats?.syncOss?.disconnectedNonRapproches?.length ?? 0) > 0 && (
+      {voitAlertesReferentiel && (stats?.syncOss?.disconnectedNonRapproches?.length ?? 0) > 0 && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">
             {stats!.syncOss!.disconnectedNonRapproches.length} eNodeB en panne côté OSS ne sont rattachés à aucun site — invisibles de la détection automatique.
@@ -430,7 +435,7 @@ export default function CoupuresReseauPage() {
           identifiant réseau. Le site suit alors un nœud qui n'est pas le sien —
           il tombe quand l'autre tombe et ne se relève jamais quand le sien
           revient. Diagnostic le plus précis : on peut nommer la correction. */}
-      {(stats?.syncOss?.conflitsNodeId?.length ?? 0) > 0 && (
+      {voitAlertesReferentiel && (stats?.syncOss?.conflitsNodeId?.length ?? 0) > 0 && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <p className="font-semibold">
             {stats!.syncOss!.conflitsNodeId!.length} fiche(s) site portent un NodeID qui ne correspond pas à l&apos;eNodeB réel.
@@ -452,7 +457,7 @@ export default function CoupuresReseauPage() {
           reconnecté. Rien ne pourra les clôturer automatiquement, et elles
           vieillissaient jusqu'ici en silence en se faisant passer pour de
           vraies pannes. */}
-      {(stats?.syncOss?.coupuresOssSansSignal?.length ?? 0) > 0 && (
+      {voitAlertesReferentiel && (stats?.syncOss?.coupuresOssSansSignal?.length ?? 0) > 0 && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <p className="font-semibold">
             {stats!.syncOss!.coupuresOssSansSignal!.length} coupure(s) automatique(s) en cours sans aucun signal OSS — elles ne se clôtureront pas toutes seules.

@@ -2411,13 +2411,23 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
         // racine, elles ne sont pas « à traiter » individuellement).
         prisma.coupureReseau.count({ where: { dateFin: null, source: 'OSS', priseEnChargePar: null, origine: 'LOCALE', ...surSite } }),
       ]);
-    // Dernier passage OSS : le NOC doit VOIR quels eNodeB down échappent à la
-    // détection (non rapprochés à un site) au lieu de le découvrir par hasard.
+    // Dernier passage OSS. Les listes de diagnostic (eNodeB non rapprochés,
+    // NodeID en conflit, coupures sans signal) sont des alertes de MAINTENANCE
+    // du référentiel : elles se corrigent sur la fiche du site, ce qui est le
+    // travail de l'administrateur. On ne les envoie donc qu'à lui — d'autant
+    // qu'elles nomment des sites et des identifiants réseau hors périmètre,
+    // qui n'ont rien à faire dans la réponse servie à un prestataire.
+    // L'HORODATAGE reste servi à tous : c'est la preuve de vie du collecteur,
+    // et le NOC doit pouvoir savoir que son écran ne reflète plus la réalité.
     const bilanOss = await prisma.systemSettings.findUnique({ where: { key: 'oss.dernierBilan' } });
+    const bilanBrut = (bilanOss?.value ?? null) as Record<string, unknown> | null;
+    const syncOss = bilanBrut && req.user!.role !== 'ADMIN'
+      ? { quand: bilanBrut.quand }
+      : bilanBrut;
     res.json({
       success: true,
       data: {
-        syncOss: bilanOss?.value ?? null,
+        syncOss,
         enCours, enCoursSiteEntier, enCoursHeritees, terminees, nouvellesDerniereHeure, aQualifier, plusAncienne,
         enCoursAuto,
         // Rapport NOC = racines manuelles + AUTO adoptées (aligné sur l'onglet).
