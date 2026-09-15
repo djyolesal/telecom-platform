@@ -15,6 +15,7 @@
 #   OSS_JUMP     rebond(s) intermédiaire(s) (ex. user@noeud2 — plusieurs : a,b)
 #   OSS_MODE     'jump' (défaut, ProxyJump -J) ou 'cascade' (ssh dans ssh —
 #                si le port SSH du nœud final n'est joignable QUE depuis noeud2)
+#   OSS_PORT     port SSH du nœud final (défaut 22)
 #   OSS_COMMANDE la commande qui produit le tableau d'état
 #   EMOPS_URL    https://emops.uk/api/v1/coupures-reseau/sync-oss
 #   EMOPS_TOKEN  jeton machine (OSS_SYNC_TOKEN du serveur E&M OpS)
@@ -49,6 +50,7 @@ touch "/tmp/collecteur-oss.lock"
 : "${OSS_COMMANDE:?OSS_COMMANDE requise}"
 : "${OSS_JUMP:=}"
 : "${OSS_MODE:=jump}"
+: "${OSS_PORT:=22}"
 : "${EMOPS_URL:=https://emops.uk/api/v1/coupures-reseau/sync-oss}"
 : "${EMOPS_TOKEN:?EMOPS_TOKEN requis}"
 
@@ -56,7 +58,7 @@ touch "/tmp/collecteur-oss.lock"
 # distante qui se fige laisse ssh attendre pour toujours. Les sondes keepalive
 # coupent une session morte, et `timeout` borne le passage entier - sans quoi
 # un ssh figé retient le verrou et tue le collecteur définitivement.
-SSH_OPTS=(-o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+SSH_OPTS=(-p "$OSS_PORT" -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
 : "${OSS_TIMEOUT:=90}"
 # `timeout` est GNU coreutils (présent sur noeud1) ; `gtimeout` sur macOS. S'il
 # manque, on continue SANS borne plutôt que d'échouer - mais on le dit, car
@@ -71,8 +73,9 @@ recolter() {
   elif [ "$OSS_MODE" = "cascade" ]; then
     # ssh dans ssh : la commande transite par noeud2, qui ouvre lui-même la
     # session vers le nœud final (sa propre clé fait foi sur ce dernier saut).
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" "$OSS_JUMP" \
-      "ssh -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'"
+    ${BORNE[@]+"${BORNE[@]}"} ssh -o ConnectTimeout=15 -o BatchMode=yes \
+      -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$OSS_JUMP" \
+      "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'"
   else
     ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$OSS_JUMP" "$OSS_HOST" "$OSS_COMMANDE"
   fi

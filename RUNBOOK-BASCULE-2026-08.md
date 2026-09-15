@@ -110,9 +110,22 @@ make backup
 > (plusieurs sites reconnectés au même passage). Nouveaux réglages en
 > Administration → Paramètres : `oss.stabiliteRetablissementMin` (20 min, 0 =
 > clôture immédiate toujours) et `oss.rebondSeuilSites` (5).
-> Contrôle : la page coupures affiche un bandeau rouge si le collecteur se tait
-> plus de 15 min, si un NodeID est en conflit, ou si une coupure AUTO n'a plus
-> aucun signal.
+> Contrôle : la page coupures affiche un bandeau rouge (ADMIN) si un NodeID est
+> en conflit ou si une coupure AUTO n'a plus aucun signal ; le bandeau
+> « collecteur muet » (> 15 min sans passage) reste visible de tous.
+>
+> **Vérifié le 15/09 : noeud1 tourne encore sur la version d'AVANT le 12/09** —
+> ni `flock`, ni cadence à la minute : `823d26e` n'a jamais été recopié. Le
+> `crontab` est donc toujours en `*/5`. En recopiant le script, ATTENTION à
+> deux points : (1) la version de production avait `ssh -p 22` codé en dur —
+> c'est désormais `OSS_PORT` (défaut 22), à poser dans l'environnement du cron
+> si le port diffère ; (2) passer le `crontab` à `* * * * *` en même temps.
+> Cause la plus probable des coupures fantômes : l'ancien script envoyait la
+> récolte AU FIL DE L'EAU (`recolter | curl --data-binary @-`), donc une session
+> qui meurt ou un `--max-time` atteint postait une sortie TRONQUÉE — les eNodeB
+> de la fin du tableau n'arrivaient jamais et leurs coupures ne pouvaient plus
+> se clôturer. Contrôle : comparer `lignesAnalysees` du dernier bilan au nombre
+> de lignes que la commande OSS produit réellement.
 
 
 > **⚠️ Panne de connexion du 15/09/2026 — corrigée, à déployer.** Des comptes
