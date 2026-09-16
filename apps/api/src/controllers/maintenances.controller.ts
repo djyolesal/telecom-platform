@@ -220,7 +220,16 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       });
       const scope: Record<string, unknown>[] = [{ technicienId: req.user!.id }];
       if (me?.prestataireId) {
-        const entreprise: Record<string, unknown> = { prestataireId: me.prestataireId };
+        // MÊME règle de contrat que le compte prestataire de son entreprise :
+        // les siennes, PLUS les non attribuées relevant de son contrat. La
+        // branche exigeait `prestataireId = le sien`, si bien qu'une tâche
+        // planifiée sur un site dont le lot ne porte pas d'attribution pour ce
+        // périmètre (prestataireId resté NULL) était visible du prestataire
+        // mais INVISIBLE de ses techniciens : le terrain ne voyait pas des
+        // tâches pourtant dans son périmètre, sur ces sites-là seulement.
+        const entreprise: Record<string, unknown> = {
+          ...(await contratMaintenancePerimetre(req.user!.id)),
+        };
         if (me.equipe) {
           entreprise.categorie = {
             in: me.equipe === 'ACTIVE' ? ACTIVE_CATS : me.equipe === 'SOLAIRE' ? SOLAIRE_CATS : PASSIVE_CATS,
