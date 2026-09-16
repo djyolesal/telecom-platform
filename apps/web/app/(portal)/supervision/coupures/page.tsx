@@ -300,7 +300,13 @@ export default function CoupuresReseauPage() {
       render: (c) => (
         <div>
           <TechnoBadge t={c.technologie} />
-          {c.source === 'OSS' && (
+          {/* Le badge AUTO ne vaut que tant que l'OSS PILOTE la coupure, donc
+              tant qu'elle décrit l'eNodeB entier. Requalifiée en secteur ou en
+              fréquence, elle échappe à ce que l'OSS sait observer : elle
+              appartient au NOC, et l'afficher « AUTO » laissait croire qu'elle
+              se clôturerait toute seule. L'origine reste lisible en colonne
+              « Source ». */}
+          {c.source === 'OSS' && c.technologie === 'SITE' && (
             <span className={`ml-1.5 rounded px-1 py-px text-[10px] font-bold ${c.priseEnChargePar ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-600'}`}
               title={c.priseEnChargePar
                 ? `Détection automatique prise en charge par ${c.priseEnChargePar}`
@@ -362,9 +368,11 @@ export default function CoupuresReseauPage() {
     },
     {
       key: 'source', header: 'Source', defaultHidden: true,
-      render: (c) => c.source === 'OSS'
-        ? (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (détection réseau)')
-        : 'Manuelle',
+      render: (c) => c.source !== 'OSS'
+        ? 'Manuelle'
+        : c.technologie !== 'SITE'
+          ? `Requalifiée par ${c.priseEnChargePar ?? 'le NOC'} (issue d'une détection AUTO)`
+          : (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (détection réseau)'),
     },
   ];
 

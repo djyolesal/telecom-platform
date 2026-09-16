@@ -359,6 +359,15 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
         const surSite = ouverteParSite.get(site.id);
         const ouverte = surSite?.source === 'OSS' ? surSite : ossOuverteParSite.get(site.id);
         if (!ouverte || ouverte.source !== 'OSS') return;
+        // PILOTAGE OSS : l'OSS ne clôture que ce qu'il sait observer, c'est-à-dire
+        // l'état de l'eNodeB ENTIER. Dès que le NOC requalifie en secteur ou en
+        // fréquence, il déclare que la lecture de l'OSS ne décrit plus cette
+        // panne : la reconnexion de l'eNodeB ne prouve alors RIEN sur le retour
+        // du secteur, et clôturer là-dessus sous-évaluait l'indisponibilité —
+        // celle qui part à l'ARCEP. La coupure reste au NOC, qui la clôt.
+        // `source` n'est PAS réécrit : il enregistre l'origine, et l'anti-doublon
+        // s'appuie dessus pour empêcher l'OSS de recréer la même panne en boucle.
+        if (ouverte.technologie !== 'SITE') return;
         // RÉTABLISSEMENT STABLE SEULEMENT (incident du 04/09/2026, zone nord) :
         // lors d'un rebond de transmission régional, l'OSS a montré tout un
         // paquet d'eNodeB « connected » quelques minutes (09:32) avant la

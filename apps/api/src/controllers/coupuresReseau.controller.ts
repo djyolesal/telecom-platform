@@ -2678,9 +2678,12 @@ export async function exportCoupures(req: Request, res: Response, next: NextFunc
         categorie: c.causeCategorie ?? '',
         // Héritée : le site AMONT responsable est nommé, comme dans le xlsx.
         origine: c.origine === 'HERITEE' ? `← ${c.coupureOrigine?.site?.nom ?? 'amont'}` : 'Locale',
-        source: c.source === 'OSS'
-          ? (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (non prise en charge)')
-          : 'Manuelle',
+        // Même règle que l'écran : « AUTO » tant que l'OSS pilote (site entier).
+        source: c.source !== 'OSS'
+          ? 'Manuelle'
+          : c.technologie !== 'SITE'
+            ? `Requalifiée par ${c.priseEnChargePar ?? 'le NOC'} (issue d'une détection AUTO)`
+            : (c.priseEnChargePar ? `AUTO · ${c.priseEnChargePar}` : 'AUTO (non prise en charge)'),
         incident: c.incident?.reference ?? '',
         cause: c.cause ?? '',
         actions: c.actions ?? '',
