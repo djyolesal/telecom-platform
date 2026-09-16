@@ -24,6 +24,8 @@ import { detectAnomalies, generateSynthese } from '../services/intelligence.serv
 import { getNum } from '../services/settings.service';
 import { clearMemo } from '../utils/memo';
 import { env } from '../config/env';
+import { notificationService } from '../services/notifications.service';
+import { logger } from '../utils/logger';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -504,6 +506,57 @@ export async function analyserBonLivraisonDocument(req: Request, res: Response, 
   } catch (err) { next(err); }
 }
 
+/**
+ * Un nouveau CHARGEMENT réel entre dans le circuit : l'administrateur en est
+ * averti (notification en base + push, jamais de SMS - la passerelle est
+ * facturée et ce n'est pas une urgence terrain).
+ *
+ * Deux portes d'entrée seulement, et elles comptent toutes les deux : la
+ * création directe d'un BL, et la FINALISATION d'un brouillon (réappro
+ * prédictif) qui reçoit son vrai numéro. Un brouillon, lui, ne notifie rien :
+ * son numéro est provisoire, son camion « À AFFECTER » et sa date fabriquée.
+ *
+ * Jamais bloquant : un push en échec ne doit pas faire échouer l'enregistrement
+ * du chargement.
+ */
+async function notifierNouveauChargement(blId: string, auteurId: string): Promise<void> {
+  try {
+    const bl = await prisma.bonLivraison.findUnique({
+      where: { id: blId },
+      select: {
+        id: true, numeroBL: true, immatriculation: true, volumeChargeLitres: true,
+        dateChargement: true, isBrouillon: true,
+        transporteur: { select: { nom: true } },
+        chauffeur: { select: { nom: true } },
+      },
+    });
+    if (!bl || bl.isBrouillon) return;
+    const auteur = await prisma.user.findUnique({ where: { id: auteurId }, select: { nom: true, prenom: true } });
+    const par = auteur ? `${auteur.prenom} ${auteur.nom}`.trim() : 'un utilisateur';
+    // volumeChargeLitres est un Decimal Prisma, pas un number.
+    const volume = Number(bl.volumeChargeLitres);
+    const litres = `${Math.round(volume).toLocaleString('fr-FR')} L`;
+    const quand = bl.dateChargement
+      ? new Date(bl.dateChargement).toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome', day: '2-digit', month: '2-digit', year: 'numeric' })
+      : null;
+    await notificationService.sendToRole('ADMIN', {
+      title: `🚚 Nouveau chargement — ${litres}`,
+      body: [
+        `BL ${bl.numeroBL}`,
+        `camion ${bl.immatriculation}`,
+        bl.chauffeur?.nom ? `chauffeur ${bl.chauffeur.nom}` : null,
+        bl.transporteur?.nom ?? null,
+        quand ? `chargé le ${quand}` : null,
+        `saisi par ${par}`,
+      ].filter(Boolean).join(' · '),
+      type: 'chargement_nouveau',
+      data: { bonLivraisonId: bl.id, numeroBL: bl.numeroBL, volumeChargeLitres: volume },
+    });
+  } catch (e) {
+    logger.warn('[chargement] notification administrateur échouée:', e);
+  }
+}
+
 export async function createBonLivraison(req: Request, res: Response, next: NextFunction) {
   try {
     const { bonCommandeId, numeroBL, mois, annee, immatriculation, volumeChargeLitres, dateChargement, dateTraitement, observations, statut, blPdfPath, bordereauPdfPath, numeroClient } = req.body;
@@ -626,6 +679,7 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     });
     await auditLog(req.user!.id, 'CREATE', 'bons_livraison', bl.id, req.body, req);
     clearMemo();
+    void notifierNouveauChargement(bl.id, req.user!.id);
     res.status(201).json({ success: true, data: bl, warnings });
   } catch (err) { next(mapKnownError(err, 'Un bon de livraison avec ce numéro existe déjà')); }
 }
@@ -805,6 +859,9 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     if (statutSync) bl.statut = statutSync;
     await auditLog(req.user!.id, 'UPDATE', 'bons_livraison', bl.id, { updated: Object.keys(data) }, req);
     clearMemo();
+    // Brouillon devenu chargement réel : c'est MAINTENANT qu'il entre dans le
+    // circuit, pas à la génération prédictive.
+    if (existing.isBrouillon && data.isBrouillon === false) void notifierNouveauChargement(bl.id, req.user!.id);
     res.json({ success: true, data: bl, warnings });
   } catch (err) { next(mapKnownError(err, 'Un bon de livraison avec ce numéro existe déjà')); }
 }
