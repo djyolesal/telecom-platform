@@ -32,7 +32,12 @@ set -euo pipefail
 # quand on n'obtient pas le verrou. Cela effaçait l'identité du détenteur et
 # remettait la date du fichier à maintenant - l'âge calculé valait donc
 # toujours 0 s et l'alerte « verrou coincé » ne pouvait JAMAIS se déclencher.
-LOCK="${OSS_LOCK:-/tmp/collecteur-oss.lock}"
+# OSS_LOCK vide = verrou interne DÉSACTIVÉ : à utiliser quand la ligne de cron
+# enveloppe déjà le script dans `flock`, sinon les deux verrous se disputent le
+# même fichier et le script ne peut JAMAIS l'obtenir. `${VAR-defaut}` (sans
+# deux-points) pour qu'une valeur vide reste vide.
+LOCK="${OSS_LOCK-/tmp/collecteur-oss.lock}"
+if [ -n "$LOCK" ]; then
 exec 9>>"$LOCK"
 if ! flock -n 9; then
   # Le détenteur s'inscrit dans le fichier (PID + horodatage de début), seule
@@ -42,7 +47,20 @@ if ! flock -n 9; then
   depuis=${detenteur##* }
   age=0
   case "${depuis:-}" in (*[!0-9]*|'') : ;; (*) age=$(( $(date +%s) - depuis )) ;; esac
-  vivant="disparu"; kill -0 "${pid:-0}" 2>/dev/null && vivant="vivant"
+  vivant="disparu"; [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null && vivant="vivant"
+  # Fichier de verrou VIDE : le détenteur n'est pas un passage du collecteur
+  # (aucun des nôtres ne s'y inscrit sans le remplir). C'est presque toujours un
+  # `flock` EXTERNE — typiquement celui de la ligne de cron, qui prend le verrou
+  # puis exécute ce script : le script ne pourra alors jamais l'obtenir, à
+  # chaque passage, indéfiniment.
+  if [ -z "$detenteur" ]; then
+    echo "ALERTE: le verrou $LOCK est tenu par un processus ÉTRANGER au collecteur." >&2
+    echo "        Cause la plus fréquente : la ligne de cron enveloppe déjà le script dans « flock »" >&2
+    echo "        sur ce même fichier - les deux verrous se bloquent alors mutuellement, à vie." >&2
+    echo "        Corriger : retirer flock de la ligne de cron (le script s'en charge lui-même)," >&2
+    echo "        OU lancer avec OSS_LOCK= (vide) pour désactiver le verrou interne." >&2
+    exit 0
+  fi
   if [ "$age" -gt "${OSS_ALERTE_VERROU_S:-600}" ] || [ "$vivant" = "disparu" ]; then
     echo "ALERTE: verrou tenu par le PID ${pid:-?} ($vivant) depuis ${age}s - le collecteur ne remonte plus rien." >&2
     echo "        Débloquer : kill -9 ${pid:-<pid>} ; sinon identifier le porteur avec : fuser -v $LOCK" >&2
@@ -55,6 +73,7 @@ fi
 # par un AUTRE descripteur, sans relâcher notre verrou).
 : > "$LOCK"
 printf '%s %s\n' "$$" "$(date +%s)" >&9
+fi
 
 : "${OSS_HOST:?OSS_HOST requis}"
 : "${OSS_COMMANDE:?OSS_COMMANDE requise}"
@@ -84,15 +103,15 @@ else BORNE=(); echo "ATTENTION: ni timeout ni gtimeout - un ssh figé ne sera pa
 # cours » pour toujours - le collecteur mort sans que rien ne tourne.
 recolter() {
   if [ -z "$OSS_JUMP" ]; then
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" "$OSS_HOST" "$OSS_COMMANDE" 9>&-
+    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" "$OSS_HOST" "$OSS_COMMANDE" ${LOCK:+9>&-}
   elif [ "$OSS_MODE" = "cascade" ]; then
     # ssh dans ssh : la commande transite par noeud2, qui ouvre lui-même la
     # session vers le nœud final (sa propre clé fait foi sur ce dernier saut).
     ${BORNE[@]+"${BORNE[@]}"} ssh -o ConnectTimeout=15 -o BatchMode=yes \
       -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$OSS_JUMP" \
-      "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'" 9>&-
+      "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'" ${LOCK:+9>&-}
   else
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$OSS_JUMP" "$OSS_HOST" "$OSS_COMMANDE" 9>&-
+    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$OSS_JUMP" "$OSS_HOST" "$OSS_COMMANDE" ${LOCK:+9>&-}
   fi
 }
 
@@ -134,5 +153,5 @@ echo "$lignes" > "$ETAT"
 curl -sS --max-time 60 -X POST "$EMOPS_URL" \
   -H "Authorization: Bearer $EMOPS_TOKEN" \
   -H "Content-Type: text/plain" \
-  --data-binary @"$RECOLTE" 9>&-
+  --data-binary @"$RECOLTE" ${LOCK:+9>&-}
 echo  # saut de ligne dans le log
