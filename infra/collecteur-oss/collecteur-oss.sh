@@ -11,6 +11,8 @@
 #   * * * * * /opt/collecteur-oss/collecteur-oss.sh >> /var/log/collecteur-oss.log 2>&1
 #
 # Configuration par variables d'environnement (ou éditer ci-dessous) :
+# Configuration recommandée : le fichier `collecteur-oss.conf` placé À CÔTÉ de
+# ce script (il survit aux mises à jour, contrairement aux valeurs éditées ici).
 #   OSS_HOST     hôte SSH du nœud final (ex. user@10.x.x.x)
 #   OSS_JUMP     rebond(s) intermédiaire(s) (ex. user@noeud2 — plusieurs : a,b)
 #   OSS_MODE     'jump' (défaut, ProxyJump -J) ou 'cascade' (ssh dans ssh —
@@ -24,6 +26,22 @@
 #   mode jump    : la clé de noeud1 acceptée par noeud2 ET par le nœud OSS
 #   mode cascade : noeud1 → noeud2, puis noeud2 → nœud OSS
 set -euo pipefail
+
+# ── Configuration PERSISTANTE ────────────────────────────────────────────────
+# Un fichier À CÔTÉ du script, qui SURVIT à son remplacement. Éditer les
+# variables dans le script lui-même (comme l'invitait l'en-tête) les faisait
+# disparaître à chaque mise à jour : le collecteur repartait alors sur
+# « OSS_HOST requis » et sortait en code 1 sans rien remonter.
+#   /home/<user>/collecteur-oss/collecteur-oss.conf
+#     OSS_HOST=user@10.x.x.x
+#     OSS_JUMP=user@noeud2
+#     OSS_MODE=cascade
+#     OSS_COMMANDE='...'
+#     EMOPS_TOKEN=...
+# Le fichier contient un JETON : le réserver à son propriétaire (chmod 600).
+CONF="${OSS_CONF:-$(dirname "$0")/collecteur-oss.conf}"
+# shellcheck source=/dev/null
+[ -r "$CONF" ] && . "$CONF"
 
 # Anti-chevauchement : à la cadence 1 min, un passage lent (SSH en cascade,
 # réseau chargé) ne doit pas s'empiler sur le suivant - on saute simplement.
