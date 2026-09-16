@@ -39,9 +39,15 @@ set -euo pipefail
 #     OSS_COMMANDE='...'
 #     EMOPS_TOKEN=...
 # Le fichier contient un JETON : le réserver à son propriétaire (chmod 600).
-CONF="${OSS_CONF:-$(dirname "$0")/collecteur-oss.conf}"
-# shellcheck source=/dev/null
-[ -r "$CONF" ] && . "$CONF"
+# Noms acceptés, dans l'ordre : OSS_CONF, puis `collecteur-oss.conf`, puis
+# `config.env` (nom déjà en service sur noeud1, où c'est la LIGNE DE CRON qui le
+# source — le script le lit désormais lui-même, donc il fonctionne aussi lancé
+# à la main, ce qui n'était pas le cas et rendait tout diagnostic trompeur).
+ICI=$(dirname "$0")
+for CONF in "${OSS_CONF:-}" "$ICI/collecteur-oss.conf" "$ICI/config.env"; do
+  # shellcheck source=/dev/null
+  [ -n "$CONF" ] && [ -r "$CONF" ] && { . "$CONF"; break; }
+done
 
 # Anti-chevauchement : à la cadence 1 min, un passage lent (SSH en cascade,
 # réseau chargé) ne doit pas s'empiler sur le suivant - on saute simplement.
