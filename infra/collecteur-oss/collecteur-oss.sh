@@ -17,7 +17,8 @@
 #   OSS_JUMP     rebond(s) intermédiaire(s) (ex. user@noeud2 — plusieurs : a,b)
 #   OSS_MODE     'jump' (défaut, ProxyJump -J) ou 'cascade' (ssh dans ssh —
 #                si le port SSH du nœud final n'est joignable QUE depuis noeud2)
-#   OSS_PORT     port SSH du nœud final (défaut 22)
+#   OSS_PORT     port SSH du nœud FINAL (défaut 22)
+#   OSS_JUMP_PORT port SSH du REBOND / noeud2 (défaut 22)
 #   OSS_COMMANDE la commande qui produit le tableau d'état
 #   EMOPS_URL    https://emops.uk/api/v1/coupures-reseau/sync-oss
 #   EMOPS_TOKEN  jeton machine (OSS_SYNC_TOKEN du serveur E&M OpS)
@@ -43,6 +44,8 @@ set -euo pipefail
 # `config.env` (nom déjà en service sur noeud1, où c'est la LIGNE DE CRON qui le
 # source — le script le lit désormais lui-même, donc il fonctionne aussi lancé
 # à la main, ce qui n'était pas le cas et rendait tout diagnostic trompeur).
+# Le fichier FAIT AUTORITÉ sur l'environnement (il est lu après lui). Pour un
+# essai ponctuel sans éditer la config : OSS_CONF=/dev/null OSS_LOCK= ./script
 ICI=$(dirname "$0")
 for CONF in "${OSS_CONF:-}" "$ICI/collecteur-oss.conf" "$ICI/config.env"; do
   # shellcheck source=/dev/null
@@ -104,6 +107,7 @@ fi
 : "${OSS_JUMP:=}"
 : "${OSS_MODE:=jump}"
 : "${OSS_PORT:=22}"
+: "${OSS_JUMP_PORT:=22}"
 : "${EMOPS_URL:=https://emops.uk/api/v1/coupures-reseau/sync-oss}"
 : "${EMOPS_TOKEN:?EMOPS_TOKEN requis}"
 
@@ -131,11 +135,21 @@ recolter() {
   elif [ "$OSS_MODE" = "cascade" ]; then
     # ssh dans ssh : la commande transite par noeud2, qui ouvre lui-même la
     # session vers le nœud final (sa propre clé fait foi sur ce dernier saut).
-    ${BORNE[@]+"${BORNE[@]}"} ssh -o ConnectTimeout=15 -o BatchMode=yes \
+    # Deux ports DISTINCTS : celui du rebond pour le saut depuis noeud1, celui
+    # du nœud final pour le saut imbriqué que noeud2 ouvre à son tour.
+    ${BORNE[@]+"${BORNE[@]}"} ssh -p "$OSS_JUMP_PORT" -o ConnectTimeout=15 -o BatchMode=yes \
       -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$OSS_JUMP" \
       "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'" ${LOCK:+9>&-}
   else
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$OSS_JUMP" "$OSS_HOST" "$OSS_COMMANDE" ${LOCK:+9>&-}
+    # ProxyJump porte son port dans la destination elle-même (user@hote:port).
+    # On ne l'ajoute que si l'utilisateur ne l'a pas déjà écrit (et jamais sur
+    # une adresse IPv6, qui contient déjà des deux-points).
+    saut="$OSS_JUMP"
+    case "$OSS_JUMP" in
+      (*:*) : ;;
+      (*) [ "$OSS_JUMP_PORT" != 22 ] && saut="$OSS_JUMP:$OSS_JUMP_PORT" ;;
+    esac
+    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$saut" "$OSS_HOST" "$OSS_COMMANDE" ${LOCK:+9>&-}
   fi
 }
 
