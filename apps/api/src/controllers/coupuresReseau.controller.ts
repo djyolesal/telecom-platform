@@ -1363,14 +1363,19 @@ export async function deleteCoupure(req: Request, res: Response, next: NextFunct
   try {
     const existante = await prisma.coupureReseau.findUnique({
       where: { id: req.params.id },
-      select: { id: true, incidentId: true, source: true, siteId: true, dateDebut: true, origine: true },
+      select: { id: true, incidentId: true, source: true, siteId: true, dateDebut: true, origine: true, technologie: true },
     });
     if (!existante) throw new AppError('Coupure introuvable', 404);
-    // Le NOC/manager ne supprime que les saisies MANUELLES erronées : une
-    // détection AUTO (source OSS) reflète l'état du réseau — elle se clôture
-    // ou se dé-adopte (annuler la prise en charge), jamais ne se supprime.
-    if (req.user!.role !== 'ADMIN' && existante.source !== 'MANUEL') {
-      throw new AppError('Seules les coupures saisies manuellement peuvent être supprimées — une détection AUTO se clôture ou se dé-adopte', 422);
+    // Une détection AUTO encore pilotée par l'OSS (site entier) reflète l'état
+    // du réseau : elle se clôture ou se dé-adopte, jamais ne se supprime — seul
+    // l'ADMIN peut passer outre. Une fois REQUALIFIÉE en secteur ou en
+    // fréquence, en revanche, la qualification est humaine et non plus celle de
+    // l'OSS : elle se supprime comme une saisie manuelle, par ceux qui la
+    // portent (NOC et manager, déjà seuls admis sur cette route avec l'ADMIN).
+    const requalifiee = existante.source === 'OSS' && existante.technologie !== 'SITE';
+    const autorise = req.user!.role === 'ADMIN' || existante.source === 'MANUEL' || requalifiee;
+    if (!autorise) {
+      throw new AppError('Seules les coupures saisies manuellement ou requalifiées peuvent être supprimées — une détection AUTO site entier se clôture ou se dé-adopte', 422);
     }
     // Cascade explicite sur toute la descendance héritée : la FK est en
     // SET NULL — sans ça les héritées resteraient ouvertes à vie, absentes des

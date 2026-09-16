@@ -853,7 +853,13 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
 
   // Saisie erronée : suppression réservée à l'ADMIN pour les AUTO ; le NOC et
   // le manager ne suppriment que les coupures saisies à la main.
-  const peutSupprimer = role === 'ADMIN' || (['NOC', 'MANAGER'].includes(role) && coupure.source === 'MANUEL');
+  // Une détection requalifiée en secteur/fréquence porte une qualification
+  // HUMAINE et non plus celle de l'OSS : elle se supprime comme une saisie
+  // manuelle. Reste réservée à l'ADMIN la détection AUTO encore pilotée par
+  // l'OSS (site entier), qui décrit l'état réel du réseau.
+  const requalifiee = coupure.source === 'OSS' && coupure.technologie !== 'SITE';
+  const peutSupprimer = role === 'ADMIN'
+    || (['NOC', 'MANAGER'].includes(role) && (coupure.source === 'MANUEL' || requalifiee));
   const [confirmerSuppression, setConfirmerSuppression] = useState(false);
   const suppression = useMutation({
     mutationFn: () => api.delete(`/coupures-reseau/${coupure.id}`),
