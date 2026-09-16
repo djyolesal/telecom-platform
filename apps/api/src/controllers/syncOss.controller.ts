@@ -438,6 +438,13 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     const sansSignal: string[] = [];
     for (const c of ossOuverteParSite.values()) {
       if (sitesVus.has(c.siteId)) continue;
+      // PRISE EN CHARGE par le NOC : la détection appartient désormais à un
+      // humain, qui la clôturera lui-même. Ce n'est plus une panne fantôme.
+      if (c.priseEnChargePar) continue;
+      // REQUALIFIÉE en secteur/fréquence : l'OSS ne voit que l'eNodeB ENTIER,
+      // jamais un secteur. Son silence sur une coupure partielle est normal —
+      // le signaler comme un NodeID douteux était un faux positif systématique.
+      if (c.technologie !== 'SITE') continue;
       const s = siteParId.get(c.siteId);
       sansSignal.push(`${s?.nom ?? c.siteId}${s?.nodeId ? ` [NodeID ${s.nodeId}]` : ' [sans NodeID]'}`);
     }
