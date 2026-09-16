@@ -50,6 +50,7 @@ import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../servic
 import { genererReference } from '../services/reference.service';
 import { rapprocherPieces, PieceSaisie } from '../services/piecesRef.service';
 import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite } from '../services/vraisemblance.service';
+import { TASK_BY_KEY } from '../utils/tachesPreventives';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -542,10 +543,20 @@ export async function createMaintenance(req: Request, res: Response, next: NextF
       if (ge.siteId !== data.siteId) throw new AppError('Le GE ciblé n’appartient pas à ce site.', 422);
     }
     // Détermine automatiquement le prestataire responsable (site → lot → attribution).
-    // Une tâche contractuelle est toujours passive → on résout sur le périmètre passif,
-    // quelle que soit la catégorie (ex. AUTRE pour pylône/terre/désherbage…).
+    // Une tâche CONTRACTUELLE se résout sur son périmètre, pas sur la catégorie
+    // saisie : beaucoup portent « AUTRE » (pylône, terre, désherbage…) qui ne
+    // désigne aucun scope. Mais « toujours passive » a cessé d'être vrai à
+    // l'arrivée du CONTRAT SOLAIRE : ses trois visites ont une clé contractuelle
+    // et tombaient donc sur le prestataire PASSIF, alors qu'elles relèvent d'un
+    // découpage de lots distinct (site.lotSolaireId). C'est le CATALOGUE qui
+    // fait foi sur le contrat dont relève une clé, jamais la catégorie reçue.
+    const tacheContrat = data.tachePreventiveKey
+      ? TASK_BY_KEY[data.tachePreventiveKey as string]
+      : undefined;
     const prestataireId = data.tachePreventiveKey
-      ? await resolvePrestataireIdByScope(data.siteId, 'PASSIVE')
+      ? (tacheContrat?.categorie === 'SOLAIRE'
+          ? await resolvePrestataireId(data.siteId, 'SOLAIRE')
+          : await resolvePrestataireIdByScope(data.siteId, 'PASSIVE'))
       : await resolvePrestataireId(data.siteId, data.categorie);
     // Référence générée DANS la transaction du create : si le create échoue
     // (P2002…), l'incrément du compteur est annulé — pas de trou de numérotation.
