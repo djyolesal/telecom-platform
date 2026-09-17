@@ -60,6 +60,12 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
     variables: ['site', 'reference', 'technicien'],
   },
   {
+    key: 'sms.tpl.planLivraison',
+    label: 'Plan de livraison transmis au transporteur',
+    defaut: '[E&M OpS] Plan de livraison BL {numeroBL} ({volume} L, camion {camion}) : {nbSites} site(s) - {sites}. Bonne tournee.',
+    variables: ['numeroBL', 'volume', 'camion', 'nbSites', 'sites'],
+  },
+  {
     key: 'sms.tpl.depotage',
     label: 'Dépotage carburant enregistré (contacts du périmètre du site)',
     // {stock} arrive PRÉ-FORMATÉ (« Stock : 1 250 L.») ou vide - même
@@ -401,6 +407,62 @@ export async function envoyerLotContacts(
     });
   }
   logger.info(`[sms] ${evenement} → ${cibles.length} contact(s)${simule ? ' (SIMULE)' : ''}`);
+}
+
+/**
+ * PLAN DE LIVRAISON transmis : le transporteur apprend SA tournée.
+ *
+ * Le moment n'est pas le statut « PLANIFIE » du bon de livraison — qui signifie
+ * au contraire « camion à charger, AUCUN plan » (cf. syncStatutBonLivraison) —
+ * mais celui où les lignes du plan sont posées : c'est là que le transporteur
+ * apprend quels sites desservir, information qu'il n'a pas autrement.
+ *
+ * Destinataires : les contacts DU TRANSPORTEUR ayant coché « Livraisons », et
+ * eux seuls — un plan ne regarde pas les autres sociétés. Sans contact opt-in,
+ * rien n'est envoyé (et c'est dit dans le journal, sans quoi l'absence de SMS
+ * ressemblerait à une panne).
+ *
+ * Jamais bloquant : un échec passerelle ne doit pas faire échouer la pose du
+ * plan. Hérite du plafond journalier, du mode SIMULE et du journal SMS.
+ */
+export async function notifierPlanLivraison(bonLivraisonId: string): Promise<void> {
+  try {
+    const bl = await prisma.bonLivraison.findUnique({
+      where: { id: bonLivraisonId },
+      select: {
+        id: true, numeroBL: true, immatriculation: true, volumeChargeLitres: true,
+        isBrouillon: true, transporteurId: true,
+        lignes: { select: { site: { select: { code: true, nom: true } } } },
+      },
+    });
+    // Brouillon = plan prévisionnel, numéro provisoire : rien à annoncer.
+    if (!bl || bl.isBrouillon || !bl.lignes.length) return;
+    if (!bl.transporteurId) {
+      logger.info(`[sms] plan BL ${bl.numeroBL} : aucun transporteur rattaché, pas de SMS`);
+      return;
+    }
+    const cibles = await prisma.contact.findMany({
+      where: { actif: true, notifLivraisons: true, prestataireId: bl.transporteurId },
+      select: { id: true, telephone: true },
+    });
+    if (!cibles.length) {
+      logger.info(`[sms] plan BL ${bl.numeroBL} : aucun contact « Livraisons » chez le transporteur`);
+      return;
+    }
+    const noms = bl.lignes.map((l) => l.site?.code || l.site?.nom || '?').filter(Boolean);
+    // Un SMS reste court : au-delà de 6 sites on compte au lieu d'énumérer.
+    const liste = noms.length <= 6 ? noms.join(', ') : `${noms.slice(0, 6).join(', ')}…`;
+    const message = rendreTemplate('sms.tpl.planLivraison', {
+      numeroBL: bl.numeroBL,
+      volume: Math.round(Number(bl.volumeChargeLitres)).toLocaleString('fr-FR'),
+      camion: bl.immatriculation,
+      nbSites: String(noms.length),
+      sites: liste,
+    });
+    await envoyerLotContacts(cibles, message, 'plan-livraison');
+  } catch (err) {
+    logger.warn('[sms] notification plan de livraison échouée:', err);
+  }
 }
 
 /**

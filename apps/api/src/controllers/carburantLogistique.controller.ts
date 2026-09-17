@@ -26,6 +26,7 @@ import { clearMemo } from '../utils/memo';
 import { env } from '../config/env';
 import { notificationService } from '../services/notifications.service';
 import { logger } from '../utils/logger';
+import { notifierPlanLivraison } from '../services/sms.service';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -680,6 +681,8 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     await auditLog(req.user!.id, 'CREATE', 'bons_livraison', bl.id, req.body, req);
     clearMemo();
     void notifierNouveauChargement(bl.id, req.user!.id);
+    // Plan posé dès la création (manager) : le transporteur apprend sa tournée.
+    if (lignes.length) void notifierPlanLivraison(bl.id);
     res.status(201).json({ success: true, data: bl, warnings });
   } catch (err) { next(mapKnownError(err, 'Un bon de livraison avec ce numéro existe déjà')); }
 }
@@ -828,6 +831,10 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
       data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : existing.volumeChargeLitres
     );
 
+    // Nombre de lignes AVANT modification : le SMS n'a de sens qu'au passage de
+    // « pas de plan » à « plan posé ». Le renvoyer à chaque retouche du plan
+    // (un volume corrigé, un site permuté) inonderait le transporteur.
+    const lignesAvant = await prisma.ligneLivraison.count({ where: { bonLivraisonId: existing.id } });
     let nouvellesLignes: { siteId: string; volumePrevuLitres: number; pickup: boolean | null }[] | null = null;
     if (req.body.lignes !== undefined && !isTransporteur) {
       nouvellesLignes = parseLignes(req.body.lignes);
@@ -862,6 +869,8 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     // Brouillon devenu chargement réel : c'est MAINTENANT qu'il entre dans le
     // circuit, pas à la génération prédictive.
     if (existing.isBrouillon && data.isBrouillon === false) void notifierNouveauChargement(bl.id, req.user!.id);
+    // Plan qui passe de VIDE à POSÉ : le transporteur reçoit sa tournée par SMS.
+    if (lignesAvant === 0 && (nouvellesLignes?.length ?? 0) > 0) void notifierPlanLivraison(bl.id);
     res.json({ success: true, data: bl, warnings });
   } catch (err) { next(mapKnownError(err, 'Un bon de livraison avec ce numéro existe déjà')); }
 }
