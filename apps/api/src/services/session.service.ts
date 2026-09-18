@@ -20,6 +20,12 @@ export async function enregistrerSession(userId: string, plt: Plateforme, sid: s
   await prisma.user.update({
     where: { id: userId },
     data: plt === 'WEB' ? { sessionWebId: sid } : { sessionMobileId: sid },
+    // `select` obligatoire : sans lui Prisma RENVOIE la ligne entière, donc
+    // réclame les colonnes d'une migration pas encore appliquée. Une API
+    // déployée avant son `migrate deploy` faisait ainsi échouer le LOGIN
+    // (P2022 → « Requête invalide. ») - panne totale, web et mobile, pour des
+    // colonnes que l'authentification n'utilise même pas.
+    select: { id: true },
   });
   await redisClient.setEx(cacheKey(plt, userId), CACHE_TTL_SECONDS, sid);
 }
@@ -31,7 +37,7 @@ export async function enregistrerSession(userId: string, plt: Plateforme, sid: s
  * d'eux-mêmes (≤ 12 h) puisque leur sid ne correspond plus à aucune session.
  */
 export async function revoquerToutesSessions(userId: string): Promise<void> {
-  await prisma.user.update({ where: { id: userId }, data: { sessionWebId: null, sessionMobileId: null } });
+  await prisma.user.update({ where: { id: userId }, data: { sessionWebId: null, sessionMobileId: null }, select: { id: true } });
   await redisClient.del(cacheKey('WEB', userId));
   await redisClient.del(cacheKey('MOBILE', userId));
   await redisClient.del(`refresh:WEB:${userId}`);

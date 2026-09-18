@@ -109,6 +109,15 @@ make backup
 > Le champ est INDICATIF : ne jamais en faire un refus de connexion — un
 > technicien en zone isolée ne peut pas mettre son APK à jour sur place.
 > Déliaison d'appareil = la version est effacée avec lui.
+>
+> **⚠️ `migrate deploy` AVANT de servir le nouveau code.** Déployée en avance sur
+> sa base, l'API échouait au LOGIN lui-même — « Requête invalide. » sur web ET
+> mobile — parce que plusieurs requêtes d'authentification ne bornaient pas
+> leurs colonnes : sans `select`, Prisma réclame TOUTE la ligne, donc aussi
+> celles qu'une migration vient d'ajouter. Le chemin d'authentification est
+> désormais borné (login, refresh, session, verrou d'appareil, jeton FCM), donc
+> une base en retard ne renverse plus la connexion. L'ordre reste néanmoins :
+> `migrate deploy` d'abord. Symptôme à reconnaître : `[Prisma P2022]` au journal.
 
 
 > **⚠️ Détection OSS — 15/09/2026.** Trois correctifs à déployer ensemble.

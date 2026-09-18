@@ -101,7 +101,20 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    // SELECT EXPLICITE : sans lui, Prisma réclame TOUTES les colonnes, donc
+    // aussi celles qu'une migration vient d'ajouter. Une API déployée avant son
+    // `migrate deploy` faisait alors échouer le LOGIN lui-même (P2022 →
+    // « Requête invalide. ») - panne totale, web et mobile, pour une colonne
+    // que l'authentification n'utilise même pas. Ici, l'ordre de déploiement ne
+    // peut plus renverser l'authentification.
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: {
+        id: true, nom: true, prenom: true, email: true, role: true, region: true,
+        passwordHash: true, isActive: true,
+        appareilId: true, appareilLabel: true,
+      },
+    });
     // Anti-énumération par le TEMPS : pour un email inexistant/inactif, on
     // comparait sans bcrypt (réponse immédiate) alors qu'un compte valide
     // subissait ~250 ms de hachage — l'écart trahissait l'existence du compte.
@@ -142,6 +155,9 @@ export async function login(req: Request, res: Response, next: NextFunction) {
           await prisma.user.update({
             where: { id: user.id },
             data: { appareilId: deviceId, appareilLabel: deviceLabel || null, appareilLieLe: new Date() },
+            // `select` même sur un update : sans lui Prisma RENVOIE toute la
+            // ligne, donc réclame les colonnes d'une migration non appliquée.
+            select: { id: true },
           });
           await auditLog(user.id, 'LOGIN', 'auth', undefined, { appareilLie: deviceLabel || deviceId }, req);
         } else if (user.appareilId !== deviceId) {
@@ -163,7 +179,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     await redisClient.setEx(`refresh:${plt}:${user.id}`, REFRESH_TTL_SECONDS, refreshToken);
 
     // Mise à jour lastLoginAt
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() }, select: { id: true } });
 
     await enregistrerVersionApp(user.id, plt, req);
     await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: true, plateforme: plt }, req);
@@ -223,7 +239,12 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
       throw new AppError('Session ouverte sur un autre appareil', 401);
     }
 
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    // Même raison qu'au login : le renouvellement de jeton ne doit pas dépendre
+    // de colonnes qu'il n'utilise pas.
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, role: true, isActive: true },
+    });
     if (!user || !user.isActive) throw new AppError('Utilisateur introuvable', 401);
 
     // Rotation des jetons au sein de la MÊME session (le sid ne change pas).
@@ -272,7 +293,7 @@ export async function updatePassword(req: Request, res: Response, next: NextFunc
 export async function updateFcmToken(req: Request, res: Response, next: NextFunction) {
   try {
     const { token } = req.body;
-    await prisma.user.update({ where: { id: req.user!.id }, data: { fcmToken: token } });
+    await prisma.user.update({ where: { id: req.user!.id }, data: { fcmToken: token }, select: { id: true } });
     res.json({ success: true });
   } catch (err) { next(err); }
 }
