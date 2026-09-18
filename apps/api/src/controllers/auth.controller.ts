@@ -37,6 +37,45 @@ function plateformeDe(body: unknown): Plateforme {
 }
 
 /**
+ * Enregistre la version de l'app MOBILE qui vient de se présenter.
+ *
+ * Capturée aux DEUX points d'authentification déjà écrits — le login et le
+ * renouvellement de jeton (toutes les 12 h) : la fraîcheur est donc de 12 h au
+ * pire, sans une seule écriture sur le chemin chaud des requêtes métier.
+ *
+ * Trois garde-fous :
+ *  - MOBILE uniquement : le portail web appelle le même refresh et écraserait
+ *    sinon la version du téléphone par du vide ;
+ *  - en-tête ABSENT = on ne touche à rien. Les APK déployés (b40, b43) ne la
+ *    déclarent pas, et leur silence ne doit rien effacer ;
+ *  - écriture seulement si la valeur CHANGE, pour ne pas réécrire la même
+ *    ligne toutes les 12 h par utilisateur.
+ *
+ * Purement indicatif : aucune décision d'accès ne s'appuie là-dessus.
+ */
+async function enregistrerVersionApp(userId: string, plt: Plateforme, req: Request): Promise<void> {
+  try {
+    if (plt !== 'MOBILE') return;
+    const brute = req.headers['x-app-version'];
+    const version = String(Array.isArray(brute) ? brute[0] : brute ?? '').trim().slice(0, 40);
+    if (!version) return;
+    // `NOT { appVersion: version }` seul n'attrape PAS une ligne NULL : en
+    // logique trois états, NOT (NULL = 'x') vaut NULL, donc la ligne est
+    // exclue - et la toute première capture n'avait jamais lieu. Le cas NULL
+    // doit être nommé explicitement.
+    await prisma.user.updateMany({
+      where: {
+        id: userId,
+        OR: [{ appVersion: null }, { NOT: { appVersion: version } }],
+      },
+      data: { appVersion: version, appVersionLe: new Date() },
+    });
+  } catch (e) {
+    logger.warn('[auth] version app non enregistrée:', e);
+  }
+}
+
+/**
  * @swagger
  * /auth/login:
  *   post:
@@ -126,6 +165,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     // Mise à jour lastLoginAt
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
+    await enregistrerVersionApp(user.id, plt, req);
     await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: true, plateforme: plt }, req);
 
     res.json({
@@ -191,6 +231,9 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
     const newRefresh = signRefresh(user.id, payload.sid, payload.plt);
 
     await redisClient.setEx(`refresh:${payload.plt}:${user.id}`, REFRESH_TTL_SECONDS, newRefresh);
+    // Le téléphone se redéclare à chaque rotation : une mise à jour d'APK est
+    // donc vue sans attendre une reconnexion, que le terrain fait rarement.
+    await enregistrerVersionApp(user.id, payload.plt, req);
 
     res.json({ success: true, data: { accessToken: newAccess, refreshToken: newRefresh } });
   } catch (err) { next(err); }

@@ -19,6 +19,7 @@ const SAFE_SELECT = {
   role: true, region: true, isActive: true, lastLoginAt: true, createdAt: true,
   prestataireId: true, equipe: true,
   appareilLabel: true, appareilLieLe: true,
+  appVersion: true, appVersionLe: true,
   prestataire: { select: { id: true, nom: true } },
 };
 
@@ -244,7 +245,9 @@ export async function delierAppareil(req: Request, res: Response, next: NextFunc
     if (!user) throw new AppError('Utilisateur introuvable', 404);
     await prisma.user.update({
       where: { id: user.id },
-      data: { appareilId: null, appareilLabel: null, appareilLieLe: null },
+      // La version décrivait CE téléphone : la garder après déliaison ferait
+      // croire que le prochain appareil porte déjà cette version.
+      data: { appareilId: null, appareilLabel: null, appareilLieLe: null, appVersion: null, appVersionLe: null },
     });
     await auditLog(req.user!.id, 'UPDATE', 'users', user.id, { action: 'delier_appareil', ancien: user.appareilLabel }, req);
     res.json({ success: true });

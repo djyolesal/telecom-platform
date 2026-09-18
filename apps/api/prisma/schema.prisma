@@ -132,6 +132,11 @@ model User {
   appareilId      String?            @map("appareil_id") @db.VarChar(100)
   appareilLabel   String?            @map("appareil_label") @db.VarChar(80)
   appareilLieLe   DateTime?          @map("appareil_lie_le")
+  // Version de l'app mobile telle qu'elle s'est déclarée au dernier login ou
+  // renouvellement de jeton (en-tête X-App-Version). NULL = APK antérieur à
+  // celui qui sait se déclarer. INDICATIF : ne jamais en faire un blocage.
+  appVersion      String?            @map("app_version") @db.VarChar(40)
+  appVersionLe    DateTime?          @map("app_version_le")
   fcmToken        String?            @map("fcm_token")
   isActive        Boolean            @default(true) @map("is_active")
   lastLoginAt     DateTime?          @map("last_login_at")

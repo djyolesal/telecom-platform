@@ -99,6 +99,18 @@ make backup
 
 ## Phase 2 — Déploiement du code
 
+> **Version mobile par utilisateur (migration 0059, APK b44).** L'app déclare sa
+> version dans l'en-tête `X-App-Version`, capturée au login ET au renouvellement
+> de jeton (fraîcheur 12 h au pire, rien sur le chemin chaud). Visible dans
+> Administration → Utilisateurs, à côté de l'appareil lié. **Les APK déployés
+> (b40, b43) continuent de fonctionner sans changement** : colonne nullable,
+> en-tête optionnel, et un en-tête absent n'efface jamais une valeur connue.
+> `version ?` = APK antérieur à b44, ce qui est en soi le renseignement.
+> Le champ est INDICATIF : ne jamais en faire un refus de connexion — un
+> technicien en zone isolée ne peut pas mettre son APK à jour sur place.
+> Déliaison d'appareil = la version est effacée avec lui.
+
+
 > **⚠️ Détection OSS — 15/09/2026.** Trois correctifs à déployer ensemble.
 > (1) Le verrou anti-chevauchement du collecteur pouvait le tuer en silence :
 > `ConnectTimeout` ne borne que l'ouverture de session, donc une commande OSS

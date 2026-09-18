@@ -30,6 +30,8 @@ interface User {
   lastLoginAt?: string;
   appareilLabel?: string | null;
   appareilLieLe?: string | null;
+  appVersion?: string | null;
+  appVersionLe?: string | null;
   equipe?: string;
   prestataire?: { id: string; nom: string };
 }
@@ -203,7 +205,19 @@ export default function UtilisateursPage() {
     {
       key: 'appareil', header: 'Appareil lié',
       render: (u) => u.appareilLabel
-        ? <span className="block max-w-[110px] truncate text-xs text-gray-600" title={`${u.appareilLabel} - lié le ${fmtDateTime(u.appareilLieLe)}`}>{u.appareilLabel}</span>
+        ? (
+          <span className="block max-w-[110px] truncate text-xs text-gray-600" title={`${u.appareilLabel} - lié le ${fmtDateTime(u.appareilLieLe)}`}>
+            {u.appareilLabel}
+            {/* Version DÉCLARÉE par l'app. Absente = APK antérieur à celui qui
+                sait se déclarer : c'est un renseignement, pas un trou. */}
+            <span
+              className={`ml-1 rounded px-1 py-px text-[10px] font-semibold ${u.appVersion ? 'bg-gray-100 text-gray-600' : 'bg-amber-50 text-amber-700'}`}
+              title={u.appVersion ? `Version de l'app, vue le ${fmtDateTime(u.appVersionLe)}` : "L'app installée ne déclare pas sa version : APK antérieur à b44"}
+            >
+              {u.appVersion ?? 'version ?'}
+            </span>
+          </span>
+        )
         : <span className="text-xs text-gray-300">—</span>,
     },
     {

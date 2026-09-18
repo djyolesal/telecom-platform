@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../constants/app_constants.dart';
 import '../errors/exceptions.dart';
 import '../storage/secure_storage.dart';
@@ -31,12 +32,30 @@ class AuthInterceptor extends Interceptor {
     }
   }
 
+  /// Version de l'app déclarée au serveur (suivi du parc mobile : savoir qui
+  /// est encore sur un ancien APK au moment d'une bascule). Lue UNE fois et
+  /// mémorisée — `PackageInfo.fromPlatform()` interroge la plateforme, inutile
+  /// de recommencer à chaque requête. Purement informatif : si la lecture
+  /// échoue, l'en-tête est simplement omis et rien n'est bloqué.
+  static String? _versionApp;
+  static Future<String?> versionApp() async {
+    if (_versionApp != null) return _versionApp;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      return _versionApp = '${info.version}+${info.buildNumber}';
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
     final token = await _storage.accessToken;
     if (token != null && !options.path.contains('/auth/login')) {
       options.headers['Authorization'] = 'Bearer $token';
     }
+    final v = await versionApp();
+    if (v != null) options.headers['X-App-Version'] = v;
     handler.next(options);
   }
 
@@ -97,7 +116,16 @@ class AuthInterceptor extends Interceptor {
     final refresh = await _storage.refreshToken;
     if (refresh == null) return null;
     try {
-      final res = await _refreshDio.post('/auth/refresh-token', data: {'refreshToken': refresh});
+      // _refreshDio n'a AUCUN intercepteur (anti-boucle) : l'en-tête de version
+      // doit donc être posé à la main ici. C'est le point qui voit passer les
+      // téléphones toutes les 12 h, sans attendre une reconnexion — rare sur le
+      // terrain, où la session dure des semaines.
+      final v = await versionApp();
+      final res = await _refreshDio.post(
+        '/auth/refresh-token',
+        data: {'refreshToken': refresh},
+        options: v == null ? null : Options(headers: {'X-App-Version': v}),
+      );
       final data = res.data['data'] as Map<String, dynamic>;
       final access = data['accessToken'] as String;
       final newRefresh = data['refreshToken'] as String?;
