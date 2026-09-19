@@ -35,6 +35,31 @@ export default function ParametresPage() {
     queryKey: ['sms-templates'],
     queryFn: () => api.get('/admin/sms-templates').then((r) => r.data.data as SmsTemplate[]),
   });
+  // CANAUX SMS : sur un téléphone, c'est l'EXPÉDITEUR qui crée le fil de
+  // discussion — un seul expéditeur et tout s'empile au même endroit.
+  const { data: canaux } = useQuery({
+    queryKey: ['sms-canaux'],
+    queryFn: () => api.get('/admin/sms-canaux').then(
+      (r) => r.data.data as { code: string; label: string; etiquetteDefaut: string; expediteur: string | null; etiquette: string }[]
+    ),
+  });
+  const [canalEdits, setCanalEdits] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (canaux) {
+      const init: Record<string, string> = {};
+      canaux.forEach((c) => {
+        init[`sms.canal.${c.code}.expediteur`] = c.expediteur ?? '';
+        init[`sms.canal.${c.code}.etiquette`] = c.etiquette;
+      });
+      setCanalEdits(init);
+    }
+  }, [canaux]);
+  const saveCanaux = useMutation({
+    mutationFn: () => api.put('/admin/settings', Object.entries(canalEdits).map(([key, value]) => ({
+      key, value, description: 'Canal SMS',
+    }))),
+    onSuccess: () => { setSavedOk(true); queryClient.invalidateQueries({ queryKey: ['sms-canaux'] }); },
+  });
   const [tplEdits, setTplEdits] = useState<Record<string, string>>({});
   useEffect(() => {
     if (tpls) {
@@ -107,6 +132,51 @@ export default function ParametresPage() {
               />
             </div>
           ))}
+        </div>
+      )}
+
+      {(canaux?.length ?? 0) > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700">Canaux SMS</h2>
+              <p className="max-w-3xl text-xs text-gray-400">
+                Sur un téléphone, c&apos;est l&apos;<b>expéditeur</b> qui crée le fil de discussion : un seul expéditeur et
+                tout s&apos;empile au même endroit. Renseignez ici les identifiants déclarés à votre contrat Moov pour
+                séparer les fils. Laissé <b>vide</b>, le canal part avec l&apos;expéditeur du contrat par défaut.
+                L&apos;<b>étiquette</b>, elle, agit tout de suite : elle remplace le préfixe du message et rend la
+                recherche du téléphone utilisable. Vide = aucun préfixe ajouté.
+              </p>
+            </div>
+            <Button icon={Save} loading={saveCanaux.isPending} onClick={() => { setSavedOk(false); saveCanaux.mutate(); }}>
+              Enregistrer les canaux
+            </Button>
+          </div>
+          <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 bg-white">
+            {canaux!.map((c) => (
+              <div key={c.code} className="flex flex-wrap items-center gap-3 p-4">
+                <p className="min-w-[220px] flex-1 text-sm font-medium text-gray-800">{c.label}</p>
+                <label className="text-xs text-gray-500">
+                  Étiquette
+                  <input
+                    value={canalEdits[`sms.canal.${c.code}.etiquette`] ?? ''}
+                    onChange={(e) => { setCanalEdits((p) => ({ ...p, [`sms.canal.${c.code}.etiquette`]: e.target.value })); setSavedOk(false); }}
+                    placeholder={c.etiquetteDefaut}
+                    className="ml-2 w-36 rounded-lg border border-gray-300 px-2 py-1 font-mono text-xs"
+                  />
+                </label>
+                <label className="text-xs text-gray-500">
+                  Expéditeur
+                  <input
+                    value={canalEdits[`sms.canal.${c.code}.expediteur`] ?? ''}
+                    onChange={(e) => { setCanalEdits((p) => ({ ...p, [`sms.canal.${c.code}.expediteur`]: e.target.value })); setSavedOk(false); }}
+                    placeholder="(contrat par défaut)"
+                    className="ml-2 w-40 rounded-lg border border-gray-300 px-2 py-1 font-mono text-xs"
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

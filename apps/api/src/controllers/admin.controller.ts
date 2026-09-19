@@ -11,7 +11,7 @@ import { auditLog } from '../services/audit.service';
 import { rapprocherHistorique } from '../services/piecesRef.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
-import { SMS_TEMPLATES } from '../services/sms.service';
+import { SMS_TEMPLATES, CANAUX_SMS } from '../services/sms.service';
 import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride } from '../services/tachesPreventives.service';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
@@ -45,6 +45,28 @@ export async function getSmsTemplates(_req: Request, res: Response, next: NextFu
       data: SMS_TEMPLATES.map((t) => {
         const brut = getRaw(t.key);
         return { ...t, valeur: typeof brut === 'string' && brut.trim() ? brut : null };
+      }),
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Canaux SMS : expéditeur et étiquette par catégorie.
+ * L'expéditeur VIDE signifie « celui du contrat par défaut » — l'écran doit le
+ * dire, sinon l'exploitant croit à un réglage manquant.
+ */
+export async function getSmsCanaux(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({
+      success: true,
+      data: CANAUX_SMS.map((c) => {
+        const exp = getRaw(`sms.canal.${c.code}.expediteur`);
+        const eti = getRaw(`sms.canal.${c.code}.etiquette`);
+        return {
+          ...c,
+          expediteur: typeof exp === 'string' && exp.trim() ? exp : null,
+          etiquette: typeof eti === 'string' ? eti : c.etiquetteDefaut,
+        };
       }),
     });
   } catch (err) { next(err); }

@@ -93,6 +93,65 @@ export const SMS_TEMPLATES: Array<{ key: string; label: string; defaut: string; 
   },
 ];
 
+/**
+ * CANAUX SMS : sur un téléphone, c'est l'EXPÉDITEUR qui crée le fil de
+ * discussion. Un expéditeur unique = tout s'empile au même endroit, et plus
+ * personne ne s'y retrouve. Deux leviers, indépendants et cumulables :
+ *
+ *  - l'ÉTIQUETTE, qui remplace le préfixe générique du message : elle rend la
+ *    lecture rapide et la recherche du téléphone utilisables, tout de suite et
+ *    sans rien demander à l'opérateur ;
+ *  - l'EXPÉDITEUR, qui sépare réellement les fils — mais il doit être déclaré
+ *    au contrat Moov. Laissé VIDE, le canal retombe sur SMS_SENDER : aucun
+ *    changement tant que l'exploitant n'a pas renseigné ses identifiants.
+ *
+ * Les deux sont des réglages (Administration → Paramètres), donc modifiables
+ * sans redéploiement — un identifiant expéditeur qui change ne doit pas
+ * attendre une livraison de code.
+ */
+export const CANAUX_SMS: Array<{ code: string; label: string; etiquetteDefaut: string }> = [
+  { code: 'INCIDENT', label: 'Incidents terrain', etiquetteDefaut: 'EMOPS INC' },
+  { code: 'COUPURE', label: 'Coupures réseau', etiquetteDefaut: 'EMOPS COUP' },
+  { code: 'MAINTENANCE', label: 'Maintenances préventives', etiquetteDefaut: 'EMOPS MAINT' },
+  { code: 'LOGISTIQUE', label: 'Carburant : livraisons, dépotages, plans', etiquetteDefaut: 'EMOPS LIVR' },
+  { code: 'SITUATION', label: 'Situations périodiques', etiquetteDefaut: 'EMOPS SITU' },
+];
+
+/**
+ * Canal d'un événement. L'ordre compte : « INCIDENT_COUPURE_NOC » relève de la
+ * coupure, pas de l'incident terrain — il faut donc tester COUPURE en premier.
+ */
+export function canalDe(evenement: string): string {
+  const e = evenement.toUpperCase();
+  if (e.includes('COUPURE')) return 'COUPURE';
+  if (e.includes('SITUATION')) return 'SITUATION';
+  if (e.includes('MAINTENANCE')) return 'MAINTENANCE';
+  if (e.includes('LIVRAISON') || e.includes('DEPOTAGE') || e.includes('CHARGEMENT')) return 'LOGISTIQUE';
+  if (e.includes('INCIDENT')) return 'INCIDENT';
+  return 'INCIDENT';
+}
+
+/** Expéditeur du canal ; vide → celui du contrat par défaut. */
+export function expediteurDe(canal: string): string | undefined {
+  const brut = getRaw(`sms.canal.${canal}.expediteur`);
+  const v = typeof brut === 'string' ? brut.trim() : '';
+  return v || env.SMS_SENDER;
+}
+
+/**
+ * Applique l'étiquette du canal en REMPLAÇANT le préfixe entre crochets du
+ * gabarit (« [E&M OpS] … »). Remplacer plutôt qu'ajouter évite le doublon
+ * « [EMOPS INC] [E&M OpS] … » et fonctionne aussi sur un gabarit personnalisé.
+ * Idempotent. Étiquette vide = message inchangé.
+ */
+export function etiqueter(message: string, canal: string): string {
+  const meta = CANAUX_SMS.find((c) => c.code === canal);
+  const brut = getRaw(`sms.canal.${canal}.etiquette`);
+  const tag = (typeof brut === 'string' ? brut : meta?.etiquetteDefaut ?? '').trim();
+  if (!tag) return message;
+  return `[${tag}] ${message.replace(/^\s*\[[^\]]{0,24}\]\s*/, '')}`;
+}
+
 /** Rend un gabarit : personnalisation admin si présente, sinon le défaut ;
  *  les {variables} inconnues sont effacées plutôt qu'affichées brutes. */
 export function rendreTemplate(key: string, vars: Record<string, string>): string {
@@ -179,7 +238,7 @@ export function translittererGsm7(texte: string): string {
   return sortie;
 }
 
-async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Promise<string> {
+async function envoyerSmsBatch(telephonesLocaux: string[], message: string, sender?: string): Promise<string> {
   let res: Response;
   try {
     res = await fetch(env.SMS_API_URL!, {
@@ -189,7 +248,7 @@ async function envoyerSmsBatch(telephonesLocaux: string[], message: string): Pro
         Authorization: `Bearer ${env.SMS_API_KEY ?? ''}`,
       },
       body: JSON.stringify({
-        sender: env.SMS_SENDER,
+        sender: sender ?? env.SMS_SENDER,
         recipients: telephonesLocaux,
         message: translittererGsm7(message),
       }),
@@ -365,6 +424,11 @@ export async function envoyerLotContacts(
   evenement: string
 ): Promise<void> {
   if (!cibles.length) return;
+  // Canal déduit de l'événement : l'étiquette part avec le message et le
+  // journal conserve le texte RÉELLEMENT envoyé, étiquette comprise.
+  const canal = canalDe(evenement);
+  message = etiqueter(message, canal);
+  const expediteur = expediteurDe(canal);
   const simule = !env.SMS_API_URL;
 
   // Plafond journalier : le lot est journalisé PLAFOND (visible dans le journal
@@ -389,7 +453,7 @@ export async function envoyerLotContacts(
   let echecs = new Set<string>();
   if (!simule) {
     try {
-      const reponse = await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message);
+      const reponse = await envoyerSmsBatch(cibles.map((c) => telephoneLocal(c.telephone)), message, expediteur);
       echecs = numerosEnEchec(reponse);
     } catch (e) {
       statutLot = 'ECHEC';

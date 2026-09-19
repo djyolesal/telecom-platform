@@ -492,6 +492,7 @@ router.post('/admin/types-pylone', rbac(['ADMIN']), adminCtrl.upsertTypePylone);
 router.delete('/admin/types-pylone/:code', rbac(['ADMIN']), adminCtrl.deleteTypePylone);
 router.get('/admin/settings', rbac(['ADMIN']), adminCtrl.getSettings);
 router.get('/admin/sms-templates', rbac(['ADMIN']), adminCtrl.getSmsTemplates);
+router.get('/admin/sms-canaux', rbac(['ADMIN']), adminCtrl.getSmsCanaux);
 router.get('/admin/settings/effectifs', rbac(['ADMIN']), adminCtrl.getEffectiveSettings);
 router.put('/admin/settings', rbac(['ADMIN']), adminCtrl.updateSettings);
 router.get('/admin/taches-preventives', rbac(['ADMIN']), adminCtrl.getTachePreventiveOverrides);
