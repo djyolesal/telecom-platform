@@ -256,6 +256,10 @@ router.post('/coupures-reseau/:id/prise-en-charge', rbac(['NOC','MANAGER','ADMIN
 // le geste reste MANUEL, une partielle se répare le plus souvent à distance.
 router.post('/coupures-reseau/:id/escalader-terrain', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.escaladerTerrain);
 router.post('/coupures-reseau/:id/annuler-prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.annulerPriseEnCharge);
+// Reclassement racine ↔ héritée : la QUALIFICATION est le métier du NOC, pas
+// du pilotage - le manager en est donc écarté (décision exploitant 19/09/2026).
+router.post('/coupures-reseau/:id/detacher-amont', rbac(['NOC','ADMIN']), coupuresCtrl.detacherAmont);
+router.post('/coupures-reseau/:id/rattacher-amont', rbac(['NOC','ADMIN']), coupuresCtrl.rattacherAmont);
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
 // Saisie erronée du NOC : suppression ouverte au NOC/manager mais limitée aux
 // coupures MANUELLES (garde dans le contrôleur) ; l'ADMIN peut tout supprimer.

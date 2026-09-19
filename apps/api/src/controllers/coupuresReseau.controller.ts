@@ -480,6 +480,93 @@ export async function notifierResolutionAutomatique(incidentId: string | null): 
   }
 }
 
+/**
+ * NOYAU du reclassement racine ↔ héritée.
+ *
+ * Une coupure « héritée » n'a pas de qualification propre : elle emprunte la
+ * cause de son amont. Tant que l'amont est ouvert, c'est juste. Dès qu'il se
+ * rétablit alors que l'aval reste coupé, c'est faux — et surtout INVISIBLE :
+ * les compteurs du NOC (« à qualifier », « plus ancienne en cours ») ne
+ * regardent que les racines. Le site restait donc coupé sans que personne ne le
+ * travaille, et son indisponibilité était imputée à un entraînement qui
+ * n'existait plus.
+ *
+ * Promouvoir conserve l'heure de DÉBUT réelle : clôturer puis resaisir aurait
+ * fragmenté l'indisponibilité et faussé l'ARCEP.
+ *
+ * @returns le nombre de lignes promues.
+ */
+export async function promouvoirHeriteesOrphelines(
+  db: Prisma.TransactionClient | typeof prisma,
+  racineId: string,
+  motif: string,
+): Promise<number> {
+  const restees = await db.coupureReseau.findMany({
+    where: { coupureOrigineId: racineId, dateFin: null },
+    select: { id: true, observations: true },
+  });
+  if (!restees.length) return 0;
+  for (const c of restees) {
+    await db.coupureReseau.update({
+      where: { id: c.id },
+      data: {
+        origine: 'LOCALE',
+        coupureOrigineId: null,
+        // La trace explique au NOC pourquoi cette ligne a changé de nature :
+        // sans elle, une coupure qui devient racine du jour au lendemain
+        // ressemble à une erreur de la plateforme.
+        observations: `${c.observations ? c.observations + '\n' : ''}${motif}`,
+      },
+    });
+  }
+  return restees.length;
+}
+
+/**
+ * BALAYAGE de fin de passage OSS : toute héritée encore OUVERTE dont la racine
+ * est CLÔTURÉE devient une racine.
+ *
+ * En fin de passage, et pas au moment où l'on clôture la racine : dans le même
+ * flux, un aval peut se reconnecter juste après son amont — le promouvoir avant
+ * d'avoir lu SA ligne le transformait en panne locale alors qu'il était bel et
+ * bien entraîné, et faussait l'imputation de son indisponibilité.
+ *
+ * Passe APRÈS le re-rattachement des orphelines à une nouvelle racine : ne
+ * restent donc ici que les vrais orphelins. Idempotent, il répare aussi les
+ * héritées laissées orphelines par les passages précédents.
+ */
+export async function promouvoirOrphelinesApresRetablissement(
+  db: Prisma.TransactionClient | typeof prisma,
+): Promise<number> {
+  const orphelines = await db.coupureReseau.findMany({
+    where: {
+      dateFin: null,
+      origine: 'HERITEE',
+      coupureOrigineId: { not: null },
+      coupureOrigine: { dateFin: { not: null } },
+    },
+    select: {
+      id: true, observations: true,
+      coupureOrigine: { select: { dateFin: true, site: { select: { nom: true } } } },
+    },
+  });
+  for (const c of orphelines) {
+    const fin = c.coupureOrigine?.dateFin;
+    const heure = fin
+      ? new Date(fin).toLocaleString('fr-FR', { timeZone: 'Africa/Lome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : '';
+    await db.coupureReseau.update({
+      where: { id: c.id },
+      data: {
+        origine: 'LOCALE',
+        coupureOrigineId: null,
+        observations: `${c.observations ? c.observations + '\n' : ''}[RECLASSÉE] L'amont ${c.coupureOrigine?.site?.nom ?? ''} est rétabli${heure ? ` le ${heure}` : ''} ; ce site est resté coupé : cause locale à qualifier.`,
+      },
+    });
+  }
+  return orphelines.length;
+}
+
 export async function resoudreIncidentSiPlusDeCoupure(
   tx: Prisma.TransactionClient,
   incidentId: string | null,
@@ -1287,6 +1374,23 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       );
     }
 
+    // Héritées RESTÉES ouvertes alors que leur racine se clôture — le NOC a
+    // fermé la racine seule (cloturerHeritees: false) parce que cet aval, lui,
+    // est toujours coupé. Elles ont donc leur propre cause : elles deviennent
+    // racines, sinon elles gardaient l'étiquette « entraînée par l'amont » et
+    // disparaissaient des compteurs du NOC, qui ne comptent que les racines.
+    // Appel inconditionnel : si la cascade les a toutes fermées, il n'y a rien
+    // à promouvoir (elles portent une dateFin).
+    let heriteesPromues = 0;
+    if (data.dateFin instanceof Date) {
+      const siteRacine = await prisma.site.findUnique({ where: { id: existing.siteId }, select: { nom: true } });
+      const heure = data.dateFin.toLocaleString('fr-FR', { timeZone: 'Africa/Lome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      heriteesPromues = await promouvoirHeriteesOrphelines(
+        prisma, existing.id,
+        `[RECLASSÉE] L'amont ${siteRacine?.nom ?? 'amont'} est rétabli le ${heure} ; ce site est resté coupé : cause locale à qualifier.`,
+      );
+    }
+
     // Rebouclage : si plus aucune coupure ouverte ne porte l'incident lié,
     // celui-ci passe RESOLU (sinon escalade horaire et SMS de situation à vie).
     let incidentResolu = false;
@@ -1348,14 +1452,14 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
     }
 
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, {
-      cloture: 'dateFin' in data, hériteesCloturees, incidentRouvert, incidentResolu, incidentRealigne,
+      cloture: 'dateFin' in data, hériteesCloturees, heriteesPromues, incidentRouvert, incidentResolu, incidentRealigne,
       // Corrections sensibles : l'ancienne valeur est consignée.
       ...(data.dateDebut instanceof Date ? { ancienDebut: existing.dateDebut, nouveauDebut: data.dateDebut } : {}),
       ...(data.siteId ? { ancienSiteId: existing.siteId, nouveauSiteId: data.siteId } : {}),
       ...(data.technologie ? { ancienneTechnologie: existing.technologie, nouvelleTechnologie: data.technologie } : {}),
     }, req);
     emettreCoupuresChangees({ action: 'maj', coupureId: existing.id });
-    res.json({ success: true, data: { ...updated, hériteesCloturees, incidentRouvert, incidentResolu, incidentRealigne } });
+    res.json({ success: true, data: { ...updated, hériteesCloturees, heriteesPromues, incidentRouvert, incidentResolu, incidentRealigne } });
   } catch (err) { next(err); }
 }
 
@@ -2038,6 +2142,111 @@ async function validerEvenementCloture(
       incident: null,
     },
   });
+}
+
+/**
+ * DÉTACHER DE L'AMONT (NOC) : la machine s'est trompée d'attribution.
+ *
+ * Le classement automatique absorbe un aval tombé jusqu'à une heure AVANT sa
+ * racine — fenêtre voulue, parce qu'en coupure d'énergie régionale l'aval tombe
+ * le premier (sa batterie est plus petite). Le revers est qu'une vraie panne
+ * locale survenue dans cette fenêtre peut se faire absorber. Seul un humain
+ * peut trancher : ce site-là est tombé pour SA cause.
+ *
+ * Réservé au NOC (et à l'administrateur) : c'est lui qui qualifie.
+ */
+export async function detacherAmont(req: Request, res: Response, next: NextFunction) {
+  try {
+    const c = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, siteId: true, origine: true, coupureOrigineId: true, observations: true, dateFin: true },
+    });
+    if (!c) throw new AppError('Coupure introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, c.siteId);
+    if (c.origine !== 'HERITEE') throw new AppError('Cette coupure est déjà une racine : rien à détacher.', 422);
+
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+    const par = moi ? `${moi.prenom} ${moi.nom}`.trim() : 'le NOC';
+    const amont = c.coupureOrigineId
+      ? await prisma.coupureReseau.findUnique({ where: { id: c.coupureOrigineId }, select: { site: { select: { nom: true } } } })
+      : null;
+    const motif = String((req.body as { motif?: unknown })?.motif ?? '').trim().slice(0, 200);
+    const updated = await prisma.coupureReseau.update({
+      where: { id: c.id },
+      data: {
+        origine: 'LOCALE',
+        coupureOrigineId: null,
+        observations: `${c.observations ? c.observations + '\n' : ''}[DÉTACHÉE] Détachée de l'amont${amont?.site?.nom ? ` ${amont.site.nom}` : ''} par ${par}${motif ? ` : ${motif}` : ''}. Cause locale à qualifier.`,
+      },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', c.id, { action: 'detacher_amont', ancienAmont: c.coupureOrigineId, motif }, req);
+    emettreCoupuresChangees({ action: 'detacherAmont', id: c.id });
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+/**
+ * RATTACHER À UN AMONT (NOC) : la réciproque — cette coupure locale fait en
+ * réalité partie d'une panne amont déjà ouverte.
+ *
+ * La cible doit être une coupure OUVERTE sur un site situé en AMONT dans la
+ * chaîne de transmission : exiger l'ascendance interdit par construction les
+ * cycles (A hérite de B qui hérite de A) et les rattachements fantaisistes.
+ */
+export async function rattacherAmont(req: Request, res: Response, next: NextFunction) {
+  try {
+    const cibleId = String((req.body as { coupureOrigineId?: unknown })?.coupureOrigineId ?? '');
+    if (!cibleId) throw new AppError('Coupure amont à rattacher requise', 400);
+    const c = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, siteId: true, origine: true, observations: true, dateFin: true },
+    });
+    if (!c) throw new AppError('Coupure introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, c.siteId);
+    if (c.dateFin) throw new AppError('Une coupure clôturée ne se rattache plus : rouvrez-la d\'abord.', 422);
+    const racine = await prisma.coupureReseau.findUnique({
+      where: { id: cibleId },
+      select: { id: true, siteId: true, dateFin: true, priseEnChargePar: true, priseEnChargeLe: true, site: { select: { nom: true } } },
+    });
+    if (!racine) throw new AppError('Coupure amont introuvable', 404);
+    if (racine.dateFin) throw new AppError('Cette coupure amont est déjà clôturée.', 422);
+    if (racine.id === c.id || racine.siteId === c.siteId) throw new AppError('Une coupure ne peut pas hériter d\'elle-même.', 422);
+
+    // Ascendance réelle : on remonte la chaîne de transmission depuis le site
+    // de la coupure. Sans cette vérification, on pourrait rattacher n'importe
+    // quoi à n'importe quoi et fabriquer des cycles.
+    const sites = await prisma.site.findMany({ select: { id: true, parentTransmissionId: true } });
+    const parent = new Map(sites.map((s) => [s.id, s.parentTransmissionId]));
+    let curseur = parent.get(c.siteId) ?? null;
+    let estAmont = false;
+    for (let saut = 0; curseur && saut < 30; saut++) {
+      if (curseur === racine.siteId) { estAmont = true; break; }
+      curseur = parent.get(curseur) ?? null;
+    }
+    if (!estAmont) {
+      throw new AppError(
+        `${racine.site?.nom ?? 'Ce site'} n'est pas en amont de ce site dans la chaîne de transmission : rattachement refusé.`,
+        422,
+      );
+    }
+
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+    const par = moi ? `${moi.prenom} ${moi.nom}`.trim() : 'le NOC';
+    const updated = await prisma.coupureReseau.update({
+      where: { id: c.id },
+      data: {
+        origine: 'HERITEE',
+        coupureOrigineId: racine.id,
+        // L'adoption de la racine couvre tout l'événement (même règle qu'au
+        // reclassement automatique de la prise en charge).
+        ...(racine.priseEnChargePar ? { priseEnChargePar: racine.priseEnChargePar, priseEnChargeLe: racine.priseEnChargeLe } : {}),
+        observations: `${c.observations ? c.observations + '\n' : ''}[RATTACHÉE] Rattachée à l'amont ${racine.site?.nom ?? ''} par ${par}.`,
+      },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', c.id, { action: 'rattacher_amont', racine: racine.id }, req);
+    emettreCoupuresChangees({ action: 'rattacherAmont', id: c.id });
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
 }
 
 export async function prendreEnChargeCoupure(req: Request, res: Response, next: NextFunction) {

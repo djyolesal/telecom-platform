@@ -860,6 +860,18 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   const requalifiee = coupure.source === 'OSS' && coupure.technologie !== 'SITE';
   const peutSupprimer = role === 'ADMIN'
     || (['NOC', 'MANAGER'].includes(role) && (coupure.source === 'MANUEL' || requalifiee));
+  // DÉTACHER DE L'AMONT : réservé au NOC (et à l'administrateur) — c'est lui
+  // qui qualifie, pas le pilotage. Le classement automatique absorbe un aval
+  // tombé jusqu'à une heure AVANT sa racine (fenêtre voulue : en coupure
+  // d'énergie régionale l'aval tombe le premier, sa batterie étant plus
+  // petite). Quand cette fenêtre se trompe, seul un humain peut trancher.
+  const peutDetacher = ['NOC', 'ADMIN'].includes(role) && coupure.origine === 'HERITEE' && !coupure.dateFin;
+  const [motifDetache, setMotifDetache] = useState('');
+  const detacher = useMutation({
+    mutationFn: () => api.post(`/coupures-reseau/${coupure.id}/detacher-amont`, { motif: motifDetache }),
+    onSuccess: () => { onDone(); onClose(); },
+  });
+  const errDetache = (detacher.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
   const [confirmerSuppression, setConfirmerSuppression] = useState(false);
   const suppression = useMutation({
     mutationFn: () => api.delete(`/coupures-reseau/${coupure.id}`),
@@ -881,6 +893,32 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           dans la disponibilité (silencieux : aucun incident, aucun SMS). */}
       {coupure.source === 'OSS' && !coupure.priseEnChargePar && !!coupure.dateFin && (
         <ValidationClotureeBloc coupureId={coupure.id} technicienInitial={coupure.technicienContacte} onDone={onDone} />
+      )}
+      {peutDetacher && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+          <p className="font-semibold text-amber-900">Cette coupure est rattachée à une panne amont.</p>
+          <p className="mt-1 text-xs text-amber-900">
+            Si ce site est en réalité tombé pour <b>sa propre cause</b>, détachez-le : il redevient une coupure racine,
+            garde son heure de début, et entre dans « à qualifier ». Tant qu&apos;il reste rattaché, sa cause est
+            imputée à l&apos;amont et il échappe aux compteurs du NOC.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              value={motifDetache}
+              onChange={(e) => setMotifDetache(e.target.value)}
+              placeholder="Motif (ex. vol de batterie constaté sur place)"
+              className="min-w-[240px] flex-1 rounded-lg border border-amber-300 px-2 py-1 text-xs"
+            />
+            <button
+              onClick={() => detacher.mutate()}
+              disabled={detacher.isPending}
+              className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {detacher.isPending ? 'Détachement…' : "Détacher de l'amont"}
+            </button>
+          </div>
+          {errDetache && <p className="mt-1 text-xs font-medium text-red-700">{errDetache}</p>}
+        </div>
       )}
       {coupure.priseEnChargePar && (
         <AnnulationPriseEnChargeBloc coupureId={coupure.id} priseEnChargePar={coupure.priseEnChargePar} onDone={onDone} />

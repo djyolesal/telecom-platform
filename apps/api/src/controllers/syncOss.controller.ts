@@ -207,6 +207,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
     let retablissementsEnAttente = 0;
     let clotureesHeritees = 0;
     let incidentsResolus = 0;
+    let heriteesPromues = 0;
     let dejaOuvertes = 0;
 
     // ── Signature d'un REBOND RÉGIONAL ───────────────────────
@@ -426,12 +427,23 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
           if (ossOuverteParSite.get(h.siteId)?.id === h.id) ossOuverteParSite.delete(h.siteId);
           clotureesHeritees++;
         }
+
       }
     }
 
     // FIN DU MODE OBSERVATION : les racines encore ouvertes après le délai
     // anti-rebond sont ARMÉES (adoption + incident + SMS/push terrain) sans
     // attendre le NOC — qui garde la qualification (alarme, classement).
+    // Balayage FINAL : les héritées restées ouvertes alors que leur racine est
+    // rétablie deviennent des racines. En fin de passage, car un aval peut se
+    // reconnecter juste après son amont dans le MÊME flux - le promouvoir avant
+    // d'avoir lu sa ligne en faisait une fausse panne locale.
+    try {
+      heriteesPromues = await chargerRebouclage().promouvoirOrphelinesApresRetablissement(prisma);
+    } catch (e) {
+      logger.warn('[sync-oss] promotion des héritées orphelines échouée:', e);
+    }
+
     let detectionsArmees = 0;
     try {
       detectionsArmees = await chargerRebouclage().armerDetectionsMures();
@@ -472,6 +484,7 @@ export async function syncOss(req: Request, res: Response, next: NextFunction) {
       rebondRegionalSuspecte: rebondSuspecte,
       retablissementsVus,
       heriteesAveuglesCloturees: clotureesHeritees,
+      heriteesPromuesRacines: heriteesPromues,
       incidentsResolus,
       coupuresDejaOuvertes: dejaOuvertes,
       // Seuls les DISCONNECTED non rapprochés sont listés : ce sont eux qui
