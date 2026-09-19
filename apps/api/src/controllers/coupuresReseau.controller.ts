@@ -1285,7 +1285,31 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       }
       data.downtimeMinutes = minutesEntre(data.dateDebut as Date, existing.dateFin);
     }
-    const updated = await prisma.coupureReseau.update({ where: { id: existing.id }, data });
+    // MISE À JOUR À BLANC : le formulaire renvoie TOUS ses champs, même
+    // intouchés. Sans ce tri, rouvrir puis fermer un modal écrivait une ligne
+    // d'audit « modification » qui n'en était pas — l'historique des actions se
+    // remplissait de bruit au point de noyer les vraies corrections. On ne
+    // garde donc que ce qui DIFFÈRE réellement de l'enregistrement en base.
+    const inchange = (cle: string, val: unknown): boolean => {
+      const avant = (existing as unknown as Record<string, unknown>)[cle];
+      if (val instanceof Date && avant instanceof Date) return val.getTime() === avant.getTime();
+      if (val instanceof Date || avant instanceof Date) return false;
+      // Un champ vidé arrive à null, une valeur absente est null en base :
+      // '' et null décrivent le même « non renseigné ».
+      const n = (v: unknown) => (v === '' || v === undefined ? null : v);
+      return n(val) === n(avant);
+    };
+    for (const cle of Object.keys(data)) {
+      if (inchange(cle, data[cle])) delete data[cle];
+    }
+    // `downtimeMinutes` est DÉRIVÉ des dates : s'il reste seul, c'est qu'aucune
+    // date n'a bougé — il ne constitue pas une modification à lui tout seul.
+    if (Object.keys(data).length === 1 && 'downtimeMinutes' in data) delete data.downtimeMinutes;
+    const aucuneModification = Object.keys(data).length === 0;
+
+    const updated = aucuneModification
+      ? await prisma.coupureReseau.findUniqueOrThrow({ where: { id: existing.id } })
+      : await prisma.coupureReseau.update({ where: { id: existing.id }, data });
 
     // ── REQUALIFICATION : réaligner l'incident déjà déclenché ───────────────
     // Cas réel : l'OSS classe « SITE » (il ne voit que l'eNodeB), le NOC prend
@@ -1451,7 +1475,15 @@ export async function updateCoupure(req: Request, res: Response, next: NextFunct
       }
     }
 
+    // Rien n'a changé : pas de trace. C'est tout l'intérêt du tri ci-dessus.
+    if (aucuneModification) {
+      return res.json({ success: true, data: { ...updated, hériteesCloturees: 0, heriteesPromues: 0, incidentRouvert: false, incidentResolu: false, incidentRealigne: false, aucuneModification: true } });
+    }
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', existing.id, {
+      // `data` ne contient plus que ce qui a RÉELLEMENT changé : l'historique
+      // peut donc nommer les champs touchés au lieu d'un « Modification de la
+      // fiche » opaque, sur lequel personne ne pouvait remonter.
+      champs: Object.keys(data),
       cloture: 'dateFin' in data, hériteesCloturees, heriteesPromues, incidentRouvert, incidentResolu, incidentRealigne,
       // Corrections sensibles : l'ancienne valeur est consignée.
       ...(data.dateDebut instanceof Date ? { ancienDebut: existing.dateDebut, nouveauDebut: data.dateDebut } : {}),
@@ -2580,6 +2612,18 @@ function libelleAuditCoupure(action: string, brut: unknown, surCetteLigne: boole
     if (d.ancienDebut) morceaux.push('début corrigé');
     if (d.nouvelleTechnologie) morceaux.push(`requalifiée ${String(d.nouvelleTechnologie) === 'SITE' ? 'Site entier' : d.nouvelleTechnologie}`);
     if (d.nouveauSiteId) morceaux.push('site corrigé');
+    // À défaut d'un fait marquant, on nomme les champs réellement modifiés.
+    if (!morceaux.length && Array.isArray(d.champs) && d.champs.length) {
+      const LISIBLE: Record<string, string> = {
+        cause: 'cause', causeCategorie: 'catégorie de cause', actions: 'actions effectuées',
+        typeAlarme: 'type d\'alarme', intervenants: 'intervenants', technicienContacte: 'technicien contacté',
+        frequence: 'fréquence', secteur: 'secteur', observations: 'observations',
+        dateFin: 'heure de rétablissement', dateDebut: 'heure de début', technologie: 'technologie',
+        downtimeMinutes: 'durée',
+      };
+      const noms = (d.champs as string[]).map((c) => LISIBLE[c] ?? c);
+      return `Modification — ${noms.join(', ')}`;
+    }
     return morceaux.length ? `Modification — ${morceaux.join(', ')}` : 'Modification de la fiche';
   }
   return action;

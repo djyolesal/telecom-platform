@@ -825,6 +825,27 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   // lié (s'il a été résolu) sera rouvert côté serveur et le prestataire notifié.
   const reouverture = !!coupure.dateFin && !dateFin;
 
+  // MODIFIÉ OU NON : « Enregistrer » restait actif même sans la moindre
+  // retouche, et chaque clic écrivait une ligne d'audit. L'historique des
+  // actions se remplissait de modifications qui n'en étaient pas, au point de
+  // noyer les vraies. On compare donc l'état du formulaire à la coupure telle
+  // qu'elle a été chargée. `cloturerHeritees` n'entre PAS dans la comparaison :
+  // c'est une option de la clôture, pas une valeur de la coupure — elle ne
+  // prend son sens que si une date de fin est posée.
+  const inchange =
+    dateDebut === toLocal(coupure.dateDebut)
+    && dateFin === toLocal(coupure.dateFin)
+    && technoCanonique === coupure.technologie
+    && cause === (coupure.cause ?? '')
+    && actions === (coupure.actions ?? '')
+    && typeAlarme === (coupure.typeAlarme === 'NA' ? '' : coupure.typeAlarme ?? '')
+    && intervenants === (coupure.intervenants ?? '')
+    && technicienContacte === (coupure.technicienContacte ?? '')
+    && frequence === (coupure.frequence ?? '')
+    && secteur === (coupure.secteur ?? '')
+    && observations === (coupure.observations ?? '')
+    && causeCategorie === (coupure.causeCategorie ?? '');
+
   const mutation = useMutation({
     mutationFn: () => api.put(`/coupures-reseau/${coupure.id}`, {
       // Début envoyé seulement s'il a été corrigé (l'audit trace l'ancien).
@@ -1074,7 +1095,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           ) : <span />}
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Annuler</button>
-            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || inchange}
+              title={inchange ? 'Aucune modification à enregistrer' : undefined}>
               {mutation.isPending ? 'Enregistrement…' : dateFin ? 'Clôturer la coupure' : 'Enregistrer'}
             </Button>
           </div>
