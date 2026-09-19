@@ -872,6 +872,21 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
     onSuccess: () => { onDone(); onClose(); },
   });
   const errDetache = (detacher.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+  // RATTACHER À UN AMONT : la réciproque du détachement. Même réserve au NOC.
+  // Ne s'affiche que sur une coupure racine encore ouverte — rattacher une
+  // héritée n'aurait pas de sens, et une coupure clôturée ne se rattache plus.
+  const peutRattacher = ['NOC', 'ADMIN'].includes(role) && coupure.origine !== 'HERITEE' && !coupure.dateFin;
+  const [amontChoisi, setAmontChoisi] = useState('');
+  const amonts = useQuery<Array<{ id: string; technologie: string; dateDebut: string; site?: { nom?: string } }>>({
+    queryKey: ['amonts-possibles', coupure.id],
+    queryFn: async () => (await api.get(`/coupures-reseau/${coupure.id}/amonts-possibles`)).data.data,
+    enabled: peutRattacher,
+  });
+  const rattacher = useMutation({
+    mutationFn: () => api.post(`/coupures-reseau/${coupure.id}/rattacher-amont`, { coupureOrigineId: amontChoisi }),
+    onSuccess: () => { onDone(); onClose(); },
+  });
+  const errRattache = (rattacher.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
   const [confirmerSuppression, setConfirmerSuppression] = useState(false);
   const suppression = useMutation({
     mutationFn: () => api.delete(`/coupures-reseau/${coupure.id}`),
@@ -918,6 +933,37 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
             </button>
           </div>
           {errDetache && <p className="mt-1 text-xs font-medium text-red-700">{errDetache}</p>}
+        </div>
+      )}
+      {peutRattacher && (amonts.data?.length ?? 0) > 0 && (
+        <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm">
+          <p className="font-semibold text-indigo-900">Une panne est ouverte en amont de ce site.</p>
+          <p className="mt-1 text-xs text-indigo-900">
+            Si cette coupure n&apos;est en réalité qu&apos;une conséquence de cette panne amont, rattachez-la : elle
+            cessera de compter comme une cause propre et suivra le sort de sa racine.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <select
+              value={amontChoisi}
+              onChange={(e) => setAmontChoisi(e.target.value)}
+              className="min-w-[240px] flex-1 rounded-lg border border-indigo-300 px-2 py-1 text-xs"
+            >
+              <option value="">Choisir la coupure amont…</option>
+              {amonts.data!.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.site?.nom ?? 'Site amont'} · {a.technologie === 'SITE' ? 'Site entier' : a.technologie} · depuis {fmtDateTime(a.dateDebut)}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => rattacher.mutate()}
+              disabled={!amontChoisi || rattacher.isPending}
+              className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {rattacher.isPending ? 'Rattachement…' : "Rattacher à l'amont"}
+            </button>
+          </div>
+          {errRattache && <p className="mt-1 text-xs font-medium text-red-700">{errRattache}</p>}
         </div>
       )}
       {coupure.priseEnChargePar && (

@@ -2186,6 +2186,53 @@ export async function detacherAmont(req: Request, res: Response, next: NextFunct
 }
 
 /**
+ * Remonte la chaîne de transmission et renvoie les sites situés en AMONT.
+ *
+ * Partagé par l'écran (qui ne propose que des amonts réels) et par la garde du
+ * rattachement (qui refuse le reste) : deux implémentations auraient fini par
+ * diverger, et l'écran aurait proposé des choix que l'API refuse.
+ * Borné à 30 sauts : une boucle dans le référentiel ne doit pas tourner à vide.
+ */
+async function sitesAmont(siteId: string): Promise<string[]> {
+  const sites = await prisma.site.findMany({ select: { id: true, parentTransmissionId: true } });
+  const parent = new Map(sites.map((s) => [s.id, s.parentTransmissionId]));
+  const amonts: string[] = [];
+  let curseur = parent.get(siteId) ?? null;
+  for (let saut = 0; curseur && saut < 30; saut++) {
+    if (amonts.includes(curseur)) break; // boucle de référentiel
+    amonts.push(curseur);
+    curseur = parent.get(curseur) ?? null;
+  }
+  return amonts;
+}
+
+/**
+ * Coupures AMONT encore ouvertes auxquelles cette coupure peut être rattachée.
+ * L'écran n'offre ainsi que des choix qui passeront la garde du rattachement.
+ */
+export async function amontsPossibles(req: Request, res: Response, next: NextFunction) {
+  try {
+    const c = await prisma.coupureReseau.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, siteId: true },
+    });
+    if (!c) throw new AppError('Coupure introuvable', 404);
+    await assertSiteInPerimetre(req.user!.id, c.siteId);
+    const amonts = await sitesAmont(c.siteId);
+    if (!amonts.length) return res.json({ success: true, data: [] });
+    const candidates = await prisma.coupureReseau.findMany({
+      where: { siteId: { in: amonts }, dateFin: null, id: { not: c.id } },
+      select: {
+        id: true, technologie: true, dateDebut: true, origine: true,
+        site: { select: { nom: true } },
+      },
+      orderBy: { dateDebut: 'asc' },
+    });
+    res.json({ success: true, data: candidates });
+  } catch (err) { next(err); }
+}
+
+/**
  * RATTACHER À UN AMONT (NOC) : la réciproque — cette coupure locale fait en
  * réalité partie d'une panne amont déjà ouverte.
  *
@@ -2212,17 +2259,9 @@ export async function rattacherAmont(req: Request, res: Response, next: NextFunc
     if (racine.dateFin) throw new AppError('Cette coupure amont est déjà clôturée.', 422);
     if (racine.id === c.id || racine.siteId === c.siteId) throw new AppError('Une coupure ne peut pas hériter d\'elle-même.', 422);
 
-    // Ascendance réelle : on remonte la chaîne de transmission depuis le site
-    // de la coupure. Sans cette vérification, on pourrait rattacher n'importe
-    // quoi à n'importe quoi et fabriquer des cycles.
-    const sites = await prisma.site.findMany({ select: { id: true, parentTransmissionId: true } });
-    const parent = new Map(sites.map((s) => [s.id, s.parentTransmissionId]));
-    let curseur = parent.get(c.siteId) ?? null;
-    let estAmont = false;
-    for (let saut = 0; curseur && saut < 30; saut++) {
-      if (curseur === racine.siteId) { estAmont = true; break; }
-      curseur = parent.get(curseur) ?? null;
-    }
+    // Ascendance réelle, via le MÊME parcours que l'écran : sans elle on
+    // pourrait rattacher n'importe quoi à n'importe quoi et fabriquer un cycle.
+    const estAmont = (await sitesAmont(c.siteId)).includes(racine.siteId);
     if (!estAmont) {
       throw new AppError(
         `${racine.site?.nom ?? 'Ce site'} n'est pas en amont de ce site dans la chaîne de transmission : rattachement refusé.`,

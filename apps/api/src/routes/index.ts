@@ -258,6 +258,7 @@ router.post('/coupures-reseau/:id/escalader-terrain', rbac(['NOC','MANAGER','ADM
 router.post('/coupures-reseau/:id/annuler-prise-en-charge', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.annulerPriseEnCharge);
 // Reclassement racine ↔ héritée : la QUALIFICATION est le métier du NOC, pas
 // du pilotage - le manager en est donc écarté (décision exploitant 19/09/2026).
+router.get('/coupures-reseau/:id/amonts-possibles', rbac(['NOC','ADMIN']), coupuresCtrl.amontsPossibles);
 router.post('/coupures-reseau/:id/detacher-amont', rbac(['NOC','ADMIN']), coupuresCtrl.detacherAmont);
 router.post('/coupures-reseau/:id/rattacher-amont', rbac(['NOC','ADMIN']), coupuresCtrl.rattacherAmont);
 router.put('/coupures-reseau/:id', rbac(['NOC','MANAGER','ADMIN']), coupuresCtrl.updateCoupure);
