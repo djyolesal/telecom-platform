@@ -21,6 +21,13 @@
   --accent: 14 124 107;
   --accent-light: 59 201 175;
   --brand-tint: 234 241 248;
+  /* ACCENT D'IDENTITÉ — la couleur qu'on reconnaît de loin, volontairement
+   * RARE : logo et onglet actif, rien d'autre. Séparée d'`accent` parce que
+   * celle-ci porte du sens (états actifs, « stock OK ») : y mettre une couleur
+   * de marque vive aurait affiché un « OK » orange à côté d'un « faible »
+   * ambre. Par défaut identique au bleu d'action : l'interface E&M OpS ne
+   * change pas. */
+  --brand-accent: 36 113 163;
 }
 
 html,

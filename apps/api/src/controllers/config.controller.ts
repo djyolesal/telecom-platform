@@ -53,7 +53,10 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
         const hex = (triplet: string) => '#' + triplet.trim().split(/\s+/)
           .map((n) => Math.max(0, Math.min(255, parseInt(n, 10) || 0)).toString(16).padStart(2, '0'))
           .join('').toUpperCase();
-        return { brand: hex(t.brand), brandLight: hex(t.brandLight), accent: hex(t.accent) };
+        return {
+          brand: hex(t.brand), brandLight: hex(t.brandLight), accent: hex(t.accent),
+          brandAccent: hex(t.brandAccent),
+        };
       })(),
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       // Référentiel des types de liaison de transmission (badges topologie, fiche site).

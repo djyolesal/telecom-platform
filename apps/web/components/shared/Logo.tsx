@@ -4,7 +4,7 @@
  */
 export function LogoIcon({ size = 32, variant = 'light' }: { size?: number; variant?: 'light' | 'dark' }) {
   const ink = variant === 'dark' ? '#FFFFFF' : 'rgb(var(--brand))';
-  const sig = variant === 'dark' ? 'rgb(var(--accent-light))' : 'rgb(var(--accent))';
+  const sig = variant === 'dark' ? 'rgb(var(--brand-accent))' : 'rgb(var(--brand-accent))';
   const dot = variant === 'dark' ? '#FFB020' : '#F59E0B';
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" aria-hidden="true">
@@ -18,7 +18,7 @@ export function LogoIcon({ size = 32, variant = 'light' }: { size?: number; vari
 
 /** Nom de l'app avec le « OpS » en teal (E&M marine / blanc selon le fond). */
 export function LogoWordmark({ variant = 'light', className = '' }: { variant?: 'light' | 'dark'; className?: string }) {
-  const ops = variant === 'dark' ? 'rgb(var(--accent-light))' : 'rgb(var(--accent))';
+  const ops = variant === 'dark' ? 'rgb(var(--brand-accent))' : 'rgb(var(--brand-accent))';
   return (
     <span className={className}>
       E&amp;M <span style={{ color: ops }}>OpS</span>

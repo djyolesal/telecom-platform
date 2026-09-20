@@ -19,6 +19,11 @@ class AppColors {
   static Color brandLight = const Color(0xFF2471A3);
   static Color accent = const Color(0xFF0E7C6B);
 
+  /// ACCENT D'IDENTITÉ — la couleur qu'on reconnaît de loin. Réservée au logo :
+  /// tenue à l'écart des états et des statuts, parce qu'une couleur de marque
+  /// vive ressemble toujours à une alerte quand on la met partout.
+  static Color brandAccent = const Color(0xFF2471A3);
+
   /// COULEURS DE STATUT — `const`, jamais thémables. Un incident critique doit
   /// rester rouge quelle que soit la charte : en plein soleil, sur un écran de
   /// téléphone, c'est la couleur qui porte l'information, pas le texte.
@@ -49,6 +54,7 @@ class AppColors {
     change |= _appliquer(t['brand'] as String?, (c) { if (brand != c) { brand = c; } else { return; } });
     change |= _appliquer(t['brandLight'] as String?, (c) { if (brandLight != c) { brandLight = c; } else { return; } });
     change |= _appliquer(t['accent'] as String?, (c) { if (accent != c) { accent = c; } else { return; } });
+    change |= _appliquer(t['brandAccent'] as String?, (c) { if (brandAccent != c) { brandAccent = c; } else { return; } });
     if (change) revision.value++;
   }
 }

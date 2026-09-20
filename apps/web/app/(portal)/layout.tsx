@@ -180,8 +180,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                       className={cn(
                         'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                         active
-                          ? 'bg-[rgb(var(--brand-light))] text-white font-medium'
-                          : 'text-blue-100 hover:bg-[rgb(var(--brand-light)/0.6)]'
+                          // Liseré en couleur d'IDENTITÉ : le seul endroit de
+                          // l'interface, avec le logo, où la marque s'affiche
+                          // en tant que telle. Rare, donc lisible.
+                          ? 'bg-[rgb(var(--brand-light))] text-white font-medium border-l-[3px] border-[rgb(var(--brand-accent))]'
+                          : 'text-blue-100 hover:bg-[rgb(var(--brand-light)/0.6)] border-l-[3px] border-transparent'
                       )}
                       title={!sidebarOpen ? item.label : undefined}
                     >

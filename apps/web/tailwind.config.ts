@@ -17,6 +17,7 @@ const config: Config = {
           accent: 'rgb(var(--accent) / <alpha-value>)',
           accentLight: 'rgb(var(--accent-light) / <alpha-value>)',
           tint: 'rgb(var(--brand-tint) / <alpha-value>)',
+          accentId: 'rgb(var(--brand-accent) / <alpha-value>)',
         },
         severite: {
           critique: '#C0392B',

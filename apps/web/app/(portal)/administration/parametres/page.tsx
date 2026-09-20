@@ -66,8 +66,8 @@ export default function ParametresPage() {
     queryKey: ['ui-theme'],
     queryFn: () => api.get('/ui/theme').then(
       (r) => r.data.data as {
-        actuel: { cle: string; nom: string; brand: string; brandLight: string; accent: string };
-        disponibles: { cle: string; nom: string; brand: string; brandLight: string; accent: string }[];
+        actuel: { cle: string; nom: string; brand: string; brandLight: string; accent: string; brandAccent: string };
+        disponibles: { cle: string; nom: string; brand: string; brandLight: string; accent: string; brandAccent: string }[];
       }
     ),
   });
@@ -77,7 +77,7 @@ export default function ParametresPage() {
       // Les surcharges couleur par couleur sont remises à vide : sinon un
       // ancien ajustement resterait collé au nouveau thème et donnerait un
       // mélange que personne n'a choisi.
-      ...['brand', 'brandLight', 'accent', 'accentLight', 'brandTint']
+      ...['brand', 'brandLight', 'accent', 'accentLight', 'brandTint', 'brandAccent']
         .map((c) => ({ key: `ui.theme.${c}`, value: '' })),
     ]),
     onSuccess: () => {
@@ -186,7 +186,7 @@ export default function ParametresPage() {
                   className={`rounded-xl border p-4 text-left transition ${actif ? 'border-brand ring-2 ring-brand/20' : 'border-gray-100 bg-white hover:border-gray-300'}`}
                 >
                   <div className="mb-2 flex gap-1.5">
-                    {[t.brand, t.brandLight, t.accent].map((c, i) => (
+                    {[t.brand, t.brandLight, t.accent, t.brandAccent].map((c, i) => (
                       <span key={i} className="h-6 w-6 rounded-md" style={{ backgroundColor: `rgb(${c})` }} />
                     ))}
                   </div>

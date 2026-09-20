@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 /// Logo « Écrou-signal » E&M OpS : un écrou hexagonal (la maintenance)
 /// dont le cœur émet un signal (la connectivité). Tracé vectoriel,
@@ -23,8 +24,11 @@ class _EcrouSignalPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final k = size.width / 120;
-    final ink = dark ? Colors.white : const Color(0xFF1B3F6B);
-    final sig = dark ? const Color(0xFF3BC9AF) : const Color(0xFF0E7C6B);
+    // Le logo suit la charte de l'établissement (Administration → Apparence) :
+    // c'est, avec l'onglet actif du portail, le seul endroit où la couleur de
+    // marque s'affiche en tant que telle.
+    final ink = dark ? Colors.white : AppColors.brand;
+    final sig = AppColors.brandAccent;
     final dot = dark ? const Color(0xFFFFB020) : const Color(0xFFF59E0B);
 
     // Écrou hexagonal.

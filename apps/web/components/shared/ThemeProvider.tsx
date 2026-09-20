@@ -33,6 +33,7 @@ export function ThemeProvider() {
         appliquer('--accent', t.accent);
         appliquer('--accent-light', t.accentLight);
         appliquer('--brand-tint', t.brandTint);
+        appliquer('--brand-accent', t.brandAccent);
       })
       .catch(() => {/* thème par défaut conservé : jamais bloquant */});
     return () => { annule = true; };
