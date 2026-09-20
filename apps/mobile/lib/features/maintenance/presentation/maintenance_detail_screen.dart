@@ -8,6 +8,7 @@ import '../../../core/constants/enums.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/services/gps_gate.dart';
 import '../../../core/sync/attachment_store.dart';
+import '../../../core/sync/photo_draft.dart';
 import '../../../core/sync/sync_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/avertissements_dialog.dart';
@@ -251,14 +252,11 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
     setState(() => _busy = true);
     try {
-      // Photos (caméra) → copie dans un stockage persistant. L'upload vers MinIO
-      // est DIFFÉRÉ au moteur de sync : immédiat si en ligne, sinon à la reconnexion.
-      final photoFiles =
-          (result['photos'] as List?)?.cast<XFile>() ?? <XFile>[];
-      final photoPaths = <String>[];
-      for (final f in photoFiles) {
-        photoPaths.add(await AttachmentStore.persistFile(f.path));
-      }
+      // Les photos sont DÉJÀ en stockage durable : la feuille les y recopie dès
+      // la prise, pour qu'elles survivent à la purge du cache et à la
+      // destruction de l'activité par Android pendant la prise de vue.
+      // L'upload vers MinIO reste différé au moteur de sync.
+      final photoPaths = (result['photos'] as List?)?.cast<String>() ?? <String>[];
 
       // Signature du technicien → persistée localement (uploadée par la sync).
       // OBLIGATOIRE pour toute clôture (préventive, curative, mouvement) : c'est
@@ -314,6 +312,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         }
         res = await envoyer(true);
       }
+      // Clôture ACCEPTÉE (envoyée ou mise en file) : le brouillon n'a plus
+      // d'objet. Les fichiers restent au moteur de sync, qui les supprimera
+      // après upload — les effacer ici perdrait une clôture hors-ligne.
+      await PhotoDraft.effacer('cloture:${widget.id}');
       if (!mounted) return;
       _snack(res.isQueued
           ? 'Clôture enregistrée hors-ligne - photos envoyées dès la reconnexion'
@@ -681,7 +683,12 @@ class _CloseSheetState extends State<_CloseSheet> {
   final _index = TextEditingController();
   final _puissance = TextEditingController();
   final _picker = ImagePicker();
-  final List<XFile> _photos = [];
+  /// Chemins de photos DÉJÀ recopiées en stockage durable — plus des XFile
+  /// pointant le cache d'image_picker, que l'OS peut purger. Sauvegardés en
+  /// brouillon à chaque prise : si Android détruit l'activité pendant que
+  /// l'appareil photo est au premier plan (ce que le terrain vivait comme
+  /// « tout se réinitialise »), la liste est retrouvée à la réouverture.
+  final List<String> _photos = [];
   // Un contrôleur d'index horaire par GE du site (cuve partagée → un seul _gasoil).
   final Map<String, TextEditingController> _geCtrls = {};
   // Vidange par GE : choix explicite du technicien (sinon pré-cochage au seuil).
@@ -716,6 +723,13 @@ class _CloseSheetState extends State<_CloseSheet> {
       _ckValeurs[item.cle] = TextEditingController();
       _ckComms[item.cle] = TextEditingController();
     }
+    // Photos déjà prises avant une éventuelle destruction de l'activité par
+    // Android : on les retrouve au lieu de tout refaire.
+    _photos.addAll(PhotoDraft.lire(_cleBrouillon));
+    // Et la photo prise à l'instant où l'activité est morte : son résultat
+    // n'est jamais revenu au code appelant, image_picker la garde de côté.
+    // Sans cette reprise, elle serait perdue en silence.
+    _recupererPhotoPerdue();
   }
 
   @override
@@ -996,8 +1010,28 @@ class _CloseSheetState extends State<_CloseSheet> {
         maxHeight: 1600,
         imageQuality: 70,
       );
-      if (img != null) setState(() => _photos.add(img));
+      if (img != null) await _conserver(img);
     } catch (_) {/* annulé / permission refusée */}
+  }
+
+  /// Recopie AUSSITÔT en stockage durable et enregistre le brouillon. Attendre
+  /// la validation de la feuille, comme avant, exposait chaque photo à la purge
+  /// du cache ET à la destruction de l'activité.
+  Future<void> _conserver(XFile img) async {
+    final chemin = await AttachmentStore.persistFile(img.path);
+    if (!mounted) return;
+    setState(() => _photos.add(chemin));
+    await PhotoDraft.ecrire(_cleBrouillon, _photos);
+  }
+
+  String get _cleBrouillon => 'cloture:${widget.maintenance.id}';
+
+  Future<void> _recupererPhotoPerdue() async {
+    try {
+      final perdue = await _picker.retrieveLostData();
+      if (perdue.isEmpty || perdue.file == null) return;
+      await _conserver(perdue.file!);
+    } catch (_) {/* rien à récupérer */}
   }
 
   Future<void> _submit() async {
@@ -1576,7 +1610,7 @@ class _CloseSheetState extends State<_CloseSheet> {
                                           // cacheWidth : décode une miniature (pas l'image pleine
                                           // résolution) → évite la surcharge mémoire / le gel.
                                           child: Image.file(
-                                              File(_photos[i].path),
+                                              File(_photos[i]),
                                               width: 60,
                                               height: 60,
                                               fit: BoxFit.cover,
@@ -1588,8 +1622,13 @@ class _CloseSheetState extends State<_CloseSheet> {
                                           child: IconButton(
                                             icon: const Icon(Icons.cancel,
                                                 size: 18, color: Colors.red),
-                                            onPressed: () => setState(
-                                                () => _photos.removeAt(i)),
+                                            // Le brouillon suit la suppression :
+                                            // sinon une photo retirée revenait
+                                            // à la réouverture de la feuille.
+                                            onPressed: () {
+                                              setState(() => _photos.removeAt(i));
+                                              PhotoDraft.ecrire(_cleBrouillon, _photos);
+                                            },
                                           ),
                                         ),
                                       ],
