@@ -11,6 +11,7 @@ import '../../features/maintenance/presentation/maintenance_form_screen.dart';
 import '../../features/maintenance/presentation/maintenance_detail_screen.dart';
 import '../../features/carburant/presentation/depotage_list_screen.dart';
 import '../../features/carburant/presentation/depotage_form_screen.dart';
+import '../../features/carburant/presentation/mouvement_form_screen.dart';
 import '../../features/carburant/presentation/depotage_detail_screen.dart';
 import '../../features/carburant/presentation/bl_form_screen.dart';
 import '../../features/carburant/presentation/bl_list_screen.dart';
@@ -52,6 +53,9 @@ GoRouter createRouter(AuthCubit authCubit) {
       // Carburant
       GoRoute(path: '/carburant', builder: (_, __) => const DepotageListScreen()),
       GoRoute(path: '/carburant/nouveau', builder: (_, s) => DepotageFormScreen(initialSiteId: s.uri.queryParameters['siteId'], initialLigneId: s.uri.queryParameters['ligneId'])),
+      // Déclaration d'un MOUVEMENT (purge, transfert) depuis le terrain : avant
+      // la route à paramètre, sinon « mouvement » serait pris pour un id.
+      GoRoute(path: '/carburant/mouvement', builder: (_, s) => MouvementFormScreen(initialSiteId: s.uri.queryParameters['siteId'])),
       GoRoute(path: '/carburant/detail/:id', builder: (_, s) => DepotageDetailScreen(id: s.pathParameters['id']!)),
       // Liste AVANT le paramètre :id - sinon « nouveau » serait pris pour un id.
       GoRoute(path: '/carburant/bons-livraison', builder: (_, __) => const BlListScreen()),

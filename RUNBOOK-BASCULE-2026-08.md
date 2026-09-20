@@ -113,6 +113,14 @@ make backup
 > le déclarant ne valide pas sa propre déclaration ; passer à 0 sur un effectif
 > réduit). L'écran des mouvements affiche « En attente / Compté / Refusé » et
 > porte les boutons Valider et Refuser (manager et administrateur).
+>
+> **Écran mobile (APK b46, 1.8.0+46)** : `/carburant/mouvement` permet au
+> technicien de déclarer une purge ou un transfert depuis le site — type, site
+> (+ destination), volume, motif, photos de cuve, signature, GPS. L'écran
+> annonce d'emblée que la déclaration ne modifie PAS le stock et part en
+> attente de validation. Les photos sont persistées à la prise et reprises par
+> brouillon si Android tue l'activité. b40/b43/b45 n'ont pas cet écran et
+> continuent de fonctionner : la déclaration reste possible depuis le portail.
 
 
 > **Photos à la déclaration d'incident (APK b45).** L'état constaté est

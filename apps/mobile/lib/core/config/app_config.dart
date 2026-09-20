@@ -17,6 +17,8 @@ class AppConfig {
   /// Photos exigées à la DÉCLARATION d'un incident depuis le mobile.
   /// 0 = facultatif : l'exploitant relève le seuil quand le parc est à jour.
   static int minPhotosIncidentDeclaration = 0;
+  /// Photos de la cuve exigées pour déclarer un mouvement depuis le terrain.
+  static int minPhotosMouvementCarburant = 2;
   static int intervalleVidangeHeures = 250;
 
   /// Catalogue des pièces de rechange (code → libellé/unité), servi par
@@ -141,6 +143,9 @@ class ConfigService {
     AppConfig.minPhotosIncidentDeclaration =
         (d['minPhotosIncidentDeclaration'] as num?)?.toInt() ??
             AppConfig.minPhotosIncidentDeclaration;
+    AppConfig.minPhotosMouvementCarburant =
+        (d['minPhotosMouvementCarburant'] as num?)?.toInt() ??
+            AppConfig.minPhotosMouvementCarburant;
     AppConfig.intervalleVidangeHeures =
         (d['intervalleVidangeHeures'] as num?)?.toInt() ??
             AppConfig.intervalleVidangeHeures;

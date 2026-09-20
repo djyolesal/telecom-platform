@@ -12,6 +12,7 @@ import 'features/sites/data/site_repository.dart';
 import 'features/maintenance/data/maintenance_repository.dart';
 import 'features/maintenance/data/maintenance_cache.dart';
 import 'features/carburant/data/depotage_repository.dart';
+import 'features/carburant/data/mouvement_repository.dart';
 import 'features/carburant/data/bon_livraison_repository.dart';
 import 'features/energie/data/releve_repository.dart';
 import 'features/incidents/data/incident_repository.dart';
@@ -32,6 +33,7 @@ class Injection {
   late final SiteRepository siteRepository;
   late final MaintenanceRepository maintenanceRepository;
   late final DepotageRepository depotageRepository;
+  late final MouvementRepository mouvementRepository;
   late final BonLivraisonRepository bonLivraisonRepository;
   late final ReleveRepository releveRepository;
   late final IncidentRepository incidentRepository;
@@ -71,6 +73,7 @@ class Injection {
     siteRepository = SiteRepository(dioClient, database, networkInfo);
     maintenanceRepository = MaintenanceRepository(dioClient, networkInfo, syncService);
     depotageRepository = DepotageRepository(dioClient, networkInfo, syncService);
+    mouvementRepository = MouvementRepository(syncService);
     bonLivraisonRepository = BonLivraisonRepository(dioClient, networkInfo, syncService);
     releveRepository = ReleveRepository(dioClient, networkInfo, syncService);
     incidentRepository = IncidentRepository(dioClient, networkInfo, syncService);

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:telecom_mobile/core/constants/app_constants.dart';
 import 'package:telecom_mobile/core/sync/photo_draft.dart';
 
