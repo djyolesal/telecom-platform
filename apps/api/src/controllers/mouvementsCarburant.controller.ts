@@ -10,9 +10,54 @@ import { genererReference } from '../services/reference.service';
 import { cleMinioValide, publicFileUrl } from '../services/storage.service';
 import { assertSiteInPerimetre, sitePerimetre, isRestreint } from '../utils/perimetre';
 import { verrouSiteCarburant } from '../services/verrou.service';
+import { getNum } from '../services/settings.service';
+import { notificationService } from '../services/notifications.service';
+import { logger } from '../utils/logger';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 const MOTIF_MIN = 10;
+
+/**
+ * JUSTIFICATIF OBLIGATOIRE (transfert et purge).
+ *
+ * Ces deux écritures RETIRENT du gasoil du stock attendu — c'est-à-dire de
+ * l'écart qui déclenche les alertes de vol. Déclarées au bureau avec un motif
+ * libre et sans pièce, elles étaient l'opération la moins prouvée de toute la
+ * chaîne carburant, alors qu'un dépotage exige GPS, six photos et deux
+ * signatures. Une pièce ne prouve pas que le gasoil a bougé, mais elle engage
+ * celui qui la produit : la fraude devient documentée au lieu d'être invisible.
+ *
+ * L'AVOIR FOURNISSEUR en est exempté par défaut : il ne touche aucune cuve,
+ * c'est une écriture comptable sur un bon de commande.
+ *
+ * Réglage `carburant.justificatifMouvementObligatoire` (1 par défaut) : une
+ * purge urgente un samedi ne doit pas rester bloquée faute de scanner.
+ */
+function assertJustificatif(doc: string | null, quoi: string): void {
+  if (getNum('carburant.justificatifMouvementObligatoire', 1) !== 1) return;
+  if (!doc) {
+    throw new AppError(
+      `Pièce justificative requise pour ${quoi} (bon de transfert, PV de purge, photo ou PDF).`,
+      422,
+    );
+  }
+}
+
+/**
+ * Tout mouvement est signalé à l'administrateur. Ces écritures sont rares et
+ * personne ne les regarde : sans alerte, une purge passe inaperçue jusqu'au
+ * bilan mensuel — trop tard pour aller vérifier la cuve.
+ * Jamais bloquant : un push en échec ne doit pas faire échouer l'écriture.
+ */
+async function notifierMouvement(titre: string, corps: string, data: Record<string, unknown>): Promise<void> {
+  try {
+    await notificationService.sendToRole('ADMIN', { title: titre, body: corps, type: 'mouvement_carburant', data });
+  } catch (e) {
+    logger.warn('[mouvement] notification administrateur échouée:', e);
+  }
+}
+
+const L = (v: number) => `${Math.round(v).toLocaleString('fr-FR')} L`;
 
 /**
  * MOUVEMENTS DE CARBURANT hors chaîne BC → BL → dépotage.
@@ -101,6 +146,7 @@ export async function createTransfert(req: Request, res: Response, next: NextFun
 
     const date = dateBornee(dateMouvement);
     const doc = cleMinioValide(documentPath);
+    assertJustificatif(doc, 'un transfert entre sites');
 
     const cree = await prisma.$transaction(async (tx) => {
       // Même verrou que les dépotages : la réconciliation du site lit ces
@@ -134,8 +180,15 @@ export async function createTransfert(req: Request, res: Response, next: NextFun
       return { sortie, entree, groupeId };
     });
 
-    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', cree.groupeId, { transfert: { siteSourceId, siteDestinationId, volume } }, req);
+    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', cree.groupeId, { transfert: { siteSourceId, siteDestinationId, volume, justificatif: !!doc } }, req);
     clearMemo();
+    const codeSrc = sites.find((x) => x.id === siteSourceId)?.code ?? 'source';
+    const codeDst = sites.find((x) => x.id === siteDestinationId)?.code ?? 'destination';
+    void notifierMouvement(
+      `⛽ Transfert de carburant — ${L(volume)}`,
+      `${codeSrc} → ${codeDst} · ${raison}`,
+      { groupeId: cree.groupeId, volumeLitres: volume },
+    );
     res.status(201).json({ success: true, data: cree, message: 'Transfert enregistré' });
   } catch (err) { next(err); }
 }
@@ -156,6 +209,8 @@ export async function createPurge(req: Request, res: Response, next: NextFunctio
     await assertSiteInPerimetre(req.user!.id, siteId);
 
     const date = dateBornee(dateMouvement);
+    const docPurge = cleMinioValide(documentPath);
+    assertJustificatif(docPurge, 'une purge de cuve');
     const mvt = await prisma.$transaction(async (tx) => {
       await verrouSiteCarburant(tx, siteId);
       return tx.mouvementCarburant.create({
@@ -165,7 +220,7 @@ export async function createPurge(req: Request, res: Response, next: NextFunctio
           volumeLitres: volume,
           dateMouvement: date,
           motif: raison,
-          documentPath: cleMinioValide(documentPath),
+          documentPath: docPurge,
           auteurId: req.user!.id,
           reference: await genererReference(tx, 'MVT', date),
           latitude: req.body.latitude != null ? Number(req.body.latitude) : null,
@@ -174,8 +229,14 @@ export async function createPurge(req: Request, res: Response, next: NextFunctio
       });
     });
 
-    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', mvt.id, { purge: { siteId, volume } }, req);
+    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', mvt.id, { purge: { siteId, volume, justificatif: !!docPurge } }, req);
     clearMemo();
+    const siteP = await prisma.site.findUnique({ where: { id: siteId }, select: { code: true, nom: true } });
+    void notifierMouvement(
+      `⛽ Purge de cuve — ${L(volume)}`,
+      `${siteP?.code ?? ''} ${siteP?.nom ?? ''} · ${raison}`.trim(),
+      { mouvementId: mvt.id, volumeLitres: volume },
+    );
     res.status(201).json({ success: true, data: mvt, message: 'Purge enregistrée' });
   } catch (err) { next(err); }
 }
@@ -214,6 +275,11 @@ export async function createAvoir(req: Request, res: Response, next: NextFunctio
 
     await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', mvt.id, { avoir: { bonCommandeId, volume } }, req);
     clearMemo();
+    void notifierMouvement(
+      `⛽ Avoir fournisseur — ${L(volume)}`,
+      `Bon de commande ${bc.numero} · ${raison}`,
+      { mouvementId: mvt.id, bonCommandeId },
+    );
     res.status(201).json({ success: true, data: mvt, message: 'Avoir enregistré' });
   } catch (err) { next(err); }
 }

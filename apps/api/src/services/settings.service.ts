@@ -78,6 +78,10 @@ export function settingsCatalog(): SettingMeta[] {
     // qui ne savent pas joindre de photo à la déclaration sont exemptés d'office
     // (ils le déclarent par X-App-Version), mais autant que la règle devienne
     // vraie pour tout le monde au même moment.
+    // Transfert et purge RETIRENT du gasoil du stock attendu : sans pièce, ce
+    // sont les écritures les moins prouvées de la chaîne. 0 = pièce facultative
+    // (dépannage : une purge urgente sans scanner à portée).
+    { key: 'carburant.justificatifMouvementObligatoire', label: 'Pièce justificative obligatoire pour un transfert ou une purge (1 = oui)', groupe: 'Carburant - stock', unite: '', defaut: 1 },
     { key: 'incident.minPhotosDeclaration', label: 'Photos min. à la déclaration d\'un incident depuis le mobile (0 = facultatif)', groupe: 'Supervision', unite: 'photos', defaut: 0 },
     // Point de départ du suivi préventif : une tâche JAMAIS enregistrée sur la
     // plateforme est réputée faite à cette date (l'historique papier d'avant
