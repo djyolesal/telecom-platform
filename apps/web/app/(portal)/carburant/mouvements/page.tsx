@@ -19,6 +19,7 @@ interface BcLite { id: string; numero: string }
 interface Mouvement {
   id: string; reference: string | null; type: string; volumeLitres: number;
   dateMouvement: string; motif: string; documentUrl: string | null;
+  statut?: string; motifRefus?: string | null;
   site: SiteLite | null; contrepartie: SiteLite | null;
   bonCommande: { id: string; numero: string } | null;
   auteur: { id: string; nom: string } | null;
@@ -52,6 +53,19 @@ export default function MouvementsCarburantPage() {
     queryFn: () => api.get('/mouvements-carburant', { params: { limit: 200 } }).then((r) => r.data.data as Mouvement[]),
   });
 
+  const valider = useMutation({
+    mutationFn: (id: string) => api.post(`/mouvements-carburant/${id}/valider`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mouvements-carburant'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-carburant'] });
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => window.alert(e.response?.data?.error ?? 'Erreur'),
+  });
+  const refuser = useMutation({
+    mutationFn: ({ id, motif }: { id: string; motif: string }) => api.post(`/mouvements-carburant/${id}/refuser`, { motif }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mouvements-carburant'] }),
+    onError: (e: { response?: { data?: { error?: string } } }) => window.alert(e.response?.data?.error ?? 'Erreur'),
+  });
   const supprimer = useMutation({
     mutationFn: (id: string) => api.delete(`/mouvements-carburant/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mouvements-carburant'] }),
@@ -78,8 +92,34 @@ export default function MouvementsCarburantPage() {
     { key: 'motif', header: 'Motif', render: (m) => <span className="text-gray-600">{m.motif}</span> },
     { key: 'auteur', header: 'Saisi par', render: (m) => m.auteur?.nom ?? '—' },
     {
+      // Une déclaration du terrain ne compte PAS dans le stock tant qu'elle
+      // n'est pas validée : l'écran doit le dire, sinon on croit à une écriture
+      // effective et on s'étonne que le stock n'ait pas bougé.
+      key: 'statut', header: 'Statut',
+      render: (m) => m.statut === 'EN_ATTENTE'
+        ? <Badge className="bg-amber-50 text-amber-700">En attente</Badge>
+        : m.statut === 'REFUSE'
+          // Le Badge ne porte pas d'infobulle : on enveloppe, pour que le
+          // motif du refus reste lisible au survol.
+          ? <span title={m.motifRefus ?? undefined}><Badge className="bg-gray-100 text-gray-500">Refusé</Badge></span>
+          : <Badge className="bg-green-50 text-green-700">Compté</Badge>,
+    },
+    {
       key: 'actions', header: '', align: 'right',
-      render: (m) => role === 'ADMIN' ? (
+      render: (m) => m.statut === 'EN_ATTENTE' && peutEcrire ? (
+        <div className="flex justify-end gap-1">
+          <button
+            onClick={() => { if (window.confirm('Valider ce mouvement ? Il entrera dans le stock du site.')) valider.mutate(m.id); }}
+            className="rounded px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50">Valider</button>
+          <button
+            onClick={() => {
+              const motif = window.prompt('Motif du refus (10 caractères minimum) :');
+              if (motif && motif.trim().length >= 10) refuser.mutate({ id: m.id, motif: motif.trim() });
+              else if (motif !== null) window.alert('Motif trop court : expliquez pourquoi la déclaration est refusée.');
+            }}
+            className="rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100">Refuser</button>
+        </div>
+      ) : role === 'ADMIN' ? (
         <button
           onClick={() => {
             // Un transfert part avec ses DEUX jambes : n'en retirer qu'une

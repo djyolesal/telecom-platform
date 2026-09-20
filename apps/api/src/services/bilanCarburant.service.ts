@@ -103,7 +103,7 @@ async function construireIndex(siteIds: string[], deputFenetre: Date, finFenetre
       select: { siteId: true, dateDepotage: true, volumeLitres: true },
     }),
     prisma.mouvementCarburant.findMany({
-      where: { siteId: { in: siteIds }, dateMouvement: { lte: finFenetre }, type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] } },
+      where: { siteId: { in: siteIds }, dateMouvement: { lte: finFenetre }, type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] }, statut: 'VALIDE' },
       orderBy: { dateMouvement: 'asc' },
       select: { siteId: true, dateMouvement: true, type: true, volumeLitres: true },
     }),

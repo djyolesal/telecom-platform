@@ -99,6 +99,22 @@ make backup
 
 ## Phase 2 — Déploiement du code
 
+> **Mouvements de carburant : preuve et validation (migration 0060).** Un
+> transfert ou une purge retire du gasoil du STOCK ATTENDU — donc de l'écart qui
+> déclenche les alertes de vol. Trois verrous : pièce justificative obligatoire
+> (transfert et purge ; l'avoir en est exempté), déclaration possible DEPUIS LE
+> TERRAIN avec GPS sur site, photos de cuve et signature, et VALIDATION par un
+> responsable. Une déclaration terrain naît `EN_ATTENTE` et **ne compte pas dans
+> le stock** tant qu'elle n'est pas validée — les cinq lectures qui somment les
+> mouvements (solde site, parc, avoirs par BC, bilan, rapprochement) filtrent
+> sur `statut = VALIDE`. La migration met l'existant à `VALIDE` : aucune valeur
+> comptable n'est réécrite. Réglages : `carburant.justificatifMouvementObligatoire`
+> (1), `carburant.minPhotosMouvement` (2), `carburant.validationParUnTiers` (1 =
+> le déclarant ne valide pas sa propre déclaration ; passer à 0 sur un effectif
+> réduit). L'écran des mouvements affiche « En attente / Compté / Refusé » et
+> porte les boutons Valider et Refuser (manager et administrateur).
+
+
 > **Photos à la déclaration d'incident (APK b45).** L'état constaté est
 > photographiable dès la DÉCLARATION, pas seulement au démarrage — le déclarant
 > n'est pas forcément l'intervenant. Réglage `incident.minPhotosDeclaration`,

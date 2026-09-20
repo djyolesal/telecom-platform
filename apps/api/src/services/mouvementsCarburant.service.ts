@@ -43,6 +43,10 @@ export async function soldeMouvementsSite(
       siteId,
       dateMouvement: { ...(debut ? { gt: debut } : {}), lte: fin },
       type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] },
+      // SEULS les mouvements VALIDÉS comptent : une déclaration du terrain
+      // encore EN_ATTENTE ne doit pas bouger le stock, sinon la validation
+      // n'aurait aucun sens — déclarer suffirait à effacer un écart.
+      statut: 'VALIDE',
     },
     select: { type: true, volumeLitres: true },
   });
@@ -65,6 +69,7 @@ export async function soldeMouvementsParSite(
       siteId: { in: [...reference.keys()] },
       dateMouvement: { gte: plusAncien },
       type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] },
+      statut: 'VALIDE',
     },
     select: { siteId: true, type: true, volumeLitres: true, dateMouvement: true },
   });
@@ -81,7 +86,7 @@ export async function soldeMouvementsParSite(
 /** Volume repris par le fournisseur sur un bon de commande (avoirs). */
 export async function avoirsBonCommande(bonCommandeId: string, db: Db = prisma): Promise<number> {
   const r = await db.mouvementCarburant.aggregate({
-    where: { bonCommandeId, type: 'AVOIR_FOURNISSEUR' },
+    where: { bonCommandeId, type: 'AVOIR_FOURNISSEUR', statut: 'VALIDE' },
     _sum: { volumeLitres: true },
   });
   return n(r._sum.volumeLitres);

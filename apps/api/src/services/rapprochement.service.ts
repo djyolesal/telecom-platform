@@ -281,6 +281,7 @@ async function conservationParSite(
         siteId: { in: ids },
         dateMouvement: { gt: debut, lte: fin },
         type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] },
+        statut: 'VALIDE',
       },
       select: { siteId: true, type: true, volumeLitres: true },
     }),

@@ -922,6 +922,14 @@ model MouvementCarburant {
   dateMouvement  DateTime               @map("date_mouvement")
   motif          String
   documentPath   String?                @map("document_path") // bon de transfert / avoir signé
+  // VALIDE (compte dans le stock) / EN_ATTENTE (déclaré sur le terrain, sans
+  // effet tant qu'un responsable n'a pas validé) / REFUSE (trace conservée).
+  // Seul VALIDE entre dans les sommes : voir mouvementsCarburant.service.
+  statut         String                 @default("VALIDE") @db.VarChar(12)
+  valideParId    String?                @map("valide_par_id")
+  valideLe       DateTime?              @map("valide_le")
+  signaturePath  String?                @map("signature_path")
+  motifRefus     String?                @map("motif_refus")
   auteurId       String?                @map("auteur_id")
   latitude       Decimal?               @db.Decimal(10, 8)
   longitude      Decimal?               @db.Decimal(11, 8)
@@ -936,6 +944,7 @@ model MouvementCarburant {
   @@index([groupeId])
   @@index([bonCommandeId])
   @@index([type])
+  @@index([statut])
   @@map("mouvements_carburant")
 }
 

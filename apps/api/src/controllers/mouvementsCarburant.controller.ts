@@ -9,6 +9,7 @@ import { dateBornee } from '../utils/dates';
 import { genererReference } from '../services/reference.service';
 import { cleMinioValide, publicFileUrl } from '../services/storage.service';
 import { assertSiteInPerimetre, sitePerimetre, isRestreint } from '../utils/perimetre';
+import { assertOnSite } from '../utils/geofence';
 import { verrouSiteCarburant } from '../services/verrou.service';
 import { getNum } from '../services/settings.service';
 import { notificationService } from '../services/notifications.service';
@@ -58,6 +59,61 @@ async function notifierMouvement(titre: string, corps: string, data: Record<stri
 }
 
 const L = (v: number) => `${Math.round(v).toLocaleString('fr-FR')} L`;
+
+/**
+ * DÉCLARATION DEPUIS LE TERRAIN : preuve réelle, mais aucun pouvoir nouveau.
+ *
+ * Laisser un technicien écrire directement dans le stock aurait ÉLARGI le droit
+ * de faire disparaître du gasoil — l'inverse de ce qu'on cherche. Un mouvement
+ * déclaré depuis le mobile naît donc EN_ATTENTE : photographié, géolocalisé et
+ * signé, mais sans le moindre effet sur le stock tant qu'un responsable ne l'a
+ * pas validé. C'est aussi ce qui met fin à l'écriture unilatérale du transfert.
+ *
+ * Depuis le PORTAIL, un manager continue d'écrire directement : il engage sa
+ * propre responsabilité, et rien ne change pour lui.
+ */
+function statutInitial(req: Request): 'VALIDE' | 'EN_ATTENTE' {
+  return req.user!.plt === 'MOBILE' ? 'EN_ATTENTE' : 'VALIDE';
+}
+
+/**
+ * Preuves exigées d'une déclaration TERRAIN : sur site, photographiée, signée.
+ * Mêmes exigences qu'un dépotage — c'est le même geste physique.
+ */
+async function assertPreuvesTerrain(
+  req: Request,
+  site: { id: string; latitude: unknown; longitude: unknown; nom?: string | null; code?: string | null },
+  photos: Array<{ url: string; key: string }>,
+): Promise<void> {
+  if (req.user!.plt !== 'MOBILE') return;
+  assertOnSite(site as never, req.body.latitude, req.body.longitude, 'la déclaration du mouvement');
+  const min = getNum('carburant.minPhotosMouvement', 2);
+  if (photos.length < min) {
+    throw new AppError(
+      `Au moins ${min} photo(s) de la cuve sont requises pour déclarer ce mouvement depuis le terrain (${photos.length} fournie(s)).`,
+      422,
+    );
+  }
+  if (!cleMinioValide(req.body.signaturePath)) {
+    throw new AppError('La signature du déclarant est requise pour un mouvement déclaré sur site.', 422);
+  }
+}
+
+/** Photos reçues du mobile, filtrées comme ailleurs (url + clé MinIO). */
+function photosDe(req: Request): Array<{ url: string; key: string }> {
+  const brut = Array.isArray(req.body?.photos) ? req.body.photos : [];
+  return brut.filter((p: unknown): p is { url: string; key: string } =>
+    !!p && typeof (p as { url?: unknown }).url === 'string' && typeof (p as { key?: unknown }).key === 'string');
+}
+
+async function enregistrerPhotos(mouvementId: string, photos: Array<{ url: string; key: string }>): Promise<void> {
+  if (!photos.length) return;
+  await prisma.photo.createMany({
+    data: photos.map((p) => ({
+      entityType: 'mouvement_carburant', entityId: mouvementId, url: p.url, minioKey: p.key, phase: 'CONSTAT',
+    })),
+  });
+}
 
 /**
  * MOUVEMENTS DE CARBURANT hors chaîne BC → BL → dépotage.
@@ -140,13 +196,20 @@ export async function createTransfert(req: Request, res: Response, next: NextFun
 
     const sites = await prisma.site.findMany({
       where: { id: { in: [siteSourceId, siteDestinationId] } },
-      select: { id: true, code: true },
+      select: { id: true, code: true, nom: true, latitude: true, longitude: true },
     });
     if (sites.length !== 2) throw new AppError('Site introuvable', 404);
 
     const date = dateBornee(dateMouvement);
     const doc = cleMinioValide(documentPath);
-    assertJustificatif(doc, 'un transfert entre sites');
+    const statut = statutInitial(req);
+    const photos = photosDe(req);
+    // Le gasoil PART du site source : c'est là que la preuve se prend.
+    if (statut === 'EN_ATTENTE') {
+      await assertPreuvesTerrain(req, sites.find((x) => x.id === siteSourceId)!, photos);
+    } else {
+      assertJustificatif(doc, 'un transfert entre sites');
+    }
 
     const cree = await prisma.$transaction(async (tx) => {
       // Même verrou que les dépotages : la réconciliation du site lit ces
@@ -155,7 +218,11 @@ export async function createTransfert(req: Request, res: Response, next: NextFun
       await verrouSiteCarburant(tx, siteDestinationId);
 
       const groupeId = (await tx.$queryRaw<{ id: string }[]>`SELECT gen_random_uuid()::text AS id`)[0].id;
-      const commun = { groupeId, volumeLitres: volume, dateMouvement: date, motif: raison, documentPath: doc, auteurId: req.user!.id };
+      const commun = {
+        groupeId, volumeLitres: volume, dateMouvement: date, motif: raison,
+        documentPath: doc, auteurId: req.user!.id, statut,
+        signaturePath: cleMinioValide(req.body.signaturePath),
+      };
 
       const sortie = await tx.mouvementCarburant.create({
         data: {
@@ -180,16 +247,26 @@ export async function createTransfert(req: Request, res: Response, next: NextFun
       return { sortie, entree, groupeId };
     });
 
-    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', cree.groupeId, { transfert: { siteSourceId, siteDestinationId, volume, justificatif: !!doc } }, req);
+    // Les photos portent sur la JAMBE DE SORTIE : c'est le site d'où part le
+    // gasoil qu'on photographie.
+    await enregistrerPhotos(cree.sortie.id, photos);
+    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', cree.groupeId, { transfert: { siteSourceId, siteDestinationId, volume, justificatif: !!doc, statut } }, req);
     clearMemo();
     const codeSrc = sites.find((x) => x.id === siteSourceId)?.code ?? 'source';
     const codeDst = sites.find((x) => x.id === siteDestinationId)?.code ?? 'destination';
     void notifierMouvement(
-      `⛽ Transfert de carburant — ${L(volume)}`,
+      statut === 'EN_ATTENTE'
+        ? `⛽ Transfert à valider — ${L(volume)}`
+        : `⛽ Transfert de carburant — ${L(volume)}`,
       `${codeSrc} → ${codeDst} · ${raison}`,
-      { groupeId: cree.groupeId, volumeLitres: volume },
+      { groupeId: cree.groupeId, volumeLitres: volume, statut },
     );
-    res.status(201).json({ success: true, data: cree, message: 'Transfert enregistré' });
+    res.status(201).json({
+      success: true, data: cree,
+      message: statut === 'EN_ATTENTE'
+        ? 'Transfert déclaré — en attente de validation, sans effet sur le stock'
+        : 'Transfert enregistré',
+    });
   } catch (err) { next(err); }
 }
 
@@ -210,7 +287,17 @@ export async function createPurge(req: Request, res: Response, next: NextFunctio
 
     const date = dateBornee(dateMouvement);
     const docPurge = cleMinioValide(documentPath);
-    assertJustificatif(docPurge, 'une purge de cuve');
+    const statutP = statutInitial(req);
+    const photosP = photosDe(req);
+    if (statutP === 'EN_ATTENTE') {
+      const siteCible = await prisma.site.findUnique({
+        where: { id: siteId }, select: { id: true, code: true, nom: true, latitude: true, longitude: true },
+      });
+      if (!siteCible) throw new AppError('Site introuvable', 404);
+      await assertPreuvesTerrain(req, siteCible, photosP);
+    } else {
+      assertJustificatif(docPurge, 'une purge de cuve');
+    }
     const mvt = await prisma.$transaction(async (tx) => {
       await verrouSiteCarburant(tx, siteId);
       return tx.mouvementCarburant.create({
@@ -222,6 +309,8 @@ export async function createPurge(req: Request, res: Response, next: NextFunctio
           motif: raison,
           documentPath: docPurge,
           auteurId: req.user!.id,
+          statut: statutP,
+          signaturePath: cleMinioValide(req.body.signaturePath),
           reference: await genererReference(tx, 'MVT', date),
           latitude: req.body.latitude != null ? Number(req.body.latitude) : null,
           longitude: req.body.longitude != null ? Number(req.body.longitude) : null,
@@ -229,15 +318,21 @@ export async function createPurge(req: Request, res: Response, next: NextFunctio
       });
     });
 
-    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', mvt.id, { purge: { siteId, volume, justificatif: !!docPurge } }, req);
+    await enregistrerPhotos(mvt.id, photosP);
+    await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', mvt.id, { purge: { siteId, volume, justificatif: !!docPurge, statut: statutP } }, req);
     clearMemo();
     const siteP = await prisma.site.findUnique({ where: { id: siteId }, select: { code: true, nom: true } });
     void notifierMouvement(
-      `⛽ Purge de cuve — ${L(volume)}`,
+      statutP === 'EN_ATTENTE' ? `⛽ Purge à valider — ${L(volume)}` : `⛽ Purge de cuve — ${L(volume)}`,
       `${siteP?.code ?? ''} ${siteP?.nom ?? ''} · ${raison}`.trim(),
-      { mouvementId: mvt.id, volumeLitres: volume },
+      { mouvementId: mvt.id, volumeLitres: volume, statut: statutP },
     );
-    res.status(201).json({ success: true, data: mvt, message: 'Purge enregistrée' });
+    res.status(201).json({
+      success: true, data: mvt,
+      message: statutP === 'EN_ATTENTE'
+        ? 'Purge déclarée — en attente de validation, sans effet sur le stock'
+        : 'Purge enregistrée',
+    });
   } catch (err) { next(err); }
 }
 
@@ -281,6 +376,75 @@ export async function createAvoir(req: Request, res: Response, next: NextFunctio
       { mouvementId: mvt.id, bonCommandeId },
     );
     res.status(201).json({ success: true, data: mvt, message: 'Avoir enregistré' });
+  } catch (err) { next(err); }
+}
+
+/**
+ * VALIDATION (étape 3) — c'est elle qui fait entrer le mouvement dans le stock.
+ *
+ * Un transfert est validé PAR SON GROUPE : ses deux jambes doivent basculer
+ * ensemble, sinon du gasoil sortirait d'un site sans arriver dans l'autre, et
+ * le parc entier perdrait des litres sans que rien ne le signale.
+ *
+ * Le validateur ne peut pas être le déclarant : une contre-validation par
+ * soi-même n'est pas une contre-validation. Réglable, car sur un petit
+ * effectif le manager peut être seul à pouvoir valider.
+ */
+export async function validerMouvement(req: Request, res: Response, next: NextFunction) {
+  try {
+    const mvt = await prisma.mouvementCarburant.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, groupeId: true, statut: true, siteId: true, volumeLitres: true, auteurId: true, type: true },
+    });
+    if (!mvt) throw new AppError('Mouvement introuvable', 404);
+    if (mvt.statut === 'VALIDE') throw new AppError('Ce mouvement est déjà validé.', 409);
+    if (mvt.statut === 'REFUSE') throw new AppError('Ce mouvement a été refusé : il ne peut plus être validé.', 409);
+    if (mvt.siteId) await assertSiteInPerimetre(req.user!.id, mvt.siteId);
+    if (mvt.auteurId === req.user!.id && getNum('carburant.validationParUnTiers', 1) === 1) {
+      throw new AppError(
+        'La validation doit être faite par une autre personne que le déclarant.',
+        403,
+      );
+    }
+
+    const cible = mvt.groupeId ? { groupeId: mvt.groupeId } : { id: mvt.id };
+    const maj = await prisma.mouvementCarburant.updateMany({
+      where: { ...cible, statut: 'EN_ATTENTE' },
+      data: { statut: 'VALIDE', valideParId: req.user!.id, valideLe: new Date() },
+    });
+
+    await auditLog(req.user!.id, 'UPDATE', 'mouvements_carburant', mvt.groupeId ?? mvt.id, { action: 'validation', lignes: maj.count }, req);
+    clearMemo();
+    res.json({ success: true, data: { lignesValidees: maj.count }, message: 'Mouvement validé — il compte désormais dans le stock' });
+  } catch (err) { next(err); }
+}
+
+/**
+ * REFUS : la déclaration reste, marquée et motivée. La supprimer effacerait le
+ * fait qu'un technicien a déclaré quelque chose — exactement ce qu'on veut
+ * pouvoir relire en cas de litige.
+ */
+export async function refuserMouvement(req: Request, res: Response, next: NextFunction) {
+  try {
+    const motif = String((req.body as { motif?: unknown })?.motif ?? '').trim();
+    if (motif.length < MOTIF_MIN) throw new AppError(`Motif du refus requis (${MOTIF_MIN} caractères minimum).`, 400);
+    const mvt = await prisma.mouvementCarburant.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, groupeId: true, statut: true, siteId: true },
+    });
+    if (!mvt) throw new AppError('Mouvement introuvable', 404);
+    if (mvt.statut !== 'EN_ATTENTE') throw new AppError('Seule une déclaration en attente peut être refusée.', 409);
+    if (mvt.siteId) await assertSiteInPerimetre(req.user!.id, mvt.siteId);
+
+    const cible = mvt.groupeId ? { groupeId: mvt.groupeId } : { id: mvt.id };
+    const maj = await prisma.mouvementCarburant.updateMany({
+      where: { ...cible, statut: 'EN_ATTENTE' },
+      data: { statut: 'REFUSE', motifRefus: motif, valideParId: req.user!.id, valideLe: new Date() },
+    });
+
+    await auditLog(req.user!.id, 'UPDATE', 'mouvements_carburant', mvt.groupeId ?? mvt.id, { action: 'refus', motif, lignes: maj.count }, req);
+    clearMemo();
+    res.json({ success: true, data: { lignesRefusees: maj.count }, message: 'Déclaration refusée' });
   } catch (err) { next(err); }
 }
 

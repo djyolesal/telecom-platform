@@ -370,9 +370,13 @@ router.delete('/bons-livraison/:id', rbac(['MANAGER', 'ADMIN']), carburantCtrl.d
 // écritures font disparaître ou apparaître du carburant sans pièce de
 // livraison, donc réservées au pilotage et toutes motivées.
 router.get('/mouvements-carburant', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), mouvementsCtrl.getMouvements);
-router.post('/mouvements-carburant/transfert', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.createTransfert);
-router.post('/mouvements-carburant/purge', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.createPurge);
+router.post('/mouvements-carburant/transfert', rbac(['TECHNICIEN', 'MANAGER', 'ADMIN']), mouvementsCtrl.createTransfert);
+router.post('/mouvements-carburant/purge', rbac(['TECHNICIEN', 'MANAGER', 'ADMIN']), mouvementsCtrl.createPurge);
 router.post('/mouvements-carburant/avoir', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.createAvoir);
+// Déclaration TERRAIN : le technicien peut déclarer, jamais valider — sa
+// déclaration naît EN_ATTENTE et reste sans effet sur le stock.
+router.post('/mouvements-carburant/:id/valider', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.validerMouvement);
+router.post('/mouvements-carburant/:id/refuser', rbac(['MANAGER', 'ADMIN']), mouvementsCtrl.refuserMouvement);
 router.delete('/mouvements-carburant/:id', rbac(['ADMIN']), mouvementsCtrl.deleteMouvement);
 
 // ── Référentiels transport (véhicules & chauffeurs) ──

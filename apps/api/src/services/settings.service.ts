@@ -81,6 +81,10 @@ export function settingsCatalog(): SettingMeta[] {
     // Transfert et purge RETIRENT du gasoil du stock attendu : sans pièce, ce
     // sont les écritures les moins prouvées de la chaîne. 0 = pièce facultative
     // (dépannage : une purge urgente sans scanner à portée).
+    { key: 'carburant.minPhotosMouvement', label: 'Photos min. de la cuve pour un mouvement déclaré sur le terrain', groupe: 'Carburant - stock', unite: 'photos', defaut: 2 },
+    // 1 = le déclarant ne peut pas valider sa propre déclaration. À passer à 0
+    // sur un effectif réduit où le manager est seul à pouvoir valider.
+    { key: 'carburant.validationParUnTiers', label: 'Un mouvement déclaré sur le terrain doit être validé par un tiers (1 = oui)', groupe: 'Carburant - stock', unite: '', defaut: 1 },
     { key: 'carburant.justificatifMouvementObligatoire', label: 'Pièce justificative obligatoire pour un transfert ou une purge (1 = oui)', groupe: 'Carburant - stock', unite: '', defaut: 1 },
     // Réglages LUS par le code mais qui n'avaient jamais été déclarés : ils
     // fonctionnaient sur leur valeur par défaut et n'apparaissaient pas dans
