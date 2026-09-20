@@ -59,11 +59,17 @@ class _TelecomAppState extends State<TelecomApp> {
       ],
       child: BlocProvider.value(
         value: _authCubit,
-        child: MaterialApp.router(
-          title: 'E&M OpS',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light,
-          routerConfig: _router,
+        // La config — donc la charte — arrive APRÈS le premier écran. Sans ce
+        // réabonnement, un changement de thème au portail n'apparaîtrait qu'au
+        // redémarrage suivant de l'application.
+        child: ValueListenableBuilder<int>(
+          valueListenable: AppColors.revision,
+          builder: (_, __, ___) => MaterialApp.router(
+            title: 'E&M OpS',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            routerConfig: _router,
+          ),
         ),
       ),
     );

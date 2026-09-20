@@ -331,7 +331,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
             padding: paddingEcran(context),
             children: [
               Text(s.nom,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: AppColors.brand)),

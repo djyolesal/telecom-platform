@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../constants/app_constants.dart';
 import '../network/dio_client.dart';
+import '../theme/app_theme.dart';
 
 /// Règles terrain configurables côté serveur, récupérées via GET /config.
 /// Valeurs par défaut sûres si le serveur n'a pas (encore) répondu.
@@ -146,6 +147,11 @@ class ConfigService {
     AppConfig.minPhotosMouvementCarburant =
         (d['minPhotosMouvementCarburant'] as num?)?.toInt() ??
             AppConfig.minPhotosMouvementCarburant;
+    // Charte de l'établissement, choisie au portail : le terrain porte les
+    // mêmes couleurs que le bureau. Mise en cache avec le reste de la config,
+    // donc conservée hors-ligne et au redémarrage.
+    AppColors.appliquerTheme(
+        (d['theme'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)));
     AppConfig.intervalleVidangeHeures =
         (d['intervalleVidangeHeures'] as num?)?.toInt() ??
             AppConfig.intervalleVidangeHeures;

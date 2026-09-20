@@ -9,14 +9,48 @@ EdgeInsets paddingEcran(BuildContext context) =>
 /// Thème de l'application - couleurs alignées sur le portail web.
 class AppColors {
   AppColors._();
-  static const brand = Color(0xFF1B3F6B);
-  static const brandLight = Color(0xFF2471A3);
-  static const accent = Color(0xFF0E7C6B);
+
+  /// COULEURS DE MARQUE — variables, alignées sur le thème choisi au portail
+  /// (Administration → Paramètres → Apparence) et reçues via /config. Non
+  /// `const` pour cette raison : le terrain porte la même charte que le bureau.
+  /// Les valeurs ci-dessous sont le thème par défaut ET le repli hors-ligne
+  /// avant le premier /config — l'application doit rester lisible sans réseau.
+  static Color brand = const Color(0xFF1B3F6B);
+  static Color brandLight = const Color(0xFF2471A3);
+  static Color accent = const Color(0xFF0E7C6B);
+
+  /// COULEURS DE STATUT — `const`, jamais thémables. Un incident critique doit
+  /// rester rouge quelle que soit la charte : en plein soleil, sur un écran de
+  /// téléphone, c'est la couleur qui porte l'information, pas le texte.
   static const critique = Color(0xFFC0392B);
   static const majeur = Color(0xFFE67E22);
   static const mineur = Color(0xFFF1C40F);
   static const informatif = Color(0xFF3498DB);
   static const bg = Color(0xFFF5F6F8);
+
+  /// Incrémenté à chaque changement de charte : l'application se redessine.
+  /// Sans lui, la config arrivant APRÈS le premier écran, le nouveau thème
+  /// n'apparaîtrait qu'au redémarrage suivant.
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  /// Applique une couleur reçue du serveur (« #1B3F6B »). Une valeur mal
+  /// formée est ignorée : mieux vaut l'ancienne charte qu'un écran noir.
+  static bool _appliquer(String? hexa, void Function(Color) poser) {
+    if (hexa == null) return false;
+    final m = RegExp(r'^#?([0-9A-Fa-f]{6})$').firstMatch(hexa.trim());
+    if (m == null) return false;
+    poser(Color(int.parse('FF${m.group(1)}', radix: 16)));
+    return true;
+  }
+
+  static void appliquerTheme(Map<String, dynamic>? t) {
+    if (t == null) return;
+    var change = false;
+    change |= _appliquer(t['brand'] as String?, (c) { if (brand != c) { brand = c; } else { return; } });
+    change |= _appliquer(t['brandLight'] as String?, (c) { if (brandLight != c) { brandLight = c; } else { return; } });
+    change |= _appliquer(t['accent'] as String?, (c) { if (accent != c) { accent = c; } else { return; } });
+    if (change) revision.value++;
+  }
 }
 
 class AppTheme {
@@ -31,7 +65,7 @@ class AppTheme {
         primary: AppColors.brand,
         secondary: AppColors.accent,
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.brand,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -58,7 +92,8 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.brandLight, width: 2),
+          // Plus `const` : la couleur de marque est désormais variable.
+          borderSide: BorderSide(color: AppColors.brandLight, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),

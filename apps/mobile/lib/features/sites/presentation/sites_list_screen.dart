@@ -85,7 +85,7 @@ class _SitesViewState extends State<_SitesView> {
                         leading: CircleAvatar(
                           backgroundColor:
                               AppColors.brand.withValues(alpha: 0.1),
-                          child: const Icon(Icons.cell_tower,
+                          child: Icon(Icons.cell_tower,
                               color: AppColors.brand, size: 20),
                         ),
                         title: Text(s.nom,

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env';
 import { prisma } from '../config/database';
 import { getNum, getRaw, typesLiaison } from '../services/settings.service';
+import { themeEffectif } from './theme.controller';
 
 /**
  * Paramètres terrain exposés aux applications (mobile/web) pour garder les
@@ -42,6 +43,18 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
       // qu'un changement de règle n'exige pas un nouvel APK.
       minPhotosIncidentDeclaration: getNum('incident.minPhotosDeclaration', 0),
       minPhotosMouvementCarburant: getNum('carburant.minPhotosMouvement', 2),
+      // THÈME : le terrain porte la même charte que le portail. Converti en
+      // hexadécimal — le web consomme des triplets RVB pour pouvoir calculer
+      // des opacités en CSS, Flutter veut un entier de couleur. Seules les
+      // couleurs de MARQUE sont servies : le rouge d'un incident critique ne
+      // change pas avec la charte, sur mobile encore moins qu'ailleurs.
+      theme: (() => {
+        const t = themeEffectif();
+        const hex = (triplet: string) => '#' + triplet.trim().split(/\s+/)
+          .map((n) => Math.max(0, Math.min(255, parseInt(n, 10) || 0)).toString(16).padStart(2, '0'))
+          .join('').toUpperCase();
+        return { brand: hex(t.brand), brandLight: hex(t.brandLight), accent: hex(t.accent) };
+      })(),
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       // Référentiel des types de liaison de transmission (badges topologie, fiche site).
       typesLiaison: typesLiaison(),
