@@ -12,7 +12,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { Loading } from '@/components/shared/states';
 import { regionOptions } from '@/lib/constants';
 
-const COLORS = ['#C0392B', '#E67E22', '#F1C40F', '#3498DB', '#0E7C6B'];
+const COLORS = ['#C0392B', '#E67E22', '#F1C40F', '#3498DB', 'rgb(var(--accent))'];
 
 function mins(m: number) {
   if (m < 60) return `${m} min`;
@@ -51,9 +51,9 @@ export default function IncidentKpisPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard title="MTTR" value={mins(d.mttr_minutes ?? 0)} subtitle="Temps moyen de résolution" icon={Timer} color="bg-[#1B3F6B]" />
-        <StatCard title="MTTI" value={mins(d.mtti_minutes ?? 0)} subtitle="Temps moyen d'intervention" icon={Activity} color="bg-[#2471A3]" />
-        <StatCard title="Résolus" value={`${d.resolus ?? 0}/${d.total ?? 0}`} subtitle={`${d.tauxResolutionJ1 ?? 0}% sous 24h`} icon={CheckCircle2} color="bg-[#0E7C6B]" />
+        <StatCard title="MTTR" value={mins(d.mttr_minutes ?? 0)} subtitle="Temps moyen de résolution" icon={Timer} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="MTTI" value={mins(d.mtti_minutes ?? 0)} subtitle="Temps moyen d'intervention" icon={Activity} color="bg-[rgb(var(--brand-light))]" />
+        <StatCard title="Résolus" value={`${d.resolus ?? 0}/${d.total ?? 0}`} subtitle={`${d.tauxResolutionJ1 ?? 0}% sous 24h`} icon={CheckCircle2} color="bg-[rgb(var(--accent))]" />
         <StatCard title="En cours / ouverts" value={`${(d.ouverts ?? 0) + (d.enCours ?? 0)}`} icon={AlertTriangle} color="bg-orange-500" />
       </div>
 
@@ -66,7 +66,7 @@ export default function IncidentKpisPage() {
               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="value" fill="#2471A3" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="value" fill="rgb(var(--brand-light))" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

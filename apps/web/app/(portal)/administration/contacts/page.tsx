@@ -144,7 +144,7 @@ export default function ContactsPage() {
                   className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     journal.jour.plafond > 0 && journal.jour.envoyes >= journal.jour.plafond * 0.8
                       ? 'bg-red-100 text-red-700'
-                      : 'bg-[#EAF1F8] text-[#1B3F6B]'
+                      : 'bg-[rgb(var(--brand-tint))] text-[rgb(var(--brand))]'
                   }`}
                   title="Consommation du jour vs plafond (réglable dans Paramètres → Notifications)"
                 >
@@ -430,7 +430,7 @@ function CoherenceBloc({ rows }: { rows: Coherence[] }) {
                         <button type="button"
                           onClick={() => versFiche.mutate({ contactId: r.contactId, champ: e.champ, valeur: e.compte! })}
                           disabled={versFiche.isPending}
-                          className="rounded-md border border-[#1B3F6B]/30 px-2 py-0.5 font-medium text-[#1B3F6B] hover:bg-[#EAF1F8] disabled:opacity-50">
+                          className="rounded-md border border-[rgb(var(--brand)/0.3)] px-2 py-0.5 font-medium text-[rgb(var(--brand))] hover:bg-[rgb(var(--brand-tint))] disabled:opacity-50">
                           Copier vers la fiche
                         </button>
                       )}
@@ -438,7 +438,7 @@ function CoherenceBloc({ rows }: { rows: Coherence[] }) {
                         <button type="button"
                           onClick={() => versCompte.mutate({ userId: r.userId, valeur: e.contact! })}
                           disabled={versCompte.isPending}
-                          className="rounded-md border border-[#1B3F6B]/30 px-2 py-0.5 font-medium text-[#1B3F6B] hover:bg-[#EAF1F8] disabled:opacity-50">
+                          className="rounded-md border border-[rgb(var(--brand)/0.3)] px-2 py-0.5 font-medium text-[rgb(var(--brand))] hover:bg-[rgb(var(--brand-tint))] disabled:opacity-50">
                           Copier vers le compte
                         </button>
                       )}
@@ -456,7 +456,7 @@ function CoherenceBloc({ rows }: { rows: Coherence[] }) {
 
 function Chip({ children, off, accent }: { children: React.ReactNode; off?: boolean; accent?: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${off ? 'bg-red-50 text-red-600' : accent ? 'bg-[#1B3F6B]/10 text-[#1B3F6B]' : 'bg-gray-100 text-gray-600'}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${off ? 'bg-red-50 text-red-600' : accent ? 'bg-[rgb(var(--brand)/0.1)] text-[rgb(var(--brand))]' : 'bg-gray-100 text-gray-600'}`}>
       {children}
     </span>
   );

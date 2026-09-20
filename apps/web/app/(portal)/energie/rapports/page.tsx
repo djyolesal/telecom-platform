@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { Loading } from '@/components/shared/states';
 
-const COLORS = ['#1B3F6B', '#0E7C6B', '#2471A3', '#F39C12', '#C0392B'];
+const COLORS = ['rgb(var(--brand))', 'rgb(var(--accent))', 'rgb(var(--brand-light))', '#F39C12', '#C0392B'];
 
 interface ReleveRow {
   date: string;
@@ -70,7 +70,7 @@ export default function EnergieRapportsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Line type="monotone" dataKey="kwh" stroke="#2471A3" name="kWh" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="kwh" stroke="rgb(var(--brand-light))" name="kWh" dot={false} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -83,7 +83,7 @@ export default function EnergieRapportsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Bar dataKey="gasoil" fill="#0E7C6B" name="Gasoil (L)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="gasoil" fill="rgb(var(--accent))" name="Gasoil (L)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

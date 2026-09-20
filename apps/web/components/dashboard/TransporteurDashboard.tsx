@@ -77,13 +77,13 @@ export function TransporteurDashboard() {
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard title="Chargements du mois" value={duMois.length}
-          subtitle={MOIS[maintenant.getMonth() + 1]} icon={Truck} color="bg-[#1B3F6B]" />
+          subtitle={MOIS[maintenant.getMonth() + 1]} icon={Truck} color="bg-[rgb(var(--brand))]" />
         <StatCard title="Volume du mois" value={`${fmtNumber(volumeMois)} L`}
-          subtitle="chargé au dépôt" icon={Droplets} color="bg-[#0E7C6B]" />
+          subtitle="chargé au dépôt" icon={Droplets} color="bg-[rgb(var(--accent))]" />
         <StatCard title="En cours" value={enCours.length}
           subtitle={sansPlan > 0 ? `${sansPlan} sans plan défini` : 'plans définis'} icon={Clock} color="bg-[#E67E22]" />
         <StatCard title="Terminés" value={livres}
-          subtitle="entièrement livrés" icon={PackageCheck} color="bg-[#2471A3]" />
+          subtitle="entièrement livrés" icon={PackageCheck} color="bg-[rgb(var(--brand-light))]" />
       </div>
 
       {sansPlan > 0 && (

@@ -141,7 +141,7 @@ export default function TablePage() {
         <select
           value={tri}
           onChange={(e) => { setTri(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2471A3]"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[rgb(var(--brand-light))]"
           title="Trier par"
         >
           <option value="">Tri par défaut</option>
@@ -159,7 +159,7 @@ export default function TablePage() {
         <select
           value={limit}
           onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2471A3]"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[rgb(var(--brand-light))]"
           title="Lignes par page"
         >
           {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}

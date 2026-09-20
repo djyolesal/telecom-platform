@@ -134,7 +134,7 @@ export default function BilanCarburantPage() {
         <div className="flex flex-wrap gap-1.5 pb-0.5">
           {Object.entries(p).map(([label, v]) => (
             <button key={label} onClick={() => { setDebut(v.debut); setFin(v.fin); }}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium ${debut === v.debut && fin === v.fin ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium ${debut === v.debut && fin === v.fin ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
               {label}
             </button>
           ))}
@@ -145,11 +145,11 @@ export default function BilanCarburantPage() {
         {/* ── KPIs ── */}
         <div className="mb-3 grid grid-cols-2 gap-4 md:grid-cols-5">
           <StatCard title="Stock début" value={`${fmtNumber(t!.stockDebutLitres)} L`} icon={Fuel} color="bg-[#5D6D7E]" />
-          <StatCard title="Livré sur la période" value={`${fmtNumber(t!.livreLitres)} L`} icon={Droplets} color="bg-[#2471A3]" />
+          <StatCard title="Livré sur la période" value={`${fmtNumber(t!.livreLitres)} L`} icon={Droplets} color="bg-[rgb(var(--brand-light))]" />
           <StatCard title="Consommation" value={`${fmtNumber(t!.consoLitres)} L`}
             subtitle={`≈ ${fmtNumber(t!.consoJourMoyenne)} L/jour`} icon={TrendingDown} color="bg-[#C0392B]" />
           <StatCard title="Stock fin" value={`${fmtNumber(t!.stockFinLitres)} L`}
-            subtitle={`${deltaStock >= 0 ? '+' : ''}${fmtNumber(deltaStock)} L sur la période`} icon={Fuel} color="bg-[#0E7C6B]" />
+            subtitle={`${deltaStock >= 0 ? '+' : ''}${fmtNumber(deltaStock)} L sur la période`} icon={Fuel} color="bg-[rgb(var(--accent))]" />
           <StatCard title="Sites mesurés" value={`${t!.nbSitesMesures} / ${t!.nbSites}`}
             subtitle="jauges aux deux bornes" icon={Gauge} color={t!.nbSitesMesures < t!.nbSites ? 'bg-[#B7950B]' : 'bg-[#148F77]'} />
         </div>
@@ -178,7 +178,7 @@ export default function BilanCarburantPage() {
                 return [litres, String(name)];
               }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Livré" fill="#2471A3" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Livré" fill="rgb(var(--brand-light))" radius={[3, 3, 0, 0]} />
               <Line dataKey="Consommé (mesuré)" stroke="#C0392B" strokeWidth={2} dot={{ r: 3 }} connectNulls />
             </ComposedChart>
           </ResponsiveContainer>

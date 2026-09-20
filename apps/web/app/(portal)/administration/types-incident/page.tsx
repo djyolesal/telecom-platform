@@ -100,7 +100,7 @@ export default function TypesIncidentPage() {
                   ) : (
                     <button
                       type="button"
-                      className="rounded px-2 py-1 text-xs font-medium text-[#2471A3] hover:bg-[#EAF1F8]"
+                      className="rounded px-2 py-1 text-xs font-medium text-[rgb(var(--brand-light))] hover:bg-[rgb(var(--brand-tint))]"
                       onClick={() => save.mutate({ code: t.code, libelle: t.libelle, actif: !t.actif })}
                     >
                       {t.actif ? 'Désactiver' : 'Réactiver'}

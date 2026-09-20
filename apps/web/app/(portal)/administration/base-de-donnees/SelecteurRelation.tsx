@@ -90,7 +90,7 @@ export function SelecteurRelation({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Rechercher…"
-              className="w-full rounded border border-gray-200 py-1.5 pl-7 pr-2 text-sm outline-none focus:border-[#2471A3]"
+              className="w-full rounded border border-gray-200 py-1.5 pl-7 pr-2 text-sm outline-none focus:border-[rgb(var(--brand-light))]"
             />
           </div>
           <div className="max-h-56 overflow-auto py-1">
@@ -101,7 +101,7 @@ export function SelecteurRelation({
                 key={o.valeur}
                 type="button"
                 onClick={() => { onChange(o.valeur); setOuvert(false); setQ(''); }}
-                className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${o.valeur === valeur ? 'bg-[#2471A3]/10 font-medium' : ''}`}
+                className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${o.valeur === valeur ? 'bg-[rgb(var(--brand-light)/0.1)] font-medium' : ''}`}
               >
                 {o.libelle}
                 <span className="ml-2 text-[10px] text-gray-400">{o.valeur.slice(0, 8)}</span>

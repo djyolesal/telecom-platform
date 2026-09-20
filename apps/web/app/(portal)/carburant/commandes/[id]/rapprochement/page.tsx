@@ -73,8 +73,8 @@ export default function RapprochementPage() {
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard title="Commandé" value={`${fmtNumber(t.commande)} L`} icon={CheckCircle2} color="bg-[#1B3F6B]" />
-        <StatCard title="Chargé" value={`${fmtNumber(t.charge)} L`} icon={CheckCircle2} color="bg-[#2471A3]" />
+        <StatCard title="Commandé" value={`${fmtNumber(t.commande)} L`} icon={CheckCircle2} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Chargé" value={`${fmtNumber(t.charge)} L`} icon={CheckCircle2} color="bg-[rgb(var(--brand-light))]" />
         <StatCard title="Livré sur sites" value={`${fmtNumber(t.livreTotal)} L`} icon={CheckCircle2} color="bg-[#148F77]" />
         <StatCard title="Écart non expliqué" value={`${fmtNumber(t.ecartNonExplique)} L`} icon={AlertTriangle} color={t.ecartNonExplique > 0 ? 'bg-[#C0392B]' : 'bg-[#7F8C8D]'} />
       </div>

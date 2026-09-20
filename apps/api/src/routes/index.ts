@@ -23,6 +23,7 @@ import * as rapportsCtrl from '../controllers/rapports.controller';
 import * as usersCtrl from '../controllers/users.controller';
 import * as adminCtrl from '../controllers/admin.controller';
 import * as notifCtrl from '../controllers/notifications.controller';
+import * as themeCtrl from '../controllers/theme.controller';
 import * as uploadCtrl from '../controllers/upload.controller';
 import * as prestatairesCtrl from '../controllers/prestataires.controller';
 import * as lotsCtrl from '../controllers/lots.controller';
@@ -86,6 +87,12 @@ router.post(
 // Authorization. L'URL est signée et expire (cf. storage.service).
 const fileLimit = rateLimit({ windowSec: 60, max: 300, keyPrefix: 'files' });
 router.get('/files/*', fileLimit, filesCtrl.servirFichier);
+
+// ── Thème de l'interface (public) ─────────────────────────────
+// Hors authMiddleware à dessein : l'écran de CONNEXION doit déjà porter les
+// couleurs de la maison, or il n'a pas encore de jeton. Une palette ne révèle
+// rien — ni donnée, ni existence de compte.
+router.get('/ui/theme', themeCtrl.getTheme);
 
 // ── Auth (protégé) ────────────────────────────────────────────
 router.use(authMiddleware); // Tout ce qui suit requiert un JWT valide

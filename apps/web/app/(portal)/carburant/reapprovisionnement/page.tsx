@@ -133,10 +133,10 @@ export default function ReapprovisionnementPage() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <StatCard title="Sites à livrer" value={String(t?.nbSites ?? 0)} icon={MapPin} color="bg-[#1B3F6B]" />
+        <StatCard title="Sites à livrer" value={String(t?.nbSites ?? 0)} icon={MapPin} color="bg-[rgb(var(--brand))]" />
         <StatCard title="Critiques" value={String(t?.nbCritiques ?? 0)} icon={AlertTriangle} color="bg-[#C0392B]" />
-        <StatCard title="Volume recommandé" value={`${fmtNumber(t?.volumeRecommande ?? 0)} L`} icon={Droplet} color="bg-[#2471A3]" />
-        <StatCard title="Tournées suggérées" value={String(t?.nbTournees ?? 0)} icon={Truck} color="bg-[#0E7C6B]" />
+        <StatCard title="Volume recommandé" value={`${fmtNumber(t?.volumeRecommande ?? 0)} L`} icon={Droplet} color="bg-[rgb(var(--brand-light))]" />
+        <StatCard title="Tournées suggérées" value={String(t?.nbTournees ?? 0)} icon={Truck} color="bg-[rgb(var(--accent))]" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -146,7 +146,7 @@ export default function ReapprovisionnementPage() {
 
       <div className="flex gap-1 border-b border-gray-200 mb-4">
         {(['sites', 'tournees', 'anomalies'] as const).map((k) => (
-          <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-[#1B3F6B] text-[#1B3F6B]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-[rgb(var(--brand))] text-[rgb(var(--brand))]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {k === 'sites' ? <><MapPin size={15} /> Sites à livrer</> : k === 'tournees' ? <><Truck size={15} /> Tournées suggérées</> : <><ShieldAlert size={15} /> Anomalies conso {anomData?.totaux.nb ? <Badge className="bg-red-100 text-red-700 ml-1">{anomData.totaux.nb}</Badge> : null}</>}
           </button>
         ))}
@@ -160,7 +160,7 @@ export default function ReapprovisionnementPage() {
       {tab === 'tournees' && (
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-gray-600">
-            <span><Truck size={14} className="inline -mt-0.5 mr-1 text-[#0E7C6B]" /><b>{t?.nbTournees ?? 0}</b> tournées optimisées</span>
+            <span><Truck size={14} className="inline -mt-0.5 mr-1 text-[rgb(var(--accent))]" /><b>{t?.nbTournees ?? 0}</b> tournées optimisées</span>
             <span>≈ <b>{fmtNumber(t?.totalKm ?? 0)}</b> km au total</span>
             <span>remplissage moyen <b>{t?.tauxRemplissageMoyen ?? 0} %</b></span>
             <span className="text-xs text-gray-400">(regroupement par balayage géographique + 2-opt)</span>
@@ -185,7 +185,7 @@ export default function ReapprovisionnementPage() {
                       <h3 className="font-semibold text-gray-800 text-sm">{tr.region} · {tr.sites.length} sites</h3>
                       <span className="text-xs text-gray-500">{fmtNumber(tr.total)} / {fmtNumber(tr.capacite)} L · {tr.tauxRemplissage}%</span>
                     </div>
-                    <div className="h-1.5 w-full rounded bg-gray-100 mb-1"><div className="h-1.5 rounded bg-[#0E7C6B]" style={{ width: `${pct}%` }} /></div>
+                    <div className="h-1.5 w-full rounded bg-gray-100 mb-1"><div className="h-1.5 rounded bg-[rgb(var(--accent))]" style={{ width: `${pct}%` }} /></div>
                     <p className="text-xs text-gray-400 mb-3">≈ {fmtNumber(tr.distanceKm)} km de tournée</p>
                     <ul className="text-sm space-y-1 mb-3 max-h-40 overflow-y-auto">
                       {tr.sites.map((s, si) => (
@@ -212,7 +212,7 @@ export default function ReapprovisionnementPage() {
                           setDone((d) => ({ ...d, [i]: r.id }));
                           refetch();
                         }}
-                        className="w-full rounded-lg bg-[#1B3F6B] px-3 py-2 text-sm font-medium text-white disabled:opacity-40">
+                        className="w-full rounded-lg bg-[rgb(var(--brand))] px-3 py-2 text-sm font-medium text-white disabled:opacity-40">
                         {bcId ? 'Créer le brouillon de livraison' : 'Choisir un bon de commande'}
                       </button>
                     )}

@@ -47,15 +47,15 @@ const fmtDateCourt = (iso?: string | null) => {
 const TENDANCE_ICON: Record<string, string> = { HAUSSE: '↑', BAISSE: '↓', STABLE: '→' };
 
 const NIVEAU_STOCK: Record<string, { label: string; color: string }> = {
-  OK: { label: 'OK', color: '#0E7C6B' },
+  OK: { label: 'OK', color: 'rgb(var(--accent))' },
   FAIBLE: { label: 'Faible', color: '#F59E0B' },
   CRITIQUE: { label: 'Critique', color: '#DC2626' },
   VIDE: { label: 'Vide', color: '#991B1B' },
 };
 
 const STATUT_COLOR: Record<string, string> = {
-  GE_PERMANENT: '#0E7C6B',
-  GE_SECOURS: '#2471A3',
+  GE_PERMANENT: 'rgb(var(--accent))',
+  GE_SECOURS: 'rgb(var(--brand-light))',
   PAS_DE_GE: '#9CA3AF',
 };
 
@@ -99,7 +99,7 @@ function SearchControl({ features, markers, onSelect }: { features: SiteFeature[
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Rechercher un site (nom, région)…"
-          className="w-full rounded-lg border border-gray-200 bg-white/95 py-2 pl-8 pr-8 text-sm shadow-md outline-none focus:border-[#2471A3]"
+          className="w-full rounded-lg border border-gray-200 bg-white/95 py-2 pl-8 pr-8 text-sm shadow-md outline-none focus:border-[rgb(var(--brand-light))]"
         />
         {q && (
           <button onClick={() => setQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -218,13 +218,13 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
         const camions = f.properties.camions ?? [];
         const couleurLivraison = camions.length > 1
           ? COULEUR_MULTI_CAMIONS
-          : (couleurParCamion?.[camions[0] ?? ''] ?? '#2471A3');
+          : (couleurParCamion?.[camions[0] ?? ''] ?? 'rgb(var(--brand-light))');
         // Mode RÉSEAU (NOC) : l'état de coupure prime - rouge = en coupure,
         // ambre = aval d'un site down, vert = en service (palette topologie).
         const reseau = etatReseauParSite?.[f.properties.id];
         const color = vueLivraison ? couleurLivraison
           : etatReseauParSite
-            ? (reseau ? COULEUR_RESEAU[reseau.etat] : '#0E7C6B')
+            ? (reseau ? COULEUR_RESEAU[reseau.etat] : 'rgb(var(--accent))')
           : n === 'CRITIQUE' || n === 'VIDE' ? '#DC2626'
           : n === 'FAIBLE' ? '#F59E0B'
           : (STATUT_COLOR[f.properties.statutGE] ?? '#9CA3AF');
@@ -240,7 +240,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
               radius={11}
               interactive={false}
               pathOptions={role === 'racine'
-                ? { color: '#1B3F6B', weight: 3, fillOpacity: 0 }
+                ? { color: 'rgb(var(--brand))', weight: 3, fillOpacity: 0 }
                 : { color: '#9CA3AF', weight: 2, fillOpacity: 0, dashArray: '3 3' }}
             />
           )}
@@ -262,7 +262,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
                     {(f.properties.livraisons ?? []).map((lv) => (
                       <p key={`${lv.numeroBL}-${lv.immatriculation}`} className="mt-0.5 flex items-center gap-1.5 text-gray-600">
                         <span className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
-                          style={{ background: couleurParCamion?.[lv.immatriculation] ?? '#2471A3' }} />
+                          style={{ background: couleurParCamion?.[lv.immatriculation] ?? 'rgb(var(--brand-light))' }} />
                         <span>{lv.immatriculation} · {lv.numeroBL} · <b>{lv.restant} L</b></span>
                       </p>
                     ))}
@@ -272,7 +272,7 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
                   <p className="mt-1">GE : {({ GE_PERMANENT: 'permanent', GE_SECOURS: 'secours', PAS_DE_GE: 'aucun' } as Record<string, string>)[f.properties.statutGE] ?? f.properties.statutGE} · {f.properties.puissanceGEkva} kVA</p>
                 )}
                 {etatReseauParSite && (
-                  <p className="mt-1 font-semibold" style={{ color: reseau ? COULEUR_RESEAU[reseau.etat] : '#0E7C6B' }}>
+                  <p className="mt-1 font-semibold" style={{ color: reseau ? COULEUR_RESEAU[reseau.etat] : 'rgb(var(--accent))' }}>
                     {reseau?.etat === 'DOWN' ? `SITE ENTIÈREMENT COUPÉ${reseau.note ? ` - ${reseau.note}` : ''}`
                       : reseau?.etat === 'PARTIEL' ? `Coupure partielle - ${reseau.note ?? 'technologie(s) touchée(s)'}`
                       : reseau?.etat === 'IMPACTE' ? 'Aval d\'un site entièrement coupé'
@@ -321,8 +321,8 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
                   );
                 })()}
                 <div className="mt-1 flex flex-col gap-0.5">
-                  {!vueLivraison && <a href={`/sites/${f.properties.id}`} className="text-[#2471A3] underline">Voir la fiche →</a>}
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`} target="_blank" rel="noreferrer" className="text-[#0E7C6B] underline">🧭 Itinéraire →</a>
+                  {!vueLivraison && <a href={`/sites/${f.properties.id}`} className="text-[rgb(var(--brand-light))] underline">Voir la fiche →</a>}
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`} target="_blank" rel="noreferrer" className="text-[rgb(var(--accent))] underline">🧭 Itinéraire →</a>
                 </div>
               </div>
             </Popup>

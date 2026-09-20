@@ -45,29 +45,29 @@ export default function DirectionPage() {
 
       {/* ── KPIs financiers ── */}
       <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Coût énergie" value={fmtFCFA(k.coutEnergieFCFA)} subtitle={`${data.periodeMois} mois`} icon={Banknote} color="bg-[#1B3F6B]" />
-        <StatCard title="Gasoil consommé" value={`${fmtNumber(k.gasoilLitres)} L`} subtitle={fmtFCFA(k.coutGasoilFCFA)} icon={Fuel} color="bg-[#0E7C6B]" />
-        <StatCard title="Électricité CEET" value={fmtFCFA(k.coutCeetFCFA)} icon={Zap} color="bg-[#2471A3]" />
+        <StatCard title="Coût énergie" value={fmtFCFA(k.coutEnergieFCFA)} subtitle={`${data.periodeMois} mois`} icon={Banknote} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Gasoil consommé" value={`${fmtNumber(k.gasoilLitres)} L`} subtitle={fmtFCFA(k.coutGasoilFCFA)} icon={Fuel} color="bg-[rgb(var(--accent))]" />
+        <StatCard title="Électricité CEET" value={fmtFCFA(k.coutCeetFCFA)} icon={Zap} color="bg-[rgb(var(--brand-light))]" />
         <StatCard title="Pertes carburant" value={fmtFCFA(k.pertesCarburantFCFA)} subtitle={`${fmtNumber(k.pertesCarburantLitres)} L · ${k.partPertes}% du gasoil`} icon={ShieldAlert} color="bg-[#DC2626]" />
       </div>
 
       {/* ── KPIs performance ── */}
       <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Respect du préventif" value={k.tauxPreventif != null ? `${k.tauxPreventif}%` : '—'} subtitle={`${k.preventivesRealisees}/${k.preventivesPlanifiees} réalisées`} icon={Wrench} color="bg-[#0E7C6B]" />
+        <StatCard title="Respect du préventif" value={k.tauxPreventif != null ? `${k.tauxPreventif}%` : '—'} subtitle={`${k.preventivesRealisees}/${k.preventivesPlanifiees} réalisées`} icon={Wrench} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Curatives" value={String(k.curatives)} subtitle="interventions correctives" icon={Wrench} color="bg-[#F59E0B]" />
-        <StatCard title="Durée moy. coupure" value={fmtDuree(k.mttrMinutes)} subtitle="MTTR incidents" icon={Clock} color="bg-[#1B3F6B]" />
-        <StatCard title="Délai moy. intervention" value={fmtDuree(k.mttaMinutes)} subtitle={`${k.incidentsOuverts} incident(s) ouvert(s)`} icon={Clock} color="bg-[#2471A3]" />
+        <StatCard title="Durée moy. coupure" value={fmtDuree(k.mttrMinutes)} subtitle="MTTR incidents" icon={Clock} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Délai moy. intervention" value={fmtDuree(k.mttaMinutes)} subtitle={`${k.incidentsOuverts} incident(s) ouvert(s)`} icon={Clock} color="bg-[rgb(var(--brand-light))]" />
       </div>
 
       {/* ── Empreinte carbone ── */}
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-700">Empreinte carbone</h3>
-        <button onClick={() => router.push('/rapports/empreinte-carbone')} className="text-xs font-medium text-[#0E7C6B] hover:underline">Détail par mois, région et site →</button>
+        <button onClick={() => router.push('/rapports/empreinte-carbone')} className="text-xs font-medium text-[rgb(var(--accent))] hover:underline">Détail par mois, région et site →</button>
       </div>
       <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="CO₂ émis" value={`${fmtNumber(k.co2TotalTonnes)} t`} subtitle={`sur ${data.periodeMois} mois`} icon={Leaf} color="bg-[#0E7C6B]" />
+        <StatCard title="CO₂ émis" value={`${fmtNumber(k.co2TotalTonnes)} t`} subtitle={`sur ${data.periodeMois} mois`} icon={Leaf} color="bg-[rgb(var(--accent))]" />
         <StatCard title="dont gasoil (GE)" value={`${fmtNumber(k.co2GasoilTonnes)} t`} subtitle="combustion groupes" icon={Fuel} color="bg-[#C0392B]" />
-        <StatCard title="dont réseau CEET" value={`${fmtNumber(k.co2CeetTonnes)} t`} subtitle="électricité réseau" icon={Zap} color="bg-[#2471A3]" />
+        <StatCard title="dont réseau CEET" value={`${fmtNumber(k.co2CeetTonnes)} t`} subtitle="électricité réseau" icon={Zap} color="bg-[rgb(var(--brand-light))]" />
         <StatCard title="Évité par le solaire" value={`${fmtNumber(k.co2EviteTonnes)} t`} subtitle="émissions évitées" icon={Sun} color="bg-[#F59E0B]" />
       </div>
 
@@ -82,8 +82,8 @@ export default function DirectionPage() {
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
               <Tooltip formatter={(v: number) => fmtFCFA(v)} />
               <Legend />
-              <Bar dataKey="coutGasoil" name="Gasoil" stackId="a" fill="#0E7C6B" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="coutCeet" name="CEET" stackId="a" fill="#2471A3" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="coutGasoil" name="Gasoil" stackId="a" fill="rgb(var(--accent))" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="coutCeet" name="CEET" stackId="a" fill="rgb(var(--brand-light))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

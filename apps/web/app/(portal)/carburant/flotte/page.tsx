@@ -137,7 +137,7 @@ export default function FlottePage() {
       <div className="mb-4 flex gap-1 border-b border-gray-200">
         {([['vehicules', 'Camions', Truck], ['chauffeurs', 'Chauffeurs', User]] as const).map(([k, label, Icon]) => (
           <button key={k} onClick={() => setOnglet(k)}
-            className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium ${onglet === k ? 'border-[#1B3F6B] text-[#1B3F6B]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium ${onglet === k ? 'border-[rgb(var(--brand))] text-[rgb(var(--brand))]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             <Icon size={15} /> {label}
           </button>
         ))}

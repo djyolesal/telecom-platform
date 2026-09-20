@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <>
-          <h1 className="text-xl font-bold text-[#1B3F6B] mb-1">Mot de passe oublié</h1>
+          <h1 className="text-xl font-bold text-[rgb(var(--brand))] mb-1">Mot de passe oublié</h1>
           <p className="text-sm text-gray-500 mb-6">Saisissez votre email pour recevoir un lien de réinitialisation.</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -49,14 +49,14 @@ export default function ForgotPasswordPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20 outline-none"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)] outline-none"
                 placeholder="vous@telecom.tg"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#1B3F6B] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#2471A3] transition-colors disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[rgb(var(--brand))] px-4 py-2.5 text-sm font-medium text-white hover:bg-[rgb(var(--brand-light))] transition-colors disabled:opacity-60"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
               Envoyer le lien

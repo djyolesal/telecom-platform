@@ -212,7 +212,7 @@ export default function ActifsPage() {
     <button
       type="button"
       onClick={() => setStatut(statut === filtre ? '' : filtre)}
-      className={`flex items-center gap-3 rounded-xl border bg-white p-4 text-left transition hover:border-gray-300 ${statut === filtre ? 'border-[#2471A3] ring-1 ring-[#2471A3]/30' : 'border-gray-100'}`}
+      className={`flex items-center gap-3 rounded-xl border bg-white p-4 text-left transition hover:border-gray-300 ${statut === filtre ? 'border-[rgb(var(--brand-light))] ring-1 ring-[rgb(var(--brand-light)/0.3)]' : 'border-gray-100'}`}
     >
       <span className={`flex h-9 w-9 items-center justify-center rounded-lg text-white ${cls}`}><Icon size={17} /></span>
       <span>
@@ -237,13 +237,13 @@ export default function ActifsPage() {
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
         <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1B3F6B] text-white"><Boxes size={17} /></span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[rgb(var(--brand))] text-white"><Boxes size={17} /></span>
           <span>
             <span className="block text-lg font-bold leading-tight text-gray-800">{parc.length}</span>
             <span className="text-xs text-gray-500">Actifs au total</span>
           </span>
         </div>
-        {statCard('En service', nb('EN_SERVICE'), CheckCircle2, 'bg-[#0E7C6B]', 'EN_SERVICE')}
+        {statCard('En service', nb('EN_SERVICE'), CheckCircle2, 'bg-[rgb(var(--accent))]', 'EN_SERVICE')}
         {statCard('Au dépôt', nb('EN_STOCK'), Warehouse, 'bg-gray-500', 'EN_STOCK')}
         {statCard('En transit', nb('EN_TRANSIT'), Truck, 'bg-[#F59E0B]', 'EN_TRANSIT')}
         {statCard('Réformés', nb('REFORME'), Archive, 'bg-[#DC2626]', 'REFORME')}
@@ -281,7 +281,7 @@ export default function ActifsPage() {
                             const cible = m === SANS_MARQUE ? '__SANS__' : m;
                             setMarque(marque === cible ? '' : cible);
                           }}
-                          className={`font-medium hover:underline ${marque === (m === SANS_MARQUE ? '__SANS__' : m) ? 'text-[#2471A3]' : 'text-gray-800'}`}
+                          className={`font-medium hover:underline ${marque === (m === SANS_MARQUE ? '__SANS__' : m) ? 'text-[rgb(var(--brand-light))]' : 'text-gray-800'}`}
                           title={m === SANS_MARQUE ? 'Lister les GE dont la marque reste à renseigner' : 'Filtrer la liste sur cette marque'}
                         >
                           {m}

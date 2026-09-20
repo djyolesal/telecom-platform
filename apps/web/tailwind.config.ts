@@ -10,9 +10,13 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: '#1B3F6B',
-          light: '#2471A3',
-          accent: '#0E7C6B',
+          // <alpha-value> : Tailwind y injecte l'opacité de la classe, donc
+          // `bg-brand/20` fonctionne comme avec une couleur en dur.
+          DEFAULT: 'rgb(var(--brand) / <alpha-value>)',
+          light: 'rgb(var(--brand-light) / <alpha-value>)',
+          accent: 'rgb(var(--accent) / <alpha-value>)',
+          accentLight: 'rgb(var(--accent-light) / <alpha-value>)',
+          tint: 'rgb(var(--brand-tint) / <alpha-value>)',
         },
         severite: {
           critique: '#C0392B',

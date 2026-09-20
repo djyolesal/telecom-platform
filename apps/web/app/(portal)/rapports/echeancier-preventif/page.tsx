@@ -104,10 +104,10 @@ export default function EcheancierPreventifPage() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Total tâches" value={String(resume.total)} icon={CalendarClock} color="bg-[#1B3F6B]" />
+        <StatCard title="Total tâches" value={String(resume.total)} icon={CalendarClock} color="bg-[rgb(var(--brand))]" />
         <StatCard title="En retard" value={String(resume.enRetard)} icon={AlertTriangle} color="bg-[#C0392B]" />
         <StatCard title="Jamais faites" value={String(resume.jamais)} icon={CircleSlash} color="bg-[#D68910]" />
-        <StatCard title="À jour" value={String(resume.aJour)} icon={CheckCircle2} color="bg-[#0E7C6B]" />
+        <StatCard title="À jour" value={String(resume.aJour)} icon={CheckCircle2} color="bg-[rgb(var(--accent))]" />
       </div>
 
       <FilterBar

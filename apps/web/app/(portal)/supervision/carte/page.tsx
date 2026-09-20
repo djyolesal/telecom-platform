@@ -14,7 +14,7 @@ import { COULEUR_MULTI_CAMIONS, PALETTE_CAMIONS } from '@/components/maps/couleu
 import { couleurLiaison, useTypesLiaison } from '@/lib/liaisons';
 
 // Couleur d'un site/liaison selon son état réseau (mode topologie « par état »).
-const ETAT_COULEUR: Record<string, string> = { DOWN: '#C0392B', PARTIEL: '#E67E22', IMPACTE: '#8E44AD', OK: '#0E7C6B' };
+const ETAT_COULEUR: Record<string, string> = { DOWN: '#C0392B', PARTIEL: '#E67E22', IMPACTE: '#8E44AD', OK: 'rgb(var(--accent))' };
 const ETAT_LABEL: Record<string, string> = { DOWN: 'entièrement coupé', PARTIEL: 'coupure partielle', IMPACTE: 'aval menacé', OK: 'en service' };
 
 // Leaflet ne supporte pas le SSR → import dynamique côté client uniquement
@@ -238,7 +238,7 @@ export default function CartePage() {
         <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white text-sm font-medium">
           {(role === 'NOC' ? (['reseau', 'topologie'] as const) : (['stock', 'reseau', 'topologie'] as const)).map((m) => (
             <button key={m} type="button" onClick={() => setModeChoisi(m)}
-              className={`px-3 py-2 ${mode === m ? 'bg-[#1B3F6B] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+              className={`px-3 py-2 ${mode === m ? 'bg-[rgb(var(--brand))] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
               {m === 'stock' ? 'Stock' : m === 'reseau' ? 'Réseau' : 'Topologie'}
             </button>
           ))}
@@ -248,7 +248,7 @@ export default function CartePage() {
             <span className="px-2 py-2 text-gray-400">Liaisons&nbsp;:</span>
             {(['type', 'etat'] as const).map((c) => (
               <button key={c} type="button" onClick={() => setColorationTopo(c)}
-                className={`px-3 py-2 ${colorationTopo === c ? 'bg-[#2471A3] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                className={`px-3 py-2 ${colorationTopo === c ? 'bg-[rgb(var(--brand-light))] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
                 {c === 'type' ? 'Par type' : 'Par état'}
               </button>
             ))}
@@ -298,27 +298,27 @@ export default function CartePage() {
               ))}
               <span className="text-gray-400">FH en pointillé</span>
               <span className="mx-1 h-3 w-px bg-gray-200" />
-              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-[#1B3F6B]" /> Racine (tête de chaîne)</span>
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-[rgb(var(--brand))]" /> Racine (tête de chaîne)</span>
               <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-dashed border-gray-400" /> Isolé (à rattacher)</span>
             </>) : (<>
               <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#C0392B]" /> Coupé</span>
               <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#E67E22]" /> Partiel</span>
               <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#8E44AD]" /> Aval menacé</span>
-              <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[#0E7C6B]" /> En service</span>
+              <span className="flex items-center gap-1"><span className="h-0.5 w-4 rounded bg-[rgb(var(--accent))]" /> En service</span>
               <span className="mx-1 h-3 w-px bg-gray-200" />
-              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-[#1B3F6B]" /> Racine</span>
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-[rgb(var(--brand))]" /> Racine</span>
               <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2 border-dashed border-gray-400" /> Isolé</span>
             </>)
           ) : modeReseau ? (<>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#C0392B]" /> Site entièrement coupé</span>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#E67E22]" /> Coupure partielle</span>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#8E44AD]" /> Aval d&apos;un site coupé</span>
-            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> En service</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[rgb(var(--accent))]" /> En service</span>
           </>) : (<>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#DC2626]" /> Stock critique</span>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#F59E0B]" /> Stock faible</span>
-            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> GE permanent</span>
-            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#2471A3]" /> GE secours</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[rgb(var(--accent))]" /> GE permanent</span>
+            <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[rgb(var(--brand-light))]" /> GE secours</span>
             <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-gray-400" /> Pas de GE</span>
           </>)}
         </div>

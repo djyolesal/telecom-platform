@@ -54,7 +54,7 @@ export function SearchSelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm focus:border-[#2471A3] focus:outline-none"
+        className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm focus:border-[rgb(var(--brand-light))] focus:outline-none"
       >
         <span className={selection ? 'text-gray-800' : 'text-gray-400'}>
           {selection ? selection.label : (emptyLabel ?? placeholder)}
@@ -80,7 +80,7 @@ export function SearchSelect({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={placeholder}
-              className="w-full rounded-md bg-gray-50 py-1.5 pl-7 pr-2 text-sm outline-none focus:bg-white focus:ring-1 focus:ring-[#2471A3]"
+              className="w-full rounded-md bg-gray-50 py-1.5 pl-7 pr-2 text-sm outline-none focus:bg-white focus:ring-1 focus:ring-[rgb(var(--brand-light))]"
             />
           </div>
           <ul className="max-h-56 overflow-y-auto py-1">
@@ -95,7 +95,7 @@ export function SearchSelect({
             {resultats.map((o) => (
               <li key={o.value}>
                 <button type="button" onClick={() => choisir(o.value)}
-                  className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${o.value === value ? 'font-semibold text-[#1B3F6B]' : 'text-gray-700'}`}>
+                  className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${o.value === value ? 'font-semibold text-[rgb(var(--brand))]' : 'text-gray-700'}`}>
                   {o.label}
                 </button>
               </li>

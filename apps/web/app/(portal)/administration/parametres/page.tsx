@@ -60,6 +60,35 @@ export default function ParametresPage() {
     }))),
     onSuccess: () => { setSavedOk(true); queryClient.invalidateQueries({ queryKey: ['sms-canaux'] }); },
   });
+  // APPARENCE : la charte est un réglage, pas une constante. La changer ne doit
+  // pas demander une livraison de code.
+  const { data: themes } = useQuery({
+    queryKey: ['ui-theme'],
+    queryFn: () => api.get('/ui/theme').then(
+      (r) => r.data.data as {
+        actuel: { cle: string; nom: string; brand: string; brandLight: string; accent: string };
+        disponibles: { cle: string; nom: string; brand: string; brandLight: string; accent: string }[];
+      }
+    ),
+  });
+  const choisirTheme = useMutation({
+    mutationFn: (cle: string) => api.put('/admin/settings', [
+      { key: 'ui.theme', value: cle, description: "Thème de l'interface web" },
+      // Les surcharges couleur par couleur sont remises à vide : sinon un
+      // ancien ajustement resterait collé au nouveau thème et donnerait un
+      // mélange que personne n'a choisi.
+      ...['brand', 'brandLight', 'accent', 'accentLight', 'brandTint']
+        .map((c) => ({ key: `ui.theme.${c}`, value: '' })),
+    ]),
+    onSuccess: () => {
+      setSavedOk(true);
+      queryClient.invalidateQueries({ queryKey: ['ui-theme'] });
+      // Rechargement : les variables CSS sont posées au montage, et toute
+      // l'interface en dépend — un rafraîchissement partiel laisserait des
+      // écrans à moitié repeints.
+      window.location.reload();
+    },
+  });
   const [tplEdits, setTplEdits] = useState<Record<string, string>>({});
   useEffect(() => {
     if (tpls) {
@@ -128,10 +157,50 @@ export default function ParametresPage() {
               <input
                 value={edited[s.key] ?? ''}
                 onChange={(e) => { setEdited((p) => ({ ...p, [s.key]: e.target.value })); setSavedOk(false); }}
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20 outline-none"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)] outline-none"
               />
             </div>
           ))}
+        </div>
+      )}
+
+      {themes && (
+        <div className="mt-8">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold text-gray-700">Apparence</h2>
+            <p className="max-w-3xl text-xs text-gray-400">
+              Le thème s&apos;applique à <b>tout le monde</b>, écran de connexion compris. Les couleurs de statut
+              (rouge pour un incident critique, ambre pour une alerte) ne changent pas : elles doivent rester
+              reconnaissables quelle que soit la charte.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {themes.disponibles.map((t) => {
+              const actif = t.cle === themes.actuel.cle;
+              return (
+                <button
+                  key={t.cle}
+                  type="button"
+                  onClick={() => { if (!actif) choisirTheme.mutate(t.cle); }}
+                  disabled={choisirTheme.isPending}
+                  className={`rounded-xl border p-4 text-left transition ${actif ? 'border-brand ring-2 ring-brand/20' : 'border-gray-100 bg-white hover:border-gray-300'}`}
+                >
+                  <div className="mb-2 flex gap-1.5">
+                    {[t.brand, t.brandLight, t.accent].map((c, i) => (
+                      <span key={i} className="h-6 w-6 rounded-md" style={{ backgroundColor: `rgb(${c})` }} />
+                    ))}
+                  </div>
+                  <p className="text-sm font-medium text-gray-800">{t.nom}</p>
+                  <p className="text-xs text-gray-400">{actif ? 'Thème actif' : 'Appliquer'}</p>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            Les couleurs du thème « Moov Africa » sont approchées d&apos;après l&apos;identité publique. Pour coller à
+            la charte officielle, saisissez les valeurs exactes en triplets RVB dans les réglages
+            <code className="mx-1 rounded bg-gray-100 px-1">ui.theme.brand</code> et suivants.
+          </p>
         </div>
       )}
 
@@ -207,7 +276,7 @@ export default function ParametresPage() {
                     ))}
                     {(tplEdits[t.key] ?? '') !== t.defaut && (
                       <button type="button" onClick={() => { setTplEdits((p) => ({ ...p, [t.key]: t.defaut })); setSavedOk(false); }}
-                        className="text-[11px] font-medium text-[#2471A3] hover:underline">défaut</button>
+                        className="text-[11px] font-medium text-[rgb(var(--brand-light))] hover:underline">défaut</button>
                     )}
                   </div>
                 </div>
@@ -215,7 +284,7 @@ export default function ParametresPage() {
                   value={tplEdits[t.key] ?? ''}
                   onChange={(e) => { setTplEdits((p) => ({ ...p, [t.key]: e.target.value })); setSavedOk(false); }}
                   rows={2}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm outline-none focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm outline-none focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)]"
                 />
               </div>
             ))}

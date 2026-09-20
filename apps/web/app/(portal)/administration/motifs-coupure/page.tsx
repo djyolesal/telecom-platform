@@ -69,7 +69,7 @@ export default function MotifsCoupurePage() {
       <div className="mb-4 flex gap-2">
         {CHAMPS.map((c) => (
           <button key={c.value} type="button" onClick={() => { setChamp(c.value); setError(''); }}
-            className={`rounded-full border px-4 py-1.5 text-sm font-medium ${champ === c.value ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+            className={`rounded-full border px-4 py-1.5 text-sm font-medium ${champ === c.value ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
             {c.label}
           </button>
         ))}
@@ -100,7 +100,7 @@ export default function MotifsCoupurePage() {
             ) : (
               <>
                 <span className={`flex-1 text-sm ${m.actif ? 'text-gray-800' : 'text-gray-400 line-through'}`}>{m.libelle}</span>
-                <button type="button" title="Renommer" className="p-1 text-gray-400 hover:text-[#1B3F6B]" onClick={() => { setEditId(m.id); setEditLibelle(m.libelle); }}><Pencil size={15} /></button>
+                <button type="button" title="Renommer" className="p-1 text-gray-400 hover:text-[rgb(var(--brand))]" onClick={() => { setEditId(m.id); setEditLibelle(m.libelle); }}><Pencil size={15} /></button>
                 <button type="button" title={m.actif ? 'Désactiver (ne sera plus suggérée)' : 'Réactiver'}
                   className={`rounded px-2 py-0.5 text-xs font-medium ${m.actif ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}
                   onClick={() => save.mutate({ id: m.id, champ: m.champ, libelle: m.libelle, actif: !m.actif })}>

@@ -88,9 +88,9 @@ export default function PertesCarburantPage() {
       />
 
       <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Sites à risque" value={String(meta.nbSites ?? 0)} icon={ShieldAlert} color="bg-[#1B3F6B]" />
+        <StatCard title="Sites à risque" value={String(meta.nbSites ?? 0)} icon={ShieldAlert} color="bg-[rgb(var(--brand))]" />
         <StatCard title="Critiques" value={String(meta.critiques ?? 0)} icon={TriangleAlert} color="bg-[#DC2626]" />
-        <StatCard title="Gasoil perdu" value={`${fmtNumber(meta.totalPerteLitres)} L`} icon={Droplets} color="bg-[#0E7C6B]" />
+        <StatCard title="Gasoil perdu" value={`${fmtNumber(meta.totalPerteLitres)} L`} icon={Droplets} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Perte estimée" value={fmtFCFA(meta.totalPerteFCFA)} icon={Banknote} color="bg-[#F59E0B]" />
       </div>
 

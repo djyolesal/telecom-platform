@@ -28,7 +28,7 @@ function LI({ children }: { children: React.ReactNode }) {
 export default function ConfidentialitePage() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-br from-[#1B3F6B] to-[#0E7C6B] px-4 py-10 text-white">
+      <header className="bg-gradient-to-br from-[rgb(var(--brand))] to-[rgb(var(--accent))] px-4 py-10 text-white">
         <div className="mx-auto max-w-3xl">
           <p className="text-sm font-semibold uppercase tracking-widest text-white/70">E&M OpS</p>
           <h1 className="mt-1 text-3xl font-bold">Politique de confidentialité</h1>

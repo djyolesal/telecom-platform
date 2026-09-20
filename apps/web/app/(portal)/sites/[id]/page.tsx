@@ -140,16 +140,16 @@ export default function SiteDetailPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Config énergie" value={POWER_CONFIGS.find((p) => p.value === site.powerConfig)?.label ?? site.powerConfig} icon={Zap} color="bg-[#2471A3]" />
-        <StatCard title="Statut GE" value={STATUTS_GE.find((p) => p.value === site.statutGE)?.label ?? site.statutGE} icon={Gauge} color="bg-[#1B3F6B]" />
-        <StatCard title="Stock gasoil" value={`${fmtNumber(stock?.stockLitres)} L`} subtitle={stock?.autonomieJours != null ? `Autonomie ${stock.autonomieJours} j` : undefined} icon={Fuel} color="bg-[#0E7C6B]" />
-        <StatCard title="Puissance GE" value={`${Number(site.puissanceGEkva).toFixed(0)} kVA`} icon={MapPin} color="bg-[#1B3F6B]" />
+        <StatCard title="Config énergie" value={POWER_CONFIGS.find((p) => p.value === site.powerConfig)?.label ?? site.powerConfig} icon={Zap} color="bg-[rgb(var(--brand-light))]" />
+        <StatCard title="Statut GE" value={STATUTS_GE.find((p) => p.value === site.statutGE)?.label ?? site.statutGE} icon={Gauge} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Stock gasoil" value={`${fmtNumber(stock?.stockLitres)} L`} subtitle={stock?.autonomieJours != null ? `Autonomie ${stock.autonomieJours} j` : undefined} icon={Fuel} color="bg-[rgb(var(--accent))]" />
+        <StatCard title="Puissance GE" value={`${Number(site.puissanceGEkva).toFixed(0)} kVA`} icon={MapPin} color="bg-[rgb(var(--brand))]" />
       </div>
 
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
         <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-gray-700"><Building2 size={15} /> Rattachement</h3>
         {(site.parentTransmission || (site.enfantsTransmission?.length ?? 0) > 0) && (
-          <div className="mb-3 rounded-lg bg-[#EAF1F8] px-4 py-2.5 text-sm">
+          <div className="mb-3 rounded-lg bg-[rgb(var(--brand-tint))] px-4 py-2.5 text-sm">
             <span className="text-gray-500">Transmission : </span>
             {/* Fil d'Ariane AMONT : racine → … → ce site. Chaque maillon est
                 cliquable, chaque flèche porte le type de liaison, un maillon
@@ -221,7 +221,7 @@ export default function SiteDetailPage() {
         {!site.parentTransmission && (site.enfantsTransmission?.length ?? 0) === 0 && canEditTransmission && (
           <div className="mb-3 rounded-lg bg-gray-50 px-4 py-2.5 text-sm text-gray-500">
             Aucune liaison de transmission déclarée.
-            <button type="button" onClick={() => setEditTransmission(true)} className="ml-2 text-[#2471A3] underline hover:no-underline">
+            <button type="button" onClick={() => setEditTransmission(true)} className="ml-2 text-[rgb(var(--brand-light))] underline hover:no-underline">
               Rattacher ce site à son amont
             </button>
           </div>
@@ -288,7 +288,7 @@ export default function SiteDetailPage() {
           } />
           <InfoRow label="Agent de sécurité" value={site.hasGardien ? 'Oui' : 'Non'} />
           <InfoRow label="Sté gardiennage" value={site.gardiennagePrestataire?.nom ?? site.societeGardiennage ?? '—'} />
-          <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[#2471A3] hover:underline">{site.telephoneSite}</a> : '—'} />
+          <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[rgb(var(--brand-light))] hover:underline">{site.telephoneSite}</a> : '—'} />
         </div>
         {site.cuve?.calculable && <ConvertisseurCuve site={site} />}
         {(site.cuve?.photos?.length ?? 0) > 0 && (
@@ -493,10 +493,10 @@ function ConvertisseurCuve({ site }: {
   const litres = hauteur !== '' ? litresPourHauteur(cfg, Number(hauteur.replace(',', '.'))) : null;
   const depasse = max != null && hauteur !== '' && Number(hauteur.replace(',', '.')) > max;
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[#EAF1F8] px-3 py-2 text-sm text-[#1B3F6B]">
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[rgb(var(--brand-tint))] px-3 py-2 text-sm text-[rgb(var(--brand))]">
       <span className="font-medium">Hauteur mesurée :</span>
       <input value={hauteur} onChange={(e) => setHauteur(e.target.value)} inputMode="decimal"
-        className="w-20 rounded-md border border-[#1B3F6B]/20 bg-white px-2 py-1 text-right text-sm" placeholder="cm" />
+        className="w-20 rounded-md border border-[rgb(var(--brand)/0.2)] bg-white px-2 py-1 text-right text-sm" placeholder="cm" />
       <span>cm →</span>
       <b>{litres != null ? `${litres.toLocaleString('fr-FR')} L` : '…'}</b>
       {depasse && <span className="text-xs text-amber-700">hauteur au-delà du max ({max} cm) - volume plafonné</span>}

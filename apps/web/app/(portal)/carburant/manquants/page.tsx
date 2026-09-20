@@ -210,8 +210,8 @@ export default function ManquantsPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
         <StatCard title="Manquant total (sites)" value={`${fmtNumber(t?.manquantSitesLitres ?? 0)} L`} icon={AlertTriangle} color="bg-[#C0392B]" />
-        <StatCard title="Sites manquants" value={String(t?.nbSitesManquants ?? 0)} icon={MapPin} color="bg-[#1B3F6B]" />
-        <StatCard title="Camions avec écart" value={String(t?.nbCamionsEcart ?? 0)} icon={Truck} color="bg-[#2471A3]" />
+        <StatCard title="Sites manquants" value={String(t?.nbSitesManquants ?? 0)} icon={MapPin} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Camions avec écart" value={String(t?.nbCamionsEcart ?? 0)} icon={Truck} color="bg-[rgb(var(--brand-light))]" />
         <StatCard title="Critiques (≥ seuil)" value={`${(t?.nbLignesCritiques ?? 0)} sites · ${(t?.nbCamionsCritiques ?? 0)} camions`} icon={AlertTriangle} color="bg-[#C0392B]" />
         <StatCard title="À traiter" value={`${nbAttente}`} icon={ClipboardList} color="bg-[#B7950B]" />
       </div>
@@ -237,7 +237,7 @@ export default function ManquantsPage() {
       <div className="flex gap-1 border-b border-gray-200 mb-4">
         {TABS.map((tb) => (
           <button key={tb.key} onClick={() => setTab(tb.key)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === tb.key ? 'border-[#1B3F6B] text-[#1B3F6B]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === tb.key ? 'border-[rgb(var(--brand))] text-[rgb(var(--brand))]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             <tb.icon size={15} /> {tb.label}
           </button>
         ))}

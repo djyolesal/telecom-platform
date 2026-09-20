@@ -186,8 +186,8 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
           </div>
         )}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
-          <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
-            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">
+          <div className="rounded-lg border border-dashed border-[rgb(var(--brand)/0.4)] bg-[rgb(var(--brand-tint)/0.5)] p-3">
+            <p className="mb-1.5 text-xs font-semibold text-[rgb(var(--brand))]">
               PDF du bon de livraison <span className="text-red-500">*</span>
               <span className="font-normal text-gray-500"> - pré-remplit le formulaire (un lot de plusieurs BL est accepté)</span>
             </p>
@@ -204,7 +204,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {extraits.map((d) => (
                   <button key={d.page} type="button" onClick={() => appliquerExtrait(d)}
-                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${pageChoisie === d.page ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${pageChoisie === d.page ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
                     {d.numeroBL ?? `page ${d.page}`}{d.volumeChargeLitres ? ` · ${d.volumeChargeLitres.toLocaleString('fr-FR')} L` : ''}
                   </button>
                 ))}

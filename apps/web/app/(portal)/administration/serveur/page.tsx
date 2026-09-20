@@ -60,10 +60,10 @@ export default function ServeurPage() {
       <h3 className="font-semibold text-gray-700 text-sm mb-3">Ressources</h3>
       {lm ? <Loading /> : metrics && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard title="Charge CPU (1m)" value={metrics.cpu?.load1 ?? '—'} subtitle={`${metrics.cpu?.cores} cœurs`} icon={Cpu} color="bg-[#2471A3]" />
-          <StatCard title="Mémoire" value={`${metrics.memory?.usedPercent ?? 0}%`} subtitle={`${metrics.memory?.usedMB} / ${metrics.memory?.totalMB} MB`} icon={MemoryStick} color="bg-[#0E7C6B]" />
-          <StatCard title="Process API" value={`${metrics.process?.rssMB ?? 0} MB`} subtitle={metrics.process?.nodeVersion} icon={Activity} color="bg-[#1B3F6B]" />
-          <StatCard title="Uptime serveur" value={`${Math.floor((metrics.uptimeSeconds ?? 0) / 3600)} h`} subtitle={metrics.hostname} icon={Server} color="bg-[#1B3F6B]" />
+          <StatCard title="Charge CPU (1m)" value={metrics.cpu?.load1 ?? '—'} subtitle={`${metrics.cpu?.cores} cœurs`} icon={Cpu} color="bg-[rgb(var(--brand-light))]" />
+          <StatCard title="Mémoire" value={`${metrics.memory?.usedPercent ?? 0}%`} subtitle={`${metrics.memory?.usedMB} / ${metrics.memory?.totalMB} MB`} icon={MemoryStick} color="bg-[rgb(var(--accent))]" />
+          <StatCard title="Process API" value={`${metrics.process?.rssMB ?? 0} MB`} subtitle={metrics.process?.nodeVersion} icon={Activity} color="bg-[rgb(var(--brand))]" />
+          <StatCard title="Uptime serveur" value={`${Math.floor((metrics.uptimeSeconds ?? 0) / 3600)} h`} subtitle={metrics.hostname} icon={Server} color="bg-[rgb(var(--brand))]" />
         </div>
       )}
 

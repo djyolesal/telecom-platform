@@ -137,15 +137,15 @@ export default function ConformiteArcepPage() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard title="Sites analysés" value={String(data.sitesAnalyses)} subtitle="stations de base actives" icon={WifiOff} color="bg-[#1B3F6B]" />
-        <StatCard title="Hors seuil DR1" value={String(data.nonConformesDr1)} subtitle={`> ${data.seuils.dr1Max} indisponibilités ≥ 1 h dans le mois`} icon={ShieldAlert} color={data.nonConformesDr1 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
-        <StatCard title="Hors seuil DR2" value={String(data.nonConformesDr2)} subtitle="au moins 1 coupure continue > 3 h dans une journée" icon={ShieldAlert} color={data.nonConformesDr2 ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
+        <StatCard title="Sites analysés" value={String(data.sitesAnalyses)} subtitle="stations de base actives" icon={WifiOff} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Hors seuil DR1" value={String(data.nonConformesDr1)} subtitle={`> ${data.seuils.dr1Max} indisponibilités ≥ 1 h dans le mois`} icon={ShieldAlert} color={data.nonConformesDr1 ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
+        <StatCard title="Hors seuil DR2" value={String(data.nonConformesDr2)} subtitle="au moins 1 coupure continue > 3 h dans une journée" icon={ShieldAlert} color={data.nonConformesDr2 ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
         <StatCard
           title={inclureNonAdoptees ? 'Non conformes (réel)' : 'Non conformes'}
           value={String(inclureNonAdoptees ? data.nonConformesReel : data.nonConformes)}
           subtitle={inclureNonAdoptees ? 'détections non adoptées incluses' : `${data.sitesEcartVerdict} de plus si non adoptées comptées`}
           icon={CalendarRange}
-          color={(inclureNonAdoptees ? data.nonConformesReel : data.nonConformes) ? 'bg-[#B26A00]' : 'bg-[#0E7C6B]'}
+          color={(inclureNonAdoptees ? data.nonConformesReel : data.nonConformes) ? 'bg-[#B26A00]' : 'bg-[rgb(var(--accent))]'}
         />
       </div>
 

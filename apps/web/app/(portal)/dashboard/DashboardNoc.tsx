@@ -89,7 +89,7 @@ function LigneDeVie24h({ pouls }: { pouls: Pouls }) {
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="mt-1 block h-14 w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d={d} stroke={style.trace} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" fill="none"
           style={{ filter: `drop-shadow(0 0 5px ${style.trace}66)` }} />
-        <circle cx={W - 8} cy={BASE} r="4" fill="#0E7C6B" />
+        <circle cx={W - 8} cy={BASE} r="4" fill="rgb(var(--accent))" />
       </svg>
       <div className="flex justify-between text-[10px] font-medium text-gray-400">
         <span>il y a 24 h</span>
@@ -146,7 +146,7 @@ export function DashboardNoc() {
         <Tuile titre="AUTO à traiter" valeur={stats?.enCoursAuto ?? '…'} detail="détections automatiques non prises en charge"
           accent={stats && stats.enCoursAuto > 0 ? 'text-indigo-600' : undefined} />
         <Tuile titre="À qualifier" valeur={stats?.aQualifier ?? '…'} detail="alarme ou classement manquant"
-          accent={stats && stats.aQualifier > 0 ? 'text-[#1B3F6B]' : undefined} />
+          accent={stats && stats.aQualifier > 0 ? 'text-[rgb(var(--brand))]' : undefined} />
         <Tuile titre="Nouvelles (1 h)" valeur={stats?.nouvellesDerniereHeure ?? '…'} detail="débutées dans l'heure"
           accent={stats && stats.nouvellesDerniereHeure > 0 ? 'text-amber-600' : undefined} />
         <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
@@ -165,9 +165,9 @@ export function DashboardNoc() {
       <div className="mb-6 rounded-xl border border-gray-100 bg-white">
         <div className="flex items-center justify-between border-b border-gray-50 px-5 py-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <ClipboardList size={15} className="text-[#1B3F6B]" /> Coupures actives - les plus graves d&apos;abord
+            <ClipboardList size={15} className="text-[rgb(var(--brand))]" /> Coupures actives - les plus graves d&apos;abord
           </h3>
-          <Link href="/supervision/coupures" className="flex items-center gap-1 text-xs font-medium text-[#2471A3] hover:underline">
+          <Link href="/supervision/coupures" className="flex items-center gap-1 text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">
             Tout voir <ArrowRight size={13} />
           </Link>
         </div>
@@ -182,7 +182,7 @@ export function DashboardNoc() {
                 <Link href={`/supervision/coupures?search=${encodeURIComponent(c.site?.nom ?? '')}`}
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-sm hover:bg-gray-50">
                   <span className="font-medium text-gray-800">{c.site?.nom ?? '—'}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${c.technologie === 'SITE' ? 'bg-red-50 text-red-700' : 'bg-[#EAF1F8] text-[#1B3F6B]'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${c.technologie === 'SITE' ? 'bg-red-50 text-red-700' : 'bg-[rgb(var(--brand-tint))] text-[rgb(var(--brand))]'}`}>
                     {c.technologie === 'SITE' ? 'Site entier' : c.technologie}
                   </span>
                   {c.source === 'OSS' && (
@@ -208,8 +208,8 @@ export function DashboardNoc() {
           const Icon = a.icon;
           return (
             <Link key={a.href} href={a.href}
-              className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 transition-all hover:border-[#2471A3]/30 hover:shadow-md">
-              <div className="rounded-lg bg-[#1B3F6B] p-2 transition-colors group-hover:bg-[#2471A3]">
+              className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 transition-all hover:border-[rgb(var(--brand-light)/0.3)] hover:shadow-md">
+              <div className="rounded-lg bg-[rgb(var(--brand))] p-2 transition-colors group-hover:bg-[rgb(var(--brand-light))]">
                 <Icon size={16} className="text-white" />
               </div>
               <span className="text-sm font-semibold text-gray-700">{a.label}</span>

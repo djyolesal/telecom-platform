@@ -78,7 +78,7 @@ function LoginForm() {
     <div className="bg-white rounded-2xl shadow-2xl p-8">
       <div className="text-center mb-8">
         <div className="mb-3 flex justify-center"><LogoIcon size={56} /></div>
-        <h1 className="text-2xl font-bold text-[#1B3F6B]"><LogoWordmark /></h1>
+        <h1 className="text-2xl font-bold text-[rgb(var(--brand))]"><LogoWordmark /></h1>
         <p className="text-sm text-gray-500 mt-1">Exploitation &amp; Maintenance · Operations Services</p>
       </div>
 
@@ -98,7 +98,7 @@ function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="username"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20 outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)] outline-none"
             placeholder="vous@telecom.tg"
           />
         </div>
@@ -111,13 +111,13 @@ function LoginForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20 outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)] outline-none"
             placeholder="••••••••"
           />
         </div>
 
         <div className="flex justify-end">
-          <Link href="/forgot-password" className="text-xs text-[#2471A3] hover:underline">
+          <Link href="/forgot-password" className="text-xs text-[rgb(var(--brand-light))] hover:underline">
             Mot de passe oublié ?
           </Link>
         </div>
@@ -125,7 +125,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#1B3F6B] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#2471A3] transition-colors disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-[rgb(var(--brand))] px-4 py-2.5 text-sm font-medium text-white hover:bg-[rgb(var(--brand-light))] transition-colors disabled:opacity-60"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
           {loading ? 'Connexion...' : 'Se connecter'}

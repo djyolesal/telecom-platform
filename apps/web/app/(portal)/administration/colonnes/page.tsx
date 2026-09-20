@@ -93,7 +93,7 @@ export default function ColonnesTableauxPage() {
           return (
             <div key={table} className="rounded-xl border border-gray-100 bg-white">
               <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
-                <Columns3 size={15} className="text-[#1B3F6B]" />
+                <Columns3 size={15} className="text-[rgb(var(--brand))]" />
                 <span className="text-sm font-semibold text-gray-800">{def.titre}</span>
                 <span className="ml-auto text-xs text-gray-400">{actives[table].size}/{def.colonnes.length}</span>
                 <button
@@ -103,7 +103,7 @@ export default function ColonnesTableauxPage() {
                     setActives((prev) => ({ ...prev, [table]: new Set(toutes ? [] : def.colonnes.map((c) => c.key)) }));
                     setSavedOk(false);
                   }}
-                  className="text-xs font-medium text-[#2471A3] hover:underline"
+                  className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline"
                 >
                   {actives[table].size === def.colonnes.length ? 'Tout décocher' : 'Tout cocher'}
                 </button>
@@ -115,7 +115,7 @@ export default function ColonnesTableauxPage() {
                       type="checkbox"
                       checked={actives[table].has(c.key)}
                       onChange={() => toggle(table, c.key)}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#0E7C6B] focus:ring-[#0E7C6B]"
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[rgb(var(--accent))] focus:ring-[rgb(var(--accent))]"
                     />
                     <span>
                       <span className="block text-sm font-medium text-gray-800">{c.header}</span>

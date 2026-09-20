@@ -157,13 +157,13 @@ export default function SitesPage() {
               });
               setPage(1);
             }}
-            className={`rounded-full border px-2.5 py-1 text-xs font-medium ${configsFiltre.has(c.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium ${configsFiltre.has(c.value) ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
             {c.label}
           </button>
         ))}
         {configsFiltre.size > 0 && (
           <button type="button" onClick={() => { setConfigsFiltre(new Set()); setPage(1); }}
-            className="text-xs font-medium text-[#2471A3] hover:underline">Toutes</button>
+            className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">Toutes</button>
         )}
       </div>
 
@@ -230,7 +230,7 @@ function ImportSitesModal({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={() => downloadFile('/sites/import/template', 'modele_import_sites.xlsx')}
-          className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-[#2471A3] hover:underline"
+          className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-[rgb(var(--brand-light))] hover:underline"
         >
           <FileDown size={15} /> Télécharger le modèle
         </button>
@@ -296,19 +296,19 @@ function CouvertureCuvesBloc() {
   if (!data || data.total === 0 || data.restants.length === 0) return null;
   const pct = Math.round((data.configures / data.total) * 100);
   return (
-    <div className="mb-4 rounded-xl border border-[#1B3F6B]/15 bg-[#EAF1F8] p-4">
+    <div className="mb-4 rounded-xl border border-[rgb(var(--brand)/0.15)] bg-[rgb(var(--brand-tint))] p-4">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
-        <p className="text-sm text-[#1B3F6B]">
+        <p className="text-sm text-[rgb(var(--brand))]">
           <span className="font-semibold">Cuves calculables : {data.configures}/{data.total} sites ({pct} %)</span>
-          <span className="text-[#1B3F6B]/70"> - {data.restants.length} cuve(s) à configurer (dimensions ou barème) pour la conversion hauteur → litres</span>
+          <span className="text-[rgb(var(--brand)/0.7)]"> - {data.restants.length} cuve(s) à configurer (dimensions ou barème) pour la conversion hauteur → litres</span>
         </p>
-        <span className="shrink-0 text-xs font-medium text-[#1B3F6B] underline">{open ? 'Masquer' : 'Voir les sites'}</span>
+        <span className="shrink-0 text-xs font-medium text-[rgb(var(--brand))] underline">{open ? 'Masquer' : 'Voir les sites'}</span>
       </button>
       {open && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {data.restants.map((s) => (
             <button key={s.id} type="button" onClick={() => router.push(`/sites/${s.id}/modifier`)}
-              className="rounded-full border border-[#1B3F6B]/20 bg-white px-2.5 py-1 text-xs text-[#1B3F6B] hover:bg-[#1B3F6B]/5"
+              className="rounded-full border border-[rgb(var(--brand)/0.2)] bg-white px-2.5 py-1 text-xs text-[rgb(var(--brand))] hover:bg-[rgb(var(--brand)/0.05)]"
               title={s.region}>
               {s.nom}
             </button>

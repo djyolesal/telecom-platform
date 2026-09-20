@@ -52,10 +52,10 @@ export default function SlaPage() {
       />
 
       <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Prestataires suivis" value={String(data.parPrestataire.length)} icon={ShieldCheck} color="bg-[#1B3F6B]" />
+        <StatCard title="Prestataires suivis" value={String(data.parPrestataire.length)} icon={ShieldCheck} color="bg-[rgb(var(--brand))]" />
         <StatCard title="Hors SLA" value={String(nonConformes)} icon={AlertTriangle} color="bg-[#DC2626]" />
         <StatCard title="Pénalités estimées" value={fmtFCFA(data.penaliteTotaleFCFA)} icon={Banknote} color="bg-[#F59E0B]" />
-        <StatCard title="Seuils" value={`${data.seuils.tauxPreventifMinPct}% · ${data.seuils.delaiResolutionMaxH}h · ${data.seuils.dispoPassiveMinPct}%`} subtitle="préventif min · résolution max · dispo passive min" icon={Timer} color="bg-[#2471A3]" />
+        <StatCard title="Seuils" value={`${data.seuils.tauxPreventifMinPct}% · ${data.seuils.delaiResolutionMaxH}h · ${data.seuils.dispoPassiveMinPct}%`} subtitle="préventif min · résolution max · dispo passive min" icon={Timer} color="bg-[rgb(var(--brand-light))]" />
       </div>
 
       {data.parPrestataire.length === 0 ? (

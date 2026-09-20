@@ -144,18 +144,18 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside className={cn(
-        'flex flex-col bg-[#1B3F6B] text-white transition-all duration-300 z-20',
+        'flex flex-col bg-[rgb(var(--brand))] text-white transition-all duration-300 z-20',
         sidebarOpen ? 'w-64' : 'w-16'
       )}>
         {/* Logo */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-[#2471A3]">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-[rgb(var(--brand-light))]">
           {sidebarOpen && (
             <span className="flex items-center gap-2 font-bold text-lg tracking-tight">
               <LogoIcon size={26} variant="dark" />
               <LogoWordmark variant="dark" />
             </span>
           )}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 rounded hover:bg-[#2471A3] transition-colors">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 rounded hover:bg-[rgb(var(--brand-light))] transition-colors">
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
@@ -167,7 +167,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               {g.titre && (sidebarOpen ? (
                 <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#7E9CBF]">{g.titre}</p>
               ) : (
-                <div className="mx-2 mb-2 border-t border-[#2471A3]/60" />
+                <div className="mx-2 mb-2 border-t border-[rgb(var(--brand-light)/0.6)]" />
               ))}
               <div className="space-y-1">
                 {g.items.map((item) => {
@@ -180,8 +180,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                       className={cn(
                         'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                         active
-                          ? 'bg-[#2471A3] text-white font-medium'
-                          : 'text-blue-100 hover:bg-[#2471A3]/60'
+                          ? 'bg-[rgb(var(--brand-light))] text-white font-medium'
+                          : 'text-blue-100 hover:bg-[rgb(var(--brand-light)/0.6)]'
                       )}
                       title={!sidebarOpen ? item.label : undefined}
                     >
@@ -196,9 +196,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         </nav>
 
         {/* User info */}
-        <div className="border-t border-[#2471A3] p-3">
+        <div className="border-t border-[rgb(var(--brand-light))] p-3">
           <div className={cn('flex items-center gap-3', !sidebarOpen && 'justify-center')}>
-            <div className="w-8 h-8 rounded-full bg-[#0E7C6B] flex items-center justify-center text-xs font-bold flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[rgb(var(--accent))] flex items-center justify-center text-xs font-bold flex-shrink-0">
               {session?.user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
             {sidebarOpen && (
@@ -254,7 +254,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               <div className="rounded-full bg-red-50 p-4"><ShieldAlert size={32} className="text-red-500" /></div>
               <h2 className="mt-4 text-lg font-semibold text-gray-800">Accès refusé</h2>
               <p className="mt-1 max-w-sm text-sm text-gray-500">Cette section n&apos;est pas ouverte à votre profil. Contactez votre responsable si vous pensez y avoir droit.</p>
-              <Link href="/dashboard" className="mt-4 rounded-lg bg-[#1B3F6B] px-4 py-2 text-sm font-medium text-white hover:bg-[#2471A3]">Retour au tableau de bord</Link>
+              <Link href="/dashboard" className="mt-4 rounded-lg bg-[rgb(var(--brand))] px-4 py-2 text-sm font-medium text-white hover:bg-[rgb(var(--brand-light))]">Retour au tableau de bord</Link>
             </div>
           ) : children}
         </main>

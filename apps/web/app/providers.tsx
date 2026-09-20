@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SessionProvider } from 'next-auth/react';
 import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query';
 import { Toaster } from '@/components/shared/Toaster';
+import { ThemeProvider } from '@/components/shared/ThemeProvider';
 import { toast, errorMessage } from '@/lib/toast';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -34,6 +35,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         {children}
+        {/* Applique la charte choisie AVANT tout rendu visible ailleurs :
+            monté ici, il couvre aussi l'écran de connexion. */}
+        <ThemeProvider />
         <Toaster />
       </QueryClientProvider>
     </SessionProvider>

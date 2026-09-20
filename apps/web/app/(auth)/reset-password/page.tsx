@@ -42,7 +42,7 @@ function ResetForm() {
         <AlertCircle size={40} className="mx-auto text-red-400 mb-3" />
         <h1 className="text-lg font-bold text-gray-800">Lien invalide</h1>
         <p className="text-sm text-gray-500 mt-2">Ce lien de réinitialisation est incomplet.</p>
-        <Link href="/forgot-password" className="mt-4 inline-block text-sm text-[#2471A3] hover:underline">Redemander un lien</Link>
+        <Link href="/forgot-password" className="mt-4 inline-block text-sm text-[rgb(var(--brand-light))] hover:underline">Redemander un lien</Link>
       </div>
     );
   }
@@ -62,7 +62,7 @@ function ResetForm() {
       <Link href="/login" className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 mb-6">
         <ArrowLeft size={14} /> Retour à la connexion
       </Link>
-      <h1 className="text-xl font-bold text-[#1B3F6B] mb-1">Nouveau mot de passe</h1>
+      <h1 className="text-xl font-bold text-[rgb(var(--brand))] mb-1">Nouveau mot de passe</h1>
       <p className="text-sm text-gray-500 mb-6">Choisissez un mot de passe d&apos;au moins 8 caractères.</p>
 
       {error && (
@@ -79,7 +79,7 @@ function ResetForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20 outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)] outline-none"
             placeholder="••••••••"
           />
         </div>
@@ -90,14 +90,14 @@ function ResetForm() {
             required
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20 outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)] outline-none"
             placeholder="••••••••"
           />
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#1B3F6B] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#2471A3] transition-colors disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-[rgb(var(--brand))] px-4 py-2.5 text-sm font-medium text-white hover:bg-[rgb(var(--brand-light))] transition-colors disabled:opacity-60"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
           Réinitialiser

@@ -14,7 +14,7 @@ function LiveDepotageCard({ e, onClose }: { e: StockUpdatedEvent; onClose: () =>
   const router = useRouter();
   return (
     <div className="fixed bottom-4 right-4 z-50 w-72 rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 bg-[#0E7C6B] text-white text-xs font-semibold">
+      <div className="flex items-center justify-between px-3 py-2 bg-[rgb(var(--accent))] text-white text-xs font-semibold">
         <span className="inline-flex items-center gap-1"><Fuel size={13} /> Dépotage en direct</span>
         <button onClick={onClose} className="hover:opacity-80"><X size={14} /></button>
       </div>
@@ -36,7 +36,7 @@ function LiveDepotageCard({ e, onClose }: { e: StockUpdatedEvent; onClose: () =>
 }
 
 
-const COLORS = ['#1B3F6B', '#0E7C6B', '#2471A3', '#F39C12', '#C0392B'];
+const COLORS = ['rgb(var(--brand))', 'rgb(var(--accent))', 'rgb(var(--brand-light))', '#F39C12', '#C0392B'];
 
 /**
  * « Pouls du parc » : la Ligne de vie porte l'état du stock des sites —
@@ -49,7 +49,7 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
   const router = useRouter();
   const total = Math.max(1, ok + faible + critique);
   const spikeX = 8 + 508 * Math.min(0.82, Math.max(0.12, ok / total));
-  const tail = critique > 0 ? '#F87171' : faible > 0 ? '#FFB020' : '#3BC9AF';
+  const tail = critique > 0 ? '#F87171' : faible > 0 ? '#FFB020' : 'rgb(var(--accent-light))';
 
   const stat = (value: string, label: string, color = 'text-white') => (
     <div>
@@ -61,7 +61,7 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
   return (
     <button
       onClick={() => router.push('/supervision/carte')}
-      className="relative block w-full overflow-hidden rounded-xl bg-gradient-to-br from-[#1B3F6B] to-[#122C4E] p-5 text-left shadow-sm transition-shadow hover:shadow-md"
+      className="relative block w-full overflow-hidden rounded-xl bg-gradient-to-br from-[rgb(var(--brand))] to-[#122C4E] p-5 text-left shadow-sm transition-shadow hover:shadow-md"
     >
       {/* Filigrane Écrou-signal */}
       <svg viewBox="0 0 120 120" className="pointer-events-none absolute -right-6 -top-8 h-44 w-44 opacity-[0.07]" aria-hidden="true">
@@ -71,12 +71,12 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
 
       <div className="flex items-baseline justify-between">
         <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9FB3C8]">Pouls du parc</span>
-        <span className="text-xs text-[#3BC9AF]">Voir la carte →</span>
+        <span className="text-xs text-[rgb(var(--accent-light))]">Voir la carte →</span>
       </div>
 
       {/* Ligne de vie dynamique */}
       <svg viewBox="0 0 600 42" className="mt-2 h-11 w-full" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-        <line x1="8" y1="27" x2={spikeX} y2="27" stroke="#3BC9AF" strokeWidth="3" strokeLinecap="round" />
+        <line x1="8" y1="27" x2={spikeX} y2="27" stroke="rgb(var(--accent-light))" strokeWidth="3" strokeLinecap="round" />
         <path d={`M${spikeX} 27 l8 -15 l10 25 l8 -12 l2 2`} fill="none" stroke="#FFB020" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         <line x1={spikeX + 28} y1="27" x2="572" y2="27" stroke={tail} strokeWidth="3" strokeLinecap="round" />
         <circle cx="586" cy="27" r="5" fill={tail} />
@@ -84,7 +84,7 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
 
       {/* Jauge proportionnelle */}
       <div className="mt-1 flex h-2 overflow-hidden rounded-full">
-        {ok > 0 && <span style={{ flex: ok, background: '#0E7C6B' }} />}
+        {ok > 0 && <span style={{ flex: ok, background: 'rgb(var(--accent))' }} />}
         {faible > 0 && <span style={{ flex: faible, background: '#F59E0B' }} />}
         {critique > 0 && <span style={{ flex: critique, background: '#DC2626' }} />}
         {ok + faible + critique === 0 && <span className="flex-1 bg-[#3A5573]" />}
@@ -92,7 +92,7 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
 
       <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
         {stat(String(sitesActifs), 'sites actifs')}
-        {stat(String(ok), 'stock OK', 'text-[#3BC9AF]')}
+        {stat(String(ok), 'stock OK', 'text-[rgb(var(--accent-light))]')}
         {stat(String(faible), 'stock faible', 'text-[#FFB020]')}
         {stat(String(critique), 'critiques / vides', 'text-[#F87171]')}
         {stat(stockTotal >= 10_000 ? `${(stockTotal / 1000).toFixed(0)}k L` : `${Math.round(stockTotal).toLocaleString('fr-FR')} L`, 'stock total')}
@@ -180,7 +180,7 @@ export function DashboardInterne() {
               <AlertTriangle size={15} className={critiquesInc(d) > 0 ? 'text-red-500' : 'text-gray-400'} />
               Incidents
             </h3>
-            <button onClick={() => router.push('/incidents')} className="text-xs text-[#1B3F6B] hover:underline">Voir tout →</button>
+            <button onClick={() => router.push('/incidents')} className="text-xs text-[rgb(var(--brand))] hover:underline">Voir tout →</button>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-gray-800">{d.incidentsOuverts || 0}</span>
@@ -216,8 +216,8 @@ export function DashboardInterne() {
               <XAxis dataKey="mois" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v) => [`${Number(v).toLocaleString('fr-FR')} kWh`]} />
-              <Bar dataKey="ge" fill="#1B3F6B" name="GE" radius={[3,3,0,0]} />
-              <Bar dataKey="ceet" fill="#0E7C6B" name="CEET" radius={[3,3,0,0]} />
+              <Bar dataKey="ge" fill="rgb(var(--brand))" name="GE" radius={[3,3,0,0]} />
+              <Bar dataKey="ceet" fill="rgb(var(--accent))" name="CEET" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
           )}
@@ -260,7 +260,7 @@ export function DashboardInterne() {
             <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
             <YAxis dataKey="region" type="category" tick={{ fontSize: 10 }} width={80} />
             <Tooltip formatter={v => [`${Number(v).toLocaleString('fr-FR')} L`]} />
-            <Bar dataKey="stock" fill="#2471A3" radius={[0,3,3,0]} />
+            <Bar dataKey="stock" fill="rgb(var(--brand-light))" radius={[0,3,3,0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -301,7 +301,7 @@ function ParcParPrestataire() {
             <div className="h-4 flex-1 overflow-hidden rounded bg-gray-100">
               <div className="flex h-full" style={{ width: `${(p.nbSites / max) * 100}%` }}>
                 <div className="h-full bg-[#C0392B]" style={{ width: `${p.nbSites ? (p.sitesCoupes / p.nbSites) * 100 : 0}%` }} />
-                <div className="h-full flex-1 bg-[#2471A3]" />
+                <div className="h-full flex-1 bg-[rgb(var(--brand-light))]" />
               </div>
             </div>
             <span className="w-32 text-right text-sm tabular-nums text-gray-700">

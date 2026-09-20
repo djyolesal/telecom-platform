@@ -171,13 +171,13 @@ export default function RelevesPage() {
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="text-gray-500">Période :</span>
         <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
         <span className="text-gray-400">→</span>
         <input type="date" value={au} onChange={(e) => { setAu(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
         {(du || au) && (
           <button type="button" onClick={() => { setDu(''); setAu(''); setPage(1); }}
-            className="text-xs font-medium text-[#2471A3] hover:underline">Effacer</button>
+            className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">Effacer</button>
         )}
       </div>
 

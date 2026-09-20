@@ -114,8 +114,8 @@ function CreateModal({ onClose }: { onClose: () => void }) {
         </div>
         {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
-          <div className="rounded-lg border border-dashed border-[#1B3F6B]/40 bg-[#EAF1F8]/50 p-3">
-            <p className="mb-1.5 text-xs font-semibold text-[#1B3F6B]">
+          <div className="rounded-lg border border-dashed border-[rgb(var(--brand)/0.4)] bg-[rgb(var(--brand-tint)/0.5)] p-3">
+            <p className="mb-1.5 text-xs font-semibold text-[rgb(var(--brand))]">
               PDF du bon de commande <span className="text-red-500">*</span>
               <span className="font-normal text-gray-500"> - pré-remplit le formulaire</span>
             </p>

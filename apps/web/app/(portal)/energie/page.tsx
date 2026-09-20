@@ -102,10 +102,10 @@ export default function EnergiePage() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard title="Consommation" value={`${fmtNumber(t.consoKwh)} kWh`} icon={Zap} color="bg-[#2471A3]" />
-            <StatCard title="Gasoil consommé" value={`${fmtNumber(t.gasoilLitres)} L`} icon={Fuel} color="bg-[#0E7C6B]" />
-            <StatCard title="Heures GE" value={`${fmtNumber(t.heuresGE)} h`} icon={Clock} color="bg-[#1B3F6B]" />
-            <StatCard title="Coût estimé" value={fmtFCFA(t.coutFCFA)} icon={Banknote} color="bg-[#1B3F6B]" />
+            <StatCard title="Consommation" value={`${fmtNumber(t.consoKwh)} kWh`} icon={Zap} color="bg-[rgb(var(--brand-light))]" />
+            <StatCard title="Gasoil consommé" value={`${fmtNumber(t.gasoilLitres)} L`} icon={Fuel} color="bg-[rgb(var(--accent))]" />
+            <StatCard title="Heures GE" value={`${fmtNumber(t.heuresGE)} h`} icon={Clock} color="bg-[rgb(var(--brand))]" />
+            <StatCard title="Coût estimé" value={fmtFCFA(t.coutFCFA)} icon={Banknote} color="bg-[rgb(var(--brand))]" />
           </div>
 
           <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -123,8 +123,8 @@ export default function EnergiePage() {
                     <YAxis yAxisId="gasoil" orientation="right" tick={{ fontSize: 10 }} />
                     <Tooltip formatter={(v: number, name: string) => [fmtNumber(v), name]} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar yAxisId="gasoil" dataKey="gasoil" name="Gasoil (L)" fill="#0E7C6B" radius={[3, 3, 0, 0]} />
-                    <Line yAxisId="kwh" type="monotone" dataKey="kwh" name="kWh (CEET)" stroke="#2471A3" strokeWidth={2} dot={false} />
+                    <Bar yAxisId="gasoil" dataKey="gasoil" name="Gasoil (L)" fill="rgb(var(--accent))" radius={[3, 3, 0, 0]} />
+                    <Line yAxisId="kwh" type="monotone" dataKey="kwh" name="kWh (CEET)" stroke="rgb(var(--brand-light))" strokeWidth={2} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -141,7 +141,7 @@ export default function EnergiePage() {
                     <div key={s.site} className="flex items-center gap-3">
                       <span className="w-24 shrink-0 truncate text-xs font-medium text-gray-700">{s.site}</span>
                       <div className="h-4 flex-1 overflow-hidden rounded bg-gray-100">
-                        <div className="h-full rounded bg-[#0E7C6B]" style={{ width: `${Math.max(2, (s.gasoil / maxGasoil) * 100)}%` }} />
+                        <div className="h-full rounded bg-[rgb(var(--accent))]" style={{ width: `${Math.max(2, (s.gasoil / maxGasoil) * 100)}%` }} />
                       </div>
                       <span className="w-20 shrink-0 text-right text-xs tabular-nums text-gray-700">{fmtNumber(Math.round(s.gasoil))} L</span>
                       <span className="w-16 shrink-0 text-right text-xs tabular-nums text-gray-400">{fmtNumber(Math.round(s.heures))} h</span>

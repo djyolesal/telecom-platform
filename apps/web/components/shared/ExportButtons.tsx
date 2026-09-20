@@ -89,7 +89,7 @@ export function ExportButtons({ base, name, query }: { base: string; name: strin
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-gray-600">Colonnes à exporter</p>
             <div className="flex items-center gap-2">
-              <button type="button" className="text-[11px] font-medium text-[#2471A3] hover:underline"
+              <button type="button" className="text-[11px] font-medium text-[rgb(var(--brand-light))] hover:underline"
                 onClick={() => setExclues(new Set())}>Tout</button>
               <button type="button" onClick={() => setPickerOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
             </div>

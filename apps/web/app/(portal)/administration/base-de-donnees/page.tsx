@@ -63,7 +63,7 @@ export default function BaseDeDonneesPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Rechercher une table…"
-          className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20"
+          className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)]"
         />
       </div>
 
@@ -76,7 +76,7 @@ export default function BaseDeDonneesPage() {
           return (
             <section key={g.cle} className="mb-7">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
-                <Database size={15} className="text-[#2471A3]" /> {g.libelle}
+                <Database size={15} className="text-[rgb(var(--brand-light))]" /> {g.libelle}
                 <span className="text-xs font-normal text-gray-400">{tables.length}</span>
               </h3>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -84,12 +84,12 @@ export default function BaseDeDonneesPage() {
                   <Link
                     key={t.modele}
                     href={`/administration/base-de-donnees/${t.modele}`}
-                    className="group rounded-xl border border-gray-100 bg-white p-4 transition-all hover:border-[#2471A3]/30 hover:shadow-md"
+                    className="group rounded-xl border border-gray-100 bg-white p-4 transition-all hover:border-[rgb(var(--brand-light)/0.3)] hover:shadow-md"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="flex items-center gap-1.5 truncate text-sm font-semibold text-gray-800">
-                          <Table2 size={14} className="shrink-0 text-gray-400 group-hover:text-[#2471A3]" />
+                          <Table2 size={14} className="shrink-0 text-gray-400 group-hover:text-[rgb(var(--brand-light))]" />
                           {t.libelle}
                           {t.lectureSeule && <Lock size={12} className="shrink-0 text-amber-500" />}
                         </h4>

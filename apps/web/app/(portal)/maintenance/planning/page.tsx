@@ -58,10 +58,10 @@ export default function PlanningPage() {
             const items = maintenances.filter((m) => isSameDay(new Date(m.datePlanifiee), day));
             const today = isSameDay(day, new Date());
             return (
-              <div key={day.toISOString()} className={`rounded-xl border bg-white p-3 min-h-[140px] ${today ? 'border-[#2471A3] ring-1 ring-[#2471A3]/20' : 'border-gray-100'}`}>
+              <div key={day.toISOString()} className={`rounded-xl border bg-white p-3 min-h-[140px] ${today ? 'border-[rgb(var(--brand-light))] ring-1 ring-[rgb(var(--brand-light)/0.2)]' : 'border-gray-100'}`}>
                 <div className="mb-2 text-center">
                   <p className="text-[10px] uppercase text-gray-400 capitalize">{format(day, 'EEE', { locale: fr })}</p>
-                  <p className={`text-sm font-bold ${today ? 'text-[#2471A3]' : 'text-gray-700'}`}>{format(day, 'd')}</p>
+                  <p className={`text-sm font-bold ${today ? 'text-[rgb(var(--brand-light))]' : 'text-gray-700'}`}>{format(day, 'd')}</p>
                 </div>
                 <div className="space-y-1.5">
                   {items.map((m) => (

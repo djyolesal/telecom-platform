@@ -236,8 +236,8 @@ export default function TopologiePage() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard title="Chaînes" value={arbres.length} subtitle="chaînes de transmission" icon={Network} color="bg-[#1B3F6B]" />
-        <StatCard title="Liaisons déclarées" value={nbLiaisons} subtitle={`${nbDirectsSansAval} sites directs sans aval`} icon={Radio} color="bg-[#0E7C6B]" />
+        <StatCard title="Chaînes" value={arbres.length} subtitle="chaînes de transmission" icon={Network} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Liaisons déclarées" value={nbLiaisons} subtitle={`${nbDirectsSansAval} sites directs sans aval`} icon={Radio} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Sites en coupure" value={sitesDown.size} subtitle="coupures en cours" icon={WifiOff} color="bg-[#C0392B]" />
         <StatCard title="Aval sous menace" value={sitesImpactes.size} subtitle="dépendants d'un site coupé" icon={WifiOff} color="bg-[#E67E22]" />
       </div>
@@ -252,7 +252,7 @@ export default function TopologiePage() {
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
           placeholder="Rechercher un site dans les chaînes…"
-          className="w-72 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2471A3]"
+          className="w-72 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[rgb(var(--brand-light))]"
         />
         {/* Basculement de représentation : schéma de réseau ou arborescence textuelle. */}
         <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white text-sm font-medium">
@@ -261,7 +261,7 @@ export default function TopologiePage() {
               key={v}
               type="button"
               onClick={() => setVue(v)}
-              className={`px-3 py-2 ${vue === v ? 'bg-[#1B3F6B] text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`px-3 py-2 ${vue === v ? 'bg-[rgb(var(--brand))] text-white' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {v === 'graphe' ? 'Graphe' : 'Liste'}
             </button>
@@ -281,7 +281,7 @@ export default function TopologiePage() {
         <div className="ml-auto flex items-center gap-x-4 gap-y-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#C0392B]" /> En coupure</span>
           <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#E67E22]" /> Aval d'un site coupé</span>
-          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[#0E7C6B]" /> En service</span>
+          <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-[rgb(var(--accent))]" /> En service</span>
         </div>
       </div>
 
@@ -376,7 +376,7 @@ export default function TopologiePage() {
                   <button
                     type="button"
                     onClick={() => router.push(`/sites/${siteIsole.id}`)}
-                    className="mt-3 rounded-lg bg-[#1B3F6B] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#2471A3]"
+                    className="mt-3 rounded-lg bg-[rgb(var(--brand))] px-3 py-1.5 text-xs font-medium text-white hover:bg-[rgb(var(--brand-light))]"
                   >
                     Ouvrir la fiche du site
                   </button>
@@ -429,7 +429,7 @@ function ImportTopologieModal({ onClose, onDone }: { onClose: () => void; onDone
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-base font-semibold text-gray-800">
-            <Network size={17} className="text-[#1B3F6B]" /> Importer la topologie
+            <Network size={17} className="text-[rgb(var(--brand))]" /> Importer la topologie
           </h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
@@ -439,7 +439,7 @@ function ImportTopologieModal({ onClose, onDone }: { onClose: () => void; onDone
           les rattachements circulaires sont refusés ligne par ligne.
         </p>
         <input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="mb-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1B3F6B] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#16345a]" />
+          className="mb-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[rgb(var(--brand))] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#16345a]" />
         {errMsg && <p className="mb-2 text-sm text-red-600">{errMsg}</p>}
         {result && (
           <div className="mb-3 rounded-lg bg-gray-50 p-3 text-sm">
@@ -712,8 +712,8 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
           const down = sitesDown.has(s.id);
           const impacte = !down && sitesImpactes.has(s.id);
           const surligne = terme && correspond(s, terme);
-          const fond = down ? '#FDECEA' : impacte ? '#FEF5E7' : surligne ? '#EAF1F8' : '#FFFFFF';
-          const bord = down ? '#C0392B' : impacte ? '#E67E22' : surligne ? '#2471A3' : '#D5DBDB';
+          const fond = down ? '#FDECEA' : impacte ? '#FEF5E7' : surligne ? 'rgb(var(--brand-tint))' : '#FFFFFF';
+          const bord = down ? '#C0392B' : impacte ? '#E67E22' : surligne ? 'rgb(var(--brand-light))' : '#D5DBDB';
           return (
             <g
               key={s.id}
@@ -725,7 +725,7 @@ function GrapheChaine({ racine, enfants, sitesDown, sitesImpactes, terme }: {
               <rect x={x} y={y} width={G.nodeW} height={G.nodeH} rx={13}
                 fill={fond} stroke={bord} strokeWidth={surligne ? 2 : 1.2} />
               <circle cx={x + 13} cy={y + G.nodeH / 2} r={4}
-                fill={down ? '#C0392B' : impacte ? '#E67E22' : '#0E7C6B'} />
+                fill={down ? '#C0392B' : impacte ? '#E67E22' : 'rgb(var(--accent))'} />
               <text x={x + 24} y={y + G.nodeH / 2 + 3.5} fontSize={11.5} fontWeight={600}
                 fill={down ? '#922B21' : impacte ? '#9C640C' : '#2C3E50'}>
                 {s.nom.length > 18 ? `${s.nom.slice(0, 17)}…` : s.nom}
@@ -764,11 +764,11 @@ function Noeud({ site, enfants, sitesDown, sitesImpactes, terme, profondeur }: {
         className={`my-1 inline-flex items-center gap-2 rounded-lg border px-2.5 py-1 text-sm transition-colors ${
           down ? 'border-red-200 bg-red-50 text-red-800'
           : impacte ? 'border-amber-200 bg-amber-50 text-amber-800'
-          : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-[#EAF1F8]'
-        } ${surligne ? 'ring-2 ring-[#2471A3]' : ''}`}
+          : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-[rgb(var(--brand-tint))]'
+        } ${surligne ? 'ring-2 ring-[rgb(var(--brand-light))]' : ''}`}
         title={`${site.nom} · ${site.region}${down ? ' - EN COUPURE' : impacte ? ' - aval d’un site en coupure' : ''}`}
       >
-        <span className={`h-2 w-2 rounded-full ${down ? 'bg-[#C0392B]' : impacte ? 'bg-[#E67E22]' : 'bg-[#0E7C6B]'}`} />
+        <span className={`h-2 w-2 rounded-full ${down ? 'bg-[#C0392B]' : impacte ? 'bg-[#E67E22]' : 'bg-[rgb(var(--accent))]'}`} />
         <span className="font-medium">{site.nom}</span>
         {site.typeLiaison && profondeur > 0 && (
           <span

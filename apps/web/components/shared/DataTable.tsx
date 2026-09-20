@@ -158,7 +158,7 @@ export function DataTable<T>({
             onClick={() => setPickerOpen((o) => !o)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium hover:bg-gray-50',
-              hidden.size > 0 ? 'text-[#0E7C6B]' : 'text-gray-500 hover:text-gray-700'
+              hidden.size > 0 ? 'text-[rgb(var(--accent))]' : 'text-gray-500 hover:text-gray-700'
             )}
           >
             <Columns3 size={14} /> Colonnes
@@ -173,7 +173,7 @@ export function DataTable<T>({
                       type="checkbox"
                       checked={!hidden.has(c.key)}
                       onChange={() => toggleCol(c.key)}
-                      className="h-3.5 w-3.5 rounded border-gray-300 text-[#0E7C6B] focus:ring-[#0E7C6B]"
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-[rgb(var(--accent))] focus:ring-[rgb(var(--accent))]"
                     />
                     {c.header}
                   </label>
@@ -183,7 +183,7 @@ export function DataTable<T>({
                 <button
                   type="button"
                   onClick={() => { setHidden(new Set()); savePrefs(new Set(), dense); }}
-                  className="mt-1 w-full rounded-md px-1.5 py-1 text-left text-xs text-[#2471A3] hover:bg-gray-50"
+                  className="mt-1 w-full rounded-md px-1.5 py-1 text-left text-xs text-[rgb(var(--brand-light))] hover:bg-gray-50"
                 >
                   Tout réafficher
                 </button>
@@ -219,7 +219,7 @@ export function DataTable<T>({
                     onClick={triable ? cycle : undefined}
                     className={cn(
                       'sticky top-0 z-10 bg-gray-50/95 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide backdrop-blur',
-                      actif ? 'text-[#1B3F6B]' : 'text-gray-500',
+                      actif ? 'text-[rgb(var(--brand))]' : 'text-gray-500',
                       triable && 'cursor-pointer select-none hover:text-gray-700',
                       c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left',
                       c.className
@@ -241,7 +241,7 @@ export function DataTable<T>({
                 onClick={() => onRowClick?.(row)}
                 className={cn(
                   'border-b border-gray-50 transition-colors last:border-0',
-                  onRowClick && 'cursor-pointer hover:bg-[#2471A3]/5',
+                  onRowClick && 'cursor-pointer hover:bg-[rgb(var(--brand-light)/0.05)]',
                   rowClassName?.(row)
                 )}
               >

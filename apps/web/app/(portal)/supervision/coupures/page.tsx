@@ -69,7 +69,7 @@ const fmtDowntime = (min?: number | null) => {
 };
 
 const TechnoBadge = ({ t }: { t: string }) => (
-  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${t === 'SITE' ? 'bg-red-50 text-red-700' : 'bg-[#EAF1F8] text-[#1B3F6B]'}`}>
+  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${t === 'SITE' ? 'bg-red-50 text-red-700' : 'bg-[rgb(var(--brand-tint))] text-[rgb(var(--brand))]'}`}>
     {t === 'SITE' ? 'Site entier' : t}
   </span>
 );
@@ -283,7 +283,7 @@ export default function CoupuresReseauPage() {
             }
             const n = parSite.size || c._count!.heritees;
             return (
-              <span className="ml-1.5 cursor-help rounded-full bg-[#EAF1F8] px-1.5 py-0.5 text-[10px] font-bold text-[#1B3F6B]"
+              <span className="ml-1.5 cursor-help rounded-full bg-[rgb(var(--brand-tint))] px-1.5 py-0.5 text-[10px] font-bold text-[rgb(var(--brand))]"
                 title={`Sites impactés en aval :\n${[...parSite.entries()].slice(0, 20).map(([nomS, ouverte]) => `• ${nomS}${ouverte ? '' : ' (rétabli)'}`).join('\n')}${parSite.size > 20 ? '\n…' : ''}`}>
                 {n} impacté(s)
               </span>
@@ -512,9 +512,9 @@ export default function CoupuresReseauPage() {
           </div>
           <button type="button" onClick={() => { const actif = !aQualifier; setAQualifier(actif); if (actif) setStatut(''); setPage(1); }}
             title="Coupures des 30 derniers jours - en cours OU clôturées - sans alarme, classement, cause ou actions : à compléter pour les rapports. Cliquer pour filtrer."
-            className={`rounded-xl border px-4 py-3 text-left transition-colors ${aQualifier ? 'border-[#1B3F6B] bg-[#EAF1F8]' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
+            className={`rounded-xl border px-4 py-3 text-left transition-colors ${aQualifier ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand-tint))]' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
             <p className="text-xs text-gray-500">À qualifier {aQualifier && '· filtre actif'}</p>
-            <p className={`mt-0.5 text-lg font-bold ${stats.aQualifier > 0 ? 'text-[#1B3F6B]' : 'text-gray-800'}`}>{stats.aQualifier}</p>
+            <p className={`mt-0.5 text-lg font-bold ${stats.aQualifier > 0 ? 'text-[rgb(var(--brand))]' : 'text-gray-800'}`}>{stats.aQualifier}</p>
           </button>
         </div>
       )}
@@ -528,7 +528,7 @@ export default function CoupuresReseauPage() {
             { v: '', l: 'Toutes' },
           ].map((o) => (
             <button key={o.v} type="button" onClick={() => { setStatut(o.v); setPage(1); }}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${statut === o.v ? 'bg-white text-[#1B3F6B] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${statut === o.v ? 'bg-white text-[rgb(var(--brand))] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               {o.l}
             </button>
           ))}
@@ -546,7 +546,7 @@ export default function CoupuresReseauPage() {
             { v: 'MANUEL', l: `Rapport NOC${stats ? ` (${stats.enCoursManuel})` : ''}` },
           ].map((o) => (
             <button key={o.v} type="button" onClick={() => { setSource(o.v); setPage(1); }}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${source === o.v ? 'bg-white text-[#1B3F6B] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${source === o.v ? 'bg-white text-[rgb(var(--brand))] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               {o.l}
             </button>
           ))}
@@ -582,26 +582,26 @@ export default function CoupuresReseauPage() {
                 });
                 setPage(1);
               }}
-              className={`rounded-full border px-2.5 py-1 text-xs font-medium ${technosFiltre.has(t.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium ${technosFiltre.has(t.value) ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
               {t.label}
             </button>
           ))}
           {technosFiltre.size > 0 && (
             <button type="button" onClick={() => { setTechnosFiltre(new Set()); setPage(1); }}
-              className="text-xs font-medium text-[#2471A3] hover:underline">Toutes</button>
+              className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">Toutes</button>
           )}
         </span>
         <Select value={typeAlarme} onChange={(e) => { setTypeAlarme(e.target.value); setPage(1); }}
           options={TYPES_ALARME} placeholder="Toutes alarmes" className="w-40" />
         <span className="flex items-center gap-1.5">
           <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
-            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
           <span className="text-gray-400">→</span>
           <input type="date" value={au} onChange={(e) => { setAu(e.target.value); setPage(1); }}
-            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
           {(du || au) && (
             <button type="button" onClick={() => { setDu(''); setAu(''); setPage(1); }}
-              className="text-xs font-medium text-[#2471A3] hover:underline">Effacer</button>
+              className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">Effacer</button>
           )}
         </span>
       </div>
@@ -726,7 +726,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
         <div className="flex flex-wrap gap-2">
           {TECHNOS.map((t) => (
             <button key={t.value} type="button" onClick={() => toggleTechno(t.value)}
-              className={`rounded-full border px-3 py-1 text-sm font-medium ${technos.has(t.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              className={`rounded-full border px-3 py-1 text-sm font-medium ${technos.has(t.value) ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
               {t.label}
             </button>
           ))}
@@ -764,7 +764,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
           {coupureExistanteId && onOuvrirExistante && (
             <button type="button"
               onClick={() => onOuvrirExistante(coupureExistanteId, siteId)}
-              className="mt-2 rounded-lg bg-[#1B3F6B] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#16345a]">
+              className="mt-2 rounded-lg bg-[rgb(var(--brand))] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#16345a]">
               Ouvrir la coupure en cours de ce site →
             </button>
           )}
@@ -1007,7 +1007,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <div className="flex flex-wrap gap-2">
           {TECHNOS.map((t) => (
             <button key={t.value} type="button" onClick={() => toggleTechno(t.value)}
-              className={`rounded-full border px-3 py-1 text-sm font-medium ${technos.has(t.value) ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              className={`rounded-full border px-3 py-1 text-sm font-medium ${technos.has(t.value) ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
               {t.label}
             </button>
           ))}
@@ -1062,7 +1062,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         </p>
       )}
       {nbHeritees > 0 && dateFin && siteEntier && (
-        <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-[#EAF1F8] p-3 text-sm text-[#1B3F6B]">
+        <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-[rgb(var(--brand-tint))] p-3 text-sm text-[rgb(var(--brand))]">
           <input type="checkbox" checked={cloturerHeritees} onChange={(e) => setCloturerHeritees(e.target.checked)} className="mt-0.5 h-4 w-4 rounded" />
           <span>Clôturer aussi les <b>{nbHeritees} coupure(s) héritée(s)</b> des sites en aval (même heure de rétablissement).</span>
         </label>
@@ -1374,7 +1374,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         Ré-importer le même rapport ne crée pas de doublons.
       </p>
       <input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        className="mb-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1B3F6B] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#16345a]" />
+        className="mb-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[rgb(var(--brand))] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#16345a]" />
       {errMsg && <p className="mb-2 text-sm text-red-600">{errMsg}</p>}
       {result && (
         <div className="mb-3 rounded-lg bg-gray-50 p-3 text-sm">
@@ -1396,7 +1396,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             <p className="mt-1 text-purple-700">{result.heriteesDetectees} coupure(s) reclassée(s) « héritée(s) » via la topologie (impact d&apos;une panne amont - pas d&apos;incident ni d&apos;imputation aval).</p>
           )}
           {(result.incidentsCrees ?? 0) > 0 && (
-            <p className="mt-1 text-[#1B3F6B]">{result.incidentsCrees} incident(s) terrain créé(s) et transmis aux équipes terrain pour les sites entiers encore hors service.</p>
+            <p className="mt-1 text-[rgb(var(--brand))]">{result.incidentsCrees} incident(s) terrain créé(s) et transmis aux équipes terrain pour les sites entiers encore hors service.</p>
           )}
           {result.sitesNonApparies.length > 0 && (
             <div className="mt-2 text-amber-700">
@@ -1453,7 +1453,7 @@ function Modal({ titre, children, onClose }: { titre: string; children: React.Re
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-800"><WifiOff size={17} className="text-[#1B3F6B]" /> {titre}</h3>
+          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-800"><WifiOff size={17} className="text-[rgb(var(--brand))]" /> {titre}</h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
         {children}

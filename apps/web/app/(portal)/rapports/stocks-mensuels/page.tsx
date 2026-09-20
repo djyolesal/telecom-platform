@@ -90,11 +90,11 @@ export default function StocksMensuelsPage() {
 
       {t && (
         <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-5">
-          <StatCard title="Stock au 1er" value={`${fmtNumber(t.stockDebut)} L`} subtitle={`${t.sites} sites`} icon={Fuel} color="bg-[#1B3F6B]" />
-          <StatCard title="Stock fin de mois" value={`${fmtNumber(t.stockFin)} L`} subtitle="interpolé au dernier jour" icon={Fuel} color="bg-[#0E7C6B]" />
-          <StatCard title="Livraisons" value={`${fmtNumber(t.livraisons)} L`} subtitle="dépotages du mois" icon={Fuel} color="bg-[#2471A3]" />
+          <StatCard title="Stock au 1er" value={`${fmtNumber(t.stockDebut)} L`} subtitle={`${t.sites} sites`} icon={Fuel} color="bg-[rgb(var(--brand))]" />
+          <StatCard title="Stock fin de mois" value={`${fmtNumber(t.stockFin)} L`} subtitle="interpolé au dernier jour" icon={Fuel} color="bg-[rgb(var(--accent))]" />
+          <StatCard title="Livraisons" value={`${fmtNumber(t.livraisons)} L`} subtitle="dépotages du mois" icon={Fuel} color="bg-[rgb(var(--brand-light))]" />
           <StatCard title="Consommation" value={`${fmtNumber(t.conso)} L`} subtitle="bilan matière pro rata" icon={Fuel} color="bg-[#7D3C98]" />
-          <StatCard title="À vérifier" value={String(t.anomalies)} subtitle="gasoil non expliqué, index, jauges" icon={TriangleAlert} color={t.anomalies ? 'bg-[#B23124]' : 'bg-[#0E7C6B]'} />
+          <StatCard title="À vérifier" value={String(t.anomalies)} subtitle="gasoil non expliqué, index, jauges" icon={TriangleAlert} color={t.anomalies ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
         </div>
       )}
 

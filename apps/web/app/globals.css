@@ -2,10 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* PALETTE DE MARQUE — en triplets RVB, pas en hexadécimal.
+ *
+ * Tailwind sait alors calculer une opacité dessus : `bg-brand/20` devient
+ * `rgb(var(--brand) / 0.2)`. Avec une variable hexadécimale, toute
+ * transparence serait perdue — or l'interface en compte une trentaine.
+ *
+ * Ces cinq variables sont RÉÉCRITES AU CHARGEMENT par le thème choisi en
+ * Administration → Apparence. Les valeurs ci-dessous sont donc le thème
+ * « E&M OpS » par défaut, et le repli si le serveur ne répond pas : l'interface
+ * doit rester lisible même sans thème.
+ *
+ * Les couleurs de STATUT (rouge danger, ambre alerte) ne sont pas ici : elles
+ * ne changent pas avec la charte — un incident critique reste rouge. */
 :root {
-  --brand: #1b3f6b;
-  --brand-light: #2471a3;
-  --accent: #0e7c6b;
+  --brand: 27 63 107;
+  --brand-light: 36 113 163;
+  --accent: 14 124 107;
+  --accent-light: 59 201 175;
+  --brand-tint: 234 241 248;
 }
 
 html,

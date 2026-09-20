@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-[#1B3F6B] text-white hover:bg-[#2471A3]',
+  primary: 'bg-[rgb(var(--brand))] text-white hover:bg-[rgb(var(--brand-light))]',
   secondary: 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50',
   danger: 'bg-red-600 text-white hover:bg-red-700',
   ghost: 'text-gray-600 hover:bg-gray-100',

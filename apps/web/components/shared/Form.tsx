@@ -29,7 +29,7 @@ export function Field({
 }
 
 const baseInput =
-  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#2471A3] focus:ring-2 focus:ring-[#2471A3]/20 outline-none disabled:bg-gray-50';
+  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[rgb(var(--brand-light))] focus:ring-2 focus:ring-[rgb(var(--brand-light)/0.2)] outline-none disabled:bg-gray-50';
 
 export const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input {...props} className={cn(baseInput, props.className)} />

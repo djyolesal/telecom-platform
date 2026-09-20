@@ -61,9 +61,9 @@ export default function CorrelationCarburantPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Total livré" value={`${fmtNumber(Math.round(totaux.livreLitres / 1000))}k L`} icon={Droplet} color="bg-[#2471A3]" />
-        <StatCard title="Total consommé GE" value={`${fmtNumber(Math.round(totaux.consommeLitres / 1000))}k L`} icon={Flame} color="bg-[#0E7C6B]" />
-        <StatCard title="Écart global" value={`${fmtNumber(Math.round(totaux.ecartLitres / 1000))}k L`} icon={Droplet} color="bg-[#1B3F6B]" />
+        <StatCard title="Total livré" value={`${fmtNumber(Math.round(totaux.livreLitres / 1000))}k L`} icon={Droplet} color="bg-[rgb(var(--brand-light))]" />
+        <StatCard title="Total consommé GE" value={`${fmtNumber(Math.round(totaux.consommeLitres / 1000))}k L`} icon={Flame} color="bg-[rgb(var(--accent))]" />
+        <StatCard title="Écart global" value={`${fmtNumber(Math.round(totaux.ecartLitres / 1000))}k L`} icon={Droplet} color="bg-[rgb(var(--brand))]" />
         <StatCard title="Sites en anomalie" value={String(data?.nbAnomalies ?? 0)} icon={AlertTriangle} color="bg-[#C0392B]" />
       </div>
 

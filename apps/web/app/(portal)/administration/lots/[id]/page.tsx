@@ -148,7 +148,7 @@ function AddSites({ lotId, onDone, existingIds, solaire }: { lotId: string; onDo
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher des sites à affecter (≥ 2 caractères)…"
-          className="w-full rounded-lg border border-gray-200 pl-9 pr-3 py-2 text-sm focus:border-[#2471A3] outline-none"
+          className="w-full rounded-lg border border-gray-200 pl-9 pr-3 py-2 text-sm focus:border-[rgb(var(--brand-light))] outline-none"
         />
       </div>
       {solaire && <p className="mb-2 text-xs text-gray-500">Contrat solaire : seuls les sites hybrides ou solaires sont éligibles.</p>}

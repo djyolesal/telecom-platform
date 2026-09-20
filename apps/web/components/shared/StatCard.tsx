@@ -5,7 +5,7 @@ export function StatCard({
   value,
   subtitle,
   icon: Icon,
-  color = 'bg-[#1B3F6B]',
+  color = 'bg-[rgb(var(--brand))]',
 }: {
   title: string;
   value: string | number;

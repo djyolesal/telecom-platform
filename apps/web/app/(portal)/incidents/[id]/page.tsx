@@ -27,7 +27,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function TimelineItem({ icon: Icon, label, date, done }: { icon: React.ElementType; label: string; date?: string | null; done: boolean }) {
   return (
     <div className="flex gap-3">
-      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${done ? 'bg-[#0E7C6B] text-white' : 'bg-gray-100 text-gray-400'}`}>
+      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${done ? 'bg-[rgb(var(--accent))] text-white' : 'bg-gray-100 text-gray-400'}`}>
         <Icon size={15} />
       </div>
       <div>

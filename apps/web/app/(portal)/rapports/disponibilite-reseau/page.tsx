@@ -20,7 +20,7 @@ const ALARMES = ['AE', 'GE', 'EN', 'FO', 'TX', 'RA', 'MI', 'MD', 'NA'];
 const basculer = (set: React.Dispatch<React.SetStateAction<Set<string>>>, v: string) =>
   set((prev) => { const n = new Set(prev); if (n.has(v)) n.delete(v); else n.add(v); return n; });
 const puce = (actif: boolean) =>
-  `rounded-full border px-2.5 py-0.5 text-xs font-medium ${actif ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`;
+  `rounded-full border px-2.5 py-0.5 text-xs font-medium ${actif ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`;
 interface AlarmeRow { type: string; coupures: number; indisponibilitéHeures: number }
 interface PrestaRow {
   nom: string; nbSites: number; coupures: number; enCours: number; sitesTouches: number;
@@ -88,10 +88,10 @@ export default function DisponibiliteReseauPage() {
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-gray-500">Du :</span>
           <input type="date" value={du} onChange={(e) => setDu(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
           <span className="text-gray-400">→</span>
           <input type="date" value={au} onChange={(e) => setAu(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[#2471A3]" />
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
         </div>
       )}
 
@@ -133,11 +133,11 @@ export default function DisponibiliteReseauPage() {
         : <>
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard title="Coupures" value={fmtNumber(k.coupures)} subtitle={`${k.sitesTouches}/${k.nbSites} sites touchés`} icon={WifiOff} color="bg-[#1B3F6B]" />
+        <StatCard title="Coupures" value={fmtNumber(k.coupures)} subtitle={`${k.sitesTouches}/${k.nbSites} sites touchés`} icon={WifiOff} color="bg-[rgb(var(--brand))]" />
         <StatCard title="En cours" value={fmtNumber(k.enCours)} subtitle="non rétablies" icon={Activity} color="bg-[#C0392B]" />
         <StatCard title="Indisponibilité cumulée" value={`${fmtNumber(k.indisponibilitéHeures)} h`} subtitle={data.periodeLibelle ?? `sur ${data.periodeMois} mois`} icon={RadioTower} color="bg-[#E67E22]" />
-        <StatCard title="Part énergie" value={`${k.partEnergiePct}%`} subtitle="alarmes AE / GE" icon={Zap} color="bg-[#0E7C6B]" />
-        <StatCard title="Part environnement" value={`${k.partEnvironnementPct ?? 0}%`} subtitle="alarmes EN (clim., température…)" icon={Thermometer} color="bg-[#2471A3]" />
+        <StatCard title="Part énergie" value={`${k.partEnergiePct}%`} subtitle="alarmes AE / GE" icon={Zap} color="bg-[rgb(var(--accent))]" />
+        <StatCard title="Part environnement" value={`${k.partEnvironnementPct ?? 0}%`} subtitle="alarmes EN (clim., température…)" icon={Thermometer} color="bg-[rgb(var(--brand-light))]" />
         <StatCard
           title="Part passif"
           value={`${k.partPassifPct ?? 0}%`}
@@ -186,7 +186,7 @@ export default function DisponibiliteReseauPage() {
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="type" width={46} tick={{ fontSize: 12 }} />
               <Tooltip formatter={(v: number, name) => name === 'indisponibilitéHeures' ? [`${fmtNumber(v)} h`, 'Indispo.'] : [v, name]} />
-              <Bar dataKey="indisponibilitéHeures" name="Indispo. (h)" fill="#1B3F6B" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="indisponibilitéHeures" name="Indispo. (h)" fill="rgb(var(--brand))" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <p className="mt-2 text-xs text-gray-400">AE = atelier d&apos;énergie · GE = groupe électrogène · EN = environnement · FO = fibre · TX = transmission · RA = radio · MI = maintenance · MD = mise hors service sur demande (référentiel NOC).</p>
@@ -226,7 +226,7 @@ export default function DisponibiliteReseauPage() {
                     <td className="px-3 py-2 text-right tabular-nums">{p.sitesTouches}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtNumber(p.indisponibilitéHeures)} h</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#7D3C98]">{fmtNumber(p.indisponibilitéPassifHeures)} h</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[#2471A3]">{fmtNumber(p.indisponibilitéActifHeures)} h</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[rgb(var(--brand-light))]">{fmtNumber(p.indisponibilitéActifHeures)} h</td>
                     <td className="px-3 py-2 text-right tabular-nums text-gray-500">{fmtNumber(p.indisponibilitéNonClasseHeures)} h</td>
                     <td className={`px-3 py-2 text-right tabular-nums font-semibold ${p.dispoPct < 95 ? 'text-red-600' : p.dispoPct < 99 ? 'text-amber-600' : 'text-emerald-600'}`}>{p.dispoPct}%</td>
                   </tr>

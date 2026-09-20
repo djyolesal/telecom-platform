@@ -128,7 +128,7 @@ export default function BilanEnergiePage() {
         <div className="flex flex-wrap gap-1.5 pb-0.5">
           {Object.entries(p).map(([label, v]) => (
             <button key={label} onClick={() => { setDebut(v.debut); setFin(v.fin); }}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium ${debut === v.debut && fin === v.fin ? 'border-[#1B3F6B] bg-[#1B3F6B] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium ${debut === v.debut && fin === v.fin ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
               {label}
             </button>
           ))}
@@ -139,8 +139,8 @@ export default function BilanEnergiePage() {
         {/* ── KPIs ── */}
         <div className="mb-3 grid grid-cols-2 gap-4 md:grid-cols-4">
           <StatCard title="Consommation" value={`${fmtNumber(t!.consoKwh)} kWh`}
-            subtitle={`≈ ${fmtNumber(t!.consoJourMoyenneKwh)} kWh/jour`} icon={Zap} color="bg-[#1B3F6B]" />
-          <StatCard title="Dont mesurée (index)" value={`${fmtNumber(t!.consoKwhMesuree)} kWh`} icon={Gauge} color="bg-[#0E7C6B]" />
+            subtitle={`≈ ${fmtNumber(t!.consoJourMoyenneKwh)} kWh/jour`} icon={Zap} color="bg-[rgb(var(--brand))]" />
+          <StatCard title="Dont mesurée (index)" value={`${fmtNumber(t!.consoKwhMesuree)} kWh`} icon={Gauge} color="bg-[rgb(var(--accent))]" />
           <StatCard title="Coût estimé" value={fmtFCFA(t!.coutFCFA)}
             subtitle={data.prixKwh != null ? `tarif ${data.prixKwh} FCFA/kWh` : 'masqué (compte prestataire)'} icon={Banknote} color="bg-[#B7950B]" />
           <StatCard title="Sites au delta d'index" value={`${t!.nbSitesMesures} / ${t!.nbSites}`}
@@ -174,7 +174,7 @@ export default function BilanEnergiePage() {
               }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="Déclarée (kWh)" fill="#5D6D7E" radius={[3, 3, 0, 0]} />
-              <Line dataKey="Index (kWh)" stroke="#1B3F6B" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line dataKey="Index (kWh)" stroke="rgb(var(--brand))" strokeWidth={2} dot={{ r: 3 }} connectNulls />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

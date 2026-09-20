@@ -49,8 +49,8 @@ export default function GardiennagePage() {
       />
 
       <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Sociétés suivies" value={String(data.societes.length)} icon={Shield} color="bg-[#1B3F6B]" />
-        <StatCard title="Sites rattachés" value={String(totalSites)} icon={MapPin} color="bg-[#2471A3]" />
+        <StatCard title="Sociétés suivies" value={String(data.societes.length)} icon={Shield} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Sites rattachés" value={String(totalSites)} icon={MapPin} color="bg-[rgb(var(--brand-light))]" />
         <StatCard title="Absences constatées" value={String(totalAbsents)} icon={ShieldAlert} color="bg-[#DC2626]" />
         <StatCard title="Sites à rapprocher" value={String(data.sitesNonRattaches)} subtitle="gardien déclaré, société non liée" icon={HelpCircle} color="bg-[#F59E0B]" />
       </div>

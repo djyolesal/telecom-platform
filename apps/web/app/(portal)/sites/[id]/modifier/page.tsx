@@ -326,8 +326,8 @@ export default function ModifierSitePage() {
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">Table de barémage <span className="font-normal text-gray-400">(certificat de jaugeage - prioritaire sur les dimensions)</span></span>
               <span className="flex gap-3">
-                <button type="button" onClick={() => setCollerBareme((v) => !v)} className="text-sm font-medium text-[#2471A3] hover:underline">Coller un barème</button>
-                <button type="button" onClick={() => setBareme((b) => [...b, { hauteurCm: '', litres: '' }])} className="text-sm font-medium text-[#2471A3] hover:underline">+ Ajouter un point</button>
+                <button type="button" onClick={() => setCollerBareme((v) => !v)} className="text-sm font-medium text-[rgb(var(--brand-light))] hover:underline">Coller un barème</button>
+                <button type="button" onClick={() => setBareme((b) => [...b, { hauteurCm: '', litres: '' }])} className="text-sm font-medium text-[rgb(var(--brand-light))] hover:underline">+ Ajouter un point</button>
               </span>
             </div>
             {collerBareme && (
@@ -337,7 +337,7 @@ export default function ModifierSitePage() {
                   placeholder={'Une ligne par point : hauteur_cm;litres\n20;300\n60;1100\n100;1900'} />
                 <div className="mt-2 flex justify-end gap-2">
                   <button type="button" onClick={() => setCollerBareme(false)} className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-white">Annuler</button>
-                  <button type="button" onClick={collerLignesBareme} className="rounded-lg bg-[#1B3F6B] px-3 py-1.5 text-sm font-medium text-white">Remplacer la table</button>
+                  <button type="button" onClick={collerLignesBareme} className="rounded-lg bg-[rgb(var(--brand))] px-3 py-1.5 text-sm font-medium text-white">Remplacer la table</button>
                 </div>
               </div>
             )}
@@ -413,7 +413,7 @@ export default function ModifierSitePage() {
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-gray-700">Groupes électrogènes supplémentaires</span>
-              <button type="button" onClick={() => setExtraGEs((g) => [...g, { puissanceKva: '0', statut: 'GE_SECOURS', marque: '' }])} className="text-sm font-medium text-[#2471A3] hover:underline">+ Ajouter un GE</button>
+              <button type="button" onClick={() => setExtraGEs((g) => [...g, { puissanceKva: '0', statut: 'GE_SECOURS', marque: '' }])} className="text-sm font-medium text-[rgb(var(--brand-light))] hover:underline">+ Ajouter un GE</button>
             </div>
             {extraGEs.length === 0 ? (
               <p className="text-xs text-gray-400">Le GE n°1 est défini ci-dessus. Ajoutez un GE n°2, 3… pour les sites multi-générateurs (cuve partagée).</p>

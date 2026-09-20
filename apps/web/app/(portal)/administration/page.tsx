@@ -34,9 +34,9 @@ export default function AdministrationHubPage() {
         {SECTIONS.map((s) => {
           const Icon = s.icon;
           return (
-            <Link key={s.href} href={s.href} className="group bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-[#2471A3]/30 transition-all">
+            <Link key={s.href} href={s.href} className="group bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-[rgb(var(--brand-light)/0.3)] transition-all">
               <div className="flex items-start gap-3">
-                <div className="p-3 rounded-xl bg-[#1B3F6B] group-hover:bg-[#2471A3] transition-colors">
+                <div className="p-3 rounded-xl bg-[rgb(var(--brand))] group-hover:bg-[rgb(var(--brand-light))] transition-colors">
                   <Icon size={20} className="text-white" />
                 </div>
                 <div>

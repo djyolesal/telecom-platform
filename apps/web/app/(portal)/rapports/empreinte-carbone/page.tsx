@@ -59,9 +59,9 @@ export default function EmpreinteCarbonePage() {
 
       {/* ── KPIs CO₂ ── */}
       <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Total émis" value={fmtT(t.co2TotalKg)} subtitle={`CO₂ · ${data.periodeMois} mois`} icon={Leaf} color="bg-[#0E7C6B]" />
+        <StatCard title="Total émis" value={fmtT(t.co2TotalKg)} subtitle={`CO₂ · ${data.periodeMois} mois`} icon={Leaf} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Gasoil (GE)" value={fmtT(t.co2GasoilKg)} subtitle={`${fmtNumber(t.gasoilLitres)} L · ${t.partGePct}% du total`} icon={Factory} color="bg-[#C0392B]" />
-        <StatCard title="Réseau CEET" value={fmtT(t.co2CeetKg)} subtitle={`${fmtNumber(t.ceetKwh)} kWh`} icon={Zap} color="bg-[#2471A3]" />
+        <StatCard title="Réseau CEET" value={fmtT(t.co2CeetKg)} subtitle={`${fmtNumber(t.ceetKwh)} kWh`} icon={Zap} color="bg-[rgb(var(--brand-light))]" />
         <StatCard title="Évité par le solaire" value={fmtT(t.co2EviteKg)} subtitle={`${fmtNumber(t.solaireKwh)} kWh solaires`} icon={Sun} color="bg-[#F59E0B]" />
       </div>
 
@@ -81,7 +81,7 @@ export default function EmpreinteCarbonePage() {
             <Tooltip formatter={(v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} t`} />
             <Legend />
             <Bar dataKey="gasoil" name="Gasoil (GE)" stackId="a" fill="#C0392B" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="ceet" name="Réseau CEET" stackId="a" fill="#2471A3" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="ceet" name="Réseau CEET" stackId="a" fill="rgb(var(--brand-light))" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
