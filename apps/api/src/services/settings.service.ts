@@ -74,6 +74,11 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'maintenance.seuilEcartGasoilPct', label: 'Tolérance écart gasoil', groupe: 'Maintenance', unite: '%', defaut: env.SEUIL_ECART_GASOIL_PCT },
     { key: 'maintenance.minPhotosMouvement', label: 'Photos min. mouvement d’actif', groupe: 'Maintenance', unite: 'photos', defaut: 2 },
     { key: 'maintenance.minPhotosCurative', label: 'Photos min. dépannage curatif', groupe: 'Maintenance', unite: 'photos', defaut: 2 },
+    // 0 = facultatif. À ne relever qu'une fois le parc mobile à jour : les APK
+    // qui ne savent pas joindre de photo à la déclaration sont exemptés d'office
+    // (ils le déclarent par X-App-Version), mais autant que la règle devienne
+    // vraie pour tout le monde au même moment.
+    { key: 'incident.minPhotosDeclaration', label: 'Photos min. à la déclaration d\'un incident depuis le mobile (0 = facultatif)', groupe: 'Supervision', unite: 'photos', defaut: 0 },
     // Point de départ du suivi préventif : une tâche JAMAIS enregistrée sur la
     // plateforme est réputée faite à cette date (l'historique papier d'avant
     // la mise en service n'est pas importé) - elle redevient due à date +

@@ -99,6 +99,19 @@ make backup
 
 ## Phase 2 — Déploiement du code
 
+> **Photos à la déclaration d'incident (APK b45).** L'état constaté est
+> photographiable dès la DÉCLARATION, pas seulement au démarrage — le déclarant
+> n'est pas forcément l'intervenant. Réglage `incident.minPhotosDeclaration`,
+> **0 à la livraison : rien ne change**. Ne le relever qu'une fois le parc à
+> jour, ce que la colonne « version » d'Administration → Utilisateurs permet de
+> vérifier. **b40 et b43 continuent de déclarer sans photo même seuil relevé** :
+> un APK qui ne sait pas en joindre (X-App-Version absente ou antérieure à b45)
+> est exempté d'office, sinon relever le seuil aurait bloqué net tout le terrain
+> resté sur une version ancienne. Jamais exigé depuis le portail : le NOC n'est
+> pas sur site. Les photos sont stockées en phase `CONSTAT` et s'affichent sur
+> la fiche incident sous « Constat à la déclaration ».
+
+
 > **Version mobile par utilisateur (migration 0059, APK b44).** L'app déclare sa
 > version dans l'en-tête `X-App-Version`, capturée au login ET au renouvellement
 > de jeton (fraîcheur 12 h au pire, rien sur le chemin chaud). Visible dans

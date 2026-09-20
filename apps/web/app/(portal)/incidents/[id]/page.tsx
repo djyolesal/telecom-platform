@@ -109,12 +109,21 @@ export default function IncidentDetailPage() {
             // Même groupage que les maintenances : l'état constaté à l'arrivée
             // (AVANT, exigé au démarrage) séparé du rétablissement (APRES).
             const photos = (inc.photos ?? []) as { id: string; url: string; phase?: string | null }[];
+            // CONSTAT : ce que le déclarant a vu, AVANT même qu'une
+            // intervention soit lancée. Le déclarant n'est pas forcément
+            // l'intervenant — c'est la seule trace de l'état initial si la
+            // prise en charge est reprise, décalée ou annulée.
+            const constat = photos.filter((p) => p.phase === 'CONSTAT');
             const avant = photos.filter((p) => p.phase === 'AVANT');
             const apres = photos.filter((p) => p.phase === 'APRES');
-            const autres = photos.filter((p) => !p.phase);
-            if (!avant.length && !apres.length) return <PhotoGallery photos={photos} />;
+            // Toute phase inconnue retombe ici : une photo ne doit JAMAIS
+            // disparaître de l'écran parce qu'on a ajouté une phase.
+            const connues = ['CONSTAT', 'AVANT', 'APRES'];
+            const autres = photos.filter((p) => !p.phase || !connues.includes(p.phase));
+            if (!constat.length && !avant.length && !apres.length) return <PhotoGallery photos={photos} />;
             return (
               <>
+                {constat.length > 0 && <PhotoGallery photos={constat} title={`Constat à la déclaration (${constat.length})`} />}
                 {avant.length > 0 && <PhotoGallery photos={avant} title={`État constaté (${avant.length})`} />}
                 {apres.length > 0 && <PhotoGallery photos={apres} title={`Après intervention (${apres.length})`} />}
                 {autres.length > 0 && <PhotoGallery photos={autres} title={`Autres photos (${autres.length})`} />}

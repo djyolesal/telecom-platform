@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/sync/attachment_store.dart';
 import '../../../core/errors/exceptions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -37,8 +39,30 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
     super.dispose();
   }
 
+  /// Photos de l'état constaté à la déclaration. Caméra uniquement, comme au
+  /// démarrage : une photo de la galerie ne prouve ni le lieu ni l'instant.
+  final List<String> _photos = [];
+
+  Future<void> _prendrePhoto() async {
+    final shot = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80);
+    if (shot == null) return;
+    final chemin = await AttachmentStore.persistFile(shot.path);
+    if (!mounted) return;
+    setState(() => _photos.add(chemin));
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false) || _siteId == null) {
+      return;
+    }
+    // Le minimum vient du SERVEUR : on le contrôle ici pour éviter un
+    // aller-retour inutile, mais c'est le serveur qui fait autorité.
+    final minPhotos = AppConfig.minPhotosIncidentDeclaration;
+    if (_photos.length < minPhotos) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Photographiez l\'état constaté : $minPhotos photo(s) minimum '
+            '(${_photos.length} prise(s)).'),
+      ));
       return;
     }
     final repo = context.read<IncidentRepository>();
@@ -54,6 +78,7 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
         description: _description.text.trim(),
         latitude: pos?.lat,
         longitude: pos?.lng,
+        photoPaths: _photos,
       );
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(
@@ -114,6 +139,43 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
               validator: (v) =>
                   (v == null || v.isEmpty) ? 'Description requise' : null,
             ),
+            const SizedBox(height: 18),
+            // ÉTAT CONSTATÉ. Celui qui déclare n'est pas forcément celui qui
+            // interviendra : sans photo, rien ne documente ce qu'il a vu si la
+            // prise en charge est reprise, décalée ou annulée. Le minimum vient
+            // du serveur ; à 0, le bloc reste proposé mais n'oblige à rien.
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    AppConfig.minPhotosIncidentDeclaration > 0
+                        ? 'État constaté — ${_photos.length}/${AppConfig.minPhotosIncidentDeclaration} photo(s) minimum'
+                        : 'État constaté — ${_photos.length} photo(s) (facultatif)',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving ? null : _prendrePhoto,
+                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                  label: const Text('Photo'),
+                ),
+              ],
+            ),
+            if (_photos.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < _photos.length; i++)
+                      Chip(
+                        label: Text('Photo ${i + 1}'),
+                        onDeleted: _saving ? null : () => setState(() => _photos.removeAt(i)),
+                      ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _saving ? null : _submit,

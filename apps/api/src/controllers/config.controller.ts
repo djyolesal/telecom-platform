@@ -38,6 +38,9 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
       minPhotosCurative: getNum('maintenance.minPhotosCurative', 2),
       // État des lieux AVANT exigé au démarrage d'un incident (photos APRES à la clôture).
       minPhotosIncidentAvant: getNum('incident.minPhotosAvant', 2),
+      // Minimum à la DÉCLARATION (0 = facultatif). Servi par le serveur pour
+      // qu'un changement de règle n'exige pas un nouvel APK.
+      minPhotosIncidentDeclaration: getNum('incident.minPhotosDeclaration', 0),
       intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       // Référentiel des types de liaison de transmission (badges topologie, fiche site).
       typesLiaison: typesLiaison(),

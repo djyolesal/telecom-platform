@@ -124,6 +124,23 @@ export async function getIncidentById(req: Request, res: Response, next: NextFun
   } catch (err) { next(err); }
 }
 
+/**
+ * L'APK sait-il joindre des photos à la DÉCLARATION ?
+ *
+ * Il le dit par `X-App-Version` (« 1.7.0+45 »). Un en-tête absent — b40, b43 —
+ * ou une version antérieure signifie « non » : on n'exige alors rien de lui.
+ * Sans cette exemption, relever le seuil aurait bloqué net tout le terrain
+ * resté sur une version ancienne, sans qu'il ait le moindre moyen de s'y
+ * conformer depuis l'application installée.
+ */
+const BUILD_PHOTOS_DECLARATION = 45;
+function appSaitPhotographierDeclaration(req: Request): boolean {
+  const brut = req.headers['x-app-version'];
+  const version = String(Array.isArray(brut) ? brut[0] : brut ?? '');
+  const build = Number(version.split('+')[1]);
+  return Number.isFinite(build) && build >= BUILD_PHOTOS_DECLARATION;
+}
+
 export async function createIncident(req: Request, res: Response, next: NextFunction) {
   try {
     const b = req.body as Record<string, unknown>;
@@ -143,6 +160,30 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
     const data = pick<Prisma.IncidentUncheckedCreateInput>(b, [
       'siteId', 'type', 'severite', 'description', 'latitude', 'longitude',
     ]);
+    // ÉTAT CONSTATÉ À LA DÉCLARATION. Le technicien qui déclare n'est pas
+    // forcément celui qui interviendra : sans photo, rien ne documente ce qu'il
+    // a vu entre la déclaration et le démarrage — reprise par un collègue,
+    // intervention décalée, ou annulée. Même raison que les photos AVANT du
+    // démarrage, un cran plus tôt.
+    //
+    // EXIGÉ SEULEMENT LÀ OÙ C'EST POSSIBLE :
+    //  - depuis le PORTAIL, on n'est pas sur site : jamais exigé (un NOC doit
+    //    pouvoir déclarer une panne sur alarme, sans friction) ;
+    //  - depuis un APK qui ne SAIT PAS envoyer de photo à la déclaration :
+    //    jamais exigé non plus, sinon relever le seuil bloquerait net tout le
+    //    terrain resté sur une version ancienne. L'app le déclare par l'en-tête
+    //    X-App-Version ; une version absente ou antérieure est donc exemptée.
+    const photosDecl = (Array.isArray(b.photos) ? b.photos : [])
+      .filter((p): p is { url: string; key: string } =>
+        !!p && typeof (p as { url?: unknown }).url === 'string' && typeof (p as { key?: unknown }).key === 'string');
+    const minDecl = getNum('incident.minPhotosDeclaration', 0);
+    if (minDecl > 0 && req.user!.plt === 'MOBILE' && appSaitPhotographierDeclaration(req) && photosDecl.length < minDecl) {
+      throw new AppError(
+        `Au moins ${minDecl} photo(s) de l'état constaté sont requises pour déclarer un incident depuis le terrain (${photosDecl.length} fournie(s)).`,
+        422,
+      );
+    }
+
     // Idempotence (rejeu de la file offline) : la clé stable devient l'id —
     // sans elle, une réponse perdue produisait un SECOND incident, une seconde
     // notification CRITIQUE et un MTTR faussé.
@@ -163,7 +204,20 @@ export async function createIncident(req: Request, res: Response, next: NextFunc
       include: { site: { select: { nom: true, code: true, region: true } } },
     }));
 
-    await auditLog(req.user!.id, 'CREATE', 'incidents', incident.id, data, req);
+    // Photos acceptées quelle que soit la version : un APK ancien n'en envoie
+    // pas, un APK à jour en envoie — les deux fonctionnent.
+    if (photosDecl.length) {
+      await prisma.photo.createMany({
+        data: photosDecl.map((p) => ({
+          // `phase` est un VarChar(10) : « DECLARATION » (11) le dépassait et
+          // faisait échouer TOUTE la déclaration. « CONSTAT » dit la même
+          // chose — l'état constaté — et tient dans la colonne.
+          entityType: 'incident', entityId: incident.id, url: p.url, minioKey: p.key, phase: 'CONSTAT',
+        })),
+      });
+    }
+
+    await auditLog(req.user!.id, 'CREATE', 'incidents', incident.id, { ...data, photosDeclaration: photosDecl.length }, req);
 
     // Notifier via WebSocket
     io.of('/supervision').emit('incident:created', {

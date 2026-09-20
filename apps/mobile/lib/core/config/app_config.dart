@@ -14,6 +14,9 @@ class AppConfig {
   static int minPhotosMouvement = 2;
   static int minPhotosCurative = 2;
   static int minPhotosIncidentAvant = 2;
+  /// Photos exigées à la DÉCLARATION d'un incident depuis le mobile.
+  /// 0 = facultatif : l'exploitant relève le seuil quand le parc est à jour.
+  static int minPhotosIncidentDeclaration = 0;
   static int intervalleVidangeHeures = 250;
 
   /// Catalogue des pièces de rechange (code → libellé/unité), servi par
@@ -135,6 +138,9 @@ class ConfigService {
     AppConfig.minPhotosIncidentAvant =
         (d['minPhotosIncidentAvant'] as num?)?.toInt() ??
             AppConfig.minPhotosIncidentAvant;
+    AppConfig.minPhotosIncidentDeclaration =
+        (d['minPhotosIncidentDeclaration'] as num?)?.toInt() ??
+            AppConfig.minPhotosIncidentDeclaration;
     AppConfig.intervalleVidangeHeures =
         (d['intervalleVidangeHeures'] as num?)?.toInt() ??
             AppConfig.intervalleVidangeHeures;

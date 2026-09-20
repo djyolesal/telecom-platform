@@ -18,7 +18,12 @@ export interface JWTPayload {
 declare global {
   namespace Express {
     interface Request {
-      user?: { id: string; role: string };
+      // `plt` : plateforme du jeton (MOBILE / WEB). Remontée jusqu'aux
+      // contrôleurs car certaines règles n'ont de sens que sur le terrain —
+      // exiger une photo de l'état constaté à la déclaration d'un incident,
+      // par exemple, n'a aucun sens depuis le portail où l'on n'est pas sur
+      // site. Absente sur les jetons d'avant la session unique.
+      user?: { id: string; role: string; plt?: Plateforme };
     }
   }
 }
@@ -45,7 +50,7 @@ export async function authMiddleware(req: Request, _res: Response, next: NextFun
       if (!ok) throw new AppError('Session ouverte sur un autre appareil', 401);
     }
 
-    req.user = { id: payload.sub, role: payload.role };
+    req.user = { id: payload.sub, role: payload.role, plt: payload.plt };
     next();
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) return next(new AppError('Session expirée, reconnectez-vous.', 401));

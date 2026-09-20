@@ -38,6 +38,17 @@ class IncidentRepository {
   }
 
   /// Déclaration offline-first.
+  /// Déclaration (offline-first).
+  ///
+  /// [photoPaths] : photos de l'ÉTAT CONSTATÉ au moment de la déclaration —
+  /// uploadées par le moteur de sync, qui les injecte en `photos: [{url, key}]`
+  /// comme au démarrage. Celui qui déclare n'est pas forcément celui qui
+  /// interviendra : sans elles, rien ne documente ce qu'il a vu si la prise en
+  /// charge est reprise, décalée ou annulée.
+  ///
+  /// Le minimum est décidé par le SERVEUR (réglage, 0 = facultatif) : l'app
+  /// n'impose rien d'elle-même, sinon un changement de règle exigerait un
+  /// nouvel APK.
   Future<SubmitResult> declare({
     required String siteId,
     required String type,
@@ -45,6 +56,7 @@ class IncidentRepository {
     required String description,
     double? latitude,
     double? longitude,
+    List<String> photoPaths = const [],
   }) {
     return _sync.submit(
       endpoint: '/incidents',
@@ -57,6 +69,9 @@ class IncidentRepository {
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
       },
+      attachments: [
+        for (final p in photoPaths) {'path': p, 'kind': 'photo'},
+      ],
     );
   }
 
