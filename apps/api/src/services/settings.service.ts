@@ -82,6 +82,14 @@ export function settingsCatalog(): SettingMeta[] {
     // sont les écritures les moins prouvées de la chaîne. 0 = pièce facultative
     // (dépannage : une purge urgente sans scanner à portée).
     { key: 'carburant.justificatifMouvementObligatoire', label: 'Pièce justificative obligatoire pour un transfert ou une purge (1 = oui)', groupe: 'Carburant - stock', unite: '', defaut: 1 },
+    // Réglages LUS par le code mais qui n'avaient jamais été déclarés : ils
+    // fonctionnaient sur leur valeur par défaut et n'apparaissaient pas dans
+    // Administration → Paramètres, donc l'exploitant ne pouvait pas y toucher —
+    // ni même savoir qu'ils existaient.
+    { key: 'incident.minPhotosAvant', label: 'Photos min. de l\'état constaté au démarrage d\'un incident', groupe: 'Supervision', unite: 'photos', defaut: 2 },
+    { key: 'depotage.antiDoublonMinutes', label: 'Fenêtre anti-doublon entre deux dépotages du même site', groupe: 'Carburant - stock', unite: 'min', defaut: 120 },
+    { key: 'appro.margeGePermanentJours', label: 'Marge de sécurité gasoil pour un site à GE permanent (réappro)', groupe: 'Carburant - stock', unite: 'jours', defaut: 2 },
+    { key: 'energie.prixKwhFCFA', label: 'Prix du kWh retenu pour le bilan énergie', groupe: 'Supervision', unite: 'FCFA', defaut: 105 },
     { key: 'incident.minPhotosDeclaration', label: 'Photos min. à la déclaration d\'un incident depuis le mobile (0 = facultatif)', groupe: 'Supervision', unite: 'photos', defaut: 0 },
     // Point de départ du suivi préventif : une tâche JAMAIS enregistrée sur la
     // plateforme est réputée faite à cette date (l'historique papier d'avant
