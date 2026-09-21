@@ -389,15 +389,29 @@ rustine en production.
 
 ## Phase 4 — APK
 
-L'APK **1.7.0+43** est déjà construit et déposé dans `~/Downloads/APK-emops/`
-(`emops-1.7.0-b43-arm64-v8a.apk` + `-armeabi-v7a.apk` + `.aab`, versionCode **2043**,
-signature `4955c7cf…` inchangée — mise à jour par-dessus, pas de désinstallation).
+L'APK courant est **1.8.0+46**, construit le 21/09/2026 et déposé dans
+`~/Downloads/APK-emops/` (`emops-1.8.0-b46-arm64-v8a.apk`, versionCode **2046**,
+SHA-256 `9e5c5675…` ; `-armeabi-v7a.apk`, versionCode **1046**, SHA-256 `63b5e875…`).
+Signature `4955c7cf…` **inchangée depuis b43** — mise à jour par-dessus, pas de
+désinstallation. URL d'API compilée dans le binaire : `https://emops.uk/api/v1`
+(vérifiée dans `libapp.so`, aucune IP ni adresse locale résiduelle).
+
+Ce qu'il apporte depuis le b43 distribué : version de l'app déclarée au serveur
+(b44), photos de l'état constaté à la déclaration d'incident et photos de clôture
+qui ne disparaissent plus (b45), déclaration de purge/transfert depuis le site et
+charte graphique héritée du portail (b46), et un 502 de la passerelle qui n'arrête
+plus le terrain (message en français + deux reprises automatiques sur les lectures).
+
+⚠️ **Couplé à l'API** : la migration **0060** (validation des mouvements de
+carburant) doit être passée AVANT de distribuer. Le `.aab` (Play Store) n'a pas été
+reconstruit — seuls les APK le sont.
+
 Pour le reconstruire à l'identique :
 
 ```bash
 cd apps/mobile
 flutter build apk --release --split-per-abi --dart-define=API_URL=https://emops.uk/api/v1
-flutter build appbundle --release --dart-define=API_URL=https://emops.uk/api/v1
+flutter build appbundle --release --dart-define=API_URL=https://emops.uk/api/v1   # .aab, si dépôt Play Store
 ```
 
 - [ ] Tester l'APK sur un téléphone AVANT distribution (login + un dépotage de test).
