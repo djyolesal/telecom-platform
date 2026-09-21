@@ -402,9 +402,16 @@ qui ne disparaissent plus (b45), déclaration de purge/transfert depuis le site 
 charte graphique héritée du portail (b46), et un 502 de la passerelle qui n'arrête
 plus le terrain (message en français + deux reprises automatiques sur les lectures).
 
+Le bundle Play Store **`emops-1.8.0-b46.aab`** est construit dans le même dossier
+(versionCode **46**, SHA-256 `8c82ea3a…`, trois ABI : arm64-v8a, armeabi-v7a,
+x86_64, même clé de signature). C'est le **fichier d'envoi** (upload key) : Play
+resigne lui-même ce qu'il distribue, donc l'empreinte vue par les téléphones venant
+du Store est celle de Play, PAS `4955c7cf…`. Conséquence : un téléphone qui a
+l'APK installé à la main ne peut pas recevoir la mise à jour par le Store sans
+désinstaller d'abord — ne mélangez pas les deux canaux sur un même téléphone.
+
 ⚠️ **Couplé à l'API** : la migration **0060** (validation des mouvements de
-carburant) doit être passée AVANT de distribuer. Le `.aab` (Play Store) n'a pas été
-reconstruit — seuls les APK le sont.
+carburant) doit être passée AVANT de distribuer.
 
 Pour le reconstruire à l'identique :
 
