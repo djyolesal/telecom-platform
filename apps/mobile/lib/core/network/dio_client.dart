@@ -77,7 +77,13 @@ class DioClient {
       }
       final status = e.response?.statusCode;
       final data = e.response?.data;
-      final msg = data is Map && data['error'] != null ? data['error'].toString() : (e.message ?? 'Erreur réseau');
+      // Un 502/503/504 vient de nginx, PAS de l'API : le corps est une page
+      // HTML, donc `data['error']` est absent et `e.message` est le texte
+      // technique anglais de Dio (« RequestOptions.validateStatus… »). Le
+      // technicien ne doit jamais lire ça : on rédige le message ici.
+      final msg = data is Map && data['error'] != null
+          ? data['error'].toString()
+          : _messageStatut(status) ?? (e.message ?? 'Erreur réseau');
       if (status == 401) throw UnauthorizedException(msg);
       // Avertissements de vraisemblance (422) : conservés pour que l'UI propose
       // au technicien de vérifier puis confirmer sa saisie.
@@ -103,10 +109,15 @@ class _RetryInterceptor extends Interceptor {
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     final retries = (err.requestOptions.extra['__retries'] as int?) ?? 0;
+    // Une passerelle qui redémarre (502/503/504) est aussi transitoire qu'une
+    // coupure réseau : sur une LECTURE, deux essais espacés suffisent en
+    // général à traverser la fenêtre de redémarrage de l'API, au lieu de
+    // laisser un écran d'erreur au technicien.
     final isTransient = err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.connectionError ||
-        (err.type == DioExceptionType.unknown && err.error is SocketException);
+        (err.type == DioExceptionType.unknown && err.error is SocketException) ||
+        _passerelleIndisponible(err.response?.statusCode);
 
     if (isTransient && err.requestOptions.method == 'GET' && retries < _maxRetries) {
       final next = retries + 1;
@@ -121,4 +132,20 @@ class _RetryInterceptor extends Interceptor {
     }
     handler.next(err);
   }
+}
+
+/// Statuts d'une passerelle momentanément incapable de joindre l'API.
+bool _passerelleIndisponible(int? s) => s == 502 || s == 503 || s == 504;
+
+/// Message métier pour les statuts dont le corps ne vient pas de l'API.
+String? _messageStatut(int? s) {
+  if (_passerelleIndisponible(s)) {
+    return 'Serveur momentanément indisponible - réessayez dans un instant.';
+  }
+  if (s == 413) return 'Envoi trop volumineux - reprenez la photo.';
+  if (s == 429) return 'Trop de tentatives - patientez quelques minutes.';
+  if (s != null && s >= 500) {
+    return 'Le serveur a rencontré une erreur - réessayez, puis prévenez votre superviseur si cela persiste.';
+  }
+  return null;
 }
