@@ -29,6 +29,8 @@ export interface PrestataireConformite {
 export interface TacheColonne { numero: number; key: string; libelle: string }
 export interface LigneSiteMatrice {
   site: string; region: string; prestataireId: string;
+  /** Configuration d'énergie du site et rôle de son GE, en toutes lettres. */
+  energie: string; ge: string;
   statuts: Record<string, 'OK' | 'NOK' | 'NA'>;
   conforme: boolean;
 }
@@ -54,10 +56,11 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
 
   /* ── Feuille unique : résumé en haut, matrice en bas ── */
   const nbColTaches = d.taches.length;
-  const nbCol = 3 + nbColTaches + 1; // Site | Région | Prestataire | tâches... | Site conforme
+  const COL_TACHE1 = 6; // Site | Région | Prestataire | Énergie | GE | tâches…
+  const nbCol = COL_TACHE1 - 1 + nbColTaches + 1; // …| Site conforme
   const ws = wb.addWorksheet('Conformité', { views: [{ showGridLines: false }] });
   ws.columns = [
-    { width: 26 }, { width: 13 }, { width: 22 },
+    { width: 26 }, { width: 13 }, { width: 22 }, { width: 17 }, { width: 13 },
     ...d.taches.map(() => ({ width: 6.5 })),
     { width: 12 },
   ];
@@ -132,12 +135,13 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
   r += 2;
   ws.mergeCells(r, 1, r, nbCol);
   const t2 = ws.getCell(r, 1);
-  t2.value = 'État par site - chaque colonne est une tâche contractuelle (OK à jour · NOK due non réalisée · N/A non applicable)';
+  t2.value = 'État par site - chaque colonne est une tâche contractuelle (OK à jour · NOK due non réalisée · N/A non applicable). '
+    + "L'applicabilité d'une tâche découle de la configuration d'énergie du site et du rôle de son GE.";
   t2.font = { size: 11, bold: true, color: { argb: NAVY } };
   r++;
   const he = ws.getRow(r);
   he.height = 86;
-  ['Site', 'Région', 'Prestataire'].forEach((h, i) => {
+  ['Site', 'Région', 'Prestataire', 'Config. énergie', 'Statut GE'].forEach((h, i) => {
     const c = he.getCell(1 + i);
     c.value = h;
     c.font = { size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -145,19 +149,19 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
     c.alignment = { horizontal: 'left', vertical: 'bottom', indent: 1 };
   });
   d.taches.forEach((t, i) => {
-    const c = he.getCell(4 + i);
+    const c = he.getCell(COL_TACHE1 + i);
     c.value = `${t.numero}. ${t.libelle}`;
     c.font = { size: 8, bold: true, color: { argb: 'FFFFFFFF' } };
     c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
     c.alignment = { textRotation: 75, vertical: 'bottom', horizontal: 'center', wrapText: true };
   });
-  const cConf = he.getCell(4 + nbColTaches);
+  const cConf = he.getCell(COL_TACHE1 + nbColTaches);
   cConf.value = 'Site conforme';
   cConf.font = { size: 8, bold: true, color: { argb: 'FFFFFFFF' } };
   cConf.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
   cConf.alignment = { textRotation: 75, vertical: 'bottom', horizontal: 'center' };
   ws.views = [{ state: 'frozen', ySplit: r, xSplit: 1, showGridLines: false }];
-  ws.autoFilter = { from: { row: r, column: 1 }, to: { row: r, column: 3 } };
+  ws.autoFilter = { from: { row: r, column: 1 }, to: { row: r, column: COL_TACHE1 - 1 } };
   r++;
   let zeb = false;
   for (const site of d.sites) {
@@ -166,19 +170,21 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
     row.getCell(1).value = site.site;
     row.getCell(2).value = site.region;
     row.getCell(3).value = d.nomsPrestataires.get(site.prestataireId) ?? '';
-    [1, 2, 3].forEach((i) => {
+    row.getCell(4).value = site.energie;
+    row.getCell(5).value = site.ge;
+    [1, 2, 3, 4, 5].forEach((i) => {
       row.getCell(i).font = { size: 9 };
       if (zeb) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA } };
     });
     d.taches.forEach((t, i) => {
-      const c = row.getCell(4 + i);
+      const c = row.getCell(COL_TACHE1 + i);
       const st = site.statuts[t.key];
       c.value = st === 'NA' ? '–' : st;
       c.alignment = { horizontal: 'center', vertical: 'middle' };
       c.font = { size: 8, bold: st === 'NOK', color: { argb: st === 'OK' ? TEAL : st === 'NOK' ? RED : GRIS } };
       c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: st === 'OK' ? VERT_PALE : st === 'NOK' ? ROUGE_PALE : GRIS_PALE } };
     });
-    const cc = row.getCell(4 + nbColTaches);
+    const cc = row.getCell(COL_TACHE1 + nbColTaches);
     cc.value = site.conforme ? 'OK' : 'NOK';
     cc.alignment = { horizontal: 'center', vertical: 'middle' };
     cc.font = { size: 9, bold: true, color: { argb: site.conforme ? TEAL : RED } };

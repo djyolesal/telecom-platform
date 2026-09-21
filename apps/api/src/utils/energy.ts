@@ -87,3 +87,27 @@ export function sourcesForConfig(powerConfig: string): Array<'CEET' | 'GE' | 'SO
       return [];
   }
 }
+
+/** Libellés de la configuration d'énergie — MÊMES mots que le portail
+ *  (apps/web/lib/constants.ts) : un export qui nomme autrement ce que
+ *  l'écran affiche oblige le lecteur à faire la traduction lui-même. */
+const LIBELLES_POWER_CONFIG: Record<string, string> = {
+  CEET_GE: 'CEET + GE',
+  CEET_UNIQUEMENT: 'CEET uniquement',
+  GE_UNIQUEMENT: 'GE uniquement',
+  HYBRIDE_GE: 'Hybride GE',
+  SOLAIRE_UNIQUEMENT: 'Solaire uniquement',
+  HYBRIDE_CEET_GE: 'Hybride CEET+GE',
+};
+
+const LIBELLES_STATUT_GE: Record<string, string> = {
+  GE_PERMANENT: 'GE permanent',
+  GE_SECOURS: 'GE secours',
+  PAS_DE_GE: 'Pas de GE',
+};
+
+export const libellePowerConfig = (v?: string | null): string =>
+  (v && LIBELLES_POWER_CONFIG[v]) || v || '';
+
+export const libelleStatutGE = (v?: string | null): string =>
+  (v && LIBELLES_STATUT_GE[v]) || v || '';

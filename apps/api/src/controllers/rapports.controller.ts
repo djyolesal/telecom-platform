@@ -20,7 +20,7 @@ import { carboneFactors } from '../services/settings.service';
 import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 import { sitePerimetre, isRestreint, estPrestataire } from '../utils/perimetre';
-import { sourcesForConfig } from '../utils/energy';
+import { sourcesForConfig, libellePowerConfig, libelleStatutGE } from '../utils/energy';
 import { stockCourantParSite } from '../services/stockCourant.service';
 import { bucketsHoraires, compterParHeure, niveauAgitation } from '../utils/pouls';
 
@@ -590,7 +590,7 @@ async function chargerConformiteMaintenance(req: Request) {
   const sitesEnRetardPar = new Map<string, Set<string>>();
   const sitesConformesPar = new Map<string, Set<string>>();
   const evolutionDuPar = new Map<string, Map<string, { dues: number; realisees: number }>>();
-  const matriceSites: { siteId: string; site: string; region: string; prestataireId: string; statuts: Record<string, 'OK' | 'NOK' | 'NA'>; conforme: boolean }[] = [];
+  const matriceSites: { siteId: string; site: string; region: string; prestataireId: string; powerConfig: string; statutGE: string; statuts: Record<string, 'OK' | 'NOK' | 'NA'>; conforme: boolean }[] = [];
   for (const site of sitesContrat) {
     const pid = passifByLot.get(site.lotId!)!;
     const du = duParSite.get(site.id)!;
@@ -611,6 +611,10 @@ async function chargerConformiteMaintenance(req: Request) {
     }
     matriceSites.push({
       siteId: site.id, site: site.nom, region: site.region, prestataireId: pid,
+      // La configuration d'énergie EXPLIQUE la matrice : c'est elle (avec le
+      // statut du GE) qui rend une tâche applicable ou N/A. Sans elle, le
+      // lecteur du rapport ne peut pas vérifier qu'un « — » est légitime.
+      powerConfig: site.powerConfig, statutGE: site.statutGE,
       statuts: du.statuts, conforme: du.conforme,
     });
   }
@@ -743,7 +747,11 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
       region: region || undefined,
       parPrestataire,
       taches: tachesCatalogue.map((t) => ({ numero: t.numero, key: t.key, libelle: t.libelle })),
-      sites: matriceSites,
+      sites: matriceSites.map((s) => ({
+        ...s,
+        energie: libellePowerConfig(s.powerConfig),
+        ge: libelleStatutGE(s.statutGE),
+      })),
       nomsPrestataires,
     };
     await auditLog(req.user!.id, 'EXPORT', 'conformite_maintenance', undefined,
