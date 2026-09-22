@@ -2256,25 +2256,77 @@ async function sitesAmont(siteId: string): Promise<string[]> {
  * Coupures AMONT encore ouvertes auxquelles cette coupure peut être rattachée.
  * L'écran n'offre ainsi que des choix qui passeront la garde du rattachement.
  */
+/**
+ * Un entraînement est-il PLAUSIBLE entre cette coupure et cette candidate amont ?
+ *
+ * Même matière que le classement automatique, mais appliquée après coup : le
+ * NOC peut rattacher une coupure DÉJÀ CLÔTURÉE à un amont lui aussi clôturé —
+ * le cas courant est celui du NOC qui comprend après coup qu'un site n'était
+ * qu'un écho de la panne amont. Rien d'autre ne bouge : ni l'heure de début,
+ * ni la durée, seulement l'imputation de la cause.
+ *
+ * @returns null si le rattachement est recevable, sinon le motif du refus.
+ */
+export function motifRefusRattachement(
+  aval: { dateDebut: Date; dateFin: Date | null },
+  racine: { dateDebut: Date; dateFin: Date | null },
+  fenetreMin: number,
+  maintenant: Date = new Date(),
+): string | null {
+  // Un aval ENCORE COUPÉ ne se rattache qu'à un amont encore coupé : sinon le
+  // balayage de reclassement le détacherait de lui-même au passage suivant.
+  if (!aval.dateFin && racine.dateFin) {
+    return 'Cet amont est déjà rétabli alors que ce site est toujours coupé : sa cause est désormais la sienne.';
+  }
+  // L'aval peut tomber AVANT son amont (coupure d'énergie régionale : sa
+  // batterie est plus petite), mais pas des heures avant — c'est la fenêtre
+  // d'entraînement du classement automatique.
+  const avanceMin = Math.round((racine.dateDebut.getTime() - aval.dateDebut.getTime()) / 60_000);
+  if (avanceMin > fenetreMin) {
+    return `Ce site est tombé ${avanceMin} min avant l'amont, au-delà de la fenêtre d'entraînement (${fenetreMin} min) : les deux pannes sont distinctes.`;
+  }
+  // Et les deux indisponibilités doivent se RECOUVRIR : deux pannes qui ne se
+  // croisent jamais ne peuvent pas être la même.
+  const finAval = aval.dateFin ?? maintenant;
+  const finRacine = racine.dateFin ?? maintenant;
+  if (racine.dateDebut > finAval || finRacine < aval.dateDebut) {
+    return "Les deux périodes d'indisponibilité ne se recouvrent pas : cette coupure ne peut pas découler de celle-là.";
+  }
+  return null;
+}
+
 export async function amontsPossibles(req: Request, res: Response, next: NextFunction) {
   try {
     const c = await prisma.coupureReseau.findUnique({
       where: { id: req.params.id },
-      select: { id: true, siteId: true },
+      select: { id: true, siteId: true, dateDebut: true, dateFin: true },
     });
     if (!c) throw new AppError('Coupure introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, c.siteId);
     const amonts = await sitesAmont(c.siteId);
     if (!amonts.length) return res.json({ success: true, data: [] });
+    const fenetreMin = getNum('oss.fenetreEntrainementMin', 60);
+    // Une coupure clôturée se rattache à un amont lui aussi clôturé : on ne
+    // borne donc plus aux amonts ouverts, on borne à ce qui s'est passé AUTOUR
+    // de cette coupure — la plausibilité est tranchée juste après, par la même
+    // règle que l'écriture, pour que l'écran n'offre aucun choix qui serait
+    // ensuite refusé.
     const candidates = await prisma.coupureReseau.findMany({
-      where: { siteId: { in: amonts }, dateFin: null, id: { not: c.id } },
+      where: {
+        siteId: { in: amonts },
+        id: { not: c.id },
+        dateDebut: { lte: c.dateFin ?? new Date() },
+        ...(c.dateFin ? {} : { dateFin: null }),
+      },
       select: {
-        id: true, technologie: true, dateDebut: true, origine: true,
+        id: true, technologie: true, dateDebut: true, dateFin: true, origine: true,
         site: { select: { nom: true } },
       },
-      orderBy: { dateDebut: 'asc' },
+      orderBy: { dateDebut: 'desc' },
+      take: 50,
     });
-    res.json({ success: true, data: candidates });
+    const recevables = candidates.filter((a) => motifRefusRattachement(c, a, fenetreMin) === null);
+    res.json({ success: true, data: recevables });
   } catch (err) { next(err); }
 }
 
@@ -2282,9 +2334,12 @@ export async function amontsPossibles(req: Request, res: Response, next: NextFun
  * RATTACHER À UN AMONT (NOC) : la réciproque — cette coupure locale fait en
  * réalité partie d'une panne amont déjà ouverte.
  *
- * La cible doit être une coupure OUVERTE sur un site situé en AMONT dans la
- * chaîne de transmission : exiger l'ascendance interdit par construction les
- * cycles (A hérite de B qui hérite de A) et les rattachements fantaisistes.
+ * La cible doit être sur un site situé en AMONT dans la chaîne de transmission :
+ * exiger l'ascendance interdit par construction les cycles (A hérite de B qui
+ * hérite de A) et les rattachements fantaisistes. Une coupure CLÔTURÉE se
+ * rattache elle aussi, à un amont clôturé : c'est le cas du NOC qui comprend
+ * après coup qu'un site n'était qu'un écho — voir motifRefusRattachement pour
+ * les conditions (fenêtre d'entraînement, recouvrement des périodes).
  */
 export async function rattacherAmont(req: Request, res: Response, next: NextFunction) {
   try {
@@ -2292,18 +2347,18 @@ export async function rattacherAmont(req: Request, res: Response, next: NextFunc
     if (!cibleId) throw new AppError('Coupure amont à rattacher requise', 400);
     const c = await prisma.coupureReseau.findUnique({
       where: { id: req.params.id },
-      select: { id: true, siteId: true, origine: true, observations: true, dateFin: true },
+      select: { id: true, siteId: true, origine: true, observations: true, dateDebut: true, dateFin: true },
     });
     if (!c) throw new AppError('Coupure introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, c.siteId);
-    if (c.dateFin) throw new AppError('Une coupure clôturée ne se rattache plus : rouvrez-la d\'abord.', 422);
     const racine = await prisma.coupureReseau.findUnique({
       where: { id: cibleId },
-      select: { id: true, siteId: true, dateFin: true, priseEnChargePar: true, priseEnChargeLe: true, site: { select: { nom: true } } },
+      select: { id: true, siteId: true, dateDebut: true, dateFin: true, priseEnChargePar: true, priseEnChargeLe: true, site: { select: { nom: true } } },
     });
     if (!racine) throw new AppError('Coupure amont introuvable', 404);
-    if (racine.dateFin) throw new AppError('Cette coupure amont est déjà clôturée.', 422);
     if (racine.id === c.id || racine.siteId === c.siteId) throw new AppError('Une coupure ne peut pas hériter d\'elle-même.', 422);
+    const refus = motifRefusRattachement(c, racine, getNum('oss.fenetreEntrainementMin', 60));
+    if (refus) throw new AppError(refus, 422);
 
     // Ascendance réelle, via le MÊME parcours que l'écran : sans elle on
     // pourrait rattacher n'importe quoi à n'importe quoi et fabriquer un cycle.
@@ -2325,7 +2380,7 @@ export async function rattacherAmont(req: Request, res: Response, next: NextFunc
         // L'adoption de la racine couvre tout l'événement (même règle qu'au
         // reclassement automatique de la prise en charge).
         ...(racine.priseEnChargePar ? { priseEnChargePar: racine.priseEnChargePar, priseEnChargeLe: racine.priseEnChargeLe } : {}),
-        observations: `${c.observations ? c.observations + '\n' : ''}[RATTACHÉE] Rattachée à l'amont ${racine.site?.nom ?? ''} par ${par}.`,
+        observations: `${c.observations ? c.observations + '\n' : ''}[RATTACHÉE] Rattachée à l'amont ${racine.site?.nom ?? ''} par ${par}${c.dateFin ? ' (après clôture : horaires et durée inchangés)' : ''}.`,
       },
     });
     await auditLog(req.user!.id, 'UPDATE', 'coupure_reseau', c.id, { action: 'rattacher_amont', racine: racine.id }, req);

@@ -1,4 +1,8 @@
-import { resoudreIncidentSiPlusDeCoupure, promouvoirOrphelinesApresRetablissement } from './coupuresReseau.controller';
+import {
+  resoudreIncidentSiPlusDeCoupure,
+  promouvoirOrphelinesApresRetablissement,
+  motifRefusRattachement,
+} from './coupuresReseau.controller';
 
 /**
  * Rebouclage coupure → incident : la résolution ne doit JAMAIS précéder
@@ -97,5 +101,53 @@ describe('promouvoirOrphelinesApresRetablissement', () => {
     // Et on ne touche toujours qu'aux héritées encore ouvertes.
     expect(où.dateFin).toBeNull();
     expect(où.origine).toBe('HERITEE');
+  });
+});
+
+/**
+ * Rattachement MANUEL après coup : le NOC comprend parfois une fois la panne
+ * passée qu'un site n'était qu'un écho de l'amont. On l'autorise sur une
+ * coupure clôturée, mais pas n'importe comment — sinon n'importe quelle panne
+ * pourrait être imputée à n'importe quelle autre.
+ */
+describe('motifRefusRattachement', () => {
+  const d = (iso: string) => new Date(`2026-09-20T${iso}:00Z`);
+  const FENETRE = 60;
+
+  it('accepte un aval clôturé qui suit son amont clôturé', () => {
+    const aval = { dateDebut: d('10:05'), dateFin: d('11:10') };
+    const racine = { dateDebut: d('10:00'), dateFin: d('11:00') };
+    expect(motifRefusRattachement(aval, racine, FENETRE)).toBeNull();
+  });
+
+  it('accepte un aval tombé AVANT son amont dans la fenêtre (batterie plus petite)', () => {
+    const aval = { dateDebut: d('09:20'), dateFin: d('11:10') };
+    const racine = { dateDebut: d('10:00'), dateFin: d('11:00') };
+    expect(motifRefusRattachement(aval, racine, FENETRE)).toBeNull();
+  });
+
+  it('refuse un aval tombé bien avant l’amont : deux pannes distinctes', () => {
+    const aval = { dateDebut: d('07:00'), dateFin: d('11:10') };
+    const racine = { dateDebut: d('10:00'), dateFin: d('11:00') };
+    expect(motifRefusRattachement(aval, racine, FENETRE)).toMatch(/180 min avant/);
+  });
+
+  it('refuse deux périodes qui ne se recouvrent pas', () => {
+    const aval = { dateDebut: d('12:00'), dateFin: d('13:00') };
+    const racine = { dateDebut: d('10:00'), dateFin: d('11:00') };
+    expect(motifRefusRattachement(aval, racine, FENETRE)).toMatch(/ne se recouvrent pas/);
+  });
+
+  it('refuse de rattacher un site ENCORE coupé à un amont déjà rétabli', () => {
+    const aval = { dateDebut: d('10:05'), dateFin: null };
+    const racine = { dateDebut: d('10:00'), dateFin: d('11:00') };
+    // Sinon le balayage de reclassement le détacherait au passage suivant.
+    expect(motifRefusRattachement(aval, racine, FENETRE)).toMatch(/déjà rétabli/);
+  });
+
+  it('accepte deux coupures encore ouvertes (cas historique, inchangé)', () => {
+    const aval = { dateDebut: d('10:05'), dateFin: null };
+    const racine = { dateDebut: d('10:00'), dateFin: null };
+    expect(motifRefusRattachement(aval, racine, FENETRE, d('11:30'))).toBeNull();
   });
 });

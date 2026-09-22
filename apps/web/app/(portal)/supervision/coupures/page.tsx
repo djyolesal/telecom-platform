@@ -886,7 +886,9 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   // tombé jusqu'à une heure AVANT sa racine (fenêtre voulue : en coupure
   // d'énergie régionale l'aval tombe le premier, sa batterie étant plus
   // petite). Quand cette fenêtre se trompe, seul un humain peut trancher.
-  const peutDetacher = ['NOC', 'ADMIN'].includes(role) && coupure.origine === 'HERITEE' && !coupure.dateFin;
+  // Après clôture aussi : un rattachement erroné doit pouvoir se défaire, et
+  // l'imputation d'une cause se corrige souvent une fois la panne passée.
+  const peutDetacher = ['NOC', 'ADMIN'].includes(role) && coupure.origine === 'HERITEE';
   const [motifDetache, setMotifDetache] = useState('');
   const detacher = useMutation({
     mutationFn: () => api.post(`/coupures-reseau/${coupure.id}/detacher-amont`, { motif: motifDetache }),
@@ -894,11 +896,13 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
   });
   const errDetache = (detacher.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
   // RATTACHER À UN AMONT : la réciproque du détachement. Même réserve au NOC.
-  // Ne s'affiche que sur une coupure racine encore ouverte — rattacher une
-  // héritée n'aurait pas de sens, et une coupure clôturée ne se rattache plus.
-  const peutRattacher = ['NOC', 'ADMIN'].includes(role) && coupure.origine !== 'HERITEE' && !coupure.dateFin;
+  // Ne s'affiche pas sur une héritée (elle l'est déjà). Une coupure CLÔTURÉE se
+  // rattache aussi : c'est le cas du NOC qui comprend après coup qu'un site
+  // n'était qu'un écho de la panne amont. L'API ne propose que des amonts dont
+  // la période recouvre la sienne — la liste est donc vide quand rien ne colle.
+  const peutRattacher = ['NOC', 'ADMIN'].includes(role) && coupure.origine !== 'HERITEE';
   const [amontChoisi, setAmontChoisi] = useState('');
-  const amonts = useQuery<Array<{ id: string; technologie: string; dateDebut: string; site?: { nom?: string } }>>({
+  const amonts = useQuery<Array<{ id: string; technologie: string; dateDebut: string; dateFin: string | null; site?: { nom?: string } }>>({
     queryKey: ['amonts-possibles', coupure.id],
     queryFn: async () => (await api.get(`/coupures-reseau/${coupure.id}/amonts-possibles`)).data.data,
     enabled: peutRattacher,
@@ -937,6 +941,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
             Si ce site est en réalité tombé pour <b>sa propre cause</b>, détachez-le : il redevient une coupure racine,
             garde son heure de début, et entre dans « à qualifier ». Tant qu&apos;il reste rattaché, sa cause est
             imputée à l&apos;amont et il échappe aux compteurs du NOC.
+            {coupure.dateFin && <> Cette coupure est <b>clôturée</b> : le détachement ne touche ni son début, ni sa fin,
+            ni sa durée — seulement l&apos;imputation de sa cause.</>}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input
@@ -958,10 +964,16 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
       )}
       {peutRattacher && (amonts.data?.length ?? 0) > 0 && (
         <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm">
-          <p className="font-semibold text-indigo-900">Une panne est ouverte en amont de ce site.</p>
+          <p className="font-semibold text-indigo-900">
+            {coupure.dateFin ? 'Une panne amont recouvre cette coupure.' : 'Une panne est ouverte en amont de ce site.'}
+          </p>
           <p className="mt-1 text-xs text-indigo-900">
             Si cette coupure n&apos;est en réalité qu&apos;une conséquence de cette panne amont, rattachez-la : elle
             cessera de compter comme une cause propre et suivra le sort de sa racine.
+            {coupure.dateFin
+              ? <> Cette coupure est <b>clôturée</b> : le rattachement ne touche ni ses horaires ni sa durée — il corrige
+                  l&apos;imputation de sa cause, donc les compteurs du NOC et l&apos;analyse des pannes.</>
+              : null}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <select
@@ -972,7 +984,8 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
               <option value="">Choisir la coupure amont…</option>
               {amonts.data!.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.site?.nom ?? 'Site amont'} · {a.technologie === 'SITE' ? 'Site entier' : a.technologie} · depuis {fmtDateTime(a.dateDebut)}
+                  {a.site?.nom ?? 'Site amont'} · {a.technologie === 'SITE' ? 'Site entier' : a.technologie} ·{' '}
+                  {a.dateFin ? `${fmtDateTime(a.dateDebut)} → ${fmtDateTime(a.dateFin)}` : `depuis ${fmtDateTime(a.dateDebut)}`}
                 </option>
               ))}
             </select>
