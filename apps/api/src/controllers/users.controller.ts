@@ -183,6 +183,18 @@ export async function resetUserPassword(req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 }
 
+/**
+ * Version de l'app pour l'export : DISTINGUER « jamais vu sur mobile » (vide)
+ * de « vu, mais l'APK ne sait pas se déclarer » — ce second cas est justement
+ * la liste des téléphones à mettre à jour avant une bascule, il ne doit pas se
+ * confondre avec les comptes purement web.
+ */
+function versionApp(u: { appVersion: string | null; appareilLabel: string | null; appVersionLe: Date | null }): string {
+  if (u.appVersion) return u.appVersion;
+  if (u.appareilLabel || u.appVersionLe) return 'antérieure à b44';
+  return '';
+}
+
 export async function exportUsers(req: Request, res: Response, next: NextFunction) {
   try {
     const users = await prisma.user.findMany({ take: EXPORT_MAX, orderBy: { nom: 'asc' }, select: SAFE_SELECT });
@@ -190,7 +202,8 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
 
     const format = req.params.format || 'csv';
     if (format === 'csv') {
-      const header = ['Nom','Prénom','Email','Téléphone','Rôle','Région','Actif','Dernière connexion'].map((h) => `"${h}"`).join(';');
+      const header = ['Nom','Prénom','Email','Téléphone','Rôle','Région','Actif','Dernière connexion',
+        'Version app','Version vue le','Appareil lié'].map((h) => `"${h}"`).join(';');
       // Échappement CSV : un nom commençant par = + - @ est interprété comme une
       // FORMULE par Excel (exécution DDE, exfiltration via HYPERLINK), et un
       // point-virgule non protégé décale toutes les colonnes.
@@ -201,7 +214,8 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
       };
       const lines = users.map((u) =>
         [u.nom, u.prenom, u.email, u.telephone ?? '', u.role, u.region ?? '',
-          u.isActive ? 'Oui' : 'Non', u.lastLoginAt?.toISOString() ?? ''].map(csvCell).join(';')
+          u.isActive ? 'Oui' : 'Non', u.lastLoginAt?.toISOString() ?? '',
+          versionApp(u), u.appVersionLe?.toISOString() ?? '', u.appareilLabel ?? ''].map(csvCell).join(';')
       );
       const csv = '﻿' + [header, ...lines].join('\n');
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -220,6 +234,9 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
         { header: 'Région', key: 'region', width: 14 },
         { header: 'Actif', key: 'actif', width: 8 },
         { header: 'Dernière connexion', key: 'connexion', width: 18 },
+        { header: 'Version app', key: 'version', width: 16 },
+        { header: 'Version vue le', key: 'versionLe', width: 18 },
+        { header: 'Appareil lié', key: 'appareil', width: 20 },
       ],
       rows: users.map((u) => ({
         nom: u.nom,
@@ -230,6 +247,9 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
         region: u.region ?? '',
         actif: u.isActive ? 'Oui' : 'Non',
         connexion: u.lastLoginAt ? u.lastLoginAt.toLocaleString('fr-FR') : '',
+        version: versionApp(u),
+        versionLe: u.appVersionLe ? u.appVersionLe.toLocaleString('fr-FR') : '',
+        appareil: u.appareilLabel ?? '',
       })),
     }]);
   } catch (err) { next(err); }

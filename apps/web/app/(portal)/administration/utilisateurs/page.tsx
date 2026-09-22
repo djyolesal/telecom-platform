@@ -208,17 +208,33 @@ export default function UtilisateursPage() {
         ? (
           <span className="block max-w-[110px] truncate text-xs text-gray-600" title={`${u.appareilLabel} - lié le ${fmtDateTime(u.appareilLieLe)}`}>
             {u.appareilLabel}
-            {/* Version DÉCLARÉE par l'app. Absente = APK antérieur à celui qui
-                sait se déclarer : c'est un renseignement, pas un trou. */}
-            <span
-              className={`ml-1 rounded px-1 py-px text-[10px] font-semibold ${u.appVersion ? 'bg-gray-100 text-gray-600' : 'bg-amber-50 text-amber-700'}`}
-              title={u.appVersion ? `Version de l'app, vue le ${fmtDateTime(u.appVersionLe)}` : "L'app installée ne déclare pas sa version : APK antérieur à b44"}
-            >
-              {u.appVersion ?? 'version ?'}
-            </span>
           </span>
         )
         : <span className="text-xs text-gray-300">—</span>,
+    },
+    {
+      // COLONNE À PART, et non une étiquette accrochée à l'appareil : collée au
+      // nom du téléphone, elle était rognée par la troncature dès que le
+      // libellé dépassait une quinzaine de caractères (« Tecno Spark 20C »),
+      // et elle disparaissait entièrement pour les rôles sans verrou
+      // d'appareil (MANAGER, SUPERVISEUR), qui utilisent pourtant l'app.
+      key: 'appVersion', header: 'Version app',
+      render: (u) => {
+        // Jamais connecté depuis le mobile : rien à dire, ce n'est pas un trou.
+        if (!u.appVersion && !u.appareilLabel && !u.appVersionLe) {
+          return <span className="text-xs text-gray-300" title="Ce compte ne s'est jamais connecté depuis l'application mobile">—</span>;
+        }
+        return (
+          <span
+            className={`whitespace-nowrap rounded px-1.5 py-px text-[11px] font-semibold ${u.appVersion ? 'bg-gray-100 text-gray-600' : 'bg-amber-50 text-amber-700'}`}
+            title={u.appVersion
+              ? `Version déclarée par l'application, vue le ${fmtDateTime(u.appVersionLe)}`
+              : "L'application installée ne déclare pas sa version : APK antérieur à b44, à mettre à jour"}
+          >
+            {u.appVersion ?? 'version ?'}
+          </span>
+        );
+      },
     },
     {
       key: 'actions', header: '', align: 'right', render: (u) => (
