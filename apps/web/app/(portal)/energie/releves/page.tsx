@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -13,6 +13,7 @@ import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/state
 import { Badge } from '@/components/shared/Badge';
 import { SOURCES_ENERGIE } from '@/lib/constants';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { fmtNumber, fmtDate } from '@/lib/utils';
 
 interface Releve {
@@ -99,17 +100,25 @@ const listeGE = (p: Passage, champ: 'index' | 'marche', suffixe: string) => {
   return vals.map((g) => `n°${g.numero ?? '?'} ${fmtNumber(g[champ]!)}${suffixe}`).join(' · ');
 };
 
-export default function RelevesPage() {
+const FILTRES_DEFAUT = { page: '1', search: '', source: '', du: '', au: '', tri: '', sens: '' };
+
+function RelevesPageInner() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [source, setSource] = useState('');
-  const [search, setSearch] = useState('');
-  const [du, setDu] = useState('');
-  const [au, setAu] = useState('');
+  // Filtres dans l'URL : ouvrir un passage puis revenir ne doit pas effacer la
+  // période et la source — et un lien filtré se partage tel quel.
+  const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
+  const page = Number(valeurs.page) || 1;
+  const setPage = (p: number) => appliquer({ page: String(p) });
+  const { source, du, au } = valeurs;
   // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
-  // réordonnerait que la page affichée). null = relevés récents d'abord.
-  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  // réordonnerait que la page affichée). Vide = relevés récents d'abord.
+  const tri = valeurs.tri ? { key: valeurs.tri, dir: (valeurs.sens === 'desc' ? -1 : 1) as 1 | -1 } : null;
+  const [search, setSearch] = useState(valeurs.search);
   const debounced = useDebounce(search);
+  useEffect(() => {
+    if (debounced !== valeurs.search) appliquer({ search: debounced, page: '1' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['releves', { page, source, debounced, du, au, tri }],
@@ -163,20 +172,20 @@ export default function RelevesPage() {
 
       <FilterBar
         search={search}
-        onSearch={(v) => { setSearch(v); setPage(1); }}
+        onSearch={setSearch}
         searchPlaceholder="Rechercher un site…"
-        filters={[{ key: 'source', label: 'Toutes sources', value: source, options: SOURCES_ENERGIE, onChange: (v) => { setSource(v); setPage(1); } }]}
+        filters={[{ key: 'source', label: 'Toutes sources', value: source, options: SOURCES_ENERGIE, onChange: (v) => appliquer({ source: v, page: '1' }) }]}
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="text-gray-500">Période :</span>
-        <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
+        <input type="date" value={du} onChange={(e) => appliquer({ du: e.target.value, page: '1' })}
           className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
         <span className="text-gray-400">→</span>
-        <input type="date" value={au} onChange={(e) => { setAu(e.target.value); setPage(1); }}
+        <input type="date" value={au} onChange={(e) => appliquer({ au: e.target.value, page: '1' })}
           className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
         {(du || au) && (
-          <button type="button" onClick={() => { setDu(''); setAu(''); setPage(1); }}
+          <button type="button" onClick={() => appliquer({ du: '', au: '', page: '1' })}
             className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">Effacer</button>
         )}
       </div>
@@ -190,10 +199,23 @@ export default function RelevesPage() {
       ) : (
         <>
           <DataTable columns={columns} data={passages} maxHeight="65vh" onRowClick={(p) => router.push(`/energie/releves/${p.id}`)}
-            serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }} />
+            serverSort={tri}
+            onServerSort={(s) => appliquer({ tri: s?.key ?? '', sens: s && s.dir === -1 ? 'desc' : '', page: '1' })} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Les filtres vivent dans la query (useFiltresUrl) : Next exige alors une
+ * frontière Suspense, sinon le prérendu de la page échoue à la construction.
+ */
+export default function RelevesPage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={6} />}>
+      <RelevesPageInner />
+    </Suspense>
   );
 }

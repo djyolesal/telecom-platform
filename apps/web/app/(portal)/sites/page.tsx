@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +15,7 @@ import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS } from '@/lib/constants';
 import { SiteOptionnel } from '@/lib/optionalColumns';
 import { useColonnesOptionnelles } from '@/lib/hooks/useColonnesOptionnelles';
@@ -30,26 +31,36 @@ interface Site extends SiteOptionnel {
   puissanceGEkva: number;
 }
 
-export default function SitesPage() {
+const FILTRES_DEFAUT = { page: '1', search: '', region: '', statutGe: '', configs: '', prestataireId: '', tri: '', sens: '' };
+
+function SitesPageInner() {
   const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
   // Création réservée MANAGER/ADMIN (rbac serveur) : le bouton suit le droit —
   // un superviseur (interne ou prestataire) ne doit pas voir un bouton en 403.
   const peutCreer = ['MANAGER', 'ADMIN'].includes((session?.user as { role?: string })?.role ?? '');
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [region, setRegion] = useState('');
-  const [statutGe, setStatutGe] = useState('');
+  // Filtres dans l'URL : ouvrir la fiche d'un site puis revenir ne doit pas
+  // effacer la sélection — et un lien filtré se partage tel quel.
+  const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
+  const page = Number(valeurs.page) || 1;
+  const setPage = (p: number) => appliquer({ page: String(p) });
+  const { region, statutGe, prestataireId } = valeurs;
   // Config énergie MULTI (pastilles) : vide = toutes ; OU entre cochées —
   // « tout ce qui a du solaire » = Solaire + Hybride GE + Hybride CEET+GE.
-  const [configsFiltre, setConfigsFiltre] = useState<Set<string>>(new Set());
-  const [prestataireId, setPrestataireId] = useState('');
+  const configsFiltre = new Set(valeurs.configs ? valeurs.configs.split(',').filter(Boolean) : []);
   const [showImport, setShowImport] = useState(false);
   // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
-  // réordonnerait que la page affichée). null = tri par nom.
-  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  // réordonnerait que la page affichée). Vide = tri par nom.
+  const tri = valeurs.tri ? { key: valeurs.tri, dir: (valeurs.sens === 'desc' ? -1 : 1) as 1 | -1 } : null;
+  // La saisie reste locale (réactive à la frappe) ; seule sa version debouncée
+  // rejoint l'URL, sinon chaque caractère réécrirait l'adresse.
+  const [search, setSearch] = useState(valeurs.search);
   const debouncedSearch = useDebounce(search);
+  useEffect(() => {
+    if (debouncedSearch !== valeurs.search) appliquer({ search: debouncedSearch, page: '1' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   // Filtre prestataire : INTERNES uniquement — un utilisateur rattaché à un
   // prestataire ne voit déjà que ses sites, le filtre serait du bruit.
@@ -131,15 +142,15 @@ export default function SitesPage() {
 
       <FilterBar
         search={search}
-        onSearch={(v) => { setSearch(v); setPage(1); }}
+        onSearch={setSearch}
         searchPlaceholder="Rechercher par nom ou région…"
         filters={[
-          { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
-          { key: 'statut', label: 'Tous statuts GE', value: statutGe, options: STATUTS_GE, onChange: (v) => { setStatutGe(v); setPage(1); } },
+          { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => appliquer({ region: v, page: '1' }) },
+          { key: 'statut', label: 'Tous statuts GE', value: statutGe, options: STATUTS_GE, onChange: (v) => appliquer({ statutGe: v, page: '1' }) },
           ...(filtrePrestataire ? [{
             key: 'prestataire', label: 'Tous prestataires', value: prestataireId,
             options: (prestataires ?? []).map((p) => ({ value: p.id, label: p.nom })),
-            onChange: (v: string) => { setPrestataireId(v); setPage(1); },
+            onChange: (v: string) => appliquer({ prestataireId: v, page: '1' }),
           }] : []),
         ]}
       />
@@ -150,19 +161,16 @@ export default function SitesPage() {
         {POWER_CONFIGS.map((c) => (
           <button key={c.value} type="button"
             onClick={() => {
-              setConfigsFiltre((prev) => {
-                const next = new Set(prev);
-                if (next.has(c.value)) next.delete(c.value); else next.add(c.value);
-                return next;
-              });
-              setPage(1);
+              const next = new Set(configsFiltre);
+              if (next.has(c.value)) next.delete(c.value); else next.add(c.value);
+              appliquer({ configs: [...next].join(','), page: '1' });
             }}
             className={`rounded-full border px-2.5 py-1 text-xs font-medium ${configsFiltre.has(c.value) ? 'border-[rgb(var(--brand))] bg-[rgb(var(--brand))] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
             {c.label}
           </button>
         ))}
         {configsFiltre.size > 0 && (
-          <button type="button" onClick={() => { setConfigsFiltre(new Set()); setPage(1); }}
+          <button type="button" onClick={() => appliquer({ configs: '', page: '1' })}
             className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">Toutes</button>
         )}
       </div>
@@ -176,7 +184,8 @@ export default function SitesPage() {
       ) : (
         <>
           <DataTable columns={columns} data={sites} onRowClick={(s) => router.push(`/sites/${s.id}`)}
-            serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }} />
+            serverSort={tri}
+            onServerSort={(s) => appliquer({ tri: s?.key ?? '', sens: s && s.dir === -1 ? 'desc' : '', page: '1' })} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}
@@ -316,5 +325,17 @@ function CouvertureCuvesBloc() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Les filtres vivent dans la query (useFiltresUrl) : Next exige alors une
+ * frontière Suspense, sinon le prérendu de la page échoue à la construction.
+ */
+export default function SitesPage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={7} />}>
+      <SitesPageInner />
+    </Suspense>
   );
 }

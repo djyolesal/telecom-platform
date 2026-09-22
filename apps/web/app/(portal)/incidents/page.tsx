@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -31,22 +32,31 @@ interface Incident {
   technicien?: { nom: string; prenom: string };
 }
 
-export default function IncidentsPage() {
+const FILTRES_DEFAUT = { page: '1', search: '', type: '', severite: '', statut: '', region: '', tri: '', sens: '' };
+
+function IncidentsPageInner() {
   const { options: typesOptions, labelDe } = useTypesIncident();
   // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
   const { data: sessionExp } = useSession();
   const roleExport = (sessionExp?.user as { role?: string })?.role ?? '';
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  // Filtres dans l'URL : ouvrir un incident puis revenir ne doit pas effacer
+  // le tri et les filtres — et un lien filtré se partage tel quel.
+  const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
+  const page = Number(valeurs.page) || 1;
+  const setPage = (p: number) => appliquer({ page: String(p) });
+  const { type, severite, statut, region } = valeurs;
+  // La saisie reste locale (réactive à la frappe) ; seule sa version
+  // debouncée rejoint l'URL, sinon chaque caractère réécrirait l'adresse.
+  const [search, setSearch] = useState(valeurs.search);
   const debouncedSearch = useDebounce(search);
-  const [type, setType] = useState('');
-  const [severite, setSeverite] = useState('');
-  const [statut, setStatut] = useState('');
-  const [region, setRegion] = useState('');
+  useEffect(() => {
+    if (debouncedSearch !== valeurs.search) appliquer({ search: debouncedSearch, page: '1' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
   // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
-  // réordonnerait que la page affichée). null = tri métier par défaut.
-  const [tri, setTri] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  // réordonnerait que la page affichée). Vide = tri métier par défaut.
+  const tri = valeurs.tri ? { key: valeurs.tri, dir: (valeurs.sens === 'desc' ? -1 : 1) as 1 | -1 } : null;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['incidents', { page, search: debouncedSearch, type, severite, statut, region, tri }],
@@ -85,13 +95,13 @@ export default function IncidentsPage() {
 
       <FilterBar
         search={search}
-        onSearch={(v) => { setSearch(v); setPage(1); }}
+        onSearch={setSearch}
         searchPlaceholder="Rechercher (réf., site, description)…"
         filters={[
-          { key: 'type', label: 'Tous types', value: type, options: typesOptions, onChange: (v) => { setType(v); setPage(1); } },
-          { key: 'severite', label: 'Toutes sévérités', value: severite, options: SEVERITES, onChange: (v) => { setSeverite(v); setPage(1); } },
-          { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_INCIDENT, onChange: (v) => { setStatut(v); setPage(1); } },
-          { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } },
+          { key: 'type', label: 'Tous types', value: type, options: typesOptions, onChange: (v) => appliquer({ type: v, page: '1' }) },
+          { key: 'severite', label: 'Toutes sévérités', value: severite, options: SEVERITES, onChange: (v) => appliquer({ severite: v, page: '1' }) },
+          { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_INCIDENT, onChange: (v) => appliquer({ statut: v, page: '1' }) },
+          { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => appliquer({ region: v, page: '1' }) },
         ]}
       />
 
@@ -104,10 +114,23 @@ export default function IncidentsPage() {
       ) : (
         <>
           <DataTable columns={columns} data={rows} onRowClick={(i) => router.push(`/incidents/${i.id}`)}
-            serverSort={tri} onServerSort={(s) => { setTri(s); setPage(1); }} />
+            serverSort={tri}
+            onServerSort={(s) => appliquer({ tri: s?.key ?? '', sens: s && s.dir === -1 ? 'desc' : '', page: '1' })} />
           <Pagination meta={meta} onChange={setPage} />
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Les filtres vivent dans la query (useFiltresUrl) : Next exige alors une
+ * frontière Suspense, sinon le prérendu de la page échoue à la construction.
+ */
+export default function IncidentsPage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={6} />}>
+      <IncidentsPageInner />
+    </Suspense>
   );
 }
