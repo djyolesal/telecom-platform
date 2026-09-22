@@ -1,4 +1,4 @@
-import { resoudreIncidentSiPlusDeCoupure } from './coupuresReseau.controller';
+import { resoudreIncidentSiPlusDeCoupure, promouvoirOrphelinesApresRetablissement } from './coupuresReseau.controller';
 
 /**
  * Rebouclage coupure → incident : la résolution ne doit JAMAIS précéder
@@ -68,5 +68,34 @@ describe('resoudreIncidentSiPlusDeCoupure', () => {
     const resolu = await resoudreIncidentSiPlusDeCoupure(tx, 'inc1', new Date());
     expect(resolu).toBe(false);
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Délai de grâce du reclassement (cas terrain 09/2026) : un site tombe et
+ * entraîne 5 avals ; quand l'amont se rétablit, les avals mettent quelques
+ * minutes à se réenregistrer. Sans délai, le balayage les DÉTACHAIT juste
+ * avant qu'ils ne remontent — l'entraînement disparaissait de l'historique et
+ * chacun héritait d'un « cause locale à qualifier » faux.
+ */
+describe('promouvoirOrphelinesApresRetablissement', () => {
+  const dbFictive = () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    return { db: { coupureReseau: { findMany, update: jest.fn() } } as never, findMany };
+  };
+
+  it('n’affranchit un aval que si son amont est rétabli depuis le délai réglé', async () => {
+    const { db, findMany } = dbFictive();
+    const avant = Date.now();
+    await promouvoirOrphelinesApresRetablissement(db);
+    const où = findMany.mock.calls[0][0].where;
+    // Le tri se fait en base : la racine doit être close AVANT le seuil.
+    const seuil = où.coupureOrigine.dateFin.lt as Date;
+    const minutes = (avant - seuil.getTime()) / 60_000;
+    expect(minutes).toBeGreaterThan(19.9);
+    expect(minutes).toBeLessThan(20.5);
+    // Et on ne touche toujours qu'aux héritées encore ouvertes.
+    expect(où.dateFin).toBeNull();
+    expect(où.origine).toBe('HERITEE');
   });
 });

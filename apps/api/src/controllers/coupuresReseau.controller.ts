@@ -524,12 +524,22 @@ export async function promouvoirHeriteesOrphelines(
 
 /**
  * BALAYAGE de fin de passage OSS : toute héritée encore OUVERTE dont la racine
- * est CLÔTURÉE devient une racine.
+ * est CLÔTURÉE DEPUIS ASSEZ LONGTEMPS devient une racine.
  *
  * En fin de passage, et pas au moment où l'on clôture la racine : dans le même
  * flux, un aval peut se reconnecter juste après son amont — le promouvoir avant
  * d'avoir lu SA ligne le transformait en panne locale alors qu'il était bel et
  * bien entraîné, et faussait l'imputation de son indisponibilité.
+ *
+ * DÉLAI DE GRÂCE (cas remonté du terrain, 09/2026 : un site tombe, 5 avals
+ * entraînés, tous correctement rattachés — puis « détachés » au moment même où
+ * ils remontaient). La fin de passage ne suffit pas : un eNodeB aval ne se
+ * réenregistre pas dans la même minute que son amont, il lui faut souvent
+ * plusieurs passages du collecteur. Entre les deux, l'aval était encore ouvert
+ * avec une racine déjà close — donc promu, détaché, et affublé d'un « cause
+ * locale à qualifier » faux. On n'affranchit un aval que si son amont est
+ * rétabli depuis `oss.delaiReclassementAvalMin` : au-delà, il n'est plus
+ * plausible que son silence soit l'écho de l'amont.
  *
  * Passe APRÈS le re-rattachement des orphelines à une nouvelle racine : ne
  * restent donc ici que les vrais orphelins. Idempotent, il répare aussi les
@@ -538,12 +548,16 @@ export async function promouvoirHeriteesOrphelines(
 export async function promouvoirOrphelinesApresRetablissement(
   db: Prisma.TransactionClient | typeof prisma,
 ): Promise<number> {
+  const delaiMin = getNum('oss.delaiReclassementAvalMin', 20);
+  // 0 = reclassement immédiat (comportement d'avant le correctif).
+  const seuil = new Date(Date.now() - Math.max(0, delaiMin) * 60_000);
   const orphelines = await db.coupureReseau.findMany({
     where: {
       dateFin: null,
       origine: 'HERITEE',
       coupureOrigineId: { not: null },
-      coupureOrigine: { dateFin: { not: null } },
+      // `lt` exclut déjà les racines encore ouvertes (dateFin NULL).
+      coupureOrigine: { dateFin: { lt: seuil } },
     },
     select: {
       id: true, observations: true,
