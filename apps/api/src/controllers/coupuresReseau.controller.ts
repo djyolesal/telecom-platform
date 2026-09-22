@@ -1614,6 +1614,17 @@ const cell = (row: { getCell(i: number): { value: unknown } }, i: number): unkno
  */
 export async function importCoupures(req: Request, res: Response, next: NextFunction) {
   try {
+    // Import DÉSACTIVÉ par défaut : les coupures naissent de la détection OSS
+    // et de la saisie du NOC. Reverser un rapport Excel par-dessus recrée des
+    // lignes en double et réécrit un historique déjà rapproché. Le refus est
+    // ici, et pas seulement dans l'écran : une requête directe doit échouer.
+    if (getNum('coupures.importRapportActif', 0) !== 1) {
+      throw new AppError(
+        "L'import du rapport de supervision est désactivé. Pour le rouvrir : Administration → "
+        + 'Paramètres système → « Autoriser l\'import du rapport de supervision NOC » à 1.',
+        403,
+      );
+    }
     if (!req.file) throw new AppError('Fichier .xlsx requis', 400);
 
     // Rapprochement par nom normalisé (comme l'import de sites).
@@ -2801,6 +2812,9 @@ export async function getCoupuresStats(req: Request, res: Response, next: NextFu
         // Prestataire rattaché : le web masque l'aiguillage sources (leur sas
         // AUTO est vide par construction).
         perimetreRestreint: restreint,
+        // Le bouton d'import suit le réglage : les réglages eux-mêmes ne sont
+        // lisibles que par un ADMIN, or cet écran est celui du NOC.
+        importRapportActif: getNum('coupures.importRapportActif', 0) === 1,
       },
     });
   } catch (err) { next(err); }

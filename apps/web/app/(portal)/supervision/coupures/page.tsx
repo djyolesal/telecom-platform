@@ -85,7 +85,11 @@ export default function CoupuresReseauPage() {
   // envoie d'ailleurs qu'à lui. Le bandeau « collecteur muet » reste visible
   // de tous : il dit que l'écran ne reflète plus la réalité du réseau.
   const voitAlertesReferentiel = role === 'ADMIN';
-  const peutImporter = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
+  // L'import du rapport de supervision est coupé par défaut (réglage
+  // `coupures.importRapportActif`) : les coupures naissent de la détection OSS
+  // et de la saisie, reverser un Excel par-dessus fabrique des doublons. Le
+  // rôle ne suffit donc plus — le serveur refuse de toute façon.
+  const peutImporterRole = ['NOC', 'MANAGER', 'ADMIN'].includes(role ?? '');
 
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -121,6 +125,7 @@ export default function CoupuresReseauPage() {
     syncOss?: { quand: string; lignesAnalysees: number; disconnectedNonRapproches: string[]; coupuresOssSansSignal?: string[]; connectedNonRapproches?: string[]; conflitsNodeId?: string[] } | null;
     plusAncienne?: { dateDebut: string; technologie: string; site?: { nom: string } } | null;
     perimetreRestreint?: boolean;
+    importRapportActif?: boolean;
   }
   const { data: stats } = useQuery({
     queryKey: ['coupures-stats'],
@@ -380,10 +385,10 @@ export default function CoupuresReseauPage() {
     <div>
       <PageHeader
         title="Coupures réseau"
-        subtitle="Indisponibilités radio (supervision NOC) : saisie, suivi et import du rapport"
+        subtitle="Indisponibilités radio (supervision NOC) : saisie et suivi"
         actions={
           <>
-            {peutImporter && (
+            {peutImporterRole && stats?.importRapportActif && (
               <button type="button" onClick={() => setShowImport(true)}
                 className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                 <Upload size={15} /> Importer le rapport
