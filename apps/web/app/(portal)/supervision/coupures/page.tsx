@@ -656,6 +656,9 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
     queryFn: () => api.get('/sites', { params: { all: 'true' } }).then((r) => r.data.data as { id: string; nom: string }[]),
     staleTime: 5 * 60_000,
   });
+  // Même clé react-query que la page : la liste est déjà en cache, aucun appel
+  // supplémentaire à l'ouverture de la modale.
+  const motifs = useMotifsCoupure();
   const [siteId, setSiteId] = useState('');
   const [technos, setTechnos] = useState<Set<string>>(new Set(['SITE']));
   const [dateDebut, setDateDebut] = useState('');
@@ -749,7 +752,10 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
           <Input value={secteur} onChange={(e) => setSecteur(e.target.value)} placeholder="ex. S2" />
         </Field>
       </div>
-      <Field label="Cause constatée"><Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" /></Field>
+      <Field label="Cause constatée">
+        <Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" />
+        <SuggestionsMotifs champ="cause" valeurs={motifs.causes} valeur={cause} onChoisir={setCause} />
+      </Field>
       <Field label="Technicien contacté"><Input value={technicien} onChange={(e) => setTechnicien(e.target.value)} /></Field>
       <Field label="Observations"><Textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} /></Field>
       {siteEntier && nbAval > 0 && (
@@ -783,6 +789,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
 // ── Édition / clôture ───────────────────────────────────────────────────────
 
 function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onClose: () => void; onDone: () => void }) {
+  const motifs = useMotifsCoupure();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role ?? '';
   const toLocal = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
@@ -1052,7 +1059,10 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <Input value={technicienContacte} onChange={(e) => setTechnicienContacte(e.target.value)} placeholder="Qui a été appelé pour cette coupure" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Cause"><Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} className={aCompleter(cause)} /></Field>
+        <Field label="Cause">
+          <Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} className={aCompleter(cause)} />
+          <SuggestionsMotifs champ="cause" valeurs={motifs.causes} valeur={cause} onChoisir={setCause} />
+        </Field>
         <Field label="Classement (actif/passif)">
           <Select
             value={causeCategorie}
@@ -1066,7 +1076,10 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           />
         </Field>
       </div>
-      <Field label="Actions effectuées"><Input list="motifs-action" value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" className={aCompleter(actions)} /></Field>
+      <Field label="Actions effectuées">
+        <Input list="motifs-action" value={actions} onChange={(e) => setActions(e.target.value)} placeholder="ex. Rétablissement de l'énergie solaire" className={aCompleter(actions)} />
+        <SuggestionsMotifs champ="action" valeurs={motifs.actions} valeur={actions} onChoisir={setActions} />
+      </Field>
       <Field label="Observations"><Textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} /></Field>
       {coupure.incident && (
         <p className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
@@ -1450,6 +1463,49 @@ function useMotifsCoupure() {
     causes: actifs.filter((m) => m.champ === 'CAUSE').map((m) => m.libelle),
     actions: actifs.filter((m) => m.champ === 'ACTION').map((m) => m.libelle),
   };
+}
+
+/**
+ * Suggestions VISIBLES sous le champ.
+ *
+ * Le `<datalist>` natif reste (confort clavier), mais il n'annonce rien : rien
+ * à l'écran ne dit qu'un référentiel existe, et selon le navigateur il faut
+ * taper le bon début de mot pour voir quoi que ce soit. Le NOC concluait que
+ * « la suggestion ne marche pas ». Les formulations sont donc proposées en
+ * pastilles cliquables, filtrées au fil de la frappe.
+ */
+function SuggestionsMotifs({ valeurs, valeur, onChoisir, champ }: {
+  valeurs: string[]; valeur: string; onChoisir: (v: string) => void; champ: 'cause' | 'action';
+}) {
+  const saisi = valeur.trim().toLowerCase();
+  // Une fois la formulation choisie telle quelle, les pastilles n'ont plus rien
+  // à apporter : elles disparaissent au lieu d'encombrer le formulaire.
+  if (valeurs.some((v) => v.toLowerCase() === saisi)) return null;
+  const proposees = (saisi ? valeurs.filter((v) => v.toLowerCase().includes(saisi)) : valeurs).slice(0, 6);
+  if (!valeurs.length) {
+    return (
+      <p className="mt-1 text-[11px] text-gray-400">
+        Aucune formulation enregistrée pour {champ === 'cause' ? 'les causes' : 'les actions'} —
+        Administration → Motifs de coupure.
+      </p>
+    );
+  }
+  if (!proposees.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {proposees.map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChoisir(v)}
+          title="Reprendre cette formulation"
+          className="rounded-full border border-gray-200 bg-gray-50 px-2 py-px text-[11px] text-gray-600 hover:border-[rgb(var(--brand-light))] hover:bg-[rgb(var(--brand-light)/0.08)] hover:text-[rgb(var(--brand))]"
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function DatalistsMotifs({ causes, actions }: { causes: string[]; actions: string[] }) {
