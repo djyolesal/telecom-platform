@@ -160,6 +160,55 @@ liaison. Ce qui compte :
   minute** ; une liaison instable produit des récoltes tronquées, que le garde
   anti-troncature rejette (donc des minutes sans supervision).
 
+### Mesurer la bande passante réelle
+
+**Moyenne depuis le démarrage, sans rien installer** — les compteurs du noyau :
+
+```bash
+uptime -p
+awk -v up=$(cut -d. -f1 /proc/uptime) '/:/{gsub(/:/," "); if ($1!="lo") \
+  printf "%s  entrant %.1f Go  sortant %.1f Go  (moy. %.2f / %.2f Mbit/s)\n", \
+  $1, $2/1073741824, $10/1073741824, $2*8/up/1000000, $10*8/up/1000000}' /proc/net/dev
+```
+
+**D'où vient le trafic** — cumul réseau par conteneur :
+
+```bash
+docker stats --no-stream --format "table {{.Name}}\t{{.NetIO}}\t{{.MemUsage}}"
+```
+
+**Historique jour par jour et pic horaire** — `vnstat`, quelques mégaoctets :
+
+```bash
+sudo apt-get install -y vnstat && sudo systemctl enable --now vnstat
+vnstat -d    # par jour
+vnstat -h    # par heure : c'est là qu'apparaît le pic de synchronisation du soir
+```
+
+**Dans Grafana, historisé sur 30 jours** — depuis la correction de
+`node-exporter` (voir §7), ces requêtes répondent enfin :
+
+```promql
+rate(node_network_receive_bytes_total{device!="lo"}[5m]) * 8    # entrant, bit/s
+rate(node_network_transmit_bytes_total{device!="lo"}[5m]) * 8   # sortant, bit/s
+increase(node_network_receive_bytes_total{device!="lo"}[30d])   # volume du mois
+```
+
+**Par route** — le journal nginx porte le sortant (`$body_bytes_sent`) ET
+l'entrant (`in=$request_length`) :
+
+```bash
+docker logs telecom_nginx 2>&1 \
+  | sed 's/.*"\([A-Z]*\) \([^ ?]*\)[^"]*" \([0-9]*\) \([0-9]*\).*in=\([0-9]*\).*/\2 \4 \5/' \
+  | awk '{sortant[$1]+=$2; entrant[$1]+=$3; n[$1]++} END \
+      {for (u in n) printf "%8.1f Mo sortant %8.1f Mo entrant %6d req  %s\n", \
+       sortant[u]/1048576, entrant[u]/1048576, n[u], u}' | sort -rn | head -15
+```
+
+> La rotation des journaux Docker est de 20 Mo × 3 fichiers : ce relevé couvre
+> quelques jours, pas l'historique complet. Pour du long terme, c'est `vnstat`
+> (volume) et Prometheus (débit) qui font foi.
+
 ### Côté terrain (données mobiles des techniciens)
 
 Une clôture de maintenance envoie ~1,5 Mo. Un technicien qui clôture 30
@@ -223,6 +272,14 @@ docker builder prune -af   # récupération immédiate, sans risque
 
 **L'alerte disque ne vous aurait pas prévenu** : elle se déclenche à 80 %, le
 cache plafonnait à 64 %. Une croissance lente sous le seuil reste invisible.
+
+**`node-exporter` ne voyait pas le réseau de la machine.** Lancé avec
+`--path.rootfs=/host` mais sans `--path.procfs=/host/proc`, et sur le réseau
+bridge de Docker, il lisait le `/proc` du **conteneur** : ses métriques
+`node_network_*` décrivaient son propre veth, donc restaient à zéro. La bande
+passante était invisible dans Prometheus alors que la collecte tournait depuis
+des mois. Corrigé (montages `/proc` et `/sys` + chemins explicites) — appliquer
+avec `docker compose up -d node-exporter`.
 
 **Aucune alerte sur un conteneur tué pour dépassement mémoire.** Les règles
 d'`infra/prometheus/alerts.yml` surveillent la mémoire de l'**hôte** (> 90 %) ;
