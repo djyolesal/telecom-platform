@@ -303,9 +303,11 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
 }
 
 /**
- * RECUEIL : un rapport complet par intervention, un par page, dans un seul
- * document. Précédé d'une page de garde qui dit ce que le document couvre —
- * sans elle, rien ne distingue un export « septembre, lot 3 » d'un autre.
+ * RAPPORT MENSUEL D'ACTIVITÉ : couverture co-signée, fiche de validation du
+ * mois, tâches dues non réalisées, puis un rapport complet par intervention.
+ *
+ * Le document est MENSUEL par construction : le dû contractuel se compte par
+ * mois, et c'est ce qui rend la fiche et les manquantes signables.
  */
 export interface RecueilSynthese {
   periode: string;
@@ -322,25 +324,43 @@ export interface RecueilSynthese {
   client: string;
   /** Référence du document, reportée en pied de CHAQUE page. */
   reference: string;
+  /** Tâches contractuelles dues sur le mois et NON réalisées, par site. */
+  manquantes: Array<{ site: string; taches: string[] }>;
+  /** Le recueil couvre-t-il un mois calendaire entier ? */
+  moisComplet: boolean;
   /** Incidents rattachés aux interventions du recueil. */
   incidents: Array<{ reference: string; site: string; statut: string; clos: boolean; date: string; action: string }>;
   /** Pièces remplacées, agrégées sur tout le recueil. */
   pieces: Array<{ nom: string; reference: string; quantite: number; sites: number }>;
 }
 
-/** Ligne de tableau simple : colonnes à largeurs fixes, saut de page géré. */
-function ligneTableau(doc: PDFKit.PDFDocument, cellules: string[], largeurs: number[], gras = false) {
-  if (doc.y > doc.page.height - 80) doc.addPage();
+/**
+ * Ligne de tableau : colonnes à largeurs fixes, saut de page géré.
+ *
+ * `multiligne` mesure la cellule la plus haute et avance d'autant. Sans lui,
+ * une cellule longue (la liste des tâches manquantes d'un site) se dessinait
+ * PAR-DESSUS la ligne suivante : le tableau devenait illisible dès qu'un site
+ * cumulait trois tâches en retard — c'est-à-dire exactement le cas qui compte.
+ */
+function ligneTableau(
+  doc: PDFKit.PDFDocument, cellules: string[], largeurs: number[], gras = false, multiligne = false,
+) {
+  const hauteurMini = 13;
+  doc.fontSize(8.5);
+  if (gras) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
+  const hauteur = multiligne
+    ? Math.max(hauteurMini, ...cellules.map((c, i) => doc.heightOfString(c, { width: largeurs[i] - 6 }) + 3))
+    : hauteurMini;
+  if (doc.y + hauteur > doc.page.height - 70) doc.addPage();
   const y = doc.y;
   let x = 50;
-  doc.fontSize(8.5).fillColor(gras ? '#1B3F6B' : '#111');
-  if (gras) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
+  doc.fillColor(gras ? '#1B3F6B' : '#111');
   cellules.forEach((c, i) => {
-    doc.text(c, x, y, { width: largeurs[i] - 4, ellipsis: true, lineBreak: false });
+    doc.text(c, x, y, { width: largeurs[i] - 6, ellipsis: !multiligne, lineBreak: multiligne });
     x += largeurs[i];
   });
   doc.font('Helvetica').fillColor('black');
-  doc.y = y + 13;
+  doc.y = y + hauteur;
 }
 
 /** Cartouche de chiffre clé de la page de garde. */
@@ -354,7 +374,15 @@ function cartouche(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: 
 
 export async function generateMaintenancesRecueilPdf(
   liste: MaintenancePdfData[],
-  garde: { titre: string; prestataire?: { nom: string; logo?: Buffer | null } } & RecueilSynthese,
+  garde: {
+    titre: string;
+    prestataire?: { nom: string; logo?: Buffer | null };
+    /** Fiche de validation du mois, quand elle a un sens (1 prestataire, mois entier). */
+    fiche?: {
+      prestataire: string; zone: string; nbSites: number;
+      lignes: Array<{ numero: number; description: string; concernes: number; realises: number; freq6: number }>;
+    };
+  } & RecueilSynthese,
 ): Promise<Buffer> {
   return render((doc) => {
     // ── En-tête CO-SIGNÉ (variante retenue) : E&M OpS d'un côté, le
@@ -426,7 +454,7 @@ export async function generateMaintenancesRecueilPdf(
       const L = [70, 120, 62, 72, 171];
       ligneTableau(doc, ['Référence', 'Site', 'État', 'Date', 'Action corrective'], L, true);
       garde.incidents.forEach((i) =>
-        ligneTableau(doc, [i.reference, i.site, i.clos ? 'Clôturé' : 'OUVERT', i.date, i.action], L));
+        ligneTableau(doc, [i.reference, i.site, i.clos ? 'Clôturé' : 'OUVERT', i.date, i.action], L, false, true));
     }
 
     // ── Pièces de rechange : le cumul, qu'aucune page individuelle ne donne.
@@ -449,6 +477,38 @@ export async function generateMaintenancesRecueilPdf(
     );
     doc.fillColor('black');
 
+    // ── CE QUI N'A PAS ÉTÉ FAIT. Un recueil ne montre que les interventions
+    //    réalisées ; l'auditeur cherche d'abord les manquantes. Même moteur que
+    //    le rapport de conformité, donc jamais deux chiffres contradictoires.
+    sectionTitle(doc, garde.moisComplet
+      ? `Tâches dues sur le mois et NON réalisées (${garde.manquantes.length} site(s))`
+      : 'Tâches dues et non réalisées');
+    if (!garde.moisComplet) {
+      doc.fontSize(9).fillColor(GRIS_PDF).text(
+        "Calcul indisponible : le dû contractuel se compte par MOIS. Éditez le rapport sur un mois calendaire "
+        + 'pour obtenir les tâches manquantes.', 50, doc.y, { width: doc.page.width - 100 });
+      doc.fillColor('black'); doc.moveDown(0.6);
+    } else if (!garde.manquantes.length) {
+      doc.fontSize(9).fillColor(ACCENT).text(
+        'Aucune : toutes les tâches dues sur le mois ont été réalisées dans ce périmètre.', 50, doc.y);
+      doc.fillColor('black'); doc.moveDown(0.6);
+    } else {
+      const L = [130, 365];
+      ligneTableau(doc, ['Site', 'Tâches dues non réalisées'], L, true);
+      // Au-delà de trente sites, la liste noierait la page de garde : le reste
+      // est annoncé, le détail complet vit dans le rapport de conformité.
+      garde.manquantes.slice(0, 30).forEach((x) => {
+        ligneTableau(doc, [x.site, x.taches.join(' · ')], L, false, true);
+        doc.moveTo(50, doc.y - 2).lineTo(doc.page.width - 50, doc.y - 2).lineWidth(0.3).stroke('#E7EBF0');
+      });
+      if (garde.manquantes.length > 30) {
+        doc.fontSize(8).fillColor(GRIS_PDF).text(
+          `+ ${garde.manquantes.length - 30} autre(s) site(s) en défaut — détail complet dans le rapport de conformité.`,
+          50, doc.y + 2);
+        doc.fillColor('black'); doc.moveDown(0.5);
+      }
+    }
+
     // ── VISA. Un recueil « contractuel » qui ne se signe pas ne vaut pas mieux
     //    qu'un listing : deux cadres, exactement comme la fiche de validation
     //    mensuelle que ces mêmes lecteurs signent déjà.
@@ -466,6 +526,44 @@ export async function generateMaintenancesRecueilPdf(
         .text('Signature et cachet :', (x as number) + 10, yVisa + 62);
       doc.fillColor('black');
     });
+
+    // ── FICHE DE VALIDATION en page 2, quand le recueil couvre UN prestataire
+    //    sur un mois entier. Mêmes lignes contractuelles et mêmes chiffres que
+    //    la fiche xlsx (calcul partagé) : ce document-ci ne peut pas la
+    //    contredire.
+    if (garde.fiche) {
+      doc.addPage();
+      const w2 = doc.page.width;
+      doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND)
+        .text('Fiche de validation — maintenance préventive', 50, 50, { width: w2 - 100, align: 'center' });
+      doc.font('Helvetica').fontSize(9).fillColor(GRIS_PDF)
+        .text(`${garde.fiche.prestataire} · ${garde.fiche.zone} · ${garde.periode} · ${garde.fiche.nbSites} site(s)`,
+          50, 70, { width: w2 - 100, align: 'center' });
+      doc.fillColor('black');
+      doc.y = 96;
+      const L = [26, 252, 76, 66, 76];
+      ligneTableau(doc, ['N°', 'Description', 'Sites concernés', 'Réalisés', 'Fréq./6 mois'], L, true);
+      garde.fiche.lignes.forEach((l) => {
+        // Un écart entre concernés et réalisés est CE QUE LE LECTEUR CHERCHE :
+        // il doit sauter aux yeux sans relire deux colonnes de chiffres.
+        const manque = l.realises < l.concernes;
+        const y0 = doc.y;
+        // Multiligne : les descriptions contractuelles font deux à trois lignes.
+        ligneTableau(doc, [String(l.numero), l.description, String(l.concernes), String(l.realises), String(l.freq6)], L, false, true);
+        if (manque) {
+          // Le repère épouse la hauteur RÉELLE de la ligne, pas une hauteur
+          // supposée : sinon il déborde sur la ligne voisine.
+          doc.save().rect(46, y0 - 1, 3, Math.max(10, doc.y - y0 - 3)).fill('#C0392B').restore();
+        }
+        doc.moveTo(50, doc.y - 2).lineTo(doc.page.width - 50, doc.y - 2).lineWidth(0.3).stroke('#E7EBF0');
+      });
+      doc.moveDown(0.6);
+      doc.fontSize(8).fillColor(GRIS_PDF).text(
+        'Chiffres identiques à la fiche de validation mensuelle (xlsx) : même calcul, même périmètre contractuel. '
+        + 'Un repère rouge signale une ligne où tous les sites concernés n’ont pas été traités.',
+        50, doc.y, { width: w2 - 100, align: 'justify' });
+      doc.fillColor('black');
+    }
 
     liste.forEach((m) => {
       doc.addPage();

@@ -47,6 +47,8 @@ import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
+import { logger } from '../utils/logger';
+import { calculerDuParSite, tachesCataloguePassif } from '../services/conformiteTaches.service';
 import { assertOnSite } from '../utils/geofence';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
@@ -1576,15 +1578,30 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
  */
 export async function exportRapportsMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
-    const { du, au, statut, type, region, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
+    const { mois, du, au, statut, type, region, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
     const statutCible = statut || 'TERMINEE';
     const champDate = statutCible === 'TERMINEE' ? 'dateFin' : 'datePlanifiee';
 
+    // MOIS CALENDAIRE par défaut. Le dû contractuel se compte par mois (une
+    // tâche mensuelle est due une fois dans le mois, une trimestrielle une fois
+    // par trimestre) : sur « du 12 au 27 », les manquantes et la fiche de
+    // validation n'auraient aucun sens. Deux dates restent acceptées pour une
+    // extraction libre, mais elles DÉSACTIVENT ces deux blocs.
+    const m = /^(\d{4})-(\d{2})$/.exec(mois ?? '');
+    if (mois && !m) throw new AppError('Mois invalide (format AAAA-MM).', 422);
+    const moisCible = m ? `${m[1]}-${m[2]}` : null;
     const bornes: Record<string, Date> = {};
-    if (du) bornes.gte = startOfDay(parseISO(du));
-    if (au) bornes.lte = endOfDay(parseISO(au));
-    for (const [cle, valeur] of Object.entries(bornes)) {
-      if (Number.isNaN(valeur.getTime())) throw new AppError(`Date ${cle === 'gte' ? 'de début' : 'de fin'} invalide (AAAA-MM-JJ).`, 422);
+    if (moisCible) {
+      const [a, mo] = [Number(m![1]), Number(m![2])];
+      if (mo < 1 || mo > 12) throw new AppError('Mois invalide (01 à 12).', 422);
+      bornes.gte = new Date(a, mo - 1, 1);
+      bornes.lte = endOfDay(new Date(a, mo, 0));
+    } else {
+      if (du) bornes.gte = startOfDay(parseISO(du));
+      if (au) bornes.lte = endOfDay(parseISO(au));
+      for (const [cle, valeur] of Object.entries(bornes)) {
+        if (Number.isNaN(valeur.getTime())) throw new AppError(`Date ${cle === 'gte' ? 'de début' : 'de fin'} invalide (AAAA-MM-JJ).`, 422);
+      }
     }
 
     const perimetre = await sitePerimetre(req.user!.id);
@@ -1699,9 +1716,50 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       }
     }
 
-    const libellePeriode = du || au
-      ? `du ${du ? new Date(du).toLocaleDateString('fr-FR') : "l'origine"} au ${au ? new Date(au).toLocaleDateString('fr-FR') : "aujourd'hui"}`
-      : 'toutes périodes';
+    // ── TÂCHES DUES ET NON RÉALISÉES. Un recueil ne montre que ce qui a été
+    //    fait ; un auditeur cherche d'abord ce qui ne l'a pas été. Calculé par
+    //    le MÊME moteur que le rapport de conformité — deux chiffres qui se
+    //    contrediraient seraient pires que pas de chiffre du tout.
+    const manquantes: Array<{ site: string; taches: string[] }> = [];
+    let sitesSansDu = 0;
+    if (moisCible) {
+      const sitesPerimetre = await prisma.site.findMany({
+        where: {
+          isActive: true,
+          ...filtreSite,
+          ...(prestataire_id
+            ? { lot: { assignments: { some: { prestataireId: prestataire_id, scope: { in: ['PASSIVE', 'LES_DEUX'] } } } } }
+            : {}),
+        },
+        select: {
+          id: true, nom: true, powerConfig: true, typePylone: true,
+          hasClimatiseur: true, hasExtincteurs: true, statutGE: true, cuveVolumeLitres: true,
+        },
+        take: 1000,
+      });
+      if (sitesPerimetre.length) {
+        const duParSite = await calculerDuParSite(sitesPerimetre, [moisCible], moisCible);
+        const catalogue = tachesCataloguePassif();
+        const libelleTache = new Map(catalogue.map((t) => [t.key, `${t.numero}. ${t.libelle}`]));
+        for (const site of sitesPerimetre) {
+          const etat = duParSite.get(site.id);
+          if (!etat) { sitesSansDu++; continue; }
+          const nok = Object.entries(etat.statuts)
+            .filter(([, v]) => v === 'NOK')
+            .map(([k]) => libelleTache.get(k) ?? k);
+          if (nok.length) manquantes.push({ site: site.nom, taches: nok });
+        }
+        manquantes.sort((a, b) => b.taches.length - a.taches.length || a.site.localeCompare(b.site));
+      }
+    }
+
+    const MOIS_FR = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    const libellePeriode = moisCible
+      ? `${MOIS_FR[Number(moisCible.slice(5))]} ${moisCible.slice(0, 4)}`
+      : (du || au
+        ? `du ${du ? new Date(du).toLocaleDateString('fr-FR') : "l'origine"} au ${au ? new Date(au).toLocaleDateString('fr-FR') : "aujourd'hui"}`
+        : 'toutes périodes');
     const perimetreLibelle = [
       // Le prestataire est NOMMÉ quand il n'y en a qu'un — c'est l'information
       // que cherche le lecteur, « prestataire sélectionné » ne dit rien.
@@ -1727,23 +1785,61 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       // source (CLIENT_NOM), pour que les deux documents se répondent.
       client: process.env.CLIENT_NOM || 'Moov Africa Togo',
       // Référence d'émission : un dossier remis doit pouvoir être cité.
-      reference: `REC-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString(36).slice(-4).toUpperCase()}`,
+      reference: `RMA-${moisCible ?? new Date().toISOString().slice(0, 7)}-${Date.now().toString(36).slice(-4).toUpperCase()}`,
       incidents,
       pieces,
+      manquantes,
+      moisComplet: !!moisCible,
     };
+    // ── FICHE DE VALIDATION : seulement sur un MOIS entier et UN prestataire.
+    //    Hors de ces conditions, ses chiffres ne voudraient rien dire — et
+    //    c'est une page destinée à être signée.
+    let fiche: Parameters<typeof generateMaintenancesRecueilPdf>[1]['fiche'];
+    const idPrestataireFiche = prestataire_id || [...idsPrestataires][0];
+    if (moisCible && idsPrestataires.size === 1 && idPrestataireFiche) {
+      try {
+        const { donneesFicheValidation } = await import('./taches.controller');
+        const { FICHE_ROWS } = await import('../services/ficheValidation.service');
+        const { TASK_BY_KEY } = await import('../utils/tachesPreventives');
+        const an = Number(moisCible.slice(0, 4));
+        const mo = Number(moisCible.slice(5));
+        const d = await donneesFicheValidation({ id: idPrestataireFiche }, lot_id || null, an, mo, 'PASSIF');
+        fiche = {
+          prestataire: prestataireGarde?.nom ?? 'Prestataire',
+          zone: d.zone,
+          nbSites: d.nbSites,
+          lignes: FICHE_ROWS.map((r) => {
+            const t = TASK_BY_KEY[r.key];
+            return {
+              numero: r.numero,
+              description: r.description,
+              concernes: t ? d.sites.filter((x) => t.eligible(x)).length : 0,
+              realises: d.realisesParKey[r.key] ?? 0,
+              freq6: r.freq6,
+            };
+          }),
+        };
+      } catch (e) {
+        // La fiche est un PLUS : son échec ne doit pas emporter le recueil.
+        logger.warn('[recueil] fiche de validation non jointe :', e);
+      }
+    }
+
     const pdf = await generateMaintenancesRecueilPdf(donnees, {
-      titre: 'Recueil des rapports de maintenance',
+      titre: "Rapport mensuel d'activité",
       prestataire: prestataireGarde,
+      fiche,
       ...synthese,
     });
     await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
-      { rapport: 'recueil_pdf', nb: donnees.length, du, au, statut: statutCible, region, lot_id, prestataire_id,
+      { rapport: 'rapport_activite_mensuel', nb: donnees.length, du, au, statut: statutCible, region, lot_id, prestataire_id,
         prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
+        mois: moisCible, sitesEnDefaut: manquantes.length, fiche: !!fiche,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
         pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition',
-      `attachment; filename="rapports-maintenances-${du || 'origine'}_${au || 'ce-jour'}.pdf"`);
+      `attachment; filename="rapport-activite-${moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`}.pdf"`);
     res.send(pdf);
   } catch (err) { next(err); }
 }

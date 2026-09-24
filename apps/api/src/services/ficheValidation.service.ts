@@ -2,7 +2,9 @@ import ExcelJS from 'exceljs';
 import { TASK_BY_KEY, SiteEligibilite } from '../utils/tachesPreventives';
 
 /** Lignes de la fiche (libellés contractuels + clé catalogue + fréquence sur 6 mois). */
-const FICHE_ROWS: { numero: number; description: string; key: string; freq6: number }[] = [
+/** Lignes contractuelles de la fiche — exportées pour que le recueil PDF
+ *  reprenne EXACTEMENT les mêmes, sans recopier le référentiel. */
+export const FICHE_ROWS: { numero: number; description: string; key: string; freq6: number }[] = [
   { numero: 1, key: 'entretien_pylone', freq6: 1, description: "Entretien pylône, serrage des systèmes boulons avec rapport sur l'état" },
   { numero: 2, key: 'controle_terre', freq6: 1, description: 'Contrôle valeur de terre et normalisation des réseaux de terre' },
   { numero: 3, key: 'desherbage', freq6: 6, description: 'Sarclage / désherbage du site avec photos horodatées et géolocalisées par site' },
@@ -18,7 +20,7 @@ const FICHE_ROWS: { numero: number; description: string; key: string; freq6: num
 ];
 
 /** Fiche du CONTRAT SOLAIRE : les 3 visites contractuelles (mêmes clés que le catalogue). */
-const FICHE_ROWS_SOLAIRE: { numero: number; description: string; key: string; freq6: number }[] = [
+export const FICHE_ROWS_SOLAIRE: { numero: number; description: string; key: string; freq6: number }[] = [
   { numero: 1, key: 'solaire_mensuel', freq6: 6, description: "Visite mensuelle solaire : énergie moyenne délivrée par jour, état de marche Auto/Manuel avec le GE, déport des alarmes et backup des configurations" },
   { numero: 2, key: 'solaire_nettoyage', freq6: 2, description: "Nettoyage et dépoussiérage des panneaux solaires à l'eau déminéralisée, avec photos horodatées et géolocalisées" },
   { numero: 3, key: 'solaire_semestriel', freq6: 1, description: "Grande visite semestrielle : panneaux (inspection, câblage, fixations, mises à la terre, mesures Isc/Voc par string), batteries (visuel, aérations, tension et température par élément, nettoyage), régulateur et coffret outdoor (fixation, parafoudres, ventilation, alarmes, nettoyage)" },

@@ -163,19 +163,19 @@ function MaintenancePageInner() {
  */
 function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statut: string; prestataireId: string }) {
   const [ouvert, setOuvert] = useState(false);
-  const moisEnCours = new Date().toISOString().slice(0, 7);
-  const [du, setDu] = useState(`${moisEnCours}-01`);
-  const [au, setAu] = useState(new Date().toISOString().slice(0, 10));
+  // MENSUEL : le dû contractuel se compte par mois, c'est lui qui rend la
+  // fiche de validation et les tâches manquantes signables.
+  const [mois, setMois] = useState(new Date().toISOString().slice(0, 7));
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState('');
 
   const editer = async () => {
     setErreur(''); setEnCours(true);
-    const q = new URLSearchParams({ du, au, statut: statut || 'TERMINEE' });
+    const q = new URLSearchParams({ mois, statut: statut || 'TERMINEE' });
     if (type) q.set('type', type);
     if (prestataireId) q.set('prestataire_id', prestataireId);
     try {
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapports-maintenances-${du}_${au}.pdf`);
+      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${mois}.pdf`);
       setOuvert(false);
     } catch (e) {
       // Le refus du serveur (période trop large, aucune intervention) porte le
@@ -191,24 +191,22 @@ function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statu
     <>
       <button type="button" onClick={() => setOuvert(true)}
         className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-        <FileText size={15} /> Recueil PDF
+        <FileText size={15} /> Rapport d’activité
       </button>
       {ouvert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOuvert(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-1 text-lg font-bold text-gray-800">Recueil des rapports</h2>
+            <h2 className="mb-1 text-lg font-bold text-gray-800">Rapport mensuel d&apos;activité</h2>
             <p className="mb-4 text-xs text-gray-500">
-              Un rapport complet par intervention — relevés, pièces, photos, signatures — dans un seul document,
-              précédé d&apos;une synthèse du curatif et des pièces remplacées. Les filtres de l&apos;écran sont repris.
+              Fiche de validation du mois, tâches dues non réalisées, puis chaque intervention au format du rapport
+              unitaire. Les filtres de l&apos;écran sont repris. Pour choisir un prestataire, un lot ou une région :
+              Rapports → Rapport mensuel d&apos;activité.
             </p>
             {erreur && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erreur}</div>}
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Du"><Input type="date" value={du} onChange={(e) => setDu(e.target.value)} /></Field>
-              <Field label="Au"><Input type="date" value={au} onChange={(e) => setAu(e.target.value)} /></Field>
-            </div>
+            <Field label="Mois"><Input type="month" value={mois} onChange={(e) => setMois(e.target.value)} /></Field>
             <p className="mt-2 text-[11px] text-gray-400">
-              Statut retenu : {statut ? statut.toLowerCase() : 'terminée'}. Chaque rapport pèse jusqu&apos;à ~3 Mo :
-              au-delà du plafond réglé, le serveur demande de resserrer la période.
+              Statut retenu : {statut ? statut.toLowerCase() : 'terminée'}. La fiche de validation n&apos;est jointe
+              que si le rapport ne couvre qu&apos;un prestataire.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setOuvert(false)}>Annuler</Button>

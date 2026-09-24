@@ -250,7 +250,21 @@ function clientBlock(client?: string): { nom: string; adresse: string[] } {
 }
 
 /** Génère le buffer xlsx d'une fiche pour un prestataire (et un lot optionnel). */
-async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null, contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF'): Promise<Buffer> {
+/**
+ * Données de la fiche de validation d'un prestataire pour un mois : sites du
+ * périmètre contractuel, exécutions par tâche, et zone couverte.
+ *
+ * Extrait de `produceFiche` pour que le RECUEIL PDF reprenne la MÊME fiche en
+ * page 2 sans recopier les règles contractuelles : deux calculs parallèles
+ * finiraient par diverger, et c'est un document signé.
+ */
+export async function donneesFicheValidation(
+  presta: { id: string },
+  lotId: string | null,
+  an: number,
+  mo: number,
+  contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF',
+) {
   // Deux découpages de parc : la fiche PASSIVE suit les lots passifs (lot),
   // la fiche SOLAIRE suit les lots solaires (lotSolaire) — contrats séparés.
   const sites = await prisma.site.findMany({
@@ -321,6 +335,12 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
   } else {
     zone = [...new Set(sites.map((s) => s.region))].join(', ') || '—';
   }
+  return { sites: sites as unknown as SiteEligibilite[], realisesParKey, zone, nbSites: sites.length };
+}
+
+/** Génère le buffer xlsx d'une fiche pour un prestataire (et un lot optionnel). */
+async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null, contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF'): Promise<Buffer> {
+  const { sites, realisesParKey, zone } = await donneesFicheValidation(presta, lotId, an, mo, contrat);
   const prestataireLogo = await loadLogo(presta.logoPath);
   return buildFicheValidationXlsx({
     prestataire: { nom: presta.nom, adresse: presta.adresse, rccm: presta.rccm, nif: presta.nif, contactCommercial: presta.contactCommercial, contactTechnique: presta.contactTechnique },

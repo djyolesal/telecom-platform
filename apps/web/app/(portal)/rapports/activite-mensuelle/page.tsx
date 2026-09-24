@@ -11,18 +11,23 @@ import { Button } from '@/components/shared/Button';
 import { regionOptions, STATUTS_MAINTENANCE, TYPES_MAINTENANCE } from '@/lib/constants';
 
 /**
- * Recueil des rapports d'intervention : un document unique où chaque
- * intervention est rendue comme son rapport unitaire, précédé d'une synthèse
- * (curatif, incidents, pièces) et d'un visa contractuel.
+ * Rapport mensuel d'activité : couverture co-signée, fiche de validation du
+ * mois, tâches dues non réalisées, puis un rapport complet par intervention.
  *
- * Sa place est ICI et non seulement sur la liste des maintenances : on l'édite
- * pour une période et un prestataire, comme les autres documents contractuels
- * (fiche de validation, rapport mensuel), pas au fil de la consultation.
+ * MENSUEL par construction : le dû contractuel se compte par mois, c'est ce
+ * qui rend la fiche de validation et les manquantes signables.
  */
-export default function RecueilMaintenancesPage() {
+const MOIS = [
+  { value: '01', label: 'Janvier' }, { value: '02', label: 'Février' }, { value: '03', label: 'Mars' },
+  { value: '04', label: 'Avril' }, { value: '05', label: 'Mai' }, { value: '06', label: 'Juin' },
+  { value: '07', label: 'Juillet' }, { value: '08', label: 'Août' }, { value: '09', label: 'Septembre' },
+  { value: '10', label: 'Octobre' }, { value: '11', label: 'Novembre' }, { value: '12', label: 'Décembre' },
+];
+
+export default function RapportActiviteMensuelPage() {
   const now = new Date();
-  const [du, setDu] = useState(`${now.toISOString().slice(0, 7)}-01`);
-  const [au, setAu] = useState(now.toISOString().slice(0, 10));
+  const [annee, setAnnee] = useState(String(now.getFullYear()));
+  const [mois, setMois] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const [prestataireId, setPrestataireId] = useState('');
   const [lotId, setLotId] = useState('');
   const [region, setRegion] = useState('');
@@ -54,13 +59,13 @@ export default function RecueilMaintenancesPage() {
 
   const editer = async () => {
     setError(''); setBusy(true);
-    const q = new URLSearchParams({ du, au, statut });
+    const q = new URLSearchParams({ mois: `${annee}-${mois}`, statut });
     if (type) q.set('type', type);
     if (region) q.set('region', region);
     if (lotId) q.set('lot_id', lotId);
     if (prestataireId) q.set('prestataire_id', prestataireId);
     try {
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `recueil-maintenances-${du}_${au}.pdf`);
+      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${annee}-${mois}.pdf`);
     } catch (e) {
       // Le serveur porte le message utile (période trop large, aucune
       // intervention) : l'afficher tel quel plutôt qu'un « échec » générique.
@@ -74,15 +79,19 @@ export default function RecueilMaintenancesPage() {
   return (
     <div>
       <PageHeader
-        title="Recueil des rapports d'intervention"
-        subtitle="Un document unique : chaque intervention au format du rapport unitaire, précédée de la synthèse du curatif et des pièces, avec visa contractuel"
+        title="Rapport mensuel d'activité"
+        subtitle="Fiche de validation du mois, tâches dues non réalisées, et chaque intervention au format du rapport unitaire — avec visa contractuel"
         backHref="/rapports"
       />
       <FormCard>
         {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Du"><Input type="date" value={du} onChange={(e) => setDu(e.target.value)} /></Field>
-          <Field label="Au"><Input type="date" value={au} onChange={(e) => setAu(e.target.value)} /></Field>
+          <Field label="Mois">
+            <Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS} />
+          </Field>
+          <Field label="Année">
+            <Input type="number" min={2024} max={2100} value={annee} onChange={(e) => setAnnee(e.target.value)} />
+          </Field>
           <Field label="Statut">
             <Select value={statut} onChange={(e) => setStatut(e.target.value)} options={STATUTS_MAINTENANCE} placeholder="Tous statuts" />
           </Field>
@@ -102,11 +111,12 @@ export default function RecueilMaintenancesPage() {
           </Field>
         </div>
         <p className="mt-4 text-xs text-gray-500">
-          Le <b>logo du prestataire</b> n’apparaît en couverture que si le recueil ne couvre qu’un prestataire.
-          Chaque rapport embarque un échantillon de photos ; au-delà du plafond réglé, le serveur demande de resserrer la période.
+          La <b>fiche de validation</b> et le <b>logo du prestataire</b> n’apparaissent que si le rapport ne couvre
+          qu’un prestataire — sur un périmètre mixte, ses chiffres n’auraient pas de sens et la page ne serait pas signable.
+          Chaque intervention embarque un échantillon de photos ; au-delà du plafond réglé, le serveur demande de resserrer le périmètre.
         </p>
         <div className="mt-4">
-          <Button icon={FileText} loading={busy} onClick={editer}>Éditer le recueil PDF</Button>
+          <Button icon={FileText} loading={busy} onClick={editer}>Éditer le rapport PDF</Button>
         </div>
       </FormCard>
     </div>
