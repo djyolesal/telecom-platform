@@ -1434,7 +1434,40 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
  * signatures. Séparé du rendu pour qu'un recueil de période puisse assembler
  * plusieurs interventions dans UN document sans dupliquer cette collecte.
  */
-export async function chargerDonneesRapport(id: string): Promise<MaintenancePdfData | null> {
+/**
+ * ÉCHANTILLON de photos pour le recueil : on n'embarque pas les douze.
+ *
+ * Deux exigences que « au hasard » ne satisferait pas seul :
+ *  - REPRODUCTIBLE : un tirage vraiment aléatoire donnerait deux documents
+ *    différents pour la même période, et un auditeur qui compare deux copies
+ *    y verrait une manipulation. Le tirage est donc dérivé de l'identifiant de
+ *    l'intervention : dispersé, mais identique à chaque édition.
+ *  - AVANT *et* APRÈS : un échantillon qui ne montrerait que l'après ne prouve
+ *    rien. Tant que les deux phases existent, chacune garde au moins une photo.
+ */
+export function echantillonner<T>(liste: T[], combien: number, graine: string): T[] {
+  if (liste.length <= combien) return liste;
+  // Hachage de la graine (FNV-1a), puis AVALANCHE par élément. La première
+  // version hachait « graine:index » d'un bloc : l'index ne changeait que les
+  // bits de poids faible, si bien que six photos n'avaient que huit ordres
+  // possibles — deux d'entre elles sortaient deux fois trop souvent, et deux
+  // interventions différentes tiraient les mêmes. Mesuré, puis corrigé.
+  let base = 2166136261;
+  for (const c of graine) base = Math.imul(base ^ c.charCodeAt(0), 16777619);
+  const melanger = (x: number): number => {
+    let v = Math.imul(x ^ (x >>> 16), 2246822507);
+    v = Math.imul(v ^ (v >>> 13), 3266489909);
+    return (v ^ (v >>> 16)) >>> 0;
+  };
+  const rang = liste.map((item, i) => ({ item, cle: melanger(base + Math.imul(i, 0x9E3779B1)) }));
+  rang.sort((a, b) => a.cle - b.cle);
+  return rang.slice(0, combien).map((r) => r.item);
+}
+
+export async function chargerDonneesRapport(
+  id: string,
+  options: { maxPhotos?: number } = {},
+): Promise<MaintenancePdfData | null> {
   const maintenance = await prisma.maintenance.findUnique({
     where: { id },
     include: {
@@ -1468,11 +1501,25 @@ export async function chargerDonneesRapport(id: string): Promise<MaintenancePdfD
     if (!key) return null;
     try { return await getObjectBuffer(key); } catch { return null; }
   };
+  // Rapport unitaire : jusqu'à 6 photos par phase (grille 3 par ligne).
+  // Recueil de période : `maxPhotos` répartit un petit échantillon entre les
+  // deux phases — le PDF signale de lui-même les photos non reprises, qui
+  // restent consultables dans l'application.
+  const nbAvant = photos.filter((p) => p.phase === 'AVANT').length;
+  const nbApres = photos.filter((p) => p.phase === 'APRES').length;
+  const quota = (phase: string): number => {
+    if (options.maxPhotos == null) return 6;
+    const total = options.maxPhotos;
+    if (total <= 0) return 0;
+    if (!nbAvant || !nbApres) return total;            // une seule phase : tout pour elle
+    // L'APRÈS emporte la part supplémentaire : c'est lui qui atteste le
+    // travail fait, l'AVANT n'a qu'à établir l'état trouvé.
+    return phase === 'AVANT' ? Math.floor(total / 2) || 1 : total - (Math.floor(total / 2) || 1);
+  };
   const bufsPhase = async (phase: string) => {
     const liste = photos.filter((p) => p.phase === phase);
-    // Jusqu'à 6 photos par phase dans le PDF (grille 3 par ligne) ; le reste
-    // est signalé et reste consultable dans l'application.
-    const bufs = (await Promise.all(liste.slice(0, 6).map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
+    const retenues = echantillonner(liste, quota(phase), `${id}:${phase}`);
+    const bufs = (await Promise.all(retenues.map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
     return { bufs, total: liste.length };
   };
   const [avant, apres, signatureTechnicien, signatureAgent] = await Promise.all([
@@ -1553,12 +1600,16 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       ...(restreint ? { AND: [await contratMaintenancePerimetre(req.user!.id)] } : {}),
     };
 
-    const plafond = getNum('maintenance.maxRapportsPdf', 60);
+    // Échantillon de photos par rapport : 3 par défaut (~750 Ko) au lieu des 12
+    // du rapport unitaire (~3 Mo), ce qui autorise un plafond bien plus haut.
+    // 0 = recueil sans photos, quelques Ko par intervention.
+    const photosParRapport = getNum('maintenance.photosParRapportRecueil', 3);
+    const plafond = getNum('maintenance.maxRapportsPdf', 200);
     const total = await prisma.maintenance.count({ where });
     if (total === 0) throw new AppError('Aucune intervention ne correspond à ces critères.', 404);
     if (total > plafond) {
       throw new AppError(
-        `${total} interventions correspondent, au-delà du plafond de ${plafond} : le document pèserait plusieurs centaines de Mo. `
+        `${total} interventions correspondent, au-delà du plafond de ${plafond} : le document deviendrait intransmissible. `
         + 'Resserrez la période, ou filtrez par région, prestataire ou lot.',
         422,
       );
@@ -1623,7 +1674,7 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
     // fichiers depuis MinIO, tout lancer d'un coup saturerait le pool.
     const donnees: MaintenancePdfData[] = [];
     for (let i = 0; i < lignes.length; i += 4) {
-      const paquet = await Promise.all(lignes.slice(i, i + 4).map((l) => chargerDonneesRapport(l.id)));
+      const paquet = await Promise.all(lignes.slice(i, i + 4).map((l) => chargerDonneesRapport(l.id, { maxPhotos: photosParRapport })));
       donnees.push(...(paquet.filter(Boolean) as MaintenancePdfData[]));
     }
 

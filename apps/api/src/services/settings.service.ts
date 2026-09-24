@@ -110,7 +110,8 @@ export function settingsCatalog(): SettingMeta[] {
     // se déclenche que si un PAQUET de sites se reconnaît reconnecté au même
     // passage, signature du rebond. Une reconnexion isolée clôture aussitôt.
     { key: 'oss.stabiliteRetablissementMin', label: 'Attente avant clôture lors d\'un rebond régional (0 = clôture immédiate)', groupe: 'Supervision', unite: 'min', defaut: 20 },
-    { key: 'maintenance.maxRapportsPdf', label: 'Interventions maximum dans un recueil PDF (chaque rapport pèse jusqu\'à ~3 Mo)', groupe: 'Maintenance', unite: 'interventions', defaut: 60 },
+    { key: 'maintenance.maxRapportsPdf', label: 'Interventions maximum dans un recueil PDF', groupe: 'Maintenance', unite: 'interventions', defaut: 200 },
+    { key: 'maintenance.photosParRapportRecueil', label: 'Photos par intervention dans un recueil PDF (0 = aucune ; le rapport unitaire en garde 12)', groupe: 'Maintenance', unite: 'photos', defaut: 3 },
     { key: 'coupures.importRapportActif', label: 'Autoriser l\'import du rapport de supervision NOC (0 = désactivé)', groupe: 'Supervision', unite: '0/1', defaut: 0 },
     { key: 'oss.delaiReclassementAvalMin', label: 'Attente avant qu\'un aval encore coupé cesse d\'être rattaché à son amont rétabli', groupe: 'Supervision', unite: 'min', defaut: 20 },
     { key: 'oss.rebondSeuilSites', label: 'Nombre de sites reconnectés au même passage qui fait suspecter un rebond', groupe: 'Supervision', unite: 'sites', defaut: 5 },
