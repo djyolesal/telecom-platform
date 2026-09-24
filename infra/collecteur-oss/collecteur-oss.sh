@@ -124,22 +124,36 @@ if command -v timeout >/dev/null 2>&1; then BORNE=(timeout -k 10 "$OSS_TIMEOUT")
 elif command -v gtimeout >/dev/null 2>&1; then BORNE=(gtimeout -k 10 "$OSS_TIMEOUT")
 else BORNE=(); echo "ATTENTION: ni timeout ni gtimeout - un ssh figé ne sera pas interrompu." >&2; fi
 
-# `9>&-` sur CHAQUE enfant : sans cela ssh, timeout et curl héritent du
-# descripteur du verrou. Un ssh orphelin (session morte, processus resté en
-# arrière-plan) continuait alors de tenir le verrou APRÈS la fin de son parent,
-# et tous les passages suivants sortaient en « passage précédent encore en
-# cours » pour toujours - le collecteur mort sans que rien ne tourne.
+# FERMER LE VERROU DANS CHAQUE ENFANT. Sans cela ssh, timeout et curl héritent
+# du descripteur du verrou : un ssh orphelin (session morte, processus resté en
+# arrière-plan) continue de le tenir APRÈS la fin de son parent, et tous les
+# passages suivants sortent en « passage précédent encore en cours », pour
+# toujours — le collecteur mort sans que rien ne tourne.
+#
+# Ceci DOIT passer par une fonction. La forme `${LOCK:+9>&-}` écrite en fin de
+# commande ne pouvait pas marcher : bash analyse les redirections AVANT
+# l'expansion des paramètres, « 9>&- » partait donc comme ARGUMENT. Pour ssh
+# l'erreur était invisible (l'argument rejoignait la commande distante, où le
+# shell du nœud OSS le lisait comme une redirection) ; pour curl elle était
+# fatale — « curl: (6) Could not resolve host: 9>&- », l'argument étant pris
+# pour une seconde URL. Et surtout, dans les DEUX cas, le descripteur restait
+# ouvert dans l'enfant : la protection n'a jamais existé. Constaté en
+# production le 24/09/2026.
+sans_verrou() {
+  if [ -n "$LOCK" ]; then "$@" 9>&-; else "$@"; fi
+}
+
 recolter() {
   if [ -z "$OSS_JUMP" ]; then
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" "$OSS_HOST" "$OSS_COMMANDE" ${LOCK:+9>&-}
+    sans_verrou ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" "$OSS_HOST" "$OSS_COMMANDE"
   elif [ "$OSS_MODE" = "cascade" ]; then
     # ssh dans ssh : la commande transite par noeud2, qui ouvre lui-même la
     # session vers le nœud final (sa propre clé fait foi sur ce dernier saut).
     # Deux ports DISTINCTS : celui du rebond pour le saut depuis noeud1, celui
     # du nœud final pour le saut imbriqué que noeud2 ouvre à son tour.
-    ${BORNE[@]+"${BORNE[@]}"} ssh -p "$OSS_JUMP_PORT" -o ConnectTimeout=15 -o BatchMode=yes \
+    sans_verrou ${BORNE[@]+"${BORNE[@]}"} ssh -p "$OSS_JUMP_PORT" -o ConnectTimeout=15 -o BatchMode=yes \
       -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$OSS_JUMP" \
-      "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'" ${LOCK:+9>&-}
+      "ssh -p $OSS_PORT -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 $OSS_HOST '$OSS_COMMANDE'"
   else
     # ProxyJump porte son port dans la destination elle-même (user@hote:port).
     # On ne l'ajoute que si l'utilisateur ne l'a pas déjà écrit (et jamais sur
@@ -149,7 +163,7 @@ recolter() {
       (*:*) : ;;
       (*) [ "$OSS_JUMP_PORT" != 22 ] && saut="$OSS_JUMP:$OSS_JUMP_PORT" ;;
     esac
-    ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$saut" "$OSS_HOST" "$OSS_COMMANDE" ${LOCK:+9>&-}
+    sans_verrou ${BORNE[@]+"${BORNE[@]}"} ssh "${SSH_OPTS[@]}" -J "$saut" "$OSS_HOST" "$OSS_COMMANDE"
   fi
 }
 
@@ -205,9 +219,9 @@ if command -v gzip >/dev/null 2>&1 \
   ENCODAGE=(-H "Content-Encoding: gzip")
 fi
 
-curl -sS --max-time 60 -X POST "$EMOPS_URL" \
+sans_verrou curl -sS --max-time 60 -X POST "$EMOPS_URL" \
   -H "Authorization: Bearer $EMOPS_TOKEN" \
   -H "Content-Type: text/plain" \
   ${ENCODAGE[@]+"${ENCODAGE[@]}"} \
-  --data-binary @"$CORPS" ${LOCK:+9>&-}
+  --data-binary @"$CORPS"
 echo  # saut de ligne dans le log
