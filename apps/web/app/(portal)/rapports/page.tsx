@@ -14,6 +14,7 @@ const RAPPORTS: Array<{
   title: string; desc: string; roles?: string[]; internesSeulement?: boolean;
 }> = [
   { href: '/rapports/mensuel', icon: CalendarRange, title: 'Rapport mensuel', desc: 'Synthèse PDF complète par mois, à consulter ou envoyer par email.', roles: ['MANAGER', 'ADMIN', 'DIRECTION'] },
+  { href: '/rapports/recueil-maintenances', icon: FileText, title: 'Recueil des rapports d\u2019intervention', desc: 'Un PDF unique : chaque intervention au format du rapport unitaire, synth\u00e8se du curatif et des pi\u00e8ces, visa contractuel.' },
   { href: '/rapports/fiche-validation', icon: FileSpreadsheet, title: 'Fiche de validation (prestataire)', desc: 'Export xlsx des travaux contractuels réalisés par prestataire et par mois, au format de validation.', internesSeulement: true },
   { href: '/rapports/echeancier-preventif', icon: CalendarClock, title: 'Échéancier préventif', desc: 'Tâches contractuelles dues / en retard par site et prestataire, et génération du planning.' },
   { href: '/rapports/conformite', icon: ClipboardCheck, title: 'Conformité maintenances', desc: 'Maintenances passives clôturées avec relevés énergie, par prestataire.' },
