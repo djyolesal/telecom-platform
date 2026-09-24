@@ -1619,7 +1619,8 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       where,
       orderBy: [{ [champDate]: 'asc' }],
       select: {
-        id: true, type: true,
+        id: true, type: true, prestataireId: true,
+        prestataire: { select: { nom: true, logoPath: true } },
         site: { select: { nom: true } },
         pieces: { select: { nom: true, reference: true, quantite: true } },
         incident: {
@@ -1680,13 +1681,33 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
 
     // Pas de flèche « → » : la police standard du PDF (Helvetica/WinAnsi) ne la
     // contient pas et l'imprime en « !' ». Constaté à la première édition.
+    // ── LOGO DU PRESTATAIRE. Affiché seulement si le recueil ne couvre QU'UN
+    //    prestataire : sur un périmètre mixte, montrer l'un des logos laisserait
+    //    croire que le document ne concerne que celui-là. Décision du 24/09/2026.
+    const idsPrestataires = new Set(lignes.map((l) => l.prestataireId).filter(Boolean));
+    let prestataireGarde: { nom: string; logo?: Buffer | null } | undefined;
+    if (idsPrestataires.size === 1) {
+      const p = lignes.find((l) => l.prestataire)?.prestataire;
+      if (p) {
+        let logo: Buffer | null = null;
+        if (p.logoPath) {
+          // Un logo introuvable ou illisible ne doit pas faire échouer un
+          // document de quarante interventions : on édite sans.
+          try { logo = await getObjectBuffer(p.logoPath); } catch { logo = null; }
+        }
+        prestataireGarde = { nom: p.nom, logo };
+      }
+    }
+
     const libellePeriode = du || au
       ? `du ${du ? new Date(du).toLocaleDateString('fr-FR') : "l'origine"} au ${au ? new Date(au).toLocaleDateString('fr-FR') : "aujourd'hui"}`
       : 'toutes périodes';
     const perimetreLibelle = [
+      // Le prestataire est NOMMÉ quand il n'y en a qu'un — c'est l'information
+      // que cherche le lecteur, « prestataire sélectionné » ne dit rien.
+      prestataireGarde ? prestataireGarde.nom : (idsPrestataires.size > 1 ? `${idsPrestataires.size} prestataires` : null),
       region ? `région ${region}` : null,
       lot_id ? 'lot sélectionné' : null,
-      prestataire_id ? 'prestataire sélectionné' : null,
       site_id ? 'site sélectionné' : null,
       restreint ? 'périmètre du compte' : null,
     ].filter(Boolean).join(' · ') || 'tout le parc';
@@ -1702,10 +1723,12 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
     };
     const pdf = await generateMaintenancesRecueilPdf(donnees, {
       titre: 'Recueil des rapports de maintenance',
+      prestataire: prestataireGarde,
       ...synthese,
     });
     await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
       { rapport: 'recueil_pdf', nb: donnees.length, du, au, statut: statutCible, region, lot_id, prestataire_id,
+        prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
         pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
     res.setHeader('Content-Type', 'application/pdf');

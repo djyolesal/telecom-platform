@@ -3,6 +3,7 @@ import { L_TYPE_MAINTENANCE, L_STATUT_MAINTENANCE, L_CATEGORIE_EQUIPEMENT, libel
 import QRCode from 'qrcode';
 
 const BRAND = '#1B3F6B';
+const GRIS_PDF = '#6B7280';
 const ACCENT = '#0E7C6B';
 
 function render(build: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
@@ -22,11 +23,16 @@ function render(build: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
 }
 
 /** Logo « Écrou-signal » E&M OpS, vectoriel (écrou hexagonal + signal). */
-export function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number, size: number) {
+/**
+ * @param couleurTrait couleur de l'écrou. Blanc par défaut (bandeau foncé) ;
+ *   la page de garde co-signée est sur fond BLANC, où un écrou blanc serait
+ *   invisible — elle passe donc la couleur de la marque.
+ */
+export function drawLogo(doc: PDFKit.PDFDocument, x: number, y: number, size: number, couleurTrait = '#FFFFFF') {
   const k = size / 120; // le tracé est défini dans un viewBox 120×120
   doc.save();
   doc.translate(x, y).scale(k);
-  doc.path('M104 60 L82 98 L38 98 L16 60 L38 22 L82 22 Z').lineWidth(9).lineJoin('round').stroke('#FFFFFF');
+  doc.path('M104 60 L82 98 L38 98 L16 60 L38 22 L82 22 Z').lineWidth(9).lineJoin('round').stroke(couleurTrait);
   doc.circle(60, 64, 7).fill('#FFB020');
   doc.path('M46 52 A18 18 0 0 1 74 52').lineWidth(6.5).lineCap('round').stroke('#3BC9AF');
   doc.path('M40 45 A25 25 0 0 1 80 45').lineWidth(6.5).lineCap('round').stroke('#3BC9AF');
@@ -323,17 +329,69 @@ function ligneTableau(doc: PDFKit.PDFDocument, cellules: string[], largeurs: num
   doc.y = y + 13;
 }
 
+/** Cartouche de chiffre clé de la page de garde. */
+function cartouche(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number,
+                   valeur: string, libelle: string, couleur = BRAND) {
+  doc.roundedRect(x, y, w, h, 6).fill('#F4F7FA');
+  doc.fillColor(couleur).font('Helvetica-Bold').fontSize(20).text(valeur, x, y + 11, { width: w, align: 'center' });
+  doc.fillColor(GRIS_PDF).font('Helvetica').fontSize(7.5).text(libelle, x, y + 37, { width: w, align: 'center' });
+  doc.font('Helvetica').fillColor('black');
+}
+
 export async function generateMaintenancesRecueilPdf(
   liste: MaintenancePdfData[],
-  garde: { titre: string } & RecueilSynthese,
+  garde: { titre: string; prestataire?: { nom: string; logo?: Buffer | null } } & RecueilSynthese,
 ): Promise<Buffer> {
   return render((doc) => {
-    header(doc, garde.titre, garde.periode);
-    sectionTitle(doc, 'Périmètre du document');
-    row(doc, 'Période', garde.periode);
-    row(doc, 'Périmètre', garde.perimetre);
-    row(doc, 'Interventions', `${garde.nb} (${garde.preventives} préventive(s), ${garde.curatives} curative(s))`);
-    row(doc, 'Édité le', fmtDate(new Date()));
+    // ── En-tête CO-SIGNÉ (variante retenue) : E&M OpS d'un côté, le
+    //    prestataire de l'autre. Le document sort de la maison — il est remis
+    //    au prestataire, joint à une facturation, produit devant un auditeur —
+    //    et doit donc porter les deux marques. Sans prestataire unique dans le
+    //    périmètre, la place reste VIDE : afficher l'un des logos laisserait
+    //    croire que le recueil ne couvre que celui-là.
+    const w = doc.page.width;
+    drawLogo(doc, 60, 28, 54, BRAND);
+    doc.font('Helvetica-Bold').fontSize(15).fillColor(BRAND).text('E&M ', 124, 40, { continued: true });
+    doc.fillColor(ACCENT).text('OpS');
+    doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF).text('Exploitation & maintenance', 124, 60);
+    if (garde.prestataire?.logo) {
+      doc.moveTo(w / 2, 30).lineTo(w / 2, 92).lineWidth(0.8).stroke('#D8DEE6');
+      try {
+        doc.image(garde.prestataire.logo, w / 2 + 40, 34, { fit: [150, 54], align: 'center', valign: 'center' });
+      } catch {
+        // Logo illisible (format exotique, fichier tronqué) : le nom suffit,
+        // le document ne doit pas échouer pour une image.
+        doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND).text(garde.prestataire.nom, w / 2 + 40, 54, { width: 150 });
+      }
+    } else if (garde.prestataire?.nom) {
+      doc.moveTo(w / 2, 30).lineTo(w / 2, 92).lineWidth(0.8).stroke('#D8DEE6');
+      doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND).text(garde.prestataire.nom, w / 2 + 40, 52, { width: 180 });
+    }
+    doc.rect(0, 116, w, 4).fill(BRAND);
+    doc.rect(0, 120, w, 2).fill('#FFB020');
+
+    let y = 150;
+    doc.font('Helvetica-Bold').fontSize(19).fillColor('#111').text(garde.titre, 60, y, { width: w - 120, align: 'center' });
+    y += 30;
+    doc.font('Helvetica').fontSize(11).fillColor(GRIS_PDF).text(garde.periode, 60, y, { width: w - 120, align: 'center' });
+    y += 18;
+    doc.fontSize(10).fillColor(BRAND).text(garde.perimetre, 60, y, { width: w - 120, align: 'center' });
+    y += 36;
+
+    const largeurCase = (w - 160) / 3;
+    const ouverts = garde.incidents.filter((i) => !i.clos).length;
+    const totalPieces = garde.pieces.reduce((t, p) => t + p.quantite, 0);
+    cartouche(doc, 60, y, largeurCase, 56, `${garde.nb}`, `interventions (${garde.preventives} prév. · ${garde.curatives} cur.)`);
+    cartouche(doc, 60 + largeurCase + 20, y, largeurCase, 56, `${ouverts}`, 'incident(s) encore ouvert(s)', ouverts ? '#C0392B' : ACCENT);
+    cartouche(doc, 60 + 2 * (largeurCase + 20), y, largeurCase, 56, `${totalPieces}`, 'pièce(s) remplacée(s)', ACCENT);
+    y += 76;
+    doc.font('Helvetica').fontSize(8.5).fillColor(GRIS_PDF).text(
+      `Document contractuel — édité le ${fmtDate(new Date())}. Chaque intervention est reprise dans les pages suivantes `
+      + 'au format du rapport unitaire.',
+      60, y, { width: w - 120, align: 'center' },
+    );
+    doc.fillColor('black');
+    doc.y = y + 30;
 
     // ── Activité curative : ce que le lecteur cherche d'abord, et qu'aucune
     //    page individuelle ne donne — l'état des incidents à la date d'édition.
