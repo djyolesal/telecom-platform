@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 /**
@@ -32,6 +32,18 @@ export function useFiltresUrl<T extends Record<string, string>>(defauts: T) {
     return v;
   }, [params, defauts]);
 
+  // MÉMOIRE DU RETOUR. Le bouton « ← Retour » d'une fiche est un lien fixe vers
+  // la liste (« /incidents ») : il ramènerait à une liste sans filtre, alors
+  // même que le bouton du navigateur, lui, restaure l'adresse. On note donc la
+  // dernière URL vue de cette liste, que l'en-tête relira. Propre à l'onglet
+  // (sessionStorage), et sans conséquence si le stockage est indisponible.
+  useEffect(() => {
+    try {
+      const qs = params.toString();
+      sessionStorage.setItem(cleRetour(pathname), qs ? `${pathname}?${qs}` : pathname);
+    } catch { /* navigation privée, stockage bloqué : le lien reste nu */ }
+  }, [params, pathname]);
+
   const appliquer = useCallback((patch: Partial<T>) => {
     const suivant = new URLSearchParams(params.toString());
     for (const [cle, val] of Object.entries(patch)) {
@@ -47,3 +59,6 @@ export function useFiltresUrl<T extends Record<string, string>>(defauts: T) {
 
   return { valeurs, appliquer, reinitialiser };
 }
+
+/** Clé de la dernière URL vue d'une liste (partagée avec PageHeader). */
+export const cleRetour = (chemin: string) => `retour:${chemin}`;
