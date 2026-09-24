@@ -149,6 +149,14 @@ update:
 	@docker compose up -d --no-deps --build api web
 	@echo "--- Migrations BDD ---"
 	@docker compose exec api npx prisma migrate deploy
+	@# Le cache BuildKit grossit à CHAQUE construction et n'est jamais purgé
+	@# tout seul : constaté en production, 260 Go de cache pour 12 Go de
+	@# données réelles, soit 64 % du disque. On en garde 10 Go (les couches
+	@# utiles à la prochaine construction), on jette le reste.
+	@echo "--- Purge du cache de construction (10 Go conservés) ---"
+	@docker builder prune -f --keep-storage 10GB 2>/dev/null \
+		|| docker builder prune -f --max-used-space 10GB 2>/dev/null \
+		|| docker builder prune -f
 	@echo "✅ Mise à jour terminée"
 
 ssl:
@@ -158,4 +166,9 @@ ssl:
 
 clean:
 	@docker system prune -f
+	@# `docker system prune` ne retire que le cache de construction ORPHELIN :
+	@# le gros du volume est du cache encore référencé, qu'il faut demander.
+	@docker builder prune -af
+	@echo "--- Espace après nettoyage ---"
+	@df -h / | tail -1
 	@echo "✅ Nettoyage terminé"
