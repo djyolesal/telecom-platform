@@ -188,94 +188,194 @@ function grillePhotos(doc: PDFKit.PDFDocument, titre: string, photos: Buffer[], 
   doc.fillColor('black');
 }
 
-export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buffer> {
-  return render((doc) => {
-    header(doc, 'Rapport de maintenance', `Réf. ${m.reference ?? m.id.slice(0, 8).toUpperCase()}`);
+/**
+ * Dessine UN rapport d'intervention dans un document déjà ouvert.
+ *
+ * Extrait de `generateMaintenancePdf` pour qu'un recueil de plusieurs
+ * interventions (export par période) rende EXACTEMENT la même page que
+ * l'export unitaire : un seul dessin, donc aucune divergence possible entre
+ * le document qu'un prestataire reçoit pour une intervention et celui que le
+ * manager édite pour tout un mois.
+ */
+export function dessinerRapportMaintenance(doc: PDFKit.PDFDocument, m: MaintenancePdfData): void {
 
-    sectionTitle(doc, 'Site');
-    row(doc, 'Nom', m.site?.nom ?? '—');
-    row(doc, 'Code', m.site?.code ?? '—');
-    row(doc, 'Région', m.site?.region ?? '—');
+  header(doc, 'Rapport de maintenance', `Réf. ${m.reference ?? m.id.slice(0, 8).toUpperCase()}`);
 
-    sectionTitle(doc, 'Intervention');
-    row(doc, 'Type', libelle(L_TYPE_MAINTENANCE, m.type));
-    row(doc, 'Catégorie', libelle(L_CATEGORIE_EQUIPEMENT, m.categorie));
-    row(doc, 'Équipement', m.equipement);
-    row(doc, 'Statut', libelle(L_STATUT_MAINTENANCE, m.statut));
-    row(doc, 'Technicien', m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—');
-    row(doc, 'Prestataire', m.prestataire?.nom ?? 'Interne');
-    if (m.nomAgentSecurite) row(doc, 'Agent de sécurité', m.nomAgentSecurite);
-    row(doc, 'Planifiée le', fmtDate(m.datePlanifiee));
-    row(doc, 'Début', fmtDate(m.dateDebut));
-    row(doc, 'Fin', fmtDate(m.dateFin));
-    row(doc, 'Durée travaillée', m.dureeMinutes != null
-      ? `${m.dureeMinutes} min${m.dureeSuspendueMinutes ? ` (hors ${m.dureeSuspendueMinutes} min de suspension)` : ''}`
-      : '—');
+  sectionTitle(doc, 'Site');
+  row(doc, 'Nom', m.site?.nom ?? '—');
+  row(doc, 'Code', m.site?.code ?? '—');
+  row(doc, 'Région', m.site?.region ?? '—');
 
-    // Relevés énergie : mêmes informations que la fiche web (index SAISIS +
-    // deltas depuis le relevé précédent quand ils existent).
-    if (m.releves?.length) {
-      sectionTitle(doc, 'Relevés énergie');
-      const ge = m.releves.filter((r) => r.source === 'GE');
-      const gasoil = ge.find((r) => r.gasoilConsommeLitres != null) ?? ge.find((r) => r.volumeGasoilLitres != null);
-      if (gasoil) {
-        row(doc, 'Gasoil', `${fmtN(gasoil.gasoilConsommeLitres, ' L consommés')} · cuve ${fmtN(gasoil.volumeGasoilLitres, ' L')}`);
-      }
-      for (const r of ge) {
-        row(doc, `GE n°${r.groupeNumero ?? ''}`, `${fmtN(r.heuresFonctGE, ' h de marche')} · index ${fmtN(r.indexHeuresGE, ' h')}`);
-      }
-      for (const r of m.releves.filter((x) => x.source !== 'GE')) {
-        if (r.source === 'CEET') row(doc, 'CEET', `${fmtN(r.consommationKwh, ' kWh')} · index ${fmtN(r.indexCompteur)}`);
-        else if (r.source === 'SOLAIRE') row(doc, 'Solaire', fmtN(r.puissanceKva, ' kVA'));
-        else row(doc, 'Autre source', '—');
-      }
+  sectionTitle(doc, 'Intervention');
+  row(doc, 'Type', libelle(L_TYPE_MAINTENANCE, m.type));
+  row(doc, 'Catégorie', libelle(L_CATEGORIE_EQUIPEMENT, m.categorie));
+  row(doc, 'Équipement', m.equipement);
+  row(doc, 'Statut', libelle(L_STATUT_MAINTENANCE, m.statut));
+  row(doc, 'Technicien', m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—');
+  row(doc, 'Prestataire', m.prestataire?.nom ?? 'Interne');
+  if (m.nomAgentSecurite) row(doc, 'Agent de sécurité', m.nomAgentSecurite);
+  row(doc, 'Planifiée le', fmtDate(m.datePlanifiee));
+  row(doc, 'Début', fmtDate(m.dateDebut));
+  row(doc, 'Fin', fmtDate(m.dateFin));
+  row(doc, 'Durée travaillée', m.dureeMinutes != null
+    ? `${m.dureeMinutes} min${m.dureeSuspendueMinutes ? ` (hors ${m.dureeSuspendueMinutes} min de suspension)` : ''}`
+    : '—');
+
+  // Relevés énergie : mêmes informations que la fiche web (index SAISIS +
+  // deltas depuis le relevé précédent quand ils existent).
+  if (m.releves?.length) {
+    sectionTitle(doc, 'Relevés énergie');
+    const ge = m.releves.filter((r) => r.source === 'GE');
+    const gasoil = ge.find((r) => r.gasoilConsommeLitres != null) ?? ge.find((r) => r.volumeGasoilLitres != null);
+    if (gasoil) {
+      row(doc, 'Gasoil', `${fmtN(gasoil.gasoilConsommeLitres, ' L consommés')} · cuve ${fmtN(gasoil.volumeGasoilLitres, ' L')}`);
     }
-
-    if (m.description) {
-      sectionTitle(doc, 'Description');
-      doc.fontSize(10).fillColor('#111').text(m.description, { align: 'justify' });
+    for (const r of ge) {
+      row(doc, `GE n°${r.groupeNumero ?? ''}`, `${fmtN(r.heuresFonctGE, ' h de marche')} · index ${fmtN(r.indexHeuresGE, ' h')}`);
     }
-    if (m.observations) {
-      sectionTitle(doc, 'Observations');
-      doc.fontSize(10).fillColor('#111').text(m.observations, { align: 'justify' });
+    for (const r of m.releves.filter((x) => x.source !== 'GE')) {
+      if (r.source === 'CEET') row(doc, 'CEET', `${fmtN(r.consommationKwh, ' kWh')} · index ${fmtN(r.indexCompteur)}`);
+      else if (r.source === 'SOLAIRE') row(doc, 'Solaire', fmtN(r.puissanceKva, ' kVA'));
+      else row(doc, 'Autre source', '—');
     }
-    if (m.analyseEnergie) {
-      sectionTitle(doc, 'Analyse énergie');
-      doc.fontSize(10).fillColor('#111').text(m.analyseEnergie, { align: 'justify' });
-    }
+  }
 
-    if (m.pieces?.length) {
-      sectionTitle(doc, 'Pièces de rechange');
-      m.pieces.forEach((p) =>
-        row(doc, `${p.quantite}× ${p.nom}`, p.reference ? `Réf. ${p.reference}` : '')
-      );
-    }
+  if (m.description) {
+    sectionTitle(doc, 'Description');
+    doc.fontSize(10).fillColor('#111').text(m.description, { align: 'justify' });
+  }
+  if (m.observations) {
+    sectionTitle(doc, 'Observations');
+    doc.fontSize(10).fillColor('#111').text(m.observations, { align: 'justify' });
+  }
+  if (m.analyseEnergie) {
+    sectionTitle(doc, 'Analyse énergie');
+    doc.fontSize(10).fillColor('#111').text(m.analyseEnergie, { align: 'justify' });
+  }
 
-    grillePhotos(doc, 'Photos avant travaux', m.photosAvant ?? [], m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0));
-    grillePhotos(doc, 'Photos après travaux', m.photosApres ?? [], m.totalPhotosApres ?? (m.photosApres?.length ?? 0));
-
-    // Signatures : le technicien signe toujours (obligatoire à la clôture) ;
-    // l'agent de sécurité n'apparaît que si un agent a été enregistré sur
-    // l'intervention. Le bloc gère lui-même le saut de page et rend visible
-    // une signature attendue mais manquante.
-    signatureSlots(doc, [
-      { label: 'Technicien', nom: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : null, image: m.signatureTechnicien ?? null },
-      ...(m.nomAgentSecurite || m.signatureAgent
-        ? [{ label: 'Agent de sécurité', nom: m.nomAgentSecurite ?? null, image: m.signatureAgent ?? null }]
-        : []),
-    ]);
-    if (m.notePreuves) {
-      doc.moveDown(0.5);
-      doc.fontSize(8).fillColor('#666').text(m.notePreuves, 50, doc.y, { width: doc.page.width - 100 });
-    }
-
-    doc.moveDown(2);
-    doc.fontSize(8).fillColor('#999').text(
-      `Généré le ${fmtDate(new Date())} - E&M OpS`,
-      50,
-      doc.page.height - 60,
-      { align: 'center', width: doc.page.width - 100 }
+  if (m.pieces?.length) {
+    sectionTitle(doc, 'Pièces de rechange');
+    m.pieces.forEach((p) =>
+      row(doc, `${p.quantite}× ${p.nom}`, p.reference ? `Réf. ${p.reference}` : '')
     );
+  }
+
+  grillePhotos(doc, 'Photos avant travaux', m.photosAvant ?? [], m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0));
+  grillePhotos(doc, 'Photos après travaux', m.photosApres ?? [], m.totalPhotosApres ?? (m.photosApres?.length ?? 0));
+
+  // Signatures : le technicien signe toujours (obligatoire à la clôture) ;
+  // l'agent de sécurité n'apparaît que si un agent a été enregistré sur
+  // l'intervention. Le bloc gère lui-même le saut de page et rend visible
+  // une signature attendue mais manquante.
+  signatureSlots(doc, [
+    { label: 'Technicien', nom: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : null, image: m.signatureTechnicien ?? null },
+    ...(m.nomAgentSecurite || m.signatureAgent
+      ? [{ label: 'Agent de sécurité', nom: m.nomAgentSecurite ?? null, image: m.signatureAgent ?? null }]
+      : []),
+  ]);
+  if (m.notePreuves) {
+    doc.moveDown(0.5);
+    doc.fontSize(8).fillColor('#666').text(m.notePreuves, 50, doc.y, { width: doc.page.width - 100 });
+  }
+
+  doc.moveDown(2);
+  doc.fontSize(8).fillColor('#999').text(
+    `Généré le ${fmtDate(new Date())} - E&M OpS`,
+    50,
+    doc.page.height - 60,
+    { align: 'center', width: doc.page.width - 100 }
+  );
+}
+
+export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buffer> {
+  return render((doc) => dessinerRapportMaintenance(doc, m));
+}
+
+/**
+ * RECUEIL : un rapport complet par intervention, un par page, dans un seul
+ * document. Précédé d'une page de garde qui dit ce que le document couvre —
+ * sans elle, rien ne distingue un export « septembre, lot 3 » d'un autre.
+ */
+export interface RecueilSynthese {
+  periode: string;
+  perimetre: string;
+  nb: number;
+  preventives: number;
+  curatives: number;
+  /** Incidents rattachés aux interventions du recueil. */
+  incidents: Array<{ reference: string; site: string; statut: string; clos: boolean; date: string; action: string }>;
+  /** Pièces remplacées, agrégées sur tout le recueil. */
+  pieces: Array<{ nom: string; reference: string; quantite: number; sites: number }>;
+}
+
+/** Ligne de tableau simple : colonnes à largeurs fixes, saut de page géré. */
+function ligneTableau(doc: PDFKit.PDFDocument, cellules: string[], largeurs: number[], gras = false) {
+  if (doc.y > doc.page.height - 80) doc.addPage();
+  const y = doc.y;
+  let x = 50;
+  doc.fontSize(8.5).fillColor(gras ? '#1B3F6B' : '#111');
+  if (gras) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
+  cellules.forEach((c, i) => {
+    doc.text(c, x, y, { width: largeurs[i] - 4, ellipsis: true, lineBreak: false });
+    x += largeurs[i];
+  });
+  doc.font('Helvetica').fillColor('black');
+  doc.y = y + 13;
+}
+
+export async function generateMaintenancesRecueilPdf(
+  liste: MaintenancePdfData[],
+  garde: { titre: string } & RecueilSynthese,
+): Promise<Buffer> {
+  return render((doc) => {
+    header(doc, garde.titre, garde.periode);
+    sectionTitle(doc, 'Périmètre du document');
+    row(doc, 'Période', garde.periode);
+    row(doc, 'Périmètre', garde.perimetre);
+    row(doc, 'Interventions', `${garde.nb} (${garde.preventives} préventive(s), ${garde.curatives} curative(s))`);
+    row(doc, 'Édité le', fmtDate(new Date()));
+
+    // ── Activité curative : ce que le lecteur cherche d'abord, et qu'aucune
+    //    page individuelle ne donne — l'état des incidents à la date d'édition.
+    sectionTitle(doc, `Activité curative — incidents (${garde.incidents.length})`);
+    if (!garde.incidents.length) {
+      doc.fontSize(9).fillColor('#666').text('Aucune intervention curative rattachée à un incident sur la période.', 50, doc.y);
+      doc.fillColor('black'); doc.moveDown(0.6);
+    } else {
+      const clos = garde.incidents.filter((i) => i.clos).length;
+      doc.fontSize(9).fillColor('#444').text(
+        `${clos} incident(s) clôturé(s) · ${garde.incidents.length - clos} encore ouvert(s) à l'édition.`, 50, doc.y);
+      doc.fillColor('black').moveDown(0.4);
+      const L = [70, 120, 62, 72, 171];
+      ligneTableau(doc, ['Référence', 'Site', 'État', 'Date', 'Action corrective'], L, true);
+      garde.incidents.forEach((i) =>
+        ligneTableau(doc, [i.reference, i.site, i.clos ? 'Clôturé' : 'OUVERT', i.date, i.action], L));
+    }
+
+    // ── Pièces de rechange : le cumul, qu'aucune page individuelle ne donne.
+    sectionTitle(doc, `Pièces de rechange remplacées (${garde.pieces.reduce((t, p) => t + p.quantite, 0)})`);
+    if (!garde.pieces.length) {
+      doc.fontSize(9).fillColor('#666').text('Aucune pièce déclarée sur la période.', 50, doc.y);
+      doc.fillColor('black'); doc.moveDown(0.6);
+    } else {
+      const L = [230, 110, 75, 80];
+      ligneTableau(doc, ['Pièce', 'Référence', 'Quantité', 'Sites'], L, true);
+      garde.pieces.forEach((p) =>
+        ligneTableau(doc, [p.nom, p.reference || '—', String(p.quantite), String(p.sites)], L));
+    }
+
+    doc.moveDown(0.8);
+    doc.fontSize(8.5).fillColor('#666').text(
+      "Les pages suivantes reprennent chaque intervention dans le format exact du rapport unitaire : "
+      + "relevés énergie, description, pièces, photos avant et après, signatures.",
+      50, doc.y, { width: doc.page.width - 100, align: 'justify' },
+    );
+    doc.fillColor('black');
+
+    liste.forEach((m) => {
+      doc.addPage();
+      dessinerRapportMaintenance(doc, m);
+    });
   });
 }
 

@@ -26,7 +26,7 @@ function notifierAffectationMaintenance(technicienId: string | null | undefined,
   );
 }
 import { ScopeMaintenance, SourceEnergie, Prisma } from '@prisma/client';
-import { differenceInMinutes, startOfWeek, endOfWeek, parseISO } from 'date-fns';
+import { differenceInMinutes, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
@@ -38,7 +38,10 @@ import { triListe } from '../utils/triListe';
 import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
 import { CHECKLIST_SOLAIRE, RESULTATS_CHECKLIST } from '../utils/checklistSolaire';
 import { auditLog } from '../services/audit.service';
-import { generateMaintenancePdf, generateBonMouvementPdf } from '../services/pdf.service';
+import {
+  generateMaintenancePdf, generateBonMouvementPdf,
+  generateMaintenancesRecueilPdf, MaintenancePdfData, RecueilSynthese,
+} from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
@@ -1425,7 +1428,13 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
  * agent de sécurité). Chaque fichier MinIO est best-effort. Renvoie null si la
  * maintenance est introuvable.
  */
-export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer | null> {
+/**
+ * Charge tout ce qu'un rapport d'intervention affiche : l'intervention, ses
+ * relevés, ses pièces, ses photos (téléchargées depuis MinIO) et ses
+ * signatures. Séparé du rendu pour qu'un recueil de période puisse assembler
+ * plusieurs interventions dans UN document sans dupliquer cette collecte.
+ */
+export async function chargerDonneesRapport(id: string): Promise<MaintenancePdfData | null> {
   const maintenance = await prisma.maintenance.findUnique({
     where: { id },
     include: {
@@ -1473,7 +1482,7 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
     charger(preuvesIncident ? maintenance.incident!.signatureAgentSecuritePath : maintenance.signatureAgentSecuritePath),
   ]);
 
-  return generateMaintenancePdf({
+  return {
     ...maintenance,
     dureeSuspendueMinutes: maintenance.dureeSuspendueMinutes,
     releves: maintenance.releves.map((r) => ({
@@ -1497,7 +1506,162 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
       ? { nomAgentSecurite: maintenance.incident!.nomAgentSecurite ?? maintenance.nomAgentSecurite,
           notePreuves: `Preuves reprises de l'incident ${maintenance.incident!.reference ?? ''} (curative créée à sa résolution).`.replace('  ', ' ') }
       : {}),
-  });
+  } as MaintenancePdfData;
+}
+
+/** Rapport unitaire : chargement + rendu (inchangé pour les appelants). */
+export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer | null> {
+  const donnees = await chargerDonneesRapport(id);
+  return donnees ? generateMaintenancePdf(donnees) : null;
+}
+
+/**
+ * RECUEIL de rapports d'intervention sur une période — un document unique où
+ * CHAQUE intervention est rendue exactement comme son rapport unitaire.
+ *
+ * Bornes de date : `dateFin` pour les interventions terminées (c'est la date
+ * qui fait foi dans un rapport de période), `datePlanifiee` sinon.
+ *
+ * PLAFOND. Chaque rapport embarque jusqu'à 12 photos, soit ~3 Mo : deux cents
+ * interventions feraient un document de 600 Mo, intransmissible. Au-delà du
+ * plafond réglable, on REFUSE en disant quoi resserrer, plutôt que de fabriquer
+ * un fichier que personne ne pourra ouvrir.
+ */
+export async function exportRapportsMaintenances(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { du, au, statut, type, region, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
+    const statutCible = statut || 'TERMINEE';
+    const champDate = statutCible === 'TERMINEE' ? 'dateFin' : 'datePlanifiee';
+
+    const bornes: Record<string, Date> = {};
+    if (du) bornes.gte = startOfDay(parseISO(du));
+    if (au) bornes.lte = endOfDay(parseISO(au));
+    for (const [cle, valeur] of Object.entries(bornes)) {
+      if (Number.isNaN(valeur.getTime())) throw new AppError(`Date ${cle === 'gte' ? 'de début' : 'de fin'} invalide (AAAA-MM-JJ).`, 422);
+    }
+
+    const perimetre = await sitePerimetre(req.user!.id);
+    const restreint = isRestreint(perimetre);
+    const filtreSite = { ...(region ? { region } : {}), ...(lot_id ? { lotId: lot_id } : {}), ...(restreint ? perimetre : {}) };
+    const where: Record<string, unknown> = {
+      ...(statutCible !== 'TOUS' ? { statut: statutCible } : {}),
+      ...(type ? { type } : {}),
+      ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
+      ...(site_id ? { siteId: site_id } : {}),
+      ...(Object.keys(bornes).length ? { [champDate]: bornes } : {}),
+      ...(Object.keys(filtreSite).length ? { site: filtreSite } : {}),
+      ...(restreint ? { AND: [await contratMaintenancePerimetre(req.user!.id)] } : {}),
+    };
+
+    const plafond = getNum('maintenance.maxRapportsPdf', 60);
+    const total = await prisma.maintenance.count({ where });
+    if (total === 0) throw new AppError('Aucune intervention ne correspond à ces critères.', 404);
+    if (total > plafond) {
+      throw new AppError(
+        `${total} interventions correspondent, au-delà du plafond de ${plafond} : le document pèserait plusieurs centaines de Mo. `
+        + 'Resserrez la période, ou filtrez par région, prestataire ou lot.',
+        422,
+      );
+    }
+
+    const lignes = await prisma.maintenance.findMany({
+      where,
+      orderBy: [{ [champDate]: 'asc' }],
+      select: {
+        id: true, type: true,
+        site: { select: { nom: true } },
+        pieces: { select: { nom: true, reference: true, quantite: true } },
+        incident: {
+          select: {
+            reference: true, statut: true, dateOuverture: true, dateResolution: true,
+            actionCorrective: true, site: { select: { nom: true } },
+          },
+        },
+      },
+    });
+
+    // ── SYNTHÈSE. Ce qu'aucune page individuelle ne peut donner : l'état des
+    //    incidents à la date d'édition, et le cumul des pièces remplacées.
+    const CLOS = ['RESOLU', 'CLOS'];
+    const incidents = lignes
+      .filter((l) => l.incident)
+      .map((l) => {
+        const i = l.incident!;
+        const quand = i.dateResolution ?? i.dateOuverture;
+        return {
+          reference: i.reference ?? '—',
+          site: i.site?.nom ?? l.site?.nom ?? '—',
+          statut: i.statut,
+          clos: CLOS.includes(i.statut),
+          date: quand ? new Date(quand).toLocaleDateString('fr-FR') : '—',
+          // Un incident encore ouvert n'a pas d'action corrective : le dire,
+          // plutôt que de laisser une case vide qu'on lira comme un oubli.
+          action: i.actionCorrective ?? (CLOS.includes(i.statut) ? '—' : 'en cours de traitement'),
+        };
+      })
+      // Les non clôturés d'abord : ce sont eux qui appellent une décision.
+      .sort((a, b) => Number(a.clos) - Number(b.clos) || a.reference.localeCompare(b.reference));
+
+    // Agrégat des pièces : même pièce sur plusieurs interventions = une ligne,
+    // avec le nombre de sites concernés (une quantité seule ne dit pas si
+    // c'est un site qui consomme ou tout le parc).
+    const parPiece = new Map<string, { nom: string; reference: string; quantite: number; sites: Set<string> }>();
+    for (const l of lignes) {
+      for (const p of l.pieces) {
+        const cle = `${p.nom.trim().toLowerCase()}|${(p.reference ?? '').trim().toLowerCase()}`;
+        const e = parPiece.get(cle) ?? { nom: p.nom, reference: p.reference ?? '', quantite: 0, sites: new Set<string>() };
+        e.quantite += p.quantite;
+        e.sites.add(l.site?.nom ?? l.id);
+        parPiece.set(cle, e);
+      }
+    }
+    const pieces = [...parPiece.values()]
+      .map((e) => ({ nom: e.nom, reference: e.reference, quantite: e.quantite, sites: e.sites.size }))
+      .sort((a, b) => b.quantite - a.quantite || a.nom.localeCompare(b.nom));
+
+    // Chargement par petits paquets : chaque rapport télécharge jusqu'à 14
+    // fichiers depuis MinIO, tout lancer d'un coup saturerait le pool.
+    const donnees: MaintenancePdfData[] = [];
+    for (let i = 0; i < lignes.length; i += 4) {
+      const paquet = await Promise.all(lignes.slice(i, i + 4).map((l) => chargerDonneesRapport(l.id)));
+      donnees.push(...(paquet.filter(Boolean) as MaintenancePdfData[]));
+    }
+
+    // Pas de flèche « → » : la police standard du PDF (Helvetica/WinAnsi) ne la
+    // contient pas et l'imprime en « !' ». Constaté à la première édition.
+    const libellePeriode = du || au
+      ? `du ${du ? new Date(du).toLocaleDateString('fr-FR') : "l'origine"} au ${au ? new Date(au).toLocaleDateString('fr-FR') : "aujourd'hui"}`
+      : 'toutes périodes';
+    const perimetreLibelle = [
+      region ? `région ${region}` : null,
+      lot_id ? 'lot sélectionné' : null,
+      prestataire_id ? 'prestataire sélectionné' : null,
+      site_id ? 'site sélectionné' : null,
+      restreint ? 'périmètre du compte' : null,
+    ].filter(Boolean).join(' · ') || 'tout le parc';
+
+    const synthese: RecueilSynthese = {
+      periode: libellePeriode,
+      perimetre: perimetreLibelle,
+      nb: donnees.length,
+      preventives: lignes.filter((l) => l.type === 'PREVENTIVE').length,
+      curatives: lignes.filter((l) => l.type !== 'PREVENTIVE').length,
+      incidents,
+      pieces,
+    };
+    const pdf = await generateMaintenancesRecueilPdf(donnees, {
+      titre: 'Recueil des rapports de maintenance',
+      ...synthese,
+    });
+    await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
+      { rapport: 'recueil_pdf', nb: donnees.length, du, au, statut: statutCible, region, lot_id, prestataire_id,
+        incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
+        pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `attachment; filename="rapports-maintenances-${du || 'origine'}_${au || 'ce-jour'}.pdf"`);
+    res.send(pdf);
+  } catch (err) { next(err); }
 }
 
 export async function getMaintenancePdf(req: Request, res: Response, next: NextFunction) {

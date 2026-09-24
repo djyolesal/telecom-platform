@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Download, CalendarDays, Camera } from 'lucide-react';
+import { Plus, Download, CalendarDays, Camera, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -13,7 +13,8 @@ import { FilterBar } from '@/components/shared/FilterBar';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
-import { ButtonLink } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
+import { Field, Input } from '@/components/shared/Form';
 import { StatutMaintBadge } from '@/components/shared/Badge';
 import { TYPES_MAINTENANCE, STATUTS_MAINTENANCE, CATEGORIES_EQUIPEMENT } from '@/lib/constants';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -116,6 +117,7 @@ function MaintenancePageInner() {
         actions={
           <>
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
+            {roleExport !== 'TECHNICIEN' && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} />}
             {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"/>}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
@@ -148,6 +150,74 @@ function MaintenancePageInner() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * RECUEIL PDF d'une période : un rapport d'intervention complet par ligne,
+ * précédé d'une synthèse (curatif, incidents clôturés ou non, pièces).
+ *
+ * Période par défaut : le mois en cours. Les filtres de l'écran sont repris —
+ * un document qui ne correspondrait pas à ce que l'utilisateur voit à l'écran
+ * serait un piège.
+ */
+function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statut: string; prestataireId: string }) {
+  const [ouvert, setOuvert] = useState(false);
+  const moisEnCours = new Date().toISOString().slice(0, 7);
+  const [du, setDu] = useState(`${moisEnCours}-01`);
+  const [au, setAu] = useState(new Date().toISOString().slice(0, 10));
+  const [enCours, setEnCours] = useState(false);
+  const [erreur, setErreur] = useState('');
+
+  const editer = async () => {
+    setErreur(''); setEnCours(true);
+    const q = new URLSearchParams({ du, au, statut: statut || 'TERMINEE' });
+    if (type) q.set('type', type);
+    if (prestataireId) q.set('prestataire_id', prestataireId);
+    try {
+      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapports-maintenances-${du}_${au}.pdf`);
+      setOuvert(false);
+    } catch (e) {
+      // Le refus du serveur (période trop large, aucune intervention) porte le
+      // message utile : l'afficher tel quel plutôt qu'un « échec » générique.
+      const r = (e as { response?: { data?: { error?: string } } }).response;
+      setErreur(r?.data?.error ?? 'Édition impossible - réessayez.');
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  return (
+    <>
+      <button type="button" onClick={() => setOuvert(true)}
+        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <FileText size={15} /> Recueil PDF
+      </button>
+      {ouvert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOuvert(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-1 text-lg font-bold text-gray-800">Recueil des rapports</h2>
+            <p className="mb-4 text-xs text-gray-500">
+              Un rapport complet par intervention — relevés, pièces, photos, signatures — dans un seul document,
+              précédé d&apos;une synthèse du curatif et des pièces remplacées. Les filtres de l&apos;écran sont repris.
+            </p>
+            {erreur && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erreur}</div>}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Du"><Input type="date" value={du} onChange={(e) => setDu(e.target.value)} /></Field>
+              <Field label="Au"><Input type="date" value={au} onChange={(e) => setAu(e.target.value)} /></Field>
+            </div>
+            <p className="mt-2 text-[11px] text-gray-400">
+              Statut retenu : {statut ? statut.toLowerCase() : 'terminée'}. Chaque rapport pèse jusqu&apos;à ~3 Mo :
+              au-delà du plafond réglé, le serveur demande de resserrer la période.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setOuvert(false)}>Annuler</Button>
+              <Button type="button" loading={enCours} onClick={editer}>Éditer le PDF</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -320,6 +320,9 @@ router.get('/maintenances', maintenanceCtrl.getMaintenances);
 router.get('/maintenances/planning', maintenanceCtrl.getPlanning);
 router.get('/maintenances/techniciens-assignables', maintenanceCtrl.getTechniciensAssignablesSite);
 router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
+// Recueil PDF : un rapport d'intervention COMPLET par ligne, sur une période
+// et un périmètre choisis, précédé d'une synthèse (curatif, incidents, pièces).
+router.get('/maintenances/export/rapports.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.exportRapportsMaintenances);
 router.post('/maintenances', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.updateMaintenance);
