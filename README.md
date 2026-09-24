@@ -33,6 +33,7 @@ Serveur Ubuntu 22.04 LTS (1 machine)
 ## 🚀 Installation rapide (serveur)
 
 ### Prérequis
+- **Dimensionnement du serveur (CPU/RAM/disque, croissance, sauvegardes) : [`infra/DIMENSIONNEMENT.md`](infra/DIMENSIONNEMENT.md)**
 - Ubuntu 22.04 LTS **ou** Debian 12 (Bookworm) — le script d'install détecte la distribution
 - Domaine DNS pointant vers le serveur
 - Accès root SSH
