@@ -106,7 +106,70 @@ docker system df -v | grep -E "minio_data|postgres_data"
 
 ---
 
-## 5. Sauvegardes : le poste qui décide de la taille du disque
+## 5. Bande passante
+
+Toutes les charges utiles ci-dessous sont **mesurées**, compression comprise :
+nginx sert en gzip (`gzip_comp_level 6`) et l'API applique `compression()`.
+
+### Entrant (vers le serveur)
+
+| Flux | Charge unitaire | Cadence | Volume mensuel |
+|---|---:|---|---:|
+| **Collecteur OSS** (1 200 eNodeB, texte brut) | **116 Ko** | chaque minute | **~5 Go** |
+| Photos terrain (6 min. par clôture, ~250 Ko l'unité) | 1,5 Mo | ~5 000-10 000 photos/mois | ~2 Go |
+| Saisies mobiles et portail (JSON) | < 5 Ko | au fil de l'eau | < 200 Mo |
+| **Total entrant** | | | **~7 Go/mois** |
+
+> **Le collecteur pèse plus lourd que toutes les photos du terrain réunies** —
+> et 94 % de ce volume est évitable. Il POSTe la récolte en texte brut, sans
+> compression : mesuré, 1 200 eNodeB font **116 Ko brut contre 6,6 Ko gzippés**
+> (facteur 17,7). L'API accepte déjà un corps gzippé — `express.text()` le
+> décompresse de lui-même, vérifié par un envoi réel : 200 des deux côtés.
+> Compresser ferait passer ce flux de **5 Go à 285 Mo par mois**.
+
+### Sortant (depuis le serveur)
+
+| Flux | Charge mesurée |
+|---|---:|
+| Première visite du portail (JS partagé + page) | 103 à 160 Ko, puis cache navigateur |
+| Liste paginée (20 lignes) | ~1,8 Ko gzip (17 Ko brut) |
+| Liste complète des sites (`?all=true`, 558 sites) | 33 Ko gzip (461 Ko brut) |
+| Statistiques, tableau de bord | < 1 Ko |
+| Export Excel / PDF | 8 à 70 Ko |
+| Consultation d'une photo | ~250 Ko |
+
+Le sortant reste **sous 1 Go/mois** pour une vingtaine d'utilisateurs : c'est la
+consultation des photos qui domine, pas les données.
+
+### Ce qu'il faut réellement
+
+| | Minimum | **Recommandé** |
+|---|---|---|
+| Débit descendant / montant | 5 Mbit/s symétrique | **10 à 20 Mbit/s symétrique** |
+| Adresse IP | fixe (obligatoire) | fixe |
+
+Le volume n'est pas le sujet — 7 Go par mois passeraient sur n'importe quelle
+liaison. Ce qui compte :
+
+- **la simultanéité du soir** : quand les techniciens synchronisent en fin de
+  journée, vingt envois de 1,5 Mo arrivent ensemble, soit ~30 Mo d'un coup ;
+- **la stabilité** : le portail tient une connexion temps réel (socket) pour la
+  supervision ; une liaison qui coupe la fait reconnecter en boucle ;
+- **l'IP fixe** : le certificat Let's Encrypt et le domaine en dépendent ;
+- **le lien vers noeud1** : le collecteur ouvre une session SSH **chaque
+  minute** ; une liaison instable produit des récoltes tronquées, que le garde
+  anti-troncature rejette (donc des minutes sans supervision).
+
+### Côté terrain (données mobiles des techniciens)
+
+Une clôture de maintenance envoie ~1,5 Mo. Un technicien qui clôture 30
+interventions par mois consomme **~45 Mo** — négligeable. En revanche, la
+**distribution d'un APK pèse 30 Mo par téléphone** : pour 50 techniciens,
+1,5 Go, à faire de préférence en Wi-Fi.
+
+---
+
+## 6. Sauvegardes : le poste qui décide de la taille du disque
 
 `infra/scripts/backup.sh` fait deux choses par passage : un `pg_dump`
 compressé, et une **archive complète du volume MinIO** (`tar czf` de tout, pas
@@ -143,7 +206,7 @@ sauvegardes en même temps.
 
 ---
 
-## 6. Pièges constatés en production
+## 7. Pièges constatés en production
 
 **Cache de construction Docker — 260 Go.** `make update` reconstruit les images
 à chaque déploiement ; le cache BuildKit s'accumule sans jamais être purgé. Il
@@ -171,7 +234,7 @@ qui lit `RestartCount` / `OOMKilled`.
 
 ---
 
-## 7. Quand faut-il grossir
+## 8. Quand faut-il grossir
 
 | Signal | Seuil | Action |
 |---|---|---|
