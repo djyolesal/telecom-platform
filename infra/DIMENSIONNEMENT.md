@@ -185,8 +185,16 @@ vnstat -d    # par jour
 vnstat -h    # par heure : c'est là qu'apparaît le pic de synchronisation du soir
 ```
 
-**Dans Grafana, historisé sur 30 jours** — depuis la correction de
-`node-exporter` (voir §7), ces requêtes répondent enfin :
+**Dans Grafana, historisé sur 30 jours** — https://emops.uk/grafana/ →
+dossier **Télécom** → **Infrastructure — Santé serveur**. Deux panneaux
+provisionnés en bas du tableau de bord : « Bande passante (bit/s) » pour le
+débit, « Volume échangé sur la période » pour le cumul (passez la fenêtre en
+haut à droite sur 30 jours pour lire la consommation du mois).
+
+> L'historique ne se reconstitue PAS : les courbes commencent à la date où
+> `node-exporter` est corrigé (§7), pas avant.
+
+Les mêmes chiffres en requête directe :
 
 ```promql
 rate(node_network_receive_bytes_total{device!="lo"}[5m]) * 8    # entrant, bit/s
