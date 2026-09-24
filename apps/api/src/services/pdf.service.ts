@@ -6,9 +6,14 @@ const BRAND = '#1B3F6B';
 const GRIS_PDF = '#6B7280';
 const ACCENT = '#0E7C6B';
 
-function render(build: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
+function render(
+  build: (doc: PDFKit.PDFDocument) => void,
+  options: { bufferPages?: boolean } = {},
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    // `bufferPages` garde les pages en mémoire : indispensable pour écrire
+    // « page 3 / 47 », qu'on ne connaît qu'une fois le document fini.
+    const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: options.bufferPages ?? false });
     const chunks: Buffer[] = [];
     doc.on('data', (c) => chunks.push(c as Buffer));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -308,6 +313,15 @@ export interface RecueilSynthese {
   nb: number;
   preventives: number;
   curatives: number;
+  /** Sites distincts couverts par le recueil. */
+  sites: number;
+  /** Heures travaillées cumulées (durées d'intervention). */
+  heures: number;
+  /** Qui a édité le document, et pour quel client. */
+  editePar: string;
+  client: string;
+  /** Référence du document, reportée en pied de CHAQUE page. */
+  reference: string;
   /** Incidents rattachés aux interventions du recueil. */
   incidents: Array<{ reference: string; site: string; statut: string; clos: boolean; date: string; action: string }>;
   /** Pièces remplacées, agrégées sur tout le recueil. */
@@ -350,25 +364,29 @@ export async function generateMaintenancesRecueilPdf(
     //    périmètre, la place reste VIDE : afficher l'un des logos laisserait
     //    croire que le recueil ne couvre que celui-là.
     const w = doc.page.width;
-    drawLogo(doc, 60, 28, 54, BRAND);
-    doc.font('Helvetica-Bold').fontSize(15).fillColor(BRAND).text('E&M ', 124, 40, { continued: true });
-    doc.fillColor(ACCENT).text('OpS');
-    doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF).text('Exploitation & maintenance', 124, 60);
+    // EXÉCUTANT à gauche, DONNEUR D'ORDRE à droite : c'est la disposition de la
+    // fiche de validation mensuelle, que les mêmes lecteurs signent déjà. En
+    // changer sur ce document-ci les obligerait à réapprendre où regarder.
+    const hautBloc = 30;
     if (garde.prestataire?.logo) {
-      doc.moveTo(w / 2, 30).lineTo(w / 2, 92).lineWidth(0.8).stroke('#D8DEE6');
       try {
-        doc.image(garde.prestataire.logo, w / 2 + 40, 34, { fit: [150, 54], align: 'center', valign: 'center' });
+        doc.image(garde.prestataire.logo, 60, hautBloc, { fit: [170, 58] });
       } catch {
-        // Logo illisible (format exotique, fichier tronqué) : le nom suffit,
-        // le document ne doit pas échouer pour une image.
-        doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND).text(garde.prestataire.nom, w / 2 + 40, 54, { width: 150 });
+        doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND).text(garde.prestataire.nom, 60, hautBloc + 18, { width: 200 });
       }
     } else if (garde.prestataire?.nom) {
-      doc.moveTo(w / 2, 30).lineTo(w / 2, 92).lineWidth(0.8).stroke('#D8DEE6');
-      doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND).text(garde.prestataire.nom, w / 2 + 40, 52, { width: 180 });
+      doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND).text(garde.prestataire.nom, 60, hautBloc + 18, { width: 200 });
     }
-    doc.rect(0, 116, w, 4).fill(BRAND);
-    doc.rect(0, 120, w, 2).fill('#FFB020');
+    doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
+      .text(garde.prestataire ? 'Prestataire' : 'Plusieurs prestataires', 60, hautBloc + 64, { width: 200 });
+
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND)
+      .text(garde.client, w - 260, hautBloc + 18, { width: 200, align: 'right' });
+    doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
+      .text('Client', w - 260, hautBloc + 64, { width: 200, align: 'right' });
+
+    doc.rect(0, 112, w, 4).fill(BRAND);
+    doc.rect(0, 116, w, 2).fill('#FFB020');
 
     let y = 150;
     doc.font('Helvetica-Bold').fontSize(19).fillColor('#111').text(garde.titre, 60, y, { width: w - 120, align: 'center' });
@@ -378,20 +396,21 @@ export async function generateMaintenancesRecueilPdf(
     doc.fontSize(10).fillColor(BRAND).text(garde.perimetre, 60, y, { width: w - 120, align: 'center' });
     y += 36;
 
-    const largeurCase = (w - 160) / 3;
     const ouverts = garde.incidents.filter((i) => !i.clos).length;
     const totalPieces = garde.pieces.reduce((t, p) => t + p.quantite, 0);
-    cartouche(doc, 60, y, largeurCase, 56, `${garde.nb}`, `interventions (${garde.preventives} prév. · ${garde.curatives} cur.)`);
-    cartouche(doc, 60 + largeurCase + 20, y, largeurCase, 56, `${ouverts}`, 'incident(s) encore ouvert(s)', ouverts ? '#C0392B' : ACCENT);
-    cartouche(doc, 60 + 2 * (largeurCase + 20), y, largeurCase, 56, `${totalPieces}`, 'pièce(s) remplacée(s)', ACCENT);
-    y += 76;
-    doc.font('Helvetica').fontSize(8.5).fillColor(GRIS_PDF).text(
-      `Document contractuel — édité le ${fmtDate(new Date())}. Chaque intervention est reprise dans les pages suivantes `
-      + 'au format du rapport unitaire.',
+    const largeurCase = (w - 170) / 4;
+    const pose = (i: number) => 60 + i * (largeurCase + 17);
+    cartouche(doc, pose(0), y, largeurCase, 58, `${garde.nb}`, `interventions · ${garde.preventives} prév. / ${garde.curatives} cur.`);
+    cartouche(doc, pose(1), y, largeurCase, 58, `${garde.sites}`, 'site(s) couvert(s)');
+    cartouche(doc, pose(2), y, largeurCase, 58, `${ouverts}`, 'incident(s) encore ouvert(s)', ouverts ? '#C0392B' : ACCENT);
+    cartouche(doc, pose(3), y, largeurCase, 58, `${totalPieces}`, 'pièce(s) remplacée(s)', ACCENT);
+    y += 70;
+    doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF).text(
+      `${garde.heures} h travaillées cumulées · édité par ${garde.editePar} le ${fmtDate(new Date())}`,
       60, y, { width: w - 120, align: 'center' },
     );
     doc.fillColor('black');
-    doc.y = y + 30;
+    doc.y = y + 24;
 
     // ── Activité curative : ce que le lecteur cherche d'abord, et qu'aucune
     //    page individuelle ne donne — l'état des incidents à la date d'édition.
@@ -430,11 +449,41 @@ export async function generateMaintenancesRecueilPdf(
     );
     doc.fillColor('black');
 
+    // ── VISA. Un recueil « contractuel » qui ne se signe pas ne vaut pas mieux
+    //    qu'un listing : deux cadres, exactement comme la fiche de validation
+    //    mensuelle que ces mêmes lecteurs signent déjà.
+    if (doc.y > doc.page.height - 160) doc.addPage();
+    const yVisa = Math.max(doc.y + 10, doc.page.height - 150);
+    const largeurVisa = (doc.page.width - 140) / 2;
+    [[garde.prestataire?.nom ?? 'le prestataire', 60],
+     [garde.client, 80 + largeurVisa]].forEach(([nom, x]) => {
+      doc.roundedRect(x as number, yVisa, largeurVisa, 92, 5).lineWidth(0.7).stroke('#D8DEE6');
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND)
+        .text(`Pour ${nom}`, (x as number) + 10, yVisa + 10, { width: largeurVisa - 20 });
+      doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF)
+        .text('Nom :', (x as number) + 10, yVisa + 30)
+        .text('Date :', (x as number) + 10, yVisa + 46)
+        .text('Signature et cachet :', (x as number) + 10, yVisa + 62);
+      doc.fillColor('black');
+    });
+
     liste.forEach((m) => {
       doc.addPage();
       dessinerRapportMaintenance(doc, m);
     });
-  });
+
+    // ── RÉFÉRENCE ET PAGINATION sur CHAQUE page. Un dossier remis se feuillette,
+    //    se photocopie, se scanne : sans numérotation, personne ne peut dire
+    //    qu'il est complet, ni citer une page en réunion.
+    const total = doc.bufferedPageRange().count;
+    for (let i = 0; i < total; i++) {
+      doc.switchToPage(i);
+      doc.font('Helvetica').fontSize(7.5).fillColor('#9AA5B1');
+      doc.text(`${garde.reference} · émis par E&M OpS`, 50, doc.page.height - 32, { width: 250 });
+      doc.text(`page ${i + 1} / ${total}`, doc.page.width - 150, doc.page.height - 32, { width: 100, align: 'right' });
+      doc.fillColor('black');
+    }
+  }, { bufferPages: true });
 }
 
 export interface MonthlyReportData {

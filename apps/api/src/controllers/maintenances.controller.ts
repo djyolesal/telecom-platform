@@ -1619,7 +1619,7 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       where,
       orderBy: [{ [champDate]: 'asc' }],
       select: {
-        id: true, type: true, prestataireId: true,
+        id: true, type: true, prestataireId: true, siteId: true, dureeMinutes: true,
         prestataire: { select: { nom: true, logoPath: true } },
         site: { select: { nom: true } },
         pieces: { select: { nom: true, reference: true, quantite: true } },
@@ -1712,12 +1712,22 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       restreint ? 'périmètre du compte' : null,
     ].filter(Boolean).join(' · ') || 'tout le parc';
 
+    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
+    const minutes = lignes.reduce((t, l) => t + (l.dureeMinutes ?? 0), 0);
     const synthese: RecueilSynthese = {
       periode: libellePeriode,
       perimetre: perimetreLibelle,
       nb: donnees.length,
       preventives: lignes.filter((l) => l.type === 'PREVENTIVE').length,
       curatives: lignes.filter((l) => l.type !== 'PREVENTIVE').length,
+      sites: new Set(lignes.map((l) => l.siteId)).size,
+      heures: Math.round(minutes / 60),
+      editePar: moi ? `${moi.prenom} ${moi.nom}`.trim() : 'E&M OpS',
+      // Le client est celui de la fiche de validation contractuelle : même
+      // source (CLIENT_NOM), pour que les deux documents se répondent.
+      client: process.env.CLIENT_NOM || 'Moov Africa Togo',
+      // Référence d'émission : un dossier remis doit pouvoir être cité.
+      reference: `REC-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString(36).slice(-4).toUpperCase()}`,
       incidents,
       pieces,
     };
