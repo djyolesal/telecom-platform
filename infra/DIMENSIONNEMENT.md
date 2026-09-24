@@ -115,17 +115,18 @@ nginx sert en gzip (`gzip_comp_level 6`) et l'API applique `compression()`.
 
 | Flux | Charge unitaire | Cadence | Volume mensuel |
 |---|---:|---|---:|
-| **Collecteur OSS** (1 200 eNodeB, texte brut) | **116 Ko** | chaque minute | **~5 Go** |
+| **Collecteur OSS** (1 200 eNodeB, gzippé) | **6,6 Ko** | chaque minute | **~285 Mo** |
 | Photos terrain (6 min. par clôture, ~250 Ko l'unité) | 1,5 Mo | ~5 000-10 000 photos/mois | ~2 Go |
 | Saisies mobiles et portail (JSON) | < 5 Ko | au fil de l'eau | < 200 Mo |
-| **Total entrant** | | | **~7 Go/mois** |
+| **Total entrant** | | | **~2,5 Go/mois** |
 
-> **Le collecteur pèse plus lourd que toutes les photos du terrain réunies** —
-> et 94 % de ce volume est évitable. Il POSTe la récolte en texte brut, sans
-> compression : mesuré, 1 200 eNodeB font **116 Ko brut contre 6,6 Ko gzippés**
-> (facteur 17,7). L'API accepte déjà un corps gzippé — `express.text()` le
-> décompresse de lui-même, vérifié par un envoi réel : 200 des deux côtés.
-> Compresser ferait passer ce flux de **5 Go à 285 Mo par mois**.
+> Le collecteur a longtemps pesé **plus lourd que toutes les photos du terrain
+> réunies** : il postait la récolte en texte brut, soit 116 Ko chaque minute —
+> 5 Go par mois. Il compresse désormais (facteur 17,7 mesuré sur 1 200 eNodeB),
+> ce qui ramène ce flux à **285 Mo par mois**. Le serveur décompresse de
+> lui-même (`express.text()`), et le collecteur retombe silencieusement sur le
+> texte brut si `gzip` manque : mieux vaut un envoi lourd qu'une supervision
+> aveugle.
 
 ### Sortant (depuis le serveur)
 

@@ -157,7 +157,7 @@ recolter() {
 # une récolte TRONQUÉE si la session mourait en cours de route (des sites ne
 # figuraient alors ni connectés ni déconnectés, et leurs coupures ne pouvaient
 # plus se clôturer). On ne POSTe qu'une récolte complète et plausible.
-RECOLTE=$(mktemp); trap 'rm -f "$RECOLTE"' EXIT
+RECOLTE=$(mktemp); trap 'rm -f "$RECOLTE" "$RECOLTE.gz"' EXIT
 # `if ! recolter` écraserait le code retour (le « ! » réussit toujours) : on le
 # capture explicitement pour distinguer un figeage d'un échec de connexion.
 rc=0
@@ -188,8 +188,26 @@ if [ "$precedent" -gt 0 ] && [ "$seuil" -gt 0 ] && [ $(( lignes * 100 / preceden
 fi
 echo "$lignes" > "$ETAT"
 
+# ENVOI COMPRESSÉ. La récolte est du texte très redondant : mesuré sur 1 200
+# eNodeB, 116 Ko bruts contre 6,6 Ko gzippés — facteur ~18. À un passage par
+# minute, cela fait la différence entre 5 Go et 285 Mo par mois, sur une
+# liaison qui sert aussi aux photos du terrain. Le serveur décompresse de
+# lui-même : `express.text()` gonfle les corps gzippés par défaut.
+#
+# Repli silencieux sur le texte brut si `gzip` manque ou échoue : mieux vaut un
+# envoi lourd qu'une supervision aveugle. Le serveur accepte les deux formes.
+CORPS="$RECOLTE"
+ENCODAGE=()
+if command -v gzip >/dev/null 2>&1 \
+   && gzip -c "$RECOLTE" > "$RECOLTE.gz" 2>/dev/null \
+   && [ -s "$RECOLTE.gz" ]; then
+  CORPS="$RECOLTE.gz"
+  ENCODAGE=(-H "Content-Encoding: gzip")
+fi
+
 curl -sS --max-time 60 -X POST "$EMOPS_URL" \
   -H "Authorization: Bearer $EMOPS_TOKEN" \
   -H "Content-Type: text/plain" \
-  --data-binary @"$RECOLTE" ${LOCK:+9>&-}
+  ${ENCODAGE[@]+"${ENCODAGE[@]}"} \
+  --data-binary @"$CORPS" ${LOCK:+9>&-}
 echo  # saut de ligne dans le log
