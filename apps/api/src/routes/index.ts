@@ -155,6 +155,11 @@ router.use((req, _res, next) => {
 const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/fiche-validation$/,
   /^\/rapports\/fiches-validation\/batch$/,
+  // Rapport mensuel d'activité : il porte le JUGEMENT du client sur le
+  // prestataire — fiche de validation à signer, tâches dues non réalisées. Un
+  // compte prestataire, même superviseur, ne peut pas éditer lui-même la pièce
+  // qui l'évalue. Il reçoit le document signé par ses donneurs d'ordre.
+  /^\/maintenances\/export\/rapports\.pdf$/,
   /^\/rapports\/reapprovisionnement$/,
   /^\/rapports\/anomalies-conso$/,
   /^\/rapports\/anomalies-carburant$/,

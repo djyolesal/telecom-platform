@@ -65,6 +65,15 @@ function MaintenancePageInner() {
     queryKey: ['prestataires-select'],
     queryFn: () => api.get('/prestataires', { params: { is_active: true, limit: 200 } }).then((r) => r.data.data),
   });
+  // Compte prestataire (même requête et même cache que le layout) : le rapport
+  // mensuel d'activité porte le jugement du client sur le prestataire — il ne
+  // s'édite pas depuis un compte prestataire, et le serveur le refuse.
+  const { data: maSociete, isLoading: societeInconnue } = useQuery({
+    queryKey: ['ma-societe'],
+    queryFn: () => api.get('/ma-societe').then((r) => r.data.data as { nom: string } | null),
+    staleTime: 10 * 60_000,
+  });
+  const equipeInterne = !societeInconnue && !maSociete;
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
   const { data, isLoading, isError } = useQuery({
@@ -117,7 +126,7 @@ function MaintenancePageInner() {
         actions={
           <>
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
-            {roleExport !== 'TECHNICIEN' && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} />}
+            {roleExport !== 'TECHNICIEN' && equipeInterne && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} />}
             {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"/>}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
