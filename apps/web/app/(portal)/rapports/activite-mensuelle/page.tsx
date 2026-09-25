@@ -8,7 +8,7 @@ import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
-import { STATUTS_MAINTENANCE, TYPES_MAINTENANCE } from '@/lib/constants';
+import { TYPES_MAINTENANCE } from '@/lib/constants';
 
 /**
  * Rapport mensuel d'activité : couverture co-signée, tâches dues non réalisées,
@@ -32,7 +32,6 @@ export default function RapportActiviteMensuelPage() {
   const [prestataireId, setPrestataireId] = useState('');
   const [lotId, setLotId] = useState('');
   const [type, setType] = useState('');
-  const [statut, setStatut] = useState('TERMINEE');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -60,7 +59,7 @@ export default function RapportActiviteMensuelPage() {
   const editer = async () => {
     if (!prestataireId || !lotId) { setError('Sélectionnez un prestataire et un lot : le rapport s’édite pour un lot d’un prestataire.'); return; }
     setError(''); setBusy(true);
-    const q = new URLSearchParams({ mois: `${annee}-${mois}`, statut });
+    const q = new URLSearchParams({ mois: `${annee}-${mois}` });
     if (type) q.set('type', type);
     if (lotId) q.set('lot_id', lotId);
     if (prestataireId) q.set('prestataire_id', prestataireId);
@@ -92,9 +91,6 @@ export default function RapportActiviteMensuelPage() {
           <Field label="Année">
             <Input type="number" min={2024} max={2100} value={annee} onChange={(e) => setAnnee(e.target.value)} />
           </Field>
-          <Field label="Statut">
-            <Select value={statut} onChange={(e) => setStatut(e.target.value)} options={STATUTS_MAINTENANCE} placeholder="Tous statuts" />
-          </Field>
           <Field label="Prestataire" required>
             <Select value={prestataireId} onChange={(e) => { setPrestataireId(e.target.value); setLotId(''); }}
               options={prestataireOptions} placeholder="Sélectionner un prestataire…" />
@@ -109,7 +105,8 @@ export default function RapportActiviteMensuelPage() {
         </div>
         <p className="mt-4 text-xs text-gray-500">
           Un rapport pour <b>un prestataire et un lot</b> à la fois : c’est le découpage contractuel, celui que le
-          prestataire signe et qu’on facture. Éditez les lots les uns après les autres. La <b>fiche de
+          prestataire signe et qu’on facture. Éditez les lots les uns après les autres. Seules les interventions
+          <b> terminées</b> y figurent - ce qui n’a pas été fait est en couverture, dans les tâches dues non réalisées. La <b>fiche de
           validation</b> du mois s’exporte à part (Rapports → Fiche de validation), en Excel ou en PDF.
           Chaque intervention embarque un échantillon de photos ; au-delà du plafond réglé, le serveur demande de resserrer le périmètre.
         </p>

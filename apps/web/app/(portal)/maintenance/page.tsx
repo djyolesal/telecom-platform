@@ -126,7 +126,7 @@ function MaintenancePageInner() {
         actions={
           <>
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
-            {roleExport === 'ADMIN' && equipeInterne && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} prestataireOptions={prestataireOptions} />}
+            {roleExport === 'ADMIN' && equipeInterne && <RecueilPdfBouton type={type} prestataireId={prestataireId} prestataireOptions={prestataireOptions} />}
             {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"/>}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
@@ -172,8 +172,8 @@ function MaintenancePageInner() {
  * contractuel du document, et l'écran des maintenances ne filtre pas dessus.
  */
 function RecueilPdfBouton(
-  { type, statut, prestataireId, prestataireOptions }:
-  { type: string; statut: string; prestataireId: string; prestataireOptions: { value: string; label: string }[] },
+  { type, prestataireId, prestataireOptions }:
+  { type: string; prestataireId: string; prestataireOptions: { value: string; label: string }[] },
 ) {
   const [ouvert, setOuvert] = useState(false);
   // MENSUEL : le dû contractuel se compte par mois, c'est lui qui rend les
@@ -203,7 +203,7 @@ function RecueilPdfBouton(
   const editer = async () => {
     if (!presta || !lotId) { setErreur('Sélectionnez un prestataire et un lot : le rapport s’édite pour un lot d’un prestataire.'); return; }
     setErreur(''); setEnCours(true);
-    const q = new URLSearchParams({ mois, statut: statut || 'TERMINEE', lot_id: lotId, prestataire_id: presta });
+    const q = new URLSearchParams({ mois, lot_id: lotId, prestataire_id: presta });
     if (type) q.set('type', type);
     try {
       await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${mois}.pdf`);
@@ -231,7 +231,7 @@ function RecueilPdfBouton(
             <p className="mb-4 text-xs text-gray-500">
               Tâches dues non réalisées, puis chaque intervention au format du rapport unitaire. Un rapport pour
               <b> un prestataire et un lot</b> : c&apos;est le découpage contractuel, celui que le prestataire signe.
-              Les filtres type et statut de l&apos;écran sont repris.
+              Le filtre « type » de l&apos;écran est repris ; seules les interventions terminées y figurent.
             </p>
             {erreur && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erreur}</div>}
             <Field label="Prestataire" required>
@@ -244,8 +244,7 @@ function RecueilPdfBouton(
             </Field>
             <Field label="Mois"><Input type="month" value={mois} onChange={(e) => setMois(e.target.value)} /></Field>
             <p className="mt-2 text-[11px] text-gray-400">
-              Statut retenu : {statut ? statut.toLowerCase() : 'terminée'}. Le logo du prestataire n&apos;apparaît
-              que si le rapport ne couvre qu&apos;un prestataire.
+              Le logo du prestataire n&apos;apparaît que si le rapport ne couvre qu&apos;un prestataire.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setOuvert(false)}>Annuler</Button>

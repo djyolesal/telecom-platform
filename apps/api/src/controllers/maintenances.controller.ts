@@ -1217,7 +1217,12 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
         const verrou = await tx.maintenance.updateMany({
           where: { id: req.params.id, statut: 'EN_COURS' },
           data: {
-            statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath,
+            // TERMINÉES, sans choix possible : le document rend compte de ce qui a
+      // été FAIT et se signe. Une intervention planifiée ou en cours n'a ni
+      // relevés, ni photos, ni signature - elle gonflerait le rapport de pages
+      // vides et ferait signer un travail qui n'a pas eu lieu. Ce qui n'a pas
+      // été fait est déjà en couverture, dans les tâches dues non réalisées.
+      statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath,
             ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}),
             ...(nomAgentSecurite ? { nomAgentSecurite: String(nomAgentSecurite).slice(0, 100) } : {}),
             ...(signatureAgentSecuritePath ? { signatureAgentSecuritePath: String(signatureAgentSecuritePath) } : {}),
@@ -1566,11 +1571,11 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
 }
 
 /**
- * RECUEIL de rapports d'intervention sur une période — un document unique où
- * CHAQUE intervention est rendue exactement comme son rapport unitaire.
+ * RAPPORT MENSUEL D'ACTIVITÉ d'un prestataire sur un lot — un document unique
+ * où CHAQUE intervention terminée est rendue exactement comme son rapport
+ * unitaire, sous une couverture co-signée.
  *
- * Bornes de date : `dateFin` pour les interventions terminées (c'est la date
- * qui fait foi dans un rapport de période), `datePlanifiee` sinon.
+ * Bornes de date : `dateFin`, la date qui fait foi dans un rapport de période.
  *
  * PLAFOND. Chaque rapport embarque jusqu'à 12 photos, soit ~3 Mo : deux cents
  * interventions feraient un document de 600 Mo, intransmissible. Au-delà du
@@ -1579,8 +1584,7 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
  */
 export async function exportRapportsMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
-    const { mois, du, au, statut, type, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
-    const statutCible = statut || 'TERMINEE';
+    const { mois, du, au, type, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
     // UN PRESTATAIRE, UN LOT, À LA FOIS. Le couple prestataire × lot est le
     // découpage CONTRACTUEL : c'est lui qu'on signe, qu'on facture et qu'on
     // conteste. Un rapport à cheval sur plusieurs lots ou plusieurs
@@ -1589,7 +1593,6 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
     if (!prestataire_id || !lot_id) {
       throw new AppError("Sélectionnez un prestataire et un lot : le rapport s'édite pour un lot d'un prestataire.", 422);
     }
-    const champDate = statutCible === 'TERMINEE' ? 'dateFin' : 'datePlanifiee';
 
     // MOIS CALENDAIRE par défaut. Le dû contractuel se compte par mois (une
     // tâche mensuelle est due une fois dans le mois, une trimestrielle une fois
@@ -1617,11 +1620,11 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
     const restreint = isRestreint(perimetre);
     const filtreSite = { lotId: lot_id, ...(restreint ? perimetre : {}) };
     const where: Record<string, unknown> = {
-      ...(statutCible !== 'TOUS' ? { statut: statutCible } : {}),
+      statut: 'TERMINEE',
       ...(type ? { type } : {}),
       ...(prestataire_id ? { prestataireId: prestataire_id } : {}),
       ...(site_id ? { siteId: site_id } : {}),
-      ...(Object.keys(bornes).length ? { [champDate]: bornes } : {}),
+      ...(Object.keys(bornes).length ? { dateFin: bornes } : {}),
       ...(Object.keys(filtreSite).length ? { site: filtreSite } : {}),
       ...(restreint ? { AND: [await contratMaintenancePerimetre(req.user!.id)] } : {}),
     };
@@ -1643,7 +1646,7 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
 
     const lignes = await prisma.maintenance.findMany({
       where,
-      orderBy: [{ [champDate]: 'asc' }],
+      orderBy: [{ dateFin: 'asc' }],
       select: {
         id: true, type: true, prestataireId: true, siteId: true, dureeMinutes: true,
         prestataire: { select: { nom: true, logoPath: true } },
@@ -1812,7 +1815,7 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       ...synthese,
     });
     await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
-      { rapport: 'rapport_activite_mensuel', nb: donnees.length, du, au, statut: statutCible, lot_id, prestataire_id,
+      { rapport: 'rapport_activite_mensuel', nb: donnees.length, du, au, lot_id, prestataire_id,
         prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
         mois: moisCible, sitesEnDefaut: manquantes.length,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
