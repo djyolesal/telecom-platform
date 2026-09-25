@@ -103,14 +103,7 @@ export default function RapportActiviteMensuelPage() {
             <Select value={type} onChange={(e) => setType(e.target.value)} options={TYPES_MAINTENANCE} placeholder="Tous types" />
           </Field>
         </div>
-        <p className="mt-4 text-xs text-gray-500">
-          Un rapport pour <b>un prestataire et un lot</b> à la fois : c’est le découpage contractuel, celui que le
-          prestataire signe et qu’on facture. Éditez les lots les uns après les autres. Seules les interventions
-          <b> terminées</b> y figurent - ce qui n’a pas été fait est en couverture, dans les tâches dues non réalisées. La <b>fiche de
-          validation</b> du mois s’exporte à part (Rapports → Fiche de validation), en Excel ou en PDF.
-          Chaque intervention embarque un échantillon de photos ; au-delà du plafond réglé, le serveur demande de resserrer le périmètre.
-        </p>
-        <div className="mt-4">
+        <div className="mt-5">
           <Button icon={FileText} loading={busy} disabled={!prestataireId || !lotId} onClick={editer}>Éditer le rapport PDF</Button>
         </div>
       </FormCard>
