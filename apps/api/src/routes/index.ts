@@ -157,8 +157,10 @@ const INTERNE_ONLY: RegExp[] = [
   /^\/rapports\/fiches-validation\/batch$/,
   // Rapport mensuel d'activité : il porte le JUGEMENT du client sur le
   // prestataire — fiche de validation à signer, tâches dues non réalisées. Un
-  // compte prestataire, même superviseur, ne peut pas éditer lui-même la pièce
-  // qui l'évalue. Il reçoit le document signé par ses donneurs d'ordre.
+  // compte prestataire ne peut pas éditer lui-même la pièce qui l'évalue : il
+  // reçoit le document signé par ses donneurs d'ordre. La route est par
+  // ailleurs réservée à ADMIN ; cette ligne reste le filet qui tiendra si ce
+  // rbac s'élargit un jour.
   /^\/maintenances\/export\/rapports\.pdf$/,
   /^\/rapports\/reapprovisionnement$/,
   /^\/rapports\/anomalies-conso$/,
@@ -327,7 +329,7 @@ router.get('/maintenances/techniciens-assignables', maintenanceCtrl.getTechnicie
 router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.exportMaintenances);
 // Recueil PDF : un rapport d'intervention COMPLET par ligne, sur une période
 // et un périmètre choisis, précédé d'une synthèse (curatif, incidents, pièces).
-router.get('/maintenances/export/rapports.pdf', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.exportRapportsMaintenances);
+router.get('/maintenances/export/rapports.pdf', rbac(['ADMIN']), maintenanceCtrl.exportRapportsMaintenances);
 router.post('/maintenances', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.updateMaintenance);

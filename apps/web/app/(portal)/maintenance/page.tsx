@@ -126,7 +126,7 @@ function MaintenancePageInner() {
         actions={
           <>
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
-            {roleExport !== 'TECHNICIEN' && equipeInterne && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} />}
+            {roleExport === 'ADMIN' && equipeInterne && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} />}
             {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"/>}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
