@@ -304,8 +304,12 @@ export async function generateMaintenancePdf(m: MaintenancePdfData): Promise<Buf
 }
 
 /**
- * RAPPORT MENSUEL D'ACTIVITÉ : couverture co-signée, fiche de validation du
- * mois, tâches dues non réalisées, puis un rapport complet par intervention.
+ * RAPPORT MENSUEL D'ACTIVITÉ : couverture co-signée, tâches dues non
+ * réalisées, puis un rapport complet par intervention.
+ *
+ * La fiche de validation N'Y FIGURE PLUS : elle s'exporte à part (Excel ou
+ * PDF), et la reproduire ici créait un second exemplaire d'un document signé —
+ * deux pièces au même titre, sans savoir laquelle fait foi.
  *
  * Le document est MENSUEL par construction : le dû contractuel se compte par
  * mois, et c'est ce qui rend la fiche et les manquantes signables.
@@ -364,13 +368,7 @@ function ligneTableau(
   doc.y = y + hauteur;
 }
 
-/**
- * Tableau des lignes contractuelles de la fiche de validation.
- *
- * Partagé par la fiche autonome (PDF) et la page 2 du rapport mensuel
- * d'activité : les deux documents circulent ensemble, ils ne peuvent pas
- * s'afficher différemment.
- */
+/** Tableau des lignes contractuelles de la fiche de validation. */
 function tableauFiche(doc: PDFKit.PDFDocument, lignes: LigneFiche[]) {
   const L = [26, 252, 76, 66, 76];
   ligneTableau(doc, ['N°', 'Description', 'Sites concernés', 'Réalisés', 'Fréq./6 mois'], L, true);
@@ -458,11 +456,6 @@ export async function generateMaintenancesRecueilPdf(
     prestataire?: { nom: string; logo?: Buffer | null };
     /** Logo du client, quand il est configuré (Administration → Paramètres). */
     clientLogo?: Buffer | null;
-    /** Fiche de validation du mois, quand elle a un sens (1 prestataire, mois entier). */
-    fiche?: {
-      prestataire: string; zone: string; nbSites: number;
-      lignes: LigneFiche[];
-    };
   } & RecueilSynthese,
 ): Promise<Buffer> {
   return render((doc) => {
@@ -608,29 +601,6 @@ export async function generateMaintenancesRecueilPdf(
     if (doc.y + hVisa + 20 > doc.page.height - 60) doc.addPage();
     const yVisa = Math.max(doc.y + 10, doc.page.height - 58 - hVisa);
     cadresVisa(doc, yVisa, 60, 80 + largeurVisa, largeurVisa, nomVisa, garde.client);
-
-    // ── FICHE DE VALIDATION en page 2, quand le recueil couvre UN prestataire
-    //    sur un mois entier. Mêmes lignes contractuelles et mêmes chiffres que
-    //    la fiche xlsx (calcul partagé) : ce document-ci ne peut pas la
-    //    contredire.
-    if (garde.fiche) {
-      doc.addPage();
-      const w2 = doc.page.width;
-      doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND)
-        .text('Fiche de validation — maintenance préventive', 50, 50, { width: w2 - 100, align: 'center' });
-      doc.font('Helvetica').fontSize(9).fillColor(GRIS_PDF)
-        .text(`${garde.fiche.prestataire} · ${garde.fiche.zone} · ${garde.periode} · ${garde.fiche.nbSites} site(s)`,
-          50, 70, { width: w2 - 100, align: 'center' });
-      doc.fillColor('black');
-      doc.y = 96;
-      tableauFiche(doc, garde.fiche.lignes);
-      doc.moveDown(0.6);
-      doc.fontSize(8).fillColor(GRIS_PDF).text(
-        'Chiffres identiques à la fiche de validation mensuelle (Excel ou PDF) : même calcul, même périmètre contractuel. '
-        + 'Un repère rouge signale une ligne où tous les sites concernés n’ont pas été traités.',
-        50, doc.y, { width: w2 - 100, align: 'justify' });
-      doc.fillColor('black');
-    }
 
     liste.forEach((m) => {
       doc.addPage();

@@ -1,9 +1,7 @@
 import ExcelJS from 'exceljs';
 import { TASK_BY_KEY, SiteEligibilite } from '../utils/tachesPreventives';
 
-/** Lignes de la fiche (libellés contractuels + clé catalogue + fréquence sur 6 mois). */
-/** Lignes contractuelles de la fiche — exportées pour que le recueil PDF
- *  reprenne EXACTEMENT les mêmes, sans recopier le référentiel. */
+/** Lignes de la fiche : libellés contractuels, clé catalogue et fréquence sur 6 mois. */
 export const FICHE_ROWS: { numero: number; description: string; key: string; freq6: number }[] = [
   { numero: 1, key: 'entretien_pylone', freq6: 1, description: "Entretien pylône, serrage des systèmes boulons avec rapport sur l'état" },
   { numero: 2, key: 'controle_terre', freq6: 1, description: 'Contrôle valeur de terre et normalisation des réseaux de terre' },
@@ -37,10 +35,9 @@ export interface LigneFiche {
 }
 
 /**
- * Lignes chiffrées de la fiche. UN SEUL calcul pour les trois sorties — xlsx,
- * PDF, et la page 2 du rapport mensuel d'activité. La fiche est un document
- * signé : deux calculs parallèles finiraient par se contredire, et personne ne
- * saurait lequel fait foi.
+ * Lignes chiffrées de la fiche. UN SEUL calcul pour les deux sorties, Excel et
+ * PDF : la fiche est un document signé, deux calculs parallèles finiraient par
+ * se contredire sans que personne sache lequel fait foi.
  */
 export function lignesFiche(d: {
   sites: SiteEligibilite[];

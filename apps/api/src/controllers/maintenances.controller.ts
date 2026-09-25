@@ -1585,9 +1585,9 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
 
     // MOIS CALENDAIRE par défaut. Le dû contractuel se compte par mois (une
     // tâche mensuelle est due une fois dans le mois, une trimestrielle une fois
-    // par trimestre) : sur « du 12 au 27 », les manquantes et la fiche de
-    // validation n'auraient aucun sens. Deux dates restent acceptées pour une
-    // extraction libre, mais elles DÉSACTIVENT ces deux blocs.
+    // par trimestre) : sur « du 12 au 27 », les tâches manquantes n'auraient
+    // aucun sens. Deux dates restent acceptées pour une extraction libre, mais
+    // elles DÉSACTIVENT ce bloc.
     const m = /^(\d{4})-(\d{2})$/.exec(mois ?? '');
     if (mois && !m) throw new AppError('Mois invalide (format AAAA-MM).', 422);
     const moisCible = m ? `${m[1]}-${m[2]}` : null;
@@ -1792,45 +1792,18 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       manquantes,
       moisComplet: !!moisCible,
     };
-    // ── FICHE DE VALIDATION : seulement sur un MOIS entier et UN prestataire.
-    //    Hors de ces conditions, ses chiffres ne voudraient rien dire — et
-    //    c'est une page destinée à être signée.
-    let fiche: Parameters<typeof generateMaintenancesRecueilPdf>[1]['fiche'];
-    const idPrestataireFiche = prestataire_id || [...idsPrestataires][0];
-    if (moisCible && idsPrestataires.size === 1 && idPrestataireFiche) {
-      try {
-        const { donneesFicheValidation } = await import('./taches.controller');
-        const { lignesFiche } = await import('../services/ficheValidation.service');
-        const an = Number(moisCible.slice(0, 4));
-        const mo = Number(moisCible.slice(5));
-        const d = await donneesFicheValidation({ id: idPrestataireFiche }, lot_id || null, an, mo, 'PASSIF');
-        fiche = {
-          prestataire: prestataireGarde?.nom ?? 'Prestataire',
-          zone: d.zone,
-          nbSites: d.nbSites,
-          // Même calcul que la fiche exportée (xlsx ET PDF) : cette page-ci ne
-          // peut pas afficher d'autres chiffres que le document signé.
-          lignes: lignesFiche({ ...d, contrat: 'PASSIF' }),
-        };
-      } catch (e) {
-        // La fiche est un PLUS : son échec ne doit pas emporter le recueil.
-        logger.warn('[recueil] fiche de validation non jointe :', e);
-      }
-    }
-
     const pdf = await generateMaintenancesRecueilPdf(donnees, {
       titre: "Rapport mensuel d'activité",
       prestataire: prestataireGarde,
       // Même marque client que la fiche de validation : les deux documents
       // partent ensemble.
       clientLogo: (await logoClient()).logo?.buffer ?? null,
-      fiche,
       ...synthese,
     });
     await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
       { rapport: 'rapport_activite_mensuel', nb: donnees.length, du, au, statut: statutCible, region, lot_id, prestataire_id,
         prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
-        mois: moisCible, sitesEnDefaut: manquantes.length, fiche: !!fiche,
+        mois: moisCible, sitesEnDefaut: manquantes.length,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
         pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
     res.setHeader('Content-Type', 'application/pdf');

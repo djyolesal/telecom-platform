@@ -11,11 +11,12 @@ import { Button } from '@/components/shared/Button';
 import { regionOptions, STATUTS_MAINTENANCE, TYPES_MAINTENANCE } from '@/lib/constants';
 
 /**
- * Rapport mensuel d'activité : couverture co-signée, fiche de validation du
- * mois, tâches dues non réalisées, puis un rapport complet par intervention.
+ * Rapport mensuel d'activité : couverture co-signée, tâches dues non réalisées,
+ * puis un rapport complet par intervention.
  *
- * MENSUEL par construction : le dû contractuel se compte par mois, c'est ce
- * qui rend la fiche de validation et les manquantes signables.
+ * MENSUEL par construction : le dû contractuel se compte par mois, c'est ce qui
+ * rend les tâches manquantes opposables. La fiche de validation s'exporte à
+ * part (Rapports → Fiche de validation).
  */
 const MOIS = [
   { value: '01', label: 'Janvier' }, { value: '02', label: 'Février' }, { value: '03', label: 'Mars' },
@@ -80,7 +81,7 @@ export default function RapportActiviteMensuelPage() {
     <div>
       <PageHeader
         title="Rapport mensuel d'activité"
-        subtitle="Fiche de validation du mois, tâches dues non réalisées, et chaque intervention au format du rapport unitaire — avec visa contractuel"
+        subtitle="Tâches dues non réalisées et chaque intervention au format du rapport unitaire — avec visa contractuel"
         backHref="/rapports"
       />
       <FormCard>
@@ -111,8 +112,9 @@ export default function RapportActiviteMensuelPage() {
           </Field>
         </div>
         <p className="mt-4 text-xs text-gray-500">
-          La <b>fiche de validation</b> et le <b>logo du prestataire</b> n’apparaissent que si le rapport ne couvre
-          qu’un prestataire — sur un périmètre mixte, ses chiffres n’auraient pas de sens et la page ne serait pas signable.
+          Le <b>logo du prestataire</b> n’apparaît que si le rapport ne couvre qu’un prestataire — sur un périmètre
+          mixte, afficher l’un des logos laisserait croire que le document ne concerne que celui-là. La <b>fiche de
+          validation</b> du mois s’exporte à part (Rapports → Fiche de validation), en Excel ou en PDF.
           Chaque intervention embarque un échantillon de photos ; au-delà du plafond réglé, le serveur demande de resserrer le périmètre.
         </p>
         <div className="mt-4">

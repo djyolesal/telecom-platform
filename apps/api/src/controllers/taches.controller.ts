@@ -239,16 +239,13 @@ function clientBlock(client?: string): { nom: string; adresse: string[] } {
   };
 }
 
-/** Génère le buffer xlsx d'une fiche pour un prestataire (et un lot optionnel). */
 /**
  * Données de la fiche de validation d'un prestataire pour un mois : sites du
  * périmètre contractuel, exécutions par tâche, et zone couverte.
  *
- * Extrait de `produceFiche` pour que le RECUEIL PDF reprenne la MÊME fiche en
- * page 2 sans recopier les règles contractuelles : deux calculs parallèles
- * finiraient par diverger, et c'est un document signé.
+ * Servies aux deux formats de la fiche (Excel et PDF) par `produceFiche`.
  */
-export async function donneesFicheValidation(
+async function donneesFicheValidation(
   presta: { id: string },
   lotId: string | null,
   an: number,

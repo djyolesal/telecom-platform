@@ -172,8 +172,8 @@ function MaintenancePageInner() {
  */
 function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statut: string; prestataireId: string }) {
   const [ouvert, setOuvert] = useState(false);
-  // MENSUEL : le dû contractuel se compte par mois, c'est lui qui rend la
-  // fiche de validation et les tâches manquantes signables.
+  // MENSUEL : le dû contractuel se compte par mois, c'est lui qui rend les
+  // tâches manquantes opposables.
   const [mois, setMois] = useState(new Date().toISOString().slice(0, 7));
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -207,14 +207,14 @@ function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statu
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-1 text-lg font-bold text-gray-800">Rapport mensuel d&apos;activité</h2>
             <p className="mb-4 text-xs text-gray-500">
-              Fiche de validation du mois, tâches dues non réalisées, puis chaque intervention au format du rapport
-              unitaire. Les filtres de l&apos;écran sont repris. Pour choisir un prestataire, un lot ou une région :
+              Tâches dues non réalisées, puis chaque intervention au format du rapport unitaire. Les filtres de
+              l&apos;écran sont repris. Pour choisir un prestataire, un lot ou une région :
               Rapports → Rapport mensuel d&apos;activité.
             </p>
             {erreur && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erreur}</div>}
             <Field label="Mois"><Input type="month" value={mois} onChange={(e) => setMois(e.target.value)} /></Field>
             <p className="mt-2 text-[11px] text-gray-400">
-              Statut retenu : {statut ? statut.toLowerCase() : 'terminée'}. La fiche de validation n&apos;est jointe
+              Statut retenu : {statut ? statut.toLowerCase() : 'terminée'}. Le logo du prestataire n&apos;apparaît
               que si le rapport ne couvre qu&apos;un prestataire.
             </p>
             <div className="mt-4 flex justify-end gap-2">
