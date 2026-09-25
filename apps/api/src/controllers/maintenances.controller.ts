@@ -1555,6 +1555,9 @@ export async function chargerDonneesRapport(
     totalPhotosAvant: avant.total,
     photosApres: apres.bufs,
     totalPhotosApres: apres.total,
+    // Échantillon (rapport mensuel d'activité) : le rendu passe en bande
+    // unique étiquetée au lieu d'une grille par phase.
+    echantillon: options.maxPhotos != null,
     signatureTechnicien,
     signatureAgent,
     ...(preuvesIncident

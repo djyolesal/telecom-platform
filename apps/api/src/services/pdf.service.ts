@@ -163,6 +163,9 @@ export interface MaintenancePdfData {
   photosApres?: Buffer[];
   totalPhotosAvant?: number;
   totalPhotosApres?: number;
+  /** Les photos sont un ÉCHANTILLON (rapport mensuel d'activité) : elles se
+   *  rendent sur une seule bande étiquetée, pas en deux grilles par phase. */
+  echantillon?: boolean;
   signatureTechnicien?: Buffer | null;
   signatureAgent?: Buffer | null;
   /** Mention affichée quand photos/signatures proviennent de l'incident lié
@@ -172,6 +175,52 @@ export interface MaintenancePdfData {
 
 const fmtN = (v: number | null | undefined, suffixe = '') =>
   v == null ? '-' : `${Number(v).toLocaleString('fr-FR')}${suffixe}`;
+
+/**
+ * Bande de photos ÉCHANTILLONNÉES : avant et après sur la MÊME ligne, chacune
+ * étiquetée sous son cadre.
+ *
+ * Deux grilles séparées pour un échantillon de trois donnaient une section à
+ * une photo et une autre à deux : deux titres, deux lignes à moitié vides, et
+ * l'œil ne rapprochait plus l'état trouvé de l'état rendu. L'étiquette sous
+ * chaque cadre remplace le titre de section - c'est elle qui dit ce qu'on
+ * regarde.
+ */
+function bandePhotos(doc: PDFKit.PDFDocument, m: MaintenancePdfData) {
+  const items = [
+    ...(m.photosAvant ?? []).map((buffer) => ({ buffer, libelle: 'Avant travaux' })),
+    ...(m.photosApres ?? []).map((buffer) => ({ buffer, libelle: 'Après travaux' })),
+  ];
+  if (!items.length) return;
+  const totalAvant = m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0);
+  const totalApres = m.totalPhotosApres ?? (m.photosApres?.length ?? 0);
+  const total = totalAvant + totalApres;
+  sectionTitle(doc, `Photos${total > items.length ? ` (${items.length} sur ${total})` : ` (${items.length})`}`);
+
+  const cols = 3, gap = 10, x0 = 50, cellH = 150, hLegende = 13;
+  const cellW = (doc.page.width - 100 - gap * (cols - 1)) / cols;
+  let col = 0, y = doc.y;
+  for (const it of items) {
+    if (col === 0 && y + cellH + hLegende > doc.page.height - 70) { doc.addPage(); y = 50; }
+    const x = x0 + col * (cellW + gap);
+    doc.roundedRect(x, y, cellW, cellH, 3).lineWidth(0.5).strokeColor('#d8dee6').stroke();
+    try {
+      doc.image(it.buffer, x + 2, y + 2, { fit: [cellW - 4, cellH - 4], align: 'center', valign: 'center' });
+    } catch { /* image illisible : le cadre et l'étiquette restent */ }
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(BRAND)
+      .text(it.libelle, x, y + cellH + 3.5, { width: cellW, align: 'center' });
+    col++;
+    if (col === cols) { col = 0; y += cellH + hLegende + gap; }
+  }
+  doc.y = (col === 0 ? y : y + cellH + hLegende + gap);
+  if (total > items.length) {
+    doc.font('Helvetica').fontSize(8).fillColor('#888').text(
+      `${totalAvant} photo(s) avant et ${totalApres} après au total - toutes consultables dans l'application.`,
+      x0, doc.y);
+    doc.moveDown(0.4);
+  }
+  doc.font('Helvetica').fillColor('black');
+}
 
 /** Grille de photos 3 par ligne occupant TOUTE la largeur, saut de page auto. */
 function grillePhotos(doc: PDFKit.PDFDocument, titre: string, photos: Buffer[], total: number) {
@@ -272,8 +321,14 @@ export function dessinerRapportMaintenance(doc: PDFKit.PDFDocument, m: Maintenan
     );
   }
 
-  grillePhotos(doc, 'Photos avant travaux', m.photosAvant ?? [], m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0));
-  grillePhotos(doc, 'Photos après travaux', m.photosApres ?? [], m.totalPhotosApres ?? (m.photosApres?.length ?? 0));
+  if (m.echantillon) {
+    bandePhotos(doc, m);
+  } else {
+    // Rapport unitaire : jusqu'à six photos par phase, chaque phase sous son
+    // propre titre - il y a la place, et le lecteur compare phase par phase.
+    grillePhotos(doc, 'Photos avant travaux', m.photosAvant ?? [], m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0));
+    grillePhotos(doc, 'Photos après travaux', m.photosApres ?? [], m.totalPhotosApres ?? (m.photosApres?.length ?? 0));
+  }
 
   // Signatures : le technicien signe toujours (obligatoire à la clôture) ;
   // l'agent de sécurité n'apparaît que si un agent a été enregistré sur
