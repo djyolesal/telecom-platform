@@ -43,6 +43,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-seed ./dist-seed
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma/
+# Marque du client livrée avec la plateforme (logo par défaut des documents
+# contractuels) : elle vit hors de `dist`, donc tsc ne la copie pas.
+COPY assets ./assets
 # Prisma 7 : la CLI (désormais en dependencies, plus de téléchargement npx au
 # `make migrate`) lit l'URL de connexion dans ce fichier — sans lui, migrate
 # deploy échoue dans le conteneur.

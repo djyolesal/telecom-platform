@@ -509,6 +509,7 @@ router.get('/admin/sms-templates', rbac(['ADMIN']), adminCtrl.getSmsTemplates);
 router.get('/admin/sms-canaux', rbac(['ADMIN']), adminCtrl.getSmsCanaux);
 router.get('/admin/settings/effectifs', rbac(['ADMIN']), adminCtrl.getEffectiveSettings);
 router.put('/admin/settings', rbac(['ADMIN']), adminCtrl.updateSettings);
+router.get('/admin/logo-client', rbac(['ADMIN']), adminCtrl.getLogoClient);
 router.get('/admin/taches-preventives', rbac(['ADMIN']), adminCtrl.getTachePreventiveOverrides);
 router.put('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.updateTachePreventiveOverride);
 router.delete('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.deleteTachePreventiveOverride);

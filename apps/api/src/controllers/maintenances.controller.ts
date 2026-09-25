@@ -48,6 +48,7 @@ import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { logger } from '../utils/logger';
+import { logoClient } from '../services/logoClient.service';
 import { calculerDuParSite, tachesCataloguePassif } from '../services/conformiteTaches.service';
 import { assertOnSite } from '../utils/geofence';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
@@ -1820,6 +1821,9 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
     const pdf = await generateMaintenancesRecueilPdf(donnees, {
       titre: "Rapport mensuel d'activité",
       prestataire: prestataireGarde,
+      // Même marque client que la fiche de validation : les deux documents
+      // partent ensemble.
+      clientLogo: (await logoClient()).logo?.buffer ?? null,
       fiche,
       ...synthese,
     });

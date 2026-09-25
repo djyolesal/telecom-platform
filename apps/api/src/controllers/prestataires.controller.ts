@@ -2,6 +2,7 @@ import { publicFileUrl } from '../services/storage.service';
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { cleLogoValide } from '../services/logoClient.service';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 
@@ -24,14 +25,17 @@ async function rapprocherSitesGardiennage(prestataireId: string, nom: string): P
  * quelle à la génération des fiches : sans contrainte, on pouvait pointer
  * n'importe quel objet du bucket (photos d'intervention, pièces jointes) et
  * l'exfiltrer dans un classeur Excel.
+ *
+ * Le motif est partagé avec le logo du client. Il refusait les SOUS-DOSSIERS,
+ * alors que l'upload range les fichiers par date : tout logo déposé depuis le
+ * portail (`logos/2026-09-25/<uuid>.png`) était rejeté à l'enregistrement —
+ * aucun prestataire ne pouvait donc avoir de logo sur sa fiche.
  */
 function logoValide(v: unknown): string | null | undefined {
   if (v === undefined) return undefined;
   if (v === null || v === '') return null;
-  const k = String(v);
-  if (!/^logos\/[A-Za-z0-9._-]+\.(png|jpe?g|gif)$/i.test(k)) {
-    throw new AppError('Chemin de logo invalide (attendu : logos/<fichier>.png|jpg|gif)', 400);
-  }
+  const k = cleLogoValide(v);
+  if (!k) throw new AppError('Chemin de logo invalide (attendu : logos/<fichier>.png|jpg|gif)', 400);
   return k;
 }
 

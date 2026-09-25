@@ -13,6 +13,7 @@ import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
 import { SMS_TEMPLATES, CANAUX_SMS } from '../services/sms.service';
 import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride } from '../services/tachesPreventives.service';
+import { cleLogoValide, logoClient } from '../services/logoClient.service';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
 export async function getSettings(_req: Request, res: Response, next: NextFunction) {
@@ -77,6 +78,15 @@ export async function updateSettings(req: Request, res: Response, next: NextFunc
     const entries: Array<{ key: string; value: unknown; description?: string }> =
       Array.isArray(req.body) ? req.body : [req.body];
 
+    // Le logo du client est relu tel quel pour être embarqué dans les documents
+    // contractuels : une clé fantaisiste sortirait une fiche SANS logo, sans
+    // que personne comprenne pourquoi. On le dit ici, pas à l'impression.
+    for (const e of entries) {
+      if (e.key === 'client.logoKey' && e.value !== '' && e.value != null && !cleLogoValide(e.value)) {
+        throw new AppError('Chemin de logo invalide (attendu : logos/<fichier>.png|jpg|gif)', 400);
+      }
+    }
+
     const updated = await Promise.all(
       entries.map((e) =>
         prisma.systemSettings.upsert({
@@ -90,6 +100,26 @@ export async function updateSettings(req: Request, res: Response, next: NextFunc
     await auditLog(req.user!.id, 'UPDATE', 'system_settings', undefined, { keys: entries.map((e) => e.key) }, req);
     await loadSettings(); // recharge le cache → effet immédiat sans redéploiement
     res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Aperçu du logo CLIENT effectif pour l'écran des paramètres.
+ *
+ * L'image part en base64 plutôt qu'en URL : le logo peut venir du bucket comme
+ * du fichier livré avec la plateforme, et l'écran n'a pas à connaître cette
+ * différence pour l'afficher.
+ */
+export async function getLogoClient(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const { logo, source, cle } = await logoClient();
+    res.json({
+      success: true,
+      data: {
+        source, cle,
+        dataUrl: logo ? `data:image/${logo.extension};base64,${logo.buffer.toString('base64')}` : null,
+      },
+    });
   } catch (err) { next(err); }
 }
 

@@ -456,6 +456,8 @@ export async function generateMaintenancesRecueilPdf(
   garde: {
     titre: string;
     prestataire?: { nom: string; logo?: Buffer | null };
+    /** Logo du client, quand il est configuré (Administration → Paramètres). */
+    clientLogo?: Buffer | null;
     /** Fiche de validation du mois, quand elle a un sens (1 prestataire, mois entier). */
     fiche?: {
       prestataire: string; zone: string; nbSites: number;
@@ -487,8 +489,17 @@ export async function generateMaintenancesRecueilPdf(
     doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
       .text(garde.prestataire ? 'Prestataire' : 'Plusieurs prestataires', 60, hautBloc + 64, { width: 200 });
 
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND)
+    // Le client est représenté comme le prestataire : sa marque si elle est
+    // connue, son nom sinon. Un document co-signé où un seul des deux porte
+    // son logo donne l'impression d'être celui de l'autre.
+    const nomClient = () => doc.font('Helvetica-Bold').fontSize(13).fillColor(BRAND)
       .text(garde.client, w - 260, hautBloc + 18, { width: 200, align: 'right' });
+    if (garde.clientLogo) {
+      try { doc.image(garde.clientLogo, w - 230, hautBloc, { fit: [170, 58], align: 'right' }); }
+      catch { nomClient(); }
+    } else {
+      nomClient();
+    }
     doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
       .text('Client', w - 260, hautBloc + 64, { width: 200, align: 'right' });
 

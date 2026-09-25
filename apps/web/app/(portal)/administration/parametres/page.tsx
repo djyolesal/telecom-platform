@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, CheckCircle2 } from 'lucide-react';
+import { Save, CheckCircle2, Upload, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, EmptyState } from '@/components/shared/states';
@@ -60,6 +60,37 @@ export default function ParametresPage() {
     }))),
     onSuccess: () => { setSavedOk(true); queryClient.invalidateQueries({ queryKey: ['sms-canaux'] }); },
   });
+  // LOGO DU CLIENT : il part sur des documents contractuels signés (fiche de
+  // validation, rapport mensuel d'activité). Tant qu'aucun n'est déposé, la
+  // plateforme utilise la marque livrée avec elle — un document ne sort jamais
+  // sans enseigne.
+  const { data: logoClient } = useQuery({
+    queryKey: ['logo-client'],
+    queryFn: () => api.get('/admin/logo-client').then(
+      (r) => r.data.data as { source: 'parametre' | 'environnement' | 'defaut' | 'aucun'; cle: string | null; dataUrl: string | null }
+    ),
+  });
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoErreur, setLogoErreur] = useState('');
+  const enregistrerLogo = async (cle: string) => {
+    await api.put('/admin/settings', [{ key: 'client.logoKey', value: cle, description: 'Logo du client sur les documents contractuels' }]);
+    queryClient.invalidateQueries({ queryKey: ['logo-client'] });
+    queryClient.invalidateQueries({ queryKey: ['settings'] });
+    setSavedOk(true);
+  };
+  const televerserLogo = async (file: File) => {
+    setLogoBusy(true); setLogoErreur(''); setSavedOk(false);
+    try {
+      const fd = new FormData();
+      fd.append('folder', 'logos');
+      fd.append('file', file);
+      const r = await api.post('/upload/image', fd);
+      await enregistrerLogo(r.data.data.key);
+    } catch {
+      setLogoErreur('Échec de l’envoi du logo. Formats acceptés : PNG, JPEG.');
+    } finally { setLogoBusy(false); }
+  };
+
   // APPARENCE : la charte est un réglage, pas une constante. La changer ne doit
   // pas demander une livraison de code.
   const { data: themes } = useQuery({
@@ -128,7 +159,8 @@ export default function ParametresPage() {
 
   if (isLoading) return <Loading />;
   // Les modèles SMS ont leur section dédiée : on les retire de la liste brute.
-  const settings = (data ?? []).filter((s) => !/^(sms|notif)\.tpl\./.test(s.key));
+  // Les modèles SMS et le logo client ont leur section dédiée : hors de la liste brute.
+  const settings = (data ?? []).filter((s) => !/^(sms|notif)\.tpl\./.test(s.key) && s.key !== 'client.logoKey');
 
   return (
     <div>
@@ -163,6 +195,45 @@ export default function ParametresPage() {
           ))}
         </div>
       )}
+
+      <div className="mt-8">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-gray-700">Logo du client</h2>
+          <p className="max-w-3xl text-xs text-gray-400">
+            Il apparaît sur les documents remis et signés : <b>fiche de validation</b> mensuelle (Excel et PDF) et
+            <b> rapport mensuel d&apos;activité</b>. Sans dépôt, la plateforme utilise la marque livrée avec elle.
+          </p>
+        </div>
+        {logoErreur && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{logoErreur}</div>}
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-gray-100 bg-white p-4">
+          {logoClient?.dataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoClient.dataUrl} alt="Logo du client" className="h-16 w-auto rounded border border-gray-100 object-contain" />
+          ) : (
+            <span className="text-xs text-gray-400">Aucun logo disponible</span>
+          )}
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-xs text-gray-500">
+              {logoClient?.source === 'parametre' && 'Logo déposé depuis cet écran.'}
+              {logoClient?.source === 'environnement' && 'Logo issu de la variable CLIENT_LOGO_KEY.'}
+              {logoClient?.source === 'defaut' && 'Marque livrée avec la plateforme (aucun logo déposé).'}
+              {logoClient?.source === 'aucun' && 'Aucun logo : les documents porteront le nom du client en toutes lettres.'}
+            </p>
+            {logoClient?.cle && <p className="font-mono text-[11px] text-gray-400">{logoClient.cle}</p>}
+          </div>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:border-gray-400">
+            <Upload size={15} />
+            {logoBusy ? 'Envoi…' : 'Déposer un logo'}
+            <input type="file" accept="image/png,image/jpeg" className="hidden" disabled={logoBusy}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) televerserLogo(f); e.target.value = ''; }} />
+          </label>
+          {logoClient?.source === 'parametre' && (
+            <Button variant="secondary" icon={RotateCcw} onClick={() => { setLogoErreur(''); enregistrerLogo(''); }}>
+              Revenir au logo par défaut
+            </Button>
+          )}
+        </div>
+      </div>
 
       {themes && (
         <div className="mt-8">

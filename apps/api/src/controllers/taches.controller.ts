@@ -10,21 +10,10 @@ import { genererPlanningPreventif } from '../services/planning.service';
 import { dateReferenceTaches } from '../services/settings.service';
 import JSZip from 'jszip';
 import { buildFicheValidationXlsx, FicheLogo, FicheValidationData } from '../services/ficheValidation.service';
+import { chargerLogo, logoClient } from '../services/logoClient.service';
 import { buildFicheValidationPdf } from '../services/pdf.service';
-import { getObjectBuffer } from '../services/storage.service';
 import { setXlsxHeaders } from '../utils/excel';
 
-/** Charge un logo (objet MinIO) et déduit son extension pour ExcelJS. */
-async function loadLogo(key?: string | null): Promise<FicheLogo | null> {
-  if (!key) return null;
-  try {
-    const buffer = await getObjectBuffer(key);
-    const ext: FicheLogo['extension'] = /\.png$/i.test(key) ? 'png' : /\.gif$/i.test(key) ? 'gif' : 'jpeg';
-    return { buffer, extension: ext };
-  } catch {
-    return null;
-  }
-}
 import {
   TASK_BY_KEY,
   FREQUENCE_MOIS,
@@ -345,7 +334,7 @@ export type FormatFiche = 'xlsx' | 'pdf';
 /** Génère le buffer d'une fiche pour un prestataire (et un lot optionnel). */
 async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null, contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF', format: FormatFiche = 'xlsx'): Promise<Buffer> {
   const { sites, realisesParKey, zone } = await donneesFicheValidation(presta, lotId, an, mo, contrat);
-  const prestataireLogo = await loadLogo(presta.logoPath);
+  const prestataireLogo = await chargerLogo(presta.logoPath);
   // Mêmes DONNÉES pour les deux formats : seule la mise en page change.
   const data: FicheValidationData = {
     prestataire: { nom: presta.nom, adresse: presta.adresse, rccm: presta.rccm, nif: presta.nif, contactCommercial: presta.contactCommercial, contactTechnique: presta.contactTechnique },
@@ -373,7 +362,7 @@ export async function getFicheValidation(req: Request, res: Response, next: Next
 
     const typeContrat: 'PASSIF' | 'SOLAIRE' = contrat === 'SOLAIRE' ? 'SOLAIRE' : 'PASSIF';
     const fmt: FormatFiche = format === 'pdf' ? 'pdf' : 'xlsx';
-    const clientLogo = await loadLogo(process.env.CLIENT_LOGO_KEY);
+    const clientLogo = (await logoClient()).logo;
     const buf = await produceFiche(presta, lot_id || null, an, mo, clientBlock(client), clientLogo, typeContrat, fmt);
 
     const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');
@@ -408,7 +397,7 @@ export async function getFichesBatch(req: Request, res: Response, next: NextFunc
     });
 
     const cb = clientBlock(client);
-    const clientLogo = await loadLogo(process.env.CLIENT_LOGO_KEY);
+    const clientLogo = (await logoClient()).logo;
     const zip = new JSZip();
     const seen = new Set<string>();
     let count = 0;
