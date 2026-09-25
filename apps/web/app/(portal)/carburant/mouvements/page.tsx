@@ -79,7 +79,7 @@ export default function MouvementsCarburantPage() {
       key: 'ou', header: 'Site / commande',
       render: (m) => m.site
         ? <span className="text-gray-800">{m.site.nom ?? m.site.code}{m.contrepartie ? <span className="text-gray-500"> ↔ {m.contrepartie.nom ?? m.contrepartie.code}</span> : null}</span>
-        : <span className="text-gray-800">BC {m.bonCommande?.numero ?? '—'}</span>,
+        : <span className="text-gray-800">BC {m.bonCommande?.numero ?? '-'}</span>,
     },
     {
       key: 'volume', header: 'Volume (L)', align: 'right',
@@ -90,7 +90,7 @@ export default function MouvementsCarburantPage() {
       ),
     },
     { key: 'motif', header: 'Motif', render: (m) => <span className="text-gray-600">{m.motif}</span> },
-    { key: 'auteur', header: 'Saisi par', render: (m) => m.auteur?.nom ?? '—' },
+    { key: 'auteur', header: 'Saisi par', render: (m) => m.auteur?.nom ?? '-' },
     {
       // Une déclaration du terrain ne compte PAS dans le stock tant qu'elle
       // n'est pas validée : l'écran doit le dire, sinon on croit à une écriture
@@ -230,7 +230,7 @@ function PieceJustificative({ valeur, onChange, setError }: {
       <p className="mt-1 text-xs text-gray-500">
         {envoi ? 'Dépôt en cours…'
           : valeur ? `Pièce jointe : ${nom}`
-          : 'Bon de transfert, PV de purge ou avoir signé — photo ou PDF.'}
+          : 'Bon de transfert, PV de purge ou avoir signé - photo ou PDF.'}
       </p>
     </Field>
   );

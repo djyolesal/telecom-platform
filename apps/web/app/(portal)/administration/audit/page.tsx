@@ -49,10 +49,10 @@ export default function AuditPage() {
 
   const columns: Column<AuditLog>[] = [
     { key: 'createdAt', header: 'Date', render: (l) => fmtDateTime(l.createdAt) },
-    { key: 'user', header: 'Utilisateur', render: (l) => (l.user ? `${l.user.prenom} ${l.user.nom}` : '—') },
+    { key: 'user', header: 'Utilisateur', render: (l) => (l.user ? `${l.user.prenom} ${l.user.nom}` : '-') },
     { key: 'action', header: 'Action', render: (l) => <Badge className={ACTION_COLOR[l.action] || 'bg-gray-100 text-gray-600'}>{l.action}</Badge> },
     { key: 'resource', header: 'Ressource' },
-    { key: 'ipAddress', header: 'IP', render: (l) => l.ipAddress || '—' },
+    { key: 'ipAddress', header: 'IP', render: (l) => l.ipAddress || '-' },
     { key: 'success', header: 'Résultat', align: 'center', render: (l) => <Badge className={l.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>{l.success ? 'OK' : 'Échec'}</Badge> },
   ];
 

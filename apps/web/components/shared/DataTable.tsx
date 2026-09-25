@@ -254,7 +254,7 @@ export function DataTable<T>({
                       c.className
                     )}
                   >
-                    {c.render ? c.render(row) : ((row as Record<string, unknown>)[c.key] as React.ReactNode) ?? '—'}
+                    {c.render ? c.render(row) : ((row as Record<string, unknown>)[c.key] as React.ReactNode) ?? '-'}
                   </td>
                 ))}
               </tr>

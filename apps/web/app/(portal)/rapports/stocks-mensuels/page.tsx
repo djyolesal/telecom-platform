@@ -46,14 +46,14 @@ export default function StocksMensuelsPage() {
     { key: 'stockDebut', header: 'Stock au 1er (L)', align: 'right', render: (l) => fmtNumber(l.stockDebut) },
     { key: 'stockFin', header: 'Stock fin (L)', align: 'right', render: (l) => fmtNumber(l.stockFin) },
     { key: 'livraisons', header: 'Livraisons (L)', align: 'right', render: (l) => fmtNumber(l.livraisons) },
-    { key: 'conso', header: 'Conso (L)', align: 'right', render: (l) => l.conso != null ? fmtNumber(l.conso) : '—' },
-    { key: 'consoJour', header: 'Conso/j', align: 'right', render: (l) => l.consoJour != null ? `${l.consoJour} L/j` : '—' },
-    { key: 'debitLh', header: 'Débit', align: 'right', render: (l) => l.debitLh != null ? `${l.debitLh} L/h` : '—' },
+    { key: 'conso', header: 'Conso (L)', align: 'right', render: (l) => l.conso != null ? fmtNumber(l.conso) : '-' },
+    { key: 'consoJour', header: 'Conso/j', align: 'right', render: (l) => l.consoJour != null ? `${l.consoJour} L/j` : '-' },
+    { key: 'debitLh', header: 'Débit', align: 'right', render: (l) => l.debitLh != null ? `${l.debitLh} L/h` : '-' },
     {
       key: 'inexplique', header: 'Non expliqué', align: 'right',
       render: (l) => l.gasoilInexplique != null
         ? <span className="font-semibold text-red-600" title="Gasoil sorti de la cuve sans marche du GE correspondante : vol, fuite ou index bloqué - à vérifier sur site.">{fmtNumber(l.gasoilInexplique)} L</span>
-        : '—',
+        : '-',
     },
     {
       key: 'obs', header: 'Observations',
@@ -106,7 +106,7 @@ export default function StocksMensuelsPage() {
             rowClassName={(l) => l.gasoilInexplique != null ? 'bg-red-50' : undefined} />
           <p className="mt-2 text-xs text-gray-400">
             Méthode : consommation = niveau antérieur + livraisons − niveau du mois, sur une fenêtre d&apos;au moins 10 jours (élargie sinon), rapportée aux jours calendaires ;
-            stocks aux frontières interpolés par la conso/j. « Non expliqué » compare la conso mesurée aux heures de marche du GE × son débit habituel — un écart fort signale un vol, une fuite ou un index bloqué.
+            stocks aux frontières interpolés par la conso/j. « Non expliqué » compare la conso mesurée aux heures de marche du GE × son débit habituel - un écart fort signale un vol, une fuite ou un index bloqué.
           </p>
         </>
       )}

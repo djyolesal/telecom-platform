@@ -5,7 +5,7 @@
   "editable": true,
   "graphTooltip": 0,
   "schemaVersion": 39,
-  "title": "Infrastructure — Santé serveur",
+  "title": "Infrastructure - Santé serveur",
   "uid": "telecom-infra",
   "tags": [
     "telecom",
@@ -241,12 +241,12 @@
       "targets": [
         {
           "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[5m]) * 8",
-          "legendFormat": "entrant — {{device}}",
+          "legendFormat": "entrant - {{device}}",
           "refId": "A"
         },
         {
           "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[5m]) * 8",
-          "legendFormat": "sortant — {{device}}",
+          "legendFormat": "sortant - {{device}}",
           "refId": "B"
         }
       ]

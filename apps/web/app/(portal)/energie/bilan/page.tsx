@@ -76,8 +76,8 @@ export default function BilanEnergiePage() {
   const cols: Column<LigneSite>[] = [
     { key: 'code', header: 'Site', render: (l) => <span className="font-medium text-gray-800">{l.nom}</span> },
     { key: 'region', header: 'Région' },
-    { key: 'indexDebut', header: 'Index début', align: 'right', render: (l) => l.indexDebut != null ? fmtNumber(l.indexDebut) : <span className="text-gray-300">—</span> },
-    { key: 'indexFin', header: 'Index fin', align: 'right', render: (l) => l.indexFin != null ? fmtNumber(l.indexFin) : <span className="text-gray-300">—</span> },
+    { key: 'indexDebut', header: 'Index début', align: 'right', render: (l) => l.indexDebut != null ? fmtNumber(l.indexDebut) : <span className="text-gray-300">-</span> },
+    { key: 'indexFin', header: 'Index fin', align: 'right', render: (l) => l.indexFin != null ? fmtNumber(l.indexFin) : <span className="text-gray-300">-</span> },
     {
       key: 'conso', header: 'Conso (kWh)', align: 'right',
       render: (l) => l.consoKwh != null
@@ -86,12 +86,12 @@ export default function BilanEnergiePage() {
     },
     {
       key: 'source', header: 'Source', align: 'center',
-      render: (l) => l.source == null ? <span className="text-gray-300">—</span>
+      render: (l) => l.source == null ? <span className="text-gray-300">-</span>
         : l.source === 'index'
           ? <Badge className="bg-green-100 text-green-700"><span title="Différence des index compteur aux deux bornes">Index</span></Badge>
           : <Badge className="bg-amber-100 text-amber-700"><span title={l.motif ?? 'Somme des consommations déclarées sur les relevés'}>Déclarée</span></Badge>,
     },
-    { key: 'cout', header: 'Coût (FCFA)', align: 'right', render: (l) => l.coutFCFA != null ? fmtFCFA(l.coutFCFA) : <span className="text-gray-300">—</span> },
+    { key: 'cout', header: 'Coût (FCFA)', align: 'right', render: (l) => l.coutFCFA != null ? fmtFCFA(l.coutFCFA) : <span className="text-gray-300">-</span> },
     { key: 'nbReleves', header: 'Relevés', align: 'right', render: (l) => l.nbReleves || <span className="text-gray-300">0</span> },
   ];
 

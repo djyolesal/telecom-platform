@@ -42,7 +42,7 @@ export interface DepotageOptionnel {
 }
 
 const fmtDuree = (min?: number | null) =>
-  min == null ? '—' : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`;
+  min == null ? '-' : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`;
 
 const COLONNES_SITES: ColonneOptionnelle[] = [
   {
@@ -50,7 +50,7 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
     render: (s: SiteOptionnel) =>
       s.latitude != null && s.longitude != null ? (
         <span className="font-mono text-xs text-gray-500">{Number(s.latitude).toFixed(5)}, {Number(s.longitude).toFixed(5)}</span>
-      ) : ('—'),
+      ) : ('-'),
   },
   {
     key: 'marqueGE', header: 'Marque GE', description: 'Marque des groupes électrogènes du site',
@@ -59,7 +59,7 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
     sortValue: (s: SiteOptionnel) => s.groupes?.find((g) => g.marque)?.marque ?? null,
     render: (s: SiteOptionnel) => {
       const marques = (s.groupes ?? []).map((g) => g.marque).filter((m): m is string => !!m);
-      return marques.length ? [...new Set(marques)].join(' / ') : '—';
+      return marques.length ? [...new Set(marques)].join(' / ') : '-';
     },
   },
   {
@@ -73,9 +73,9 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
     render: (s: SiteOptionnel) =>
       s.telephoneSite ? (
         <a href={`tel:${s.telephoneSite}`} onClick={(e) => e.stopPropagation()} className="text-[#2471A3] hover:underline">{s.telephoneSite}</a>
-      ) : ('—'),
+      ) : ('-'),
   },
-  { key: 'typePylone', header: 'Type de pylône', description: 'Référentiel des types de pylône', render: (s: SiteOptionnel) => (s.typePylone ? (TYPES_PYLONE.find((t) => t.value === s.typePylone)?.label ?? s.typePylone) : '—') },
+  { key: 'typePylone', header: 'Type de pylône', description: 'Référentiel des types de pylône', render: (s: SiteOptionnel) => (s.typePylone ? (TYPES_PYLONE.find((t) => t.value === s.typePylone)?.label ?? s.typePylone) : '-') },
   {
     key: 'prestataires', header: 'Prestataires',
     description: 'Titulaires des contrats du site (passif/actif et solaire)',
@@ -85,7 +85,7 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
       const passifs = (s.lot?.assignments ?? [])
         .map((a) => `${a.prestataire?.nom ?? '?'}${a.scope === 'ACTIVE' ? ' (actif)' : a.scope === 'LES_DEUX' ? ' (passif + actif)' : ''}`);
       const solaire = s.lotSolaire?.assignments?.[0]?.prestataire?.nom;
-      if (!passifs.length && !solaire) return <span className="text-gray-300">—</span>;
+      if (!passifs.length && !solaire) return <span className="text-gray-300">-</span>;
       return (
         <span className="flex flex-wrap gap-1">
           {passifs.map((nom, i) => (
@@ -98,14 +98,14 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
   },
   {
     key: 'cuveVolumeLitres', header: 'Cuve (L)', description: 'Capacité de la cuve à gasoil', align: 'right',
-    render: (s: SiteOptionnel) => (s.cuveVolumeLitres != null ? fmtNumber(Number(s.cuveVolumeLitres)) : '—'),
+    render: (s: SiteOptionnel) => (s.cuveVolumeLitres != null ? fmtNumber(Number(s.cuveVolumeLitres)) : '-'),
   },
 ];
 
 const COLONNES_MAINTENANCES: ColonneOptionnelle[] = [
   {
     key: 'region', header: 'Région', description: 'Région du site concerné',
-    sortValue: (m: MaintenanceOptionnelle) => m.site?.region, render: (m: MaintenanceOptionnelle) => m.site?.region ?? '—',
+    sortValue: (m: MaintenanceOptionnelle) => m.site?.region, render: (m: MaintenanceOptionnelle) => m.site?.region ?? '-',
   },
   { key: 'dateDebut', header: 'Début réel', description: 'Date de démarrage effectif de l’intervention', render: (m: MaintenanceOptionnelle) => fmtDate(m.dateDebut) },
   { key: 'dateFin', header: 'Fin réelle', description: 'Date de clôture de l’intervention', render: (m: MaintenanceOptionnelle) => fmtDate(m.dateFin) },
@@ -118,24 +118,24 @@ const COLONNES_MAINTENANCES: ColonneOptionnelle[] = [
 const COLONNES_DEPOTAGES: ColonneOptionnelle[] = [
   {
     key: 'region', header: 'Région', description: 'Région du site livré',
-    sortValue: (d: DepotageOptionnel) => d.site?.region, render: (d: DepotageOptionnel) => d.site?.region ?? '—',
+    sortValue: (d: DepotageOptionnel) => d.site?.region, render: (d: DepotageOptionnel) => d.site?.region ?? '-',
   },
   {
     key: 'technicien', header: 'Technicien', description: 'Technicien ayant réalisé le dépotage',
     sortValue: (d: DepotageOptionnel) => d.technicien?.nom,
-    render: (d: DepotageOptionnel) => (d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—'),
+    render: (d: DepotageOptionnel) => (d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '-'),
   },
   {
     key: 'numeroBonLivraison', header: 'N° BL', description: 'Numéro du bon de livraison',
-    render: (d: DepotageOptionnel) => d.numeroBonLivraison ? <span className="font-mono text-xs text-gray-500">{d.numeroBonLivraison}</span> : '—',
+    render: (d: DepotageOptionnel) => d.numeroBonLivraison ? <span className="font-mono text-xs text-gray-500">{d.numeroBonLivraison}</span> : '-',
   },
   {
     key: 'stockAvantLitres', header: 'Stock avant (L)', description: 'Jauge relevée avant dépotage', align: 'right',
-    render: (d: DepotageOptionnel) => (d.stockAvantLitres != null ? fmtNumber(Number(d.stockAvantLitres)) : '—'),
+    render: (d: DepotageOptionnel) => (d.stockAvantLitres != null ? fmtNumber(Number(d.stockAvantLitres)) : '-'),
   },
   {
     key: 'coutTotal', header: 'Coût total', description: 'Coût de la livraison (FCFA)', align: 'right',
-    render: (d: DepotageOptionnel) => (d.coutTotal != null ? fmtFCFA(Number(d.coutTotal)) : '—'),
+    render: (d: DepotageOptionnel) => (d.coutTotal != null ? fmtFCFA(Number(d.coutTotal)) : '-'),
   },
 ];
 

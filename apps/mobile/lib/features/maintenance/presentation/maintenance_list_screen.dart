@@ -249,7 +249,7 @@ class _MaintenanceViewState extends State<_MaintenanceView> {
                             final m = visibles[i];
                             return ListTile(
                               title: Text(
-                                  '${m.siteNom ?? '—'} · ${m.equipement}',
+                                  '${m.siteNom ?? '-'} · ${m.equipement}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w600)),
                               subtitle: Text(

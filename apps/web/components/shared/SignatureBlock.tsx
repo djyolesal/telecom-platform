@@ -32,7 +32,7 @@ export function SignatureBlock({ signatures }: { signatures?: SignatureSlot[] | 
               )}
             </div>
             <p className="mt-1.5 text-sm font-semibold text-gray-800">{s.label}</p>
-            <p className="text-xs text-gray-500">{s.nom || '—'}</p>
+            <p className="text-xs text-gray-500">{s.nom || '-'}</p>
           </div>
         ))}
       </div>

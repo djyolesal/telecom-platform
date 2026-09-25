@@ -108,7 +108,7 @@ export function SelecteurRelation({
               </button>
             ))}
             {options?.length === 50 && (
-              <p className="px-3 py-1.5 text-[11px] text-gray-400">50 premiers résultats — affinez la recherche.</p>
+              <p className="px-3 py-1.5 text-[11px] text-gray-400">50 premiers résultats - affinez la recherche.</p>
             )}
           </div>
         </div>

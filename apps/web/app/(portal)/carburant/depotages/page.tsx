@@ -55,23 +55,23 @@ function DepotagesPageInner() {
   const colonnesOptionnelles = useColonnesOptionnelles<Depotage>('depotages');
 
   const columns: Column<Depotage>[] = [
-    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
-    { key: 'site', header: 'Site', render: (d) => <span className="font-medium text-gray-800">{d.site?.nom ?? "—"}</span> },
+    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '-'}</span> },
+    { key: 'site', header: 'Site', render: (d) => <span className="font-medium text-gray-800">{d.site?.nom ?? "-"}</span> },
     { key: 'dateDepotage', header: 'Date', render: (d) => fmtDate(d.dateDepotage) },
     { key: 'volumeLitres', header: 'Volume (L)', align: 'right', render: (d) => fmtNumber(Number(d.volumeLitres)) },
-    { key: 'stockApresLitres', header: 'Stock après (L)', align: 'right', render: (d) => (d.stockApresLitres != null ? fmtNumber(Number(d.stockApresLitres)) : '—') },
+    { key: 'stockApresLitres', header: 'Stock après (L)', align: 'right', render: (d) => (d.stockApresLitres != null ? fmtNumber(Number(d.stockApresLitres)) : '-') },
     {
       key: 'ecartLivraisonLitres',
       header: 'Écart livr. (L)',
       align: 'right',
       render: (d) => {
-        if (d.ecartLivraisonLitres == null) return '—';
+        if (d.ecartLivraisonLitres == null) return '-';
         const v = Number(d.ecartLivraisonLitres);
         const color = Math.abs(v) < 1 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : 'text-amber-600';
         return <span className={color}>{`${v > 0 ? '+' : ''}${fmtNumber(v)}`}</span>;
       },
     },
-    { key: 'fournisseur', header: 'Fournisseur', render: (d) => d.fournisseur || '—' },
+    { key: 'fournisseur', header: 'Fournisseur', render: (d) => d.fournisseur || '-' },
     {
       key: 'photoCount',
       header: 'Photos',
@@ -80,7 +80,7 @@ function DepotagesPageInner() {
         d.photoCount && d.photoCount > 0 ? (
           <span className="inline-flex items-center gap-1 text-gray-600"><Camera size={14} /> {d.photoCount}</span>
         ) : (
-          <span className="text-gray-300">—</span>
+          <span className="text-gray-300">-</span>
         ),
     },
     ...colonnesOptionnelles,

@@ -63,7 +63,7 @@ export default function FlottePage() {
 
   const colsV: Column<Vehicule>[] = [
     { key: 'libelle', header: 'Camion', render: (v) => <span className="font-medium text-gray-800">{v.libelle}</span> },
-    { key: 'marque', header: 'Marque', render: (v) => v.marque ?? '—' },
+    { key: 'marque', header: 'Marque', render: (v) => v.marque ?? '-' },
     {
       key: 'capacite', header: 'Capacité citerne', align: 'right',
       render: (v) => v.capaciteCiterneLitres != null
@@ -87,7 +87,7 @@ export default function FlottePage() {
         );
       },
     },
-    { key: 'prestataire', header: 'Transporteur', render: (v) => v.prestataire?.nom ?? '—' },
+    { key: 'prestataire', header: 'Transporteur', render: (v) => v.prestataire?.nom ?? '-' },
     { key: 'nbBl', header: 'Chargements', align: 'right', render: (v) => v._count.bonsLivraison },
     { key: 'actif', header: 'État', align: 'center', render: (v) => v.isActive ? <Badge className="bg-green-100 text-green-700">Actif</Badge> : <Badge className="bg-gray-200 text-gray-600">Retiré</Badge> },
     { key: 'actions', header: '', align: 'right', render: (v) => <button onClick={() => setEditV(v)} className="rounded p-1 text-gray-500 hover:bg-gray-100"><Pencil size={15} /></button> },
@@ -95,9 +95,9 @@ export default function FlottePage() {
 
   const colsC: Column<Chauffeur>[] = [
     { key: 'nom', header: 'Chauffeur', render: (c) => <span className="font-medium text-gray-800">{c.nom}</span> },
-    { key: 'telephone', header: 'Téléphone', render: (c) => c.telephone ?? '—' },
-    { key: 'permis', header: 'N° permis', render: (c) => c.numeroPermis ?? '—' },
-    { key: 'prestataire', header: 'Transporteur', render: (c) => c.prestataire?.nom ?? '—' },
+    { key: 'telephone', header: 'Téléphone', render: (c) => c.telephone ?? '-' },
+    { key: 'permis', header: 'N° permis', render: (c) => c.numeroPermis ?? '-' },
+    { key: 'prestataire', header: 'Transporteur', render: (c) => c.prestataire?.nom ?? '-' },
     { key: 'nb', header: 'Chargements / dépotages', align: 'right', render: (c) => `${c._count.bonsLivraison} / ${c._count.depotages}` },
     { key: 'actif', header: 'État', align: 'center', render: (c) => c.isActive ? <Badge className="bg-green-100 text-green-700">Actif</Badge> : <Badge className="bg-gray-200 text-gray-600">Inactif</Badge> },
     { key: 'actions', header: '', align: 'right', render: (c) => <button onClick={() => setEditC(c)} className="rounded p-1 text-gray-500 hover:bg-gray-100"><Pencil size={15} /></button> },
@@ -254,7 +254,7 @@ function VehiculeModal({ vehicule, isInterne, onClose }: { vehicule: Vehicule | 
         </div>
         {isInterne && (
           <Field label="Transporteur">
-            <Select value={form.prestataireId} onChange={(e) => setForm((f) => ({ ...f, prestataireId: e.target.value }))} placeholder="—"
+            <Select value={form.prestataireId} onChange={(e) => setForm((f) => ({ ...f, prestataireId: e.target.value }))} placeholder="-"
               options={transporteurs.map((t) => ({ value: t.id, label: t.nom }))} />
           </Field>
         )}
@@ -311,7 +311,7 @@ function ChauffeurModal({ chauffeur, isInterne, onClose }: { chauffeur: Chauffeu
         <Field label="N° de permis"><Input value={form.numeroPermis} onChange={(e) => setForm((f) => ({ ...f, numeroPermis: e.target.value }))} /></Field>
         {isInterne && (
           <Field label="Transporteur">
-            <Select value={form.prestataireId} onChange={(e) => setForm((f) => ({ ...f, prestataireId: e.target.value }))} placeholder="—"
+            <Select value={form.prestataireId} onChange={(e) => setForm((f) => ({ ...f, prestataireId: e.target.value }))} placeholder="-"
               options={transporteurs.map((t) => ({ value: t.id, label: t.nom }))} />
           </Field>
         )}

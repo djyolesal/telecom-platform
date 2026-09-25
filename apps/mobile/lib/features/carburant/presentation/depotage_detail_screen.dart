@@ -56,7 +56,7 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
             children: [
               _card('Livraison', [
                 if (d.reference != null) _row('Référence', d.reference!),
-                _row('Site', d.siteNom ?? '—'),
+                _row('Site', d.siteNom ?? '-'),
                 _row('Date', fmtDateTime(d.dateDepotage)),
                 _row('Volume livré (jauge)', fmtLitres(d.volumeLitres)),
                 _row('Stock avant', fmtLitres(d.stockAvantLitres)),
@@ -177,7 +177,7 @@ class _DepotageDetailScreenState extends State<DepotageDetailScreen> {
 
   /// Écart signé avec code couleur (vert ≈ 0, rouge négatif/manquant, ambre surplus).
   Widget _ecartRow(String label, double? value) {
-    if (value == null) return _row(label, '—');
+    if (value == null) return _row(label, '-');
     final color = value.abs() < 1
         ? Colors.green.shade700
         : value < 0

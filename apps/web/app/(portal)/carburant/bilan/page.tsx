@@ -79,14 +79,14 @@ export default function BilanCarburantPage() {
   const cols: Column<LigneSite>[] = [
     { key: 'code', header: 'Site', render: (l) => <span className="font-medium text-gray-800">{l.nom}</span> },
     { key: 'region', header: 'Région' },
-    { key: 'stockDebut', header: 'Stock début (L)', align: 'right', render: (l) => l.stockDebut != null ? fmtNumber(l.stockDebut) : <span className="text-gray-300">—</span> },
-    { key: 'livre', header: 'Livré (L)', align: 'right', render: (l) => l.livre > 0 ? fmtNumber(l.livre) : <span className="text-gray-300">—</span> },
+    { key: 'stockDebut', header: 'Stock début (L)', align: 'right', render: (l) => l.stockDebut != null ? fmtNumber(l.stockDebut) : <span className="text-gray-300">-</span> },
+    { key: 'livre', header: 'Livré (L)', align: 'right', render: (l) => l.livre > 0 ? fmtNumber(l.livre) : <span className="text-gray-300">-</span> },
     {
       key: 'mouvements', header: 'Transf./purges (L)', align: 'right',
-      render: (l) => l.mouvements === 0 ? <span className="text-gray-300">—</span>
+      render: (l) => l.mouvements === 0 ? <span className="text-gray-300">-</span>
         : <span className={l.mouvements > 0 ? 'text-blue-600' : 'text-amber-700'}>{l.mouvements > 0 ? '+' : ''}{fmtNumber(l.mouvements)}</span>,
     },
-    { key: 'stockFin', header: 'Stock fin (L)', align: 'right', render: (l) => l.stockFin != null ? fmtNumber(l.stockFin) : <span className="text-gray-300">—</span> },
+    { key: 'stockFin', header: 'Stock fin (L)', align: 'right', render: (l) => l.stockFin != null ? fmtNumber(l.stockFin) : <span className="text-gray-300">-</span> },
     {
       key: 'conso', header: 'Conso (L)', align: 'right',
       render: (l) => l.conso != null
@@ -96,7 +96,7 @@ export default function BilanCarburantPage() {
     { key: 'theo', header: 'Théorique (L)', align: 'right', render: (l) => <span className="text-gray-500">{fmtNumber(l.consoTheorique)}</span> },
     {
       key: 'ecart', header: 'Écart', align: 'right',
-      render: (l) => l.ecart == null ? <span className="text-gray-300">—</span>
+      render: (l) => l.ecart == null ? <span className="text-gray-300">-</span>
         : <span className={l.ecart > 0 ? 'font-semibold text-red-600' : 'text-green-700'}>{l.ecart > 0 ? '+' : ''}{fmtNumber(l.ecart)}</span>,
     },
   ];

@@ -132,7 +132,7 @@ export default function PiecesRefPage() {
                 <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
                   {editId === p.id
                     ? <div className="ml-auto w-32"><Input type="number" value={edit.coutStandard} onChange={(e) => setEdit({ ...edit, coutStandard: e.target.value })} /></div>
-                    : p.coutStandard != null ? `${fmtNumber(Number(p.coutStandard))} F` : '—'}
+                    : p.coutStandard != null ? `${fmtNumber(Number(p.coutStandard))} F` : '-'}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{p.utilisations > 0 ? p.utilisations : <span className="text-gray-300">0</span>}</td>
                 <td className="px-3 py-2.5 text-center">

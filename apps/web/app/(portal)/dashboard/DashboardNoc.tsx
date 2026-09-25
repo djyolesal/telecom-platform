@@ -80,7 +80,7 @@ function LigneDeVie24h({ pouls }: { pouls: Pouls }) {
   return (
     <div className="mb-6 rounded-xl border border-gray-100 bg-white px-5 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-700">Ligne de vie — 24 dernières heures</h3>
+        <h3 className="text-sm font-semibold text-gray-700">Ligne de vie - 24 dernières heures</h3>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500">{totalCoup} coupure(s) · {totalInc} incident(s)</span>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${style.badge}`}>{style.libelle}</span>
@@ -153,7 +153,7 @@ export function DashboardNoc() {
           <p className="text-xs text-gray-500">Plus ancienne en cours</p>
           {stats?.plusAncienne ? (
             <>
-              <p className="mt-0.5 truncate text-sm font-bold text-gray-800" title={stats.plusAncienne.site?.nom}>{stats.plusAncienne.site?.nom ?? '—'}</p>
+              <p className="mt-0.5 truncate text-sm font-bold text-gray-800" title={stats.plusAncienne.site?.nom}>{stats.plusAncienne.site?.nom ?? '-'}</p>
               <p className="text-xs font-bold text-red-600">{duree(stats.plusAncienne.dateDebut)}</p>
             </>
           ) : <p className="mt-0.5 text-sm font-bold text-emerald-600">aucune</p>}
@@ -181,7 +181,7 @@ export function DashboardNoc() {
               <li key={c.id}>
                 <Link href={`/supervision/coupures?search=${encodeURIComponent(c.site?.nom ?? '')}`}
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-sm hover:bg-gray-50">
-                  <span className="font-medium text-gray-800">{c.site?.nom ?? '—'}</span>
+                  <span className="font-medium text-gray-800">{c.site?.nom ?? '-'}</span>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${c.technologie === 'SITE' ? 'bg-red-50 text-red-700' : 'bg-[rgb(var(--brand-tint))] text-[rgb(var(--brand))]'}`}>
                     {c.technologie === 'SITE' ? 'Site entier' : c.technologie}
                   </span>

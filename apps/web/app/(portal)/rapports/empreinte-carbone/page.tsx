@@ -66,7 +66,7 @@ export default function EmpreinteCarbonePage() {
       </div>
 
       <p className="mb-6 text-xs text-gray-400">
-        Facteurs d’émission appliqués : gasoil <b>{f.gasoilKgCO2L} kgCO₂/L</b>, réseau CEET <b>{f.reseauKgCO2Kwh} kgCO₂/kWh</b>, solaire 0 —
+        Facteurs d’émission appliqués : gasoil <b>{f.gasoilKgCO2L} kgCO₂/L</b>, réseau CEET <b>{f.reseauKgCO2Kwh} kgCO₂/kWh</b>, solaire 0 -
         modifiables dans Administration → Paramètres. « Évité par le solaire » = énergie solaire × facteur réseau (émissions non émises par rapport au réseau).
       </p>
 

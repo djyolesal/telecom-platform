@@ -70,7 +70,7 @@ export function champsAffichables(meta: TableMeta): ChampMeta[] {
 }
 
 export function octetsLisibles(n: number | null): string {
-  if (n == null) return '—';
+  if (n == null) return '-';
   if (n < 1024) return `${n} o`;
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(0)} Ko`;
   if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} Mo`;
@@ -83,7 +83,7 @@ export function octetsLisibles(n: number | null): string {
  * de la même façon qu'en base.
  */
 export function afficher(champ: ChampMeta, valeur: unknown, relations?: Relations): string {
-  if (valeur === null || valeur === undefined || valeur === '') return '—';
+  if (valeur === null || valeur === undefined || valeur === '') return '-';
   if (champ.fkVers) {
     const libelle = relations?.[champ.nom]?.[String(valeur)];
     return libelle ?? String(valeur).slice(0, 8);

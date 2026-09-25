@@ -102,10 +102,10 @@ function SitesPageInner() {
   const columns: Column<Site>[] = [
     { key: 'nom', header: 'Nom', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },
     { key: 'region', header: 'Région' },
-    { key: 'ville', header: 'Ville', render: (s) => s.ville || '—' },
+    { key: 'ville', header: 'Ville', render: (s) => s.ville || '-' },
     { key: 'powerConfig', header: 'Config énergie', render: (s) => POWER_CONFIGS.find((p) => p.value === s.powerConfig)?.label ?? s.powerConfig },
     { key: 'statutGE', header: 'Statut GE', render: (s) => STATUTS_GE.find((p) => p.value === s.statutGE)?.label ?? s.statutGE },
-    { key: 'puissanceGEkva', header: 'Puissance GE (kVA)', align: 'right', render: (s) => s.puissanceGEkva != null && !Number.isNaN(Number(s.puissanceGEkva)) ? Number(s.puissanceGEkva).toFixed(0) : '—' },
+    { key: 'puissanceGEkva', header: 'Puissance GE (kVA)', align: 'right', render: (s) => s.puissanceGEkva != null && !Number.isNaN(Number(s.puissanceGEkva)) ? Number(s.puissanceGEkva).toFixed(0) : '-' },
     ...colonnesOptionnelles,
   ];
 

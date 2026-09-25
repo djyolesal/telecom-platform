@@ -42,12 +42,12 @@ interface Rapprochement {
   };
 }
 
-const L = (v: number | null) => (v == null ? <span className="text-gray-300">—</span> : fmtNumber(v));
+const L = (v: number | null) => (v == null ? <span className="text-gray-300">-</span> : fmtNumber(v));
 // Écart non expliqué : rouge dès qu'il est positif - c'est du carburant chargé
 // dont personne ne sait dire où il est passé.
 const ecartCell = (v: number) => (
   <span className={Math.abs(v) < 1 ? 'text-gray-400' : v > 0 ? 'font-semibold text-red-600' : 'font-semibold text-blue-600'}>
-    {Math.abs(v) < 1 ? '—' : fmtNumber(v)}
+    {Math.abs(v) < 1 ? '-' : fmtNumber(v)}
   </span>
 );
 
@@ -130,10 +130,10 @@ export default function RapprochementPage() {
                 <td className="text-right">{L(l.charge)}</td>
                 <td className="text-right text-gray-500">{L(l.planifie)}</td>
                 <td className="text-right">{L(l.livreTotal)}</td>
-                <td className="text-right text-gray-500">{l.livreHorsPlan > 0 ? fmtNumber(l.livreHorsPlan) : '—'}</td>
-                <td className="text-right">{l.retourDepot > 0 ? fmtNumber(l.retourDepot) : <span className="text-gray-300">—</span>}</td>
-                <td className="text-right">{l.perte > 0 ? <span className="font-semibold text-red-600">{fmtNumber(l.perte)}</span> : <span className="text-gray-300">—</span>}</td>
-                <td className="text-right">{l.report > 0 ? fmtNumber(l.report) : <span className="text-gray-300">—</span>}</td>
+                <td className="text-right text-gray-500">{l.livreHorsPlan > 0 ? fmtNumber(l.livreHorsPlan) : '-'}</td>
+                <td className="text-right">{l.retourDepot > 0 ? fmtNumber(l.retourDepot) : <span className="text-gray-300">-</span>}</td>
+                <td className="text-right">{l.perte > 0 ? <span className="font-semibold text-red-600">{fmtNumber(l.perte)}</span> : <span className="text-gray-300">-</span>}</td>
+                <td className="text-right">{l.report > 0 ? fmtNumber(l.report) : <span className="text-gray-300">-</span>}</td>
                 <td className="text-right">{ecartCell(l.ecartNonExplique)}</td>
               </tr>
             ))}
@@ -199,19 +199,19 @@ export default function RapprochementPage() {
                   <td className="text-right">{L(c.livre)}</td>
                   {/* Transferts et purges : sortis du calcul de consommation,
                       sinon ils ressortent en surconsommation donc en soupçon. */}
-                  <td className="text-right">{c.mouvements === 0 ? <span className="text-gray-300">—</span> : <span className={c.mouvements > 0 ? 'text-blue-600' : 'text-amber-700'}>{fmtNumber(c.mouvements)}</span>}</td>
+                  <td className="text-right">{c.mouvements === 0 ? <span className="text-gray-300">-</span> : <span className={c.mouvements > 0 ? 'text-blue-600' : 'text-amber-700'}>{fmtNumber(c.mouvements)}</span>}</td>
                   <td className="text-right">{L(c.stockFin)}</td>
                   <td className="text-right font-medium">{L(c.consoReelle)}</td>
                   {data.arrete.anticipe && (
                     <td className="text-right text-blue-700">
                       {c.projectionLitres != null
-                        ? <span title={`Source : ${c.sourceProjection ?? '—'}`}>+{fmtNumber(c.projectionLitres)}</span>
-                        : <span className="text-gray-300">—</span>}
+                        ? <span title={`Source : ${c.sourceProjection ?? '-'}`}>+{fmtNumber(c.projectionLitres)}</span>
+                        : <span className="text-gray-300">-</span>}
                     </td>
                   )}
                   {data.arrete.anticipe && <td className="text-right text-blue-700">{L(c.stockFinEstime)}</td>}
                   <td className="text-right text-gray-500">{L(c.consoTheorique)}</td>
-                  <td className="text-right">{c.ecart == null ? <span className="text-gray-300">—</span> : ecartCell(c.ecart)}</td>
+                  <td className="text-right">{c.ecart == null ? <span className="text-gray-300">-</span> : ecartCell(c.ecart)}</td>
                 </tr>
               ))}
             </tbody>

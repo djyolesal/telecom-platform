@@ -232,7 +232,7 @@ function CreateBLModal({ bc, onClose }: { bc: BC; onClose: () => void }) {
             </Field>
             {isManager && (
               <Field label="Transporteur">
-                <Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="—"
+                <Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="-"
                   options={transporteurs.map((t) => ({ value: t.id, label: t.nom }))} />
               </Field>
             )}
@@ -352,7 +352,7 @@ export default function BonCommandeDetailPage() {
                 <td className="text-right">{fmtNumber(v.charge)}</td>
                 <td className="text-right">{fmtNumber(v.livre)}</td>
                 <td className={`text-right ${v.enCours > TOL ? 'text-amber-600' : 'text-gray-400'}`}>
-                  {v.enCours > TOL ? fmtNumber(v.enCours) : '—'}
+                  {v.enCours > TOL ? fmtNumber(v.enCours) : '-'}
                 </td>
                 <td className={`text-right font-medium ${v.depassement ? 'text-red-600' : v.ecart < -TOL ? 'text-amber-600' : 'text-green-600'}`}>
                   {v.ecart > 0 ? '+' : ''}{fmtNumber(v.ecart)}
@@ -365,7 +365,7 @@ export default function BonCommandeDetailPage() {
               <td className="text-right">{fmtNumber(totalCharge)}</td>
               <td className="text-right">{fmtNumber(totalLivre)}</td>
               <td className={`text-right ${totalCharge - totalLivre > TOL ? 'text-amber-600' : 'text-gray-400'}`}>
-                {totalCharge - totalLivre > TOL ? fmtNumber(totalCharge - totalLivre) : '—'}
+                {totalCharge - totalLivre > TOL ? fmtNumber(totalCharge - totalLivre) : '-'}
               </td>
               <td className={`text-right ${totalCharge > totalPrevu + TOL ? 'text-red-600' : 'text-gray-700'}`}>{totalCharge - totalPrevu > 0 ? '+' : ''}{fmtNumber(totalCharge - totalPrevu)}</td>
             </tr>

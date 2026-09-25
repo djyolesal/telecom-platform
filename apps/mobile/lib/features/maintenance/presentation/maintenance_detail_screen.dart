@@ -421,7 +421,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
                     _row('Type', kTypeMaintenance[m.type] ?? m.type),
                     _row('Catégorie',
                         '${kCategorieEquipement[m.categorie] ?? m.categorie}${m.isPassive ? ' · passive' : ' · active'}'),
-                    _row('Technicien', m.technicien ?? '—'),
+                    _row('Technicien', m.technicien ?? '-'),
                     if (m.prestataire != null)
                       _row('Prestataire', m.prestataire!),
                     _row('Planifiée', fmtDateTime(m.datePlanifiee)),

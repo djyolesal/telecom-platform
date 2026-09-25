@@ -456,7 +456,7 @@ export async function exporterTable(req: Request, res: Response, next: NextFunct
         columns: colonnes.map((c) => ({ key: c.nom, header: c.nom, width: 22 })),
         rows: lignes.map((l) => serialiserLigne(l)),
       }],
-      `Table ${modele.table} — ${lignes.length} ligne(s)${lignes.length === EXPORT_MAX ? ' (export plafonné)' : ''}`
+      `Table ${modele.table} - ${lignes.length} ligne(s)${lignes.length === EXPORT_MAX ? ' (export plafonné)' : ''}`
     );
   } catch (err) { next(err); }
 }

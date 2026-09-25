@@ -89,7 +89,7 @@ export default function ConformitePage() {
     {
       key: 'du', header: 'Dû du mois', align: 'center',
       render: (l) => l.dues === 0
-        ? <span className="text-gray-400" title="Aucune tâche contractuelle due ce mois sur ses sites.">—</span>
+        ? <span className="text-gray-400" title="Aucune tâche contractuelle due ce mois sur ses sites.">-</span>
         : <span title={`${l.realisees} tâche(s) réalisée(s) sur ${l.dues} due(s) au contrat ce mois.`}>
             <b className={l.realisees < l.dues ? 'text-red-600' : 'text-gray-800'}>{l.realisees}</b>
             <span className="text-gray-500">/{l.dues}</span>
@@ -98,7 +98,7 @@ export default function ConformitePage() {
     {
       key: 'sitesConf', header: 'Sites conformes', align: 'center',
       render: (l) => l.sitesAvecDu === 0
-        ? <span className="text-gray-400">—</span>
+        ? <span className="text-gray-400">-</span>
         : <span title="Sites dont TOUTES les tâches dues du mois sont réalisées.">
             <b className={l.sitesConformes < l.sitesAvecDu ? 'text-red-600' : 'text-gray-800'}>{l.sitesConformes}</b>
             <span className="text-gray-500">/{l.sitesAvecDu}</span>
@@ -157,8 +157,8 @@ export default function ConformitePage() {
             <StatCard title="Dû contractuel" value={t.dues ?? 0} subtitle="tâches dues ce mois" icon={ClipboardCheck} color="bg-[rgb(var(--brand))]" />
             <StatCard title="Réalisées" value={t.realisees ?? 0} subtitle="du dû du mois" icon={CheckCircle2} color="bg-[rgb(var(--accent))]" />
             <StatCard title="Non réalisées" value={t.manquantes ?? 0} subtitle="à relancer" icon={XCircle} color={(t.manquantes ?? 0) > 0 ? 'bg-red-500' : 'bg-gray-400'} />
-            <StatCard title="Conformité contractuelle" value={t.tauxContractuel != null ? `${t.tauxContractuel}%` : '—'} icon={ClipboardCheck} color="bg-[rgb(var(--brand-light))]" />
-            <StatCard title="Sites conformes" value={t.sitesAvecDu ? `${t.sitesConformes}/${t.sitesAvecDu}` : '—'}
+            <StatCard title="Conformité contractuelle" value={t.tauxContractuel != null ? `${t.tauxContractuel}%` : '-'} icon={ClipboardCheck} color="bg-[rgb(var(--brand-light))]" />
+            <StatCard title="Sites conformes" value={t.sitesAvecDu ? `${t.sitesConformes}/${t.sitesAvecDu}` : '-'}
               subtitle="tout leur dû réalisé" icon={ClipboardCheck}
               color={t.sitesAvecDu && t.sitesConformes < t.sitesAvecDu ? 'bg-[#B23124]' : 'bg-[#7D3C98]'} />
           </div>

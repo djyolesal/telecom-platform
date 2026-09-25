@@ -97,14 +97,14 @@ export function aggregateCarbone(
         if (rv.source === 'GE') b.co2Gasoil += co2; else if (rv.source === 'CEET') b.co2Ceet += co2;
         b.co2Total += co2;
       }
-      const reg = rv.region ?? '—';
+      const reg = rv.region ?? '-';
       const pr = parRegion.get(reg) ?? { region: reg, co2TotalKg: 0, co2GasoilKg: 0, co2CeetKg: 0 };
       pr.co2TotalKg += co2;
       if (rv.source === 'GE') pr.co2GasoilKg += co2; else if (rv.source === 'CEET') pr.co2CeetKg += co2;
       parRegion.set(reg, pr);
 
       if (rv.siteId) {
-        const ps = parSite.get(rv.siteId) ?? { code: rv.siteCode ?? '', nom: rv.siteNom ?? '', region: rv.region ?? '—', co2TotalKg: 0 };
+        const ps = parSite.get(rv.siteId) ?? { code: rv.siteCode ?? '', nom: rv.siteNom ?? '', region: rv.region ?? '-', co2TotalKg: 0 };
         ps.co2TotalKg += co2; parSite.set(rv.siteId, ps);
       }
     }

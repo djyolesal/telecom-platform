@@ -379,7 +379,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                 isExpanded: true,
                 decoration: const InputDecoration(
                     labelText: 'Équipement en panne *',
-                    hintText: '— Sélectionner l\'équipement —'),
+                    hintText: '- Sélectionner l\'équipement -'),
                 items: AppConfig.equipements
                     .map((e) => DropdownMenuItem(
                         value: e['code'],

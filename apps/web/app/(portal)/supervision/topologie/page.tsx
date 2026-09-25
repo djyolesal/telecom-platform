@@ -311,7 +311,7 @@ export default function TopologiePage() {
                           <span className="rounded px-1.5 py-px text-[10px] font-bold text-white" style={{ backgroundColor: couleurLiaison(site.typeLiaison) }}>
                             {site.typeLiaison}
                           </span>
-                        ) : <span className="text-xs text-gray-300">—</span>}
+                        ) : <span className="text-xs text-gray-300">-</span>}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{poids}</td>
                       <td className="px-3 py-1.5">

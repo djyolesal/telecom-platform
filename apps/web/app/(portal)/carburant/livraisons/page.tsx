@@ -44,7 +44,7 @@ export default function BonsLivraisonPage() {
 
   const columns: Column<BL>[] = [
     { key: 'numeroBL', header: 'N° BL', render: (b) => <span className="font-medium text-gray-800">{b.numeroBL}</span> },
-    { key: 'bc', header: 'BC', render: (b) => b.bonCommande?.numero ?? '—' },
+    { key: 'bc', header: 'BC', render: (b) => b.bonCommande?.numero ?? '-' },
     { key: 'mois', header: 'Mois', render: (b) => `${MOIS[b.mois]} ${b.annee}` },
     { key: 'camion', header: 'Camion', render: (b) => b.immatriculation },
     { key: 'volume', header: 'Volume (L)', align: 'right', render: (b) => fmtNumber(Number(b.volumeChargeLitres)) },

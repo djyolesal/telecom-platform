@@ -93,7 +93,7 @@ export function EnregistrementModal({
         <Select
           value={valeur}
           onChange={(e) => set(c.nom, e.target.value)}
-          placeholder={c.obligatoire ? 'Choisir…' : '— vide —'}
+          placeholder={c.obligatoire ? 'Choisir…' : '- vide -'}
           options={(meta.enums[c.type] ?? []).map((v) => ({ value: v, label: v }))}
         />
       );
@@ -103,7 +103,7 @@ export function EnregistrementModal({
         <Select
           value={valeur}
           onChange={(e) => set(c.nom, e.target.value)}
-          placeholder={c.obligatoire ? 'Choisir…' : '— vide —'}
+          placeholder={c.obligatoire ? 'Choisir…' : '- vide -'}
           options={[{ value: 'true', label: 'Oui' }, { value: 'false', label: 'Non' }]}
         />
       );
@@ -150,7 +150,7 @@ export function EnregistrementModal({
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-800">
-              {modification ? `Modifier — ${meta.libelle}` : `Nouvel enregistrement — ${meta.libelle}`}
+              {modification ? `Modifier - ${meta.libelle}` : `Nouvel enregistrement - ${meta.libelle}`}
             </h2>
             <p className="mt-0.5 font-mono text-xs text-gray-400">
               {meta.table}
@@ -186,7 +186,7 @@ export function EnregistrementModal({
           <div className="mt-2 flex items-center justify-between gap-3 border-t border-gray-100 pt-4 sm:col-span-2">
             <p className="text-xs text-gray-400">
               {modification
-                ? `${modifies.length} champ(s) modifié(s) — journalisé dans l'audit`
+                ? `${modifies.length} champ(s) modifié(s) - journalisé dans l'audit`
                 : 'Les champs laissés vides prennent la valeur par défaut du schéma'}
             </p>
             <div className="flex gap-2">

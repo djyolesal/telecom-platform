@@ -17,7 +17,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
       <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '—'}</span>
+      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '-'}</span>
     </div>
   );
 }
@@ -110,10 +110,10 @@ export default function ActifDetailPage() {
                 <div className="text-sm">
                   <p className="text-gray-800">
                     {m.natureTravaux === 'DEPLACEMENT' && m.siteSource
-                      ? `${m.siteSource.nom} → ${m.site?.nom ?? '—'}`
+                      ? `${m.siteSource.nom} → ${m.site?.nom ?? '-'}`
                       : m.natureTravaux === 'DESINSTALLATION'
-                        ? `Déposé de ${m.site?.nom ?? '—'}`
-                        : `Posé sur ${m.site?.nom ?? '—'}`}
+                        ? `Déposé de ${m.site?.nom ?? '-'}`
+                        : `Posé sur ${m.site?.nom ?? '-'}`}
                   </p>
                   <p className="text-xs text-gray-400">
                     {m.statut === 'TERMINEE' ? fmtDateTime(m.dateFin) : `Planifié - ${fmtDateTime(m.datePlanifiee)}`}

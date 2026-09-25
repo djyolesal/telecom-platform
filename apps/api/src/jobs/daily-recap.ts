@@ -105,7 +105,7 @@ async function blocMaintenances(
     enCours,
     planifiees,
     enRetard: retard.map((m) => ({
-      site: m.site?.nom ?? '—',
+      site: m.site?.nom ?? '-',
       equipement: `${m.equipement} (${LABEL_STATUT[m.statut] ?? m.statut.toLowerCase()})`,
       datePlanifiee: m.datePlanifiee,
     })),
@@ -157,7 +157,7 @@ export async function calculerRecap(prestataireId: string | null, debutMois: Dat
       ]);
       return {
         ouvertsPeriode, resolus, encoreOuverts, ouvertsAujourdhui,
-        critiquesOuverts: critiques.map((i) => ({ site: i.site?.nom ?? '—', reference: i.reference, depuis: i.dateOuverture })),
+        critiquesOuverts: critiques.map((i) => ({ site: i.site?.nom ?? '-', reference: i.reference, depuis: i.dateOuverture })),
       };
     })(),
     (async () => {
@@ -267,7 +267,7 @@ function sectionMaintenances(titre: string, b: BlocMaintenances): string {
   const retard = b.enRetard.length
     ? `<p style="margin:8px 12px 4px;font-size:12px;color:#B26A00;"><b>En retard :</b> ${b.enRetard
         .map((r) => `${r.site} · ${r.equipement} (prévu ${fmtD(r.datePlanifiee)})`)
-        .join(' — ')}</p>`
+        .join(' - ')}</p>`
     : '';
   return `
   <h3 style="margin:18px 0 6px;color:${NAVY};font-size:15px;">${titre}</h3>
@@ -312,7 +312,7 @@ function sectionDetailPrestataires(lignes: LignePrestataire[]): string {
     ${celluleDetail(String(l.planifiees))}
     ${celluleDetail(`${l.pct} %`, { accent: true })}
     ${celluleDetail(l.incidentsOuverts ? `<span style="color:#B23124;font-weight:700;">${l.incidentsOuverts}</span>` : '0')}
-    ${celluleDetail(l.litres != null ? `${l.litres.toLocaleString('fr-FR')} L` : '—')}
+    ${celluleDetail(l.litres != null ? `${l.litres.toLocaleString('fr-FR')} L` : '-')}
   </tr>`).join('');
   return `
   <h3 style="margin:18px 0 6px;color:${NAVY};font-size:15px;">Détail par prestataire</h3>
@@ -328,12 +328,12 @@ export function rendreEmail(d: RecapData, jour: Date, perimetreLabel: string, de
   const critiques = inc.critiquesOuverts.length
     ? `<p style="margin:8px 12px 4px;font-size:12px;color:#B23124;"><b>Critiques ouverts :</b> ${inc.critiquesOuverts
         .map((c) => `${c.site}${c.reference ? ` · ${c.reference}` : ''} (depuis ${fmtD(c.depuis)})`)
-        .join(' — ')}</p>`
+        .join(' - ')}</p>`
     : '';
   return `
   <div style="font-family:Segoe UI,Arial,sans-serif;max-width:640px;margin:0 auto;color:#222;">
     <div style="background:${NAVY};color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;">
-      <p style="margin:0;font-size:17px;font-weight:700;">E&M OpS — Récap journalier</p>
+      <p style="margin:0;font-size:17px;font-weight:700;">E&M OpS - Récap journalier</p>
       <p style="margin:4px 0 0;font-size:13px;color:#cdd9e8;">${perimetreLabel} · du 1er du mois au ${jour.toLocaleDateString('fr-FR')}</p>
     </div>
     <div style="background:#f7f9fc;border:1px solid #e3e8ef;border-top:0;padding:12px 16px 18px;border-radius:0 0 8px 8px;">
@@ -353,7 +353,7 @@ export function rendreEmail(d: RecapData, jour: Date, perimetreLabel: string, de
         ${ligne('Volume livré', `${d.depotages.litres.toLocaleString('fr-FR')} L`, true)}
       </table>` : ''}
       ${detailPrestataires ? sectionDetailPrestataires(detailPrestataires) : ''}
-      <p style="margin:16px 0 0;font-size:11px;color:#8a94a0;">Email automatique quotidien — merci de ne pas y répondre. Le détail des activités est dans l'application E&M OpS.</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#8a94a0;">Email automatique quotidien - merci de ne pas y répondre. Le détail des activités est dans l'application E&M OpS.</p>
     </div>
   </div>`;
 }
@@ -381,7 +381,7 @@ export async function dailyRecapJob(): Promise<void> {
     groupes.set(cle, [...(groupes.get(cle) ?? []), u.email]);
   }
 
-  // Détail par prestataire : calculé UNE fois si l'email interne part — et
+  // Détail par prestataire : calculé UNE fois si l'email interne part - et
   // ses RecapData resservent aux emails des superviseurs de ces sociétés.
   const detail = groupes.has('INTERNE') ? await calculerDetailPrestataires(debutMois, debutJour) : null;
 

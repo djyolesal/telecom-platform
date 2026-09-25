@@ -73,11 +73,11 @@ export default function EcheancierPreventifPage() {
   const columns: Column<Ligne>[] = [
     { key: 'siteNom', header: 'Site', render: (l) => <span className="font-medium text-gray-800">{l.siteNom}</span> },
     { key: 'region', header: 'Région' },
-    { key: 'prestataire', header: 'Prestataire', render: (l) => l.prestataire ?? '—' },
+    { key: 'prestataire', header: 'Prestataire', render: (l) => l.prestataire ?? '-' },
     { key: 'tache', header: 'Tâche' },
     { key: 'frequenceLabel', header: 'Fréquence' },
-    { key: 'derniereExecution', header: 'Dernière', render: (l) => (l.derniereExecution ? fmtDate(l.derniereExecution) : '—') },
-    { key: 'prochaineEcheance', header: 'Échéance', render: (l) => (l.prochaineEcheance ? fmtDate(l.prochaineEcheance) : '—') },
+    { key: 'derniereExecution', header: 'Dernière', render: (l) => (l.derniereExecution ? fmtDate(l.derniereExecution) : '-') },
+    { key: 'prochaineEcheance', header: 'Échéance', render: (l) => (l.prochaineEcheance ? fmtDate(l.prochaineEcheance) : '-') },
     { key: 'statut', header: 'Statut', render: (l) => <StatutBadge value={l.statut} /> },
   ];
 

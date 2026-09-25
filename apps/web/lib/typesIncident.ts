@@ -18,6 +18,6 @@ export function useTypesIncident() {
   });
   const tous = data ?? TYPES_INCIDENT.map((t) => ({ code: t.value, libelle: t.label, actif: true }));
   const options = tous.filter((t) => t.actif).map((t) => ({ value: t.code, label: t.libelle }));
-  const labelDe = (code?: string | null) => tous.find((t) => t.code === code)?.libelle ?? code ?? '—';
+  const labelDe = (code?: string | null) => tous.find((t) => t.code === code)?.libelle ?? code ?? '-';
   return { options, labelDe };
 }

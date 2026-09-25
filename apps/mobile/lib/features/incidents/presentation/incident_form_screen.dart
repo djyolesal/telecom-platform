@@ -149,8 +149,8 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
                 Expanded(
                   child: Text(
                     AppConfig.minPhotosIncidentDeclaration > 0
-                        ? 'État constaté — ${_photos.length}/${AppConfig.minPhotosIncidentDeclaration} photo(s) minimum'
-                        : 'État constaté — ${_photos.length} photo(s) (facultatif)',
+                        ? 'État constaté - ${_photos.length}/${AppConfig.minPhotosIncidentDeclaration} photo(s) minimum'
+                        : 'État constaté - ${_photos.length} photo(s) (facultatif)',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),

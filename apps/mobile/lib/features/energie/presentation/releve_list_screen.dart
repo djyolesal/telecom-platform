@@ -69,7 +69,7 @@ class _ReleveView extends StatelessWidget {
                   leading:
                       const CircleAvatar(child: Icon(Icons.bolt, size: 20)),
                   title: Text(
-                      '${r.siteNom ?? '—'} · ${r.provenance ?? kSourceEnergie[r.source] ?? r.source}',
+                      '${r.siteNom ?? '-'} · ${r.provenance ?? kSourceEnergie[r.source] ?? r.source}',
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text('${fmtDate(r.dateReleve)} · $detail'),
                   trailing: const Icon(Icons.chevron_right),

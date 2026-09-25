@@ -24,7 +24,7 @@ export async function seConnecter(page: Page, email: string, password: string): 
     // ou désactivé) — le formulaire reste alors sur /login avec son message.
     const refus = await page.getByText('Email ou mot de passe incorrect').isVisible().catch(() => false);
     if (refus) {
-      throw new Error(`Connexion REFUSÉE par l'API pour ${email} — vérifier le compte (existe ? actif ? bon mot de passe ?).`);
+      throw new Error(`Connexion REFUSÉE par l'API pour ${email} - vérifier le compte (existe ? actif ? bon mot de passe ?).`);
     }
     throw e;
   }

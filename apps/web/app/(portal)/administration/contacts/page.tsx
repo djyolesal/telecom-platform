@@ -515,7 +515,7 @@ function ContactForm({ initial, societes, nomsPrestataires, loading, onCancel, o
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <b>« {f.societe} » n&apos;est ni INTERNE ni un prestataire connu</b> : sans « toutes les sociétés »,
           ce contact ne recevra <b>aucun</b> SMS d&apos;incident, de coupure ni de situation périodique.
-          Pour un contact NOC/interne, cochez « toutes les sociétés » — ou corrigez la société.
+          Pour un contact NOC/interne, cochez « toutes les sociétés » - ou corrigez la société.
         </p>
       )}
       <div className="mt-4 flex justify-end gap-2">

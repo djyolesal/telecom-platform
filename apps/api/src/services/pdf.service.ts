@@ -64,7 +64,7 @@ function header(doc: PDFKit.PDFDocument, title: string, subtitle?: string) {
 function row(doc: PDFKit.PDFDocument, label: string, value: string) {
   const y = doc.y;
   doc.fontSize(10).fillColor('#666').text(label, 50, y, { width: 170 });
-  doc.fillColor('#111').text(value || '—', 220, y, { width: 320 });
+  doc.fillColor('#111').text(value || '-', 220, y, { width: 320 });
   doc.moveDown(0.6);
 }
 
@@ -116,14 +116,14 @@ function signatureSlots(
       doc.fontSize(7.5).fillColor('#b4b4b4').text('Signature manquante', x, y + boxH - 16, { width: boxW, align: 'center' });
     }
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#333').text(s.label, x + 2, y + boxH + 7, { width: boxW });
-    doc.font('Helvetica').fontSize(9).fillColor('#666').text(s.nom || '—', x + 2, y + boxH + 19, { width: boxW });
+    doc.font('Helvetica').fontSize(9).fillColor('#666').text(s.nom || '-', x + 2, y + boxH + 19, { width: boxW });
   });
   doc.font('Helvetica').fillColor('black');
   doc.y = y + boxH + footer + 4;
 }
 
 const fmtDate = (d?: Date | string | null) =>
-  d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
 
 export interface RelevePdf {
   source: string;
@@ -171,7 +171,7 @@ export interface MaintenancePdfData {
 }
 
 const fmtN = (v: number | null | undefined, suffixe = '') =>
-  v == null ? '—' : `${Number(v).toLocaleString('fr-FR')}${suffixe}`;
+  v == null ? '-' : `${Number(v).toLocaleString('fr-FR')}${suffixe}`;
 
 /** Grille de photos 3 par ligne occupant TOUTE la largeur, saut de page auto. */
 function grillePhotos(doc: PDFKit.PDFDocument, titre: string, photos: Buffer[], total: number) {
@@ -214,16 +214,16 @@ export function dessinerRapportMaintenance(doc: PDFKit.PDFDocument, m: Maintenan
   header(doc, 'Rapport de maintenance', `Réf. ${m.reference ?? m.id.slice(0, 8).toUpperCase()}`);
 
   sectionTitle(doc, 'Site');
-  row(doc, 'Nom', m.site?.nom ?? '—');
-  row(doc, 'Code', m.site?.code ?? '—');
-  row(doc, 'Région', m.site?.region ?? '—');
+  row(doc, 'Nom', m.site?.nom ?? '-');
+  row(doc, 'Code', m.site?.code ?? '-');
+  row(doc, 'Région', m.site?.region ?? '-');
 
   sectionTitle(doc, 'Intervention');
   row(doc, 'Type', libelle(L_TYPE_MAINTENANCE, m.type));
   row(doc, 'Catégorie', libelle(L_CATEGORIE_EQUIPEMENT, m.categorie));
   row(doc, 'Équipement', m.equipement);
   row(doc, 'Statut', libelle(L_STATUT_MAINTENANCE, m.statut));
-  row(doc, 'Technicien', m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—');
+  row(doc, 'Technicien', m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '-');
   row(doc, 'Prestataire', m.prestataire?.nom ?? 'Interne');
   if (m.nomAgentSecurite) row(doc, 'Agent de sécurité', m.nomAgentSecurite);
   row(doc, 'Planifiée le', fmtDate(m.datePlanifiee));
@@ -231,7 +231,7 @@ export function dessinerRapportMaintenance(doc: PDFKit.PDFDocument, m: Maintenan
   row(doc, 'Fin', fmtDate(m.dateFin));
   row(doc, 'Durée travaillée', m.dureeMinutes != null
     ? `${m.dureeMinutes} min${m.dureeSuspendueMinutes ? ` (hors ${m.dureeSuspendueMinutes} min de suspension)` : ''}`
-    : '—');
+    : '-');
 
   // Relevés énergie : mêmes informations que la fiche web (index SAISIS +
   // deltas depuis le relevé précédent quand ils existent).
@@ -248,7 +248,7 @@ export function dessinerRapportMaintenance(doc: PDFKit.PDFDocument, m: Maintenan
     for (const r of m.releves.filter((x) => x.source !== 'GE')) {
       if (r.source === 'CEET') row(doc, 'CEET', `${fmtN(r.consommationKwh, ' kWh')} · index ${fmtN(r.indexCompteur)}`);
       else if (r.source === 'SOLAIRE') row(doc, 'Solaire', fmtN(r.puissanceKva, ' kVA'));
-      else row(doc, 'Autre source', '—');
+      else row(doc, 'Autre source', '-');
     }
   }
 
@@ -525,7 +525,7 @@ export async function generateMaintenancesRecueilPdf(
 
     // ── Activité curative : ce que le lecteur cherche d'abord, et qu'aucune
     //    page individuelle ne donne — l'état des incidents à la date d'édition.
-    sectionTitle(doc, `Activité curative — incidents (${garde.incidents.length})`);
+    sectionTitle(doc, `Activité curative - incidents (${garde.incidents.length})`);
     if (!garde.incidents.length) {
       doc.fontSize(9).fillColor('#666').text('Aucune intervention curative rattachée à un incident sur la période.', 50, doc.y);
       doc.fillColor('black'); doc.moveDown(0.6);
@@ -549,7 +549,7 @@ export async function generateMaintenancesRecueilPdf(
       const L = [230, 110, 75, 80];
       ligneTableau(doc, ['Pièce', 'Référence', 'Quantité', 'Sites'], L, true);
       garde.pieces.forEach((p) =>
-        ligneTableau(doc, [p.nom, p.reference || '—', String(p.quantite), String(p.sites)], L));
+        ligneTableau(doc, [p.nom, p.reference || '-', String(p.quantite), String(p.sites)], L));
     }
 
     doc.moveDown(0.8);
@@ -586,7 +586,7 @@ export async function generateMaintenancesRecueilPdf(
       });
       if (garde.manquantes.length > 30) {
         doc.fontSize(8).fillColor(GRIS_PDF).text(
-          `+ ${garde.manquantes.length - 30} autre(s) site(s) en défaut — détail complet dans le rapport de conformité.`,
+          `+ ${garde.manquantes.length - 30} autre(s) site(s) en défaut - détail complet dans le rapport de conformité.`,
           50, doc.y + 2);
         doc.fillColor('black'); doc.moveDown(0.5);
       }
@@ -685,7 +685,7 @@ export async function buildFicheValidationPdf(d: FicheValidationData): Promise<B
 
     doc.rect(50, y, w - 100, 18).fill('#D6E4F0');
     doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND).text(
-      d.contrat === 'SOLAIRE' ? 'OPÉRATION DE MAINTENANCE PRÉVENTIVE — CONTRAT SOLAIRE' : 'OPÉRATION DE MAINTENANCE PRÉVENTIVE',
+      d.contrat === 'SOLAIRE' ? 'OPÉRATION DE MAINTENANCE PRÉVENTIVE - CONTRAT SOLAIRE' : 'OPÉRATION DE MAINTENANCE PRÉVENTIVE',
       56, y + 5, { width: w - 112, align: 'center' });
     doc.fillColor('black');
     doc.y = y + 26;
@@ -797,8 +797,8 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
 
     sectionTitle(doc, 'Chargement');
     row(doc, 'N° bon de livraison', p.numeroBL);
-    row(doc, 'Bon de commande', p.bcNumero ?? '—');
-    row(doc, 'Transporteur', p.transporteur ?? '—');
+    row(doc, 'Bon de commande', p.bcNumero ?? '-');
+    row(doc, 'Transporteur', p.transporteur ?? '-');
     if (p.numeroClient) row(doc, 'N° client', p.numeroClient);
     row(doc, 'Camion', p.immatriculation);
     row(doc, 'Volume chargé', `${Math.round(p.volumeChargeLitres)} L`);
@@ -874,7 +874,7 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
     if (nbPickup > 0) {
       doc.moveDown(0.8);
       doc.fontSize(8).fillColor('#b45309').text(
-        `Pickup : ${nbPickup} site(s) inaccessibles au camion citerne — prévoir un véhicule de transfert.`,
+        `Pickup : ${nbPickup} site(s) inaccessibles au camion citerne - prévoir un véhicule de transfert.`,
         X0, doc.y, { width: X1 - X0 }
       );
     }
@@ -931,26 +931,26 @@ export interface DepotagePdfData {
   photos?: Buffer[];
 }
 
-const L = (n?: number | null) => (n == null ? '—' : `${Math.round(Number(n)).toLocaleString('fr-FR')} L`);
-const SIGNED = (n?: number | null) => (n == null ? '—' : `${Number(n) > 0 ? '+' : ''}${Math.round(Number(n)).toLocaleString('fr-FR')} L`);
+const L = (n?: number | null) => (n == null ? '-' : `${Math.round(Number(n)).toLocaleString('fr-FR')} L`);
+const SIGNED = (n?: number | null) => (n == null ? '-' : `${Number(n) > 0 ? '+' : ''}${Math.round(Number(n)).toLocaleString('fr-FR')} L`);
 
 export async function generateDepotagePdf(d: DepotagePdfData): Promise<Buffer> {
   return render((doc) => {
     header(doc, 'Bordereau de dépotage', `Réf. ${d.reference ?? d.id.slice(0, 8).toUpperCase()} - ${fmtDate(d.dateDepotage)}`);
 
     sectionTitle(doc, 'Site');
-    row(doc, 'Nom', d.site?.nom ?? '—');
-    row(doc, 'Code', d.site?.code ?? '—');
-    row(doc, 'Région', d.site?.region ?? '—');
+    row(doc, 'Nom', d.site?.nom ?? '-');
+    row(doc, 'Code', d.site?.code ?? '-');
+    row(doc, 'Région', d.site?.region ?? '-');
 
     sectionTitle(doc, 'Livraison');
     row(doc, 'Volume livré (jauge)', L(d.volumeLitres));
     row(doc, 'Stock avant', L(d.stockAvantLitres));
     row(doc, 'Stock après', L(d.stockApresLitres));
     row(doc, 'Volume annoncé (BL)', L(d.volumeAnnonceLitres));
-    row(doc, 'Fournisseur', d.fournisseur ?? '—');
-    row(doc, 'Bon de livraison', d.numeroBonLivraison ?? '—');
-    row(doc, 'Technicien', d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—');
+    row(doc, 'Fournisseur', d.fournisseur ?? '-');
+    row(doc, 'Bon de livraison', d.numeroBonLivraison ?? '-');
+    row(doc, 'Technicien', d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '-');
 
     if (d.volumeAnnonceLitres != null || d.ecartLivraisonLitres != null || d.ecartConsoLitres != null || d.analyseDepotage) {
       sectionTitle(doc, 'Réconciliation');
@@ -1052,8 +1052,8 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
     sectionTitle(doc, 'Actif');
     row(doc, 'Type', libelle(L_CATEGORIE_EQUIPEMENT, d.actif.type));
     row(doc, 'Désignation', d.actif.designation);
-    row(doc, 'N° de série', d.actif.numeroSerie ?? '—');
-    row(doc, 'Marque', d.actif.marque ?? '—');
+    row(doc, 'N° de série', d.actif.numeroSerie ?? '-');
+    row(doc, 'Marque', d.actif.marque ?? '-');
     if (d.actif.caracteristique) row(doc, 'Caractéristique', d.actif.caracteristique);
 
     sectionTitle(doc, 'Localisation');
@@ -1071,8 +1071,8 @@ export async function generateBonMouvementPdf(d: BonMouvementPdfData): Promise<B
     }
 
     sectionTitle(doc, 'Intervenants');
-    row(doc, 'Technicien', d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—');
-    row(doc, 'Prestataire', d.prestataire?.nom ?? '—');
+    row(doc, 'Technicien', d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '-');
+    row(doc, 'Prestataire', d.prestataire?.nom ?? '-');
 
     if (d.observations) {
       sectionTitle(doc, 'Observations');

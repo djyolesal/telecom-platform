@@ -235,7 +235,7 @@ export default function SiteDetailPage() {
               site.lot.assignments.map((a: { id: string; scope: string; prestataire?: { nom: string } }) => (
                 <div key={a.id} className="flex items-center gap-1.5">
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">{SCOPE_LABELS[a.scope] ?? a.scope}</span>
-                  <span className="text-gray-800">{a.prestataire?.nom ?? '—'}</span>
+                  <span className="text-gray-800">{a.prestataire?.nom ?? '-'}</span>
                 </div>
               ))
             ) : (
@@ -252,7 +252,7 @@ export default function SiteDetailPage() {
               site.lotSolaire.assignments.map((a: { id: string; prestataire?: { nom: string } }) => (
                 <div key={a.id} className="flex items-center gap-1.5">
                   <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-800">Solaire</span>
-                  <span className="text-gray-800">{a.prestataire?.nom ?? '—'}</span>
+                  <span className="text-gray-800">{a.prestataire?.nom ?? '-'}</span>
                 </div>
               ))
             ) : (
@@ -265,18 +265,18 @@ export default function SiteDetailPage() {
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Infrastructure</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-          <InfoRow label="Type de pylône" value={pyloneOptions.find((t) => t.value === site.typePylone)?.label ?? site.typePylone ?? '—'} />
+          <InfoRow label="Type de pylône" value={pyloneOptions.find((t) => t.value === site.typePylone)?.label ?? site.typePylone ?? '-'} />
           <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
           <InfoRow label="Accès camion citerne" value={site.accesPickup ? 'Livraison par pickup' : 'Accès direct'} />
-          <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '—'} />
-          <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '—'} />
+          <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '-'} />
+          <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '-'} />
           <InfoRow label="Dimensions cuve" value={
             site.cuveDiametreCm != null || site.cuveHauteurCm != null
               ? (site.formeCuve === 'CYLINDRE_COUCHE'
                 ? `Ø ${fmtNumber(site.cuveDiametreCm)} × L ${fmtNumber(site.cuveLongueurCm)} cm`
                 : `${fmtNumber(site.cuveLongueurCm)} × ${fmtNumber(site.cuveLargeurCm)} × h ${fmtNumber(site.cuveHauteurCm)} cm`)
-              : (site.cuveDimensions || '—')
+              : (site.cuveDimensions || '-')
           } />
           <InfoRow label="Conversion hauteur → litres" value={
             site.cuve?.calculable ? (
@@ -287,8 +287,8 @@ export default function SiteDetailPage() {
             ) : <span className="text-gray-400">Non configurée - le technicien saisit les litres à la main</span>
           } />
           <InfoRow label="Agent de sécurité" value={site.hasGardien ? 'Oui' : 'Non'} />
-          <InfoRow label="Sté gardiennage" value={site.gardiennagePrestataire?.nom ?? site.societeGardiennage ?? '—'} />
-          <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[rgb(var(--brand-light))] hover:underline">{site.telephoneSite}</a> : '—'} />
+          <InfoRow label="Sté gardiennage" value={site.gardiennagePrestataire?.nom ?? site.societeGardiennage ?? '-'} />
+          <InfoRow label="Téléphone site" value={site.telephoneSite ? <a href={`tel:${site.telephoneSite}`} className="text-[rgb(var(--brand-light))] hover:underline">{site.telephoneSite}</a> : '-'} />
         </div>
         {site.cuve?.calculable && <ConvertisseurCuve site={site} />}
         {(site.cuve?.photos?.length ?? 0) > 0 && (
@@ -336,7 +336,7 @@ export default function SiteDetailPage() {
                   : t.statut === 'JAMAIS' ? 'bg-orange-50 text-orange-700 ring-orange-100'
                   : t.statut === 'A_JOUR' ? 'bg-green-50 text-green-700 ring-green-100'
                   : 'bg-gray-100 text-gray-500 ring-gray-200'}`}>
-                  {t.statut === 'EN_RETARD' ? 'En retard' : t.statut === 'JAMAIS' ? 'Jamais' : t.statut === 'A_JOUR' ? 'À jour' : '—'}
+                  {t.statut === 'EN_RETARD' ? 'En retard' : t.statut === 'JAMAIS' ? 'Jamais' : t.statut === 'A_JOUR' ? 'À jour' : '-'}
                 </span>
                 <span className="flex-1 text-gray-700">{t.libelle}</span>
                 <span className="text-xs text-gray-400">{t.frequenceLabel}</span>
@@ -367,7 +367,7 @@ export default function SiteDetailPage() {
               toolbar={false}
               columns={[
                 { key: 'equipement', header: 'Équipement' },
-                { key: 'type', header: 'Type', render: (m) => (m.type === 'PREVENTIVE' ? 'Préventive' : m.type === 'CURATIVE' ? 'Curative' : m.type ?? '—') },
+                { key: 'type', header: 'Type', render: (m) => (m.type === 'PREVENTIVE' ? 'Préventive' : m.type === 'CURATIVE' ? 'Curative' : m.type ?? '-') },
                 { key: 'statut', header: 'Statut', render: (m) => <StatutMaintBadge value={m.statut} /> },
                 { key: 'datePlanifiee', header: 'Date', render: (m) => fmtDateTime(m.datePlanifiee) },
               ]}

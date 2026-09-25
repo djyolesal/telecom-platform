@@ -99,7 +99,7 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
     row.getCell(2).value = p.dues;
     row.getCell(3).value = p.realisees;
     row.getCell(3).font = { size: 10, color: { argb: p.realisees < p.dues ? RED : TEAL } };
-    row.getCell(4).value = p.sitesAvecDu ? `${p.sitesConformes}/${p.sitesAvecDu}` : '—';
+    row.getCell(4).value = p.sitesAvecDu ? `${p.sitesConformes}/${p.sitesAvecDu}` : '-';
     row.getCell(4).font = { size: 10, color: { argb: p.sitesConformes < p.sitesAvecDu ? RED : TEAL } };
     row.getCell(5).value = p.invalidees || '';
     row.getCell(5).font = { size: 10, bold: true, color: { argb: RED } };
@@ -232,8 +232,8 @@ export async function buildConformitePdf(d: DonneesConformite): Promise<Buffer> 
     ['Tâches dues', String(dues), P_NAVY],
     ['Réalisées', String(realisees), P_TEAL],
     ['Non réalisées', String(dues - realisees), dues - realisees > 0 ? P_RED : P_GRIS],
-    ['Conformité', taux != null ? `${taux}%` : '—', taux != null ? pCouleur(taux) : P_GRIS],
-    ['Sites conformes', sitesAvecDu ? `${sitesConformes}/${sitesAvecDu}` : '—', sitesConformes < sitesAvecDu ? P_RED : P_TEAL],
+    ['Conformité', taux != null ? `${taux}%` : '-', taux != null ? pCouleur(taux) : P_GRIS],
+    ['Sites conformes', sitesAvecDu ? `${sitesConformes}/${sitesAvecDu}` : '-', sitesConformes < sitesAvecDu ? P_RED : P_TEAL],
   ];
   let y = 80;
   const kw = (INNER - 4 * 10) / 5;
@@ -262,7 +262,7 @@ export async function buildConformitePdf(d: DonneesConformite): Promise<Buffer> 
       doc.roundedRect(bx, by, Math.max(8, (bw * p.tauxContractuel) / 100), 7, 3.5).fill(pCouleur(p.tauxContractuel));
     }
     doc.fill(p.tauxContractuel != null ? pCouleur(p.tauxContractuel) : P_GRIS).font('Helvetica-Bold').fontSize(12)
-      .text(p.tauxContractuel != null ? `${p.tauxContractuel}%` : '—', bx + bw + 8, by - 3, { lineBreak: false });
+      .text(p.tauxContractuel != null ? `${p.tauxContractuel}%` : '-', bx + bw + 8, by - 3, { lineBreak: false });
     // Mini-graphe : 6 barres mensuelles, hauteur et couleur = % du dû.
     const gx = bx + bw + 60, barW = 14, gap = 6, gBottom = y + 38, gH = 26;
     p.evolution.forEach((e, i) => {

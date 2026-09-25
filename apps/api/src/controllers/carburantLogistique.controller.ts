@@ -541,7 +541,7 @@ async function notifierNouveauChargement(blId: string, auteurId: string): Promis
       ? new Date(bl.dateChargement).toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome', day: '2-digit', month: '2-digit', year: 'numeric' })
       : null;
     await notificationService.sendToRole('ADMIN', {
-      title: `🚚 Nouveau chargement — ${litres}`,
+      title: `🚚 Nouveau chargement - ${litres}`,
       body: [
         `BL ${bl.numeroBL}`,
         `camion ${bl.immatriculation}`,

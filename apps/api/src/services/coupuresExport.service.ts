@@ -74,7 +74,7 @@ export const COLONNES_DETAIL = [
 /** Durée lisible pour un document destiné à être LU (PDF) : « 2 h 30 », « 3 j 4 h ».
  *  Le classeur xlsx, lui, garde des minutes brutes pour rester calculable. */
 export const fmtDuree = (min: number | null) => {
-  if (min == null) return '—';
+  if (min == null) return '-';
   if (min < 60) return `${min} min`;
   if (min < 60 * 48) return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
   return `${Math.floor(min / 1440)} j ${Math.floor((min % 1440) / 60)} h`;
@@ -193,7 +193,7 @@ export function construireClasseurCoupures(opts: {
   };
 
   tableau('Downtime par type d’alarme', ['Alarme', 'Coupures', 'Downtime (h)', 'Part'],
-    agrege((l) => l.typeAlarme ?? '—').map(([k, a]) => [LIBELLES_ALARME[k] ?? k, a.coupures, Math.round(a.dt / 60), pct(a.dt)]));
+    agrege((l) => l.typeAlarme ?? '-').map(([k, a]) => [LIBELLES_ALARME[k] ?? k, a.coupures, Math.round(a.dt / 60), pct(a.dt)]));
 
   tableau('Répartition par technologie', ['Technologie', 'Coupures', 'Downtime (h)', 'En cours'],
     agrege((l) => l.technologie).map(([k, a]) => [k === 'SITE' ? 'Site entier' : k, a.coupures, Math.round(a.dt / 60), a.enCours]));

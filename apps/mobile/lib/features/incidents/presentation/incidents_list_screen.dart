@@ -124,7 +124,7 @@ class _IncidentsViewState extends State<_IncidentsView> {
                                   size: 20),
                             ),
                             title: Text(
-                                '${inc.siteNom ?? '—'} · ${AppConfig.typesIncident[inc.type] ?? kTypeIncident[inc.type] ?? inc.type}',
+                                '${inc.siteNom ?? '-'} · ${AppConfig.typesIncident[inc.type] ?? kTypeIncident[inc.type] ?? inc.type}',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600)),
                             subtitle: Text(

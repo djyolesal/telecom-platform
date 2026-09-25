@@ -314,7 +314,7 @@ class _CarteLigneState extends State<_CarteLigne> {
                     Icon(Icons.local_shipping,
                         size: 13, color: Colors.orange.shade800),
                     const SizedBox(width: 4),
-                    Text('Pickup — camion citerne sans accès',
+                    Text('Pickup - camion citerne sans accès',
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,

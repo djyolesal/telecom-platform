@@ -256,15 +256,15 @@ export async function createTransfert(req: Request, res: Response, next: NextFun
     const codeDst = sites.find((x) => x.id === siteDestinationId)?.code ?? 'destination';
     void notifierMouvement(
       statut === 'EN_ATTENTE'
-        ? `⛽ Transfert à valider — ${L(volume)}`
-        : `⛽ Transfert de carburant — ${L(volume)}`,
+        ? `⛽ Transfert à valider - ${L(volume)}`
+        : `⛽ Transfert de carburant - ${L(volume)}`,
       `${codeSrc} → ${codeDst} · ${raison}`,
       { groupeId: cree.groupeId, volumeLitres: volume, statut },
     );
     res.status(201).json({
       success: true, data: cree,
       message: statut === 'EN_ATTENTE'
-        ? 'Transfert déclaré — en attente de validation, sans effet sur le stock'
+        ? 'Transfert déclaré - en attente de validation, sans effet sur le stock'
         : 'Transfert enregistré',
     });
   } catch (err) { next(err); }
@@ -323,14 +323,14 @@ export async function createPurge(req: Request, res: Response, next: NextFunctio
     clearMemo();
     const siteP = await prisma.site.findUnique({ where: { id: siteId }, select: { code: true, nom: true } });
     void notifierMouvement(
-      statutP === 'EN_ATTENTE' ? `⛽ Purge à valider — ${L(volume)}` : `⛽ Purge de cuve — ${L(volume)}`,
+      statutP === 'EN_ATTENTE' ? `⛽ Purge à valider - ${L(volume)}` : `⛽ Purge de cuve - ${L(volume)}`,
       `${siteP?.code ?? ''} ${siteP?.nom ?? ''} · ${raison}`.trim(),
       { mouvementId: mvt.id, volumeLitres: volume, statut: statutP },
     );
     res.status(201).json({
       success: true, data: mvt,
       message: statutP === 'EN_ATTENTE'
-        ? 'Purge déclarée — en attente de validation, sans effet sur le stock'
+        ? 'Purge déclarée - en attente de validation, sans effet sur le stock'
         : 'Purge enregistrée',
     });
   } catch (err) { next(err); }
@@ -371,7 +371,7 @@ export async function createAvoir(req: Request, res: Response, next: NextFunctio
     await auditLog(req.user!.id, 'CREATE', 'mouvements_carburant', mvt.id, { avoir: { bonCommandeId, volume } }, req);
     clearMemo();
     void notifierMouvement(
-      `⛽ Avoir fournisseur — ${L(volume)}`,
+      `⛽ Avoir fournisseur - ${L(volume)}`,
       `Bon de commande ${bc.numero} · ${raison}`,
       { mouvementId: mvt.id, bonCommandeId },
     );
@@ -415,7 +415,7 @@ export async function validerMouvement(req: Request, res: Response, next: NextFu
 
     await auditLog(req.user!.id, 'UPDATE', 'mouvements_carburant', mvt.groupeId ?? mvt.id, { action: 'validation', lignes: maj.count }, req);
     clearMemo();
-    res.json({ success: true, data: { lignesValidees: maj.count }, message: 'Mouvement validé — il compte désormais dans le stock' });
+    res.json({ success: true, data: { lignesValidees: maj.count }, message: 'Mouvement validé - il compte désormais dans le stock' });
   } catch (err) { next(err); }
 }
 

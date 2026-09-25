@@ -97,10 +97,10 @@ export default function ReapprovisionnementPage() {
     { key: 'tendance', header: 'Tend.', align: 'center', render: (s) => <span title={`Tendance ${s.tendance.toLowerCase()}`} className={s.tendance === 'HAUSSE' ? 'text-red-600' : s.tendance === 'BAISSE' ? 'text-green-600' : 'text-gray-400'}>{s.tendance === 'HAUSSE' ? '↗' : s.tendance === 'BAISSE' ? '↘' : '→'}</span> },
     { key: 'dependance', header: 'Dépendance', align: 'center', render: (s) => {
       const d = DEPENDANCE[s.rangEnergie ?? 3];
-      return d ? <Badge className={d.classe}><span title={d.aide}>{d.label}</span></Badge> : '—';
+      return d ? <Badge className={d.classe}><span title={d.aide}>{d.label}</span></Badge> : '-';
     } },
-    { key: 'autonomie', header: 'Autonomie', align: 'right', render: (s) => s.autonomieJours != null ? `${s.autonomieJours} j` : '—' },
-    { key: 'livraison', header: 'À livrer le', render: (s) => s.dateLivraisonCible ? <span className={(s.joursAvantLivraison ?? 1) <= 0 ? 'text-red-600 font-medium' : ''}>{fmtDate(s.dateLivraisonCible)}</span> : '—' },
+    { key: 'autonomie', header: 'Autonomie', align: 'right', render: (s) => s.autonomieJours != null ? `${s.autonomieJours} j` : '-' },
+    { key: 'livraison', header: 'À livrer le', render: (s) => s.dateLivraisonCible ? <span className={(s.joursAvantLivraison ?? 1) <= 0 ? 'text-red-600 font-medium' : ''}>{fmtDate(s.dateLivraisonCible)}</span> : '-' },
     { key: 'quantite', header: 'Quantité reco (L)', align: 'right', render: (s) => <span className="font-semibold text-gray-800">{fmtNumber(s.quantiteRecommandee)}</span> },
     { key: 'priorite', header: 'Priorité', align: 'center', render: (s) => <Badge className={PRIO_COLORS[s.priorite] || ''}>{PRIO_LABEL[s.priorite] || s.priorite}</Badge> },
   ];
@@ -239,7 +239,7 @@ export default function ReapprovisionnementPage() {
                 { key: 'theo', header: 'Attendue/j (L)', align: 'right', render: (a: Anomalie) => fmtNumber(a.consoTheoriqueJour) },
                 { key: 'ecart', header: 'Écart', align: 'right', render: (a: Anomalie) => <span className={a.ecartPct > 0 ? 'text-red-600 font-semibold' : 'text-amber-600 font-medium'}>{a.ecartPct > 0 ? '+' : ''}{a.ecartPct}%</span> },
                 { key: 'type', header: 'Type', render: (a: Anomalie) => a.type === 'SURCONSOMMATION' ? 'Surconsommation' : 'Sous-consommation' },
-                { key: 'manquant', header: 'Manquant', align: 'center', render: (a: Anomalie) => a.manquantAssocie ? <Badge className="bg-red-100 text-red-700">oui</Badge> : <span className="text-gray-300">—</span> },
+                { key: 'manquant', header: 'Manquant', align: 'center', render: (a: Anomalie) => a.manquantAssocie ? <Badge className="bg-red-100 text-red-700">oui</Badge> : <span className="text-gray-300">-</span> },
                 { key: 'severite', header: 'Sévérité', align: 'center', render: (a: Anomalie) => <Badge className={a.severite === 'ELEVEE' ? 'bg-red-600 text-white' : 'bg-amber-100 text-amber-700'}>{a.severite === 'ELEVEE' ? 'Élevée' : 'Moyenne'}</Badge> },
               ]}
               data={anomData.anomalies}

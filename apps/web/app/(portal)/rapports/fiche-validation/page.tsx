@@ -103,7 +103,7 @@ export default function FicheValidationPage() {
           </Field>
           <Field label="Format" className="md:col-span-3">
             <Select value={format} onChange={(e) => setFormat(e.target.value as 'xlsx' | 'pdf')}
-              options={[{ value: 'xlsx', label: 'Excel (.xlsx) — pour travailler les chiffres' }, { value: 'pdf', label: 'PDF — mise en page figée, à signer' }]} />
+              options={[{ value: 'xlsx', label: 'Excel (.xlsx) - pour travailler les chiffres' }, { value: 'pdf', label: 'PDF - mise en page figée, à signer' }]} />
           </Field>
           <Field label="Mois" required>
             <Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS} />

@@ -49,7 +49,7 @@ class _ReleveDetailScreenState extends State<ReleveDetailScreen> {
             padding: paddingEcran(context),
             children: [
               _card('Relevé', [
-                _row('Site', r.siteNom ?? '—'),
+                _row('Site', r.siteNom ?? '-'),
                 _row('Date', fmtDateTime(r.dateReleve)),
                 if (r.provenance != null && r.provenance!.isNotEmpty)
                   _row('Provenance', r.provenance!),

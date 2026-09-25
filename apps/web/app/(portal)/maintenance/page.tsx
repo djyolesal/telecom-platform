@@ -90,8 +90,8 @@ function MaintenancePageInner() {
   const colonnesOptionnelles = useColonnesOptionnelles<Maintenance>('maintenances');
 
   const columns: Column<Maintenance>[] = [
-    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
-    { key: 'site', header: 'Site', render: (m) => <span className="font-medium text-gray-800">{m.site?.nom ?? '—'}</span> },
+    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '-'}</span> },
+    { key: 'site', header: 'Site', render: (m) => <span className="font-medium text-gray-800">{m.site?.nom ?? '-'}</span> },
     {
       key: 'equipement',
       header: 'Équipement',
@@ -112,9 +112,9 @@ function MaintenancePageInner() {
     },
     { key: 'type', header: 'Type', render: (m) => TYPES_MAINTENANCE.find((t) => t.value === m.type)?.label ?? m.type },
     { key: 'categorie', header: 'Catégorie', render: (m) => CATEGORIES_EQUIPEMENT.find((c) => c.value === m.categorie)?.label ?? m.categorie },
-    { key: 'prestataire', header: 'Prestataire', render: (m) => m.prestataire?.nom ?? '—' },
+    { key: 'prestataire', header: 'Prestataire', render: (m) => m.prestataire?.nom ?? '-' },
     { key: 'statut', header: 'Statut', render: (m) => <StatutMaintBadge value={m.statut} /> },
-    { key: 'technicien', header: 'Technicien', render: (m) => (m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—') },
+    { key: 'technicien', header: 'Technicien', render: (m) => (m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '-') },
     { key: 'datePlanifiee', header: 'Planifiée', render: (m) => fmtDateTime(m.datePlanifiee) },
     ...colonnesOptionnelles,
   ];

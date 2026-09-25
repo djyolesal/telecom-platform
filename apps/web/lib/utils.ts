@@ -8,25 +8,25 @@ export function cn(...inputs: ClassValue[]): string {
 
 /** Formate un nombre avec séparateurs de milliers (fr-FR). */
 export function fmtNumber(n: number | null | undefined): string {
-  if (n == null) return '—';
+  if (n == null) return '-';
   return n.toLocaleString('fr-FR');
 }
 
 /** Formate une valeur monétaire en FCFA. */
 export function fmtFCFA(n: number | null | undefined): string {
-  if (n == null) return '—';
+  if (n == null) return '-';
   return `${n.toLocaleString('fr-FR')} FCFA`;
 }
 
 /** Formate une date ISO en format court fr-FR. */
 export function fmtDate(d: string | Date | null | undefined): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 /** Formate une date+heure. */
 export function fmtDateTime(d: string | Date | null | undefined): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 }
 

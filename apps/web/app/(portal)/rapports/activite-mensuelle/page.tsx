@@ -81,7 +81,7 @@ export default function RapportActiviteMensuelPage() {
     <div>
       <PageHeader
         title="Rapport mensuel d'activité"
-        subtitle="Tâches dues non réalisées et chaque intervention au format du rapport unitaire — avec visa contractuel"
+        subtitle="Tâches dues non réalisées et chaque intervention au format du rapport unitaire - avec visa contractuel"
         backHref="/rapports"
       />
       <FormCard>
@@ -112,7 +112,7 @@ export default function RapportActiviteMensuelPage() {
           </Field>
         </div>
         <p className="mt-4 text-xs text-gray-500">
-          Le <b>logo du prestataire</b> n’apparaît que si le rapport ne couvre qu’un prestataire — sur un périmètre
+          Le <b>logo du prestataire</b> n’apparaît que si le rapport ne couvre qu’un prestataire - sur un périmètre
           mixte, afficher l’un des logos laisserait croire que le document ne concerne que celui-là. La <b>fiche de
           validation</b> du mois s’exporte à part (Rapports → Fiche de validation), en Excel ou en PDF.
           Chaque intervention embarque un échantillon de photos ; au-delà du plafond réglé, le serveur demande de resserrer le périmètre.

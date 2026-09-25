@@ -67,7 +67,7 @@ export function extraireChampsBC(texte: string, ocr: boolean): ExtractionBC {
     const annee = parseInt(m[2], 10);
     annees.set(annee, (annees.get(annee) ?? 0) + 1);
     // (?![,\d]) : sans cette borne, « 158 000 670,0000 » (QTE puis prix
-    // unitaire) était lu 158 000 670 — le motif reculera jusqu'à « 158 000 ».
+    // unitaire) était lu 158 000 670 - le motif reculera jusqu'à « 158 000 ».
     const qte = m[3].match(/(\d{1,3}(?:[ .]\d{3})+|\d{4,7})(?![,\d])/);
     const valeur = qte ? litres(qte[1]) : NaN;
     if (!qte || !Number.isFinite(valeur) || valeur < 100 || valeur > 5_000_000) {

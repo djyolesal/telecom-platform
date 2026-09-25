@@ -80,9 +80,9 @@ function CreateModal({ onClose }: { onClose: () => void }) {
           <Field label="Email" required className="col-span-2"><Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required /></Field>
           <Field label="Téléphone"><Input value={form.telephone} onChange={(e) => set('telephone', e.target.value)} /></Field>
           <Field label="Rôle" required><Select value={form.role} onChange={(e) => set('role', e.target.value)} options={ROLES} /></Field>
-          <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="—" /></Field>
+          <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="-" /></Field>
           <Field label="Prestataire"><Select value={form.prestataireId} onChange={(e) => set('prestataireId', e.target.value)} options={prestataireOptions} placeholder="(interne)" /></Field>
-          <Field label="Équipe"><Select value={form.equipe} onChange={(e) => set('equipe', e.target.value)} options={EQUIPES} placeholder="—" /></Field>
+          <Field label="Équipe"><Select value={form.equipe} onChange={(e) => set('equipe', e.target.value)} options={EQUIPES} placeholder="-" /></Field>
           <Field label="Mot de passe" className="col-span-2"><Input type="text" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="(auto si vide)" /></Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
@@ -146,9 +146,9 @@ function EditModal({ user, onClose }: { user: User; onClose: () => void }) {
           <Field label="Email" required><Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required /></Field>
           <Field label="Téléphone"><Input value={form.telephone} onChange={(e) => set('telephone', e.target.value)} placeholder="+228…" /></Field>
           <Field label="Rôle" required><Select value={form.role} onChange={(e) => set('role', e.target.value)} options={ROLES} /></Field>
-          <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="—" /></Field>
+          <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="-" /></Field>
           <Field label="Prestataire"><Select value={form.prestataireId} onChange={(e) => set('prestataireId', e.target.value)} options={prestataireOptions} placeholder="(interne)" /></Field>
-          <Field label="Équipe"><Select value={form.equipe} onChange={(e) => set('equipe', e.target.value)} options={EQUIPES} placeholder="—" /></Field>
+          <Field label="Équipe"><Select value={form.equipe} onChange={(e) => set('equipe', e.target.value)} options={EQUIPES} placeholder="-" /></Field>
           <Field label="Nouveau mot de passe" className="col-span-2"><Input type="text" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="(laisser vide pour ne pas changer)" /></Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
@@ -193,13 +193,13 @@ export default function UtilisateursPage() {
   const columns: Column<User>[] = [
     { key: 'nom', header: 'Nom', render: (u) => <span className="block max-w-[160px] truncate font-medium text-gray-800" title={`${u.prenom} ${u.nom}`}>{u.prenom} {u.nom}</span> },
     { key: 'email', header: 'Email', render: (u) => <span className="block max-w-[190px] truncate" title={u.email}>{u.email}</span> },
-    { key: 'telephone', header: 'Téléphone', render: (u) => u.telephone ? <span className="tabular-nums">{u.telephone}</span> : <span className="text-gray-300" title="Sans numéro : ce compte ne recevra pas les SMS d'affectation">—</span> },
+    { key: 'telephone', header: 'Téléphone', render: (u) => u.telephone ? <span className="tabular-nums">{u.telephone}</span> : <span className="text-gray-300" title="Sans numéro : ce compte ne recevra pas les SMS d'affectation">-</span> },
     { key: 'role', header: 'Rôle', render: (u) => ROLES.find((r) => r.value === u.role)?.label ?? u.role },
     { key: 'prestataire', header: 'Prestataire', render: (u) => {
       const libelle = u.prestataire ? `${u.prestataire.nom}${u.equipe ? ` (${u.equipe === 'PASSIVE' ? 'passive' : 'active'})` : ''}` : 'Interne';
       return <span className="block max-w-[140px] truncate" title={libelle}>{libelle}</span>;
     } },
-    { key: 'region', header: 'Région', render: (u) => u.region || '—' },
+    { key: 'region', header: 'Région', render: (u) => u.region || '-' },
     { key: 'isActive', header: 'Statut', render: (u) => <Badge className={u.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>{u.isActive ? 'Actif' : 'Inactif'}</Badge> },
     { key: 'lastLoginAt', header: 'Dern. connexion', render: (u) => <span className="whitespace-nowrap text-xs">{fmtDateTime(u.lastLoginAt)}</span> },
     {
@@ -210,7 +210,7 @@ export default function UtilisateursPage() {
             {u.appareilLabel}
           </span>
         )
-        : <span className="text-xs text-gray-300">—</span>,
+        : <span className="text-xs text-gray-300">-</span>,
     },
     {
       // COLONNE À PART, et non une étiquette accrochée à l'appareil : collée au
@@ -222,7 +222,7 @@ export default function UtilisateursPage() {
       render: (u) => {
         // Jamais connecté depuis le mobile : rien à dire, ce n'est pas un trou.
         if (!u.appVersion && !u.appareilLabel && !u.appVersionLe) {
-          return <span className="text-xs text-gray-300" title="Ce compte ne s'est jamais connecté depuis l'application mobile">—</span>;
+          return <span className="text-xs text-gray-300" title="Ce compte ne s'est jamais connecté depuis l'application mobile">-</span>;
         }
         return (
           <span

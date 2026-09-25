@@ -13,7 +13,7 @@ class LotAttribution {
     final p = j['prestataire'] as Map<String, dynamic>?;
     return LotAttribution(
       scope: j['scope'] as String? ?? '',
-      prestataireNom: p?['nom'] as String? ?? '—',
+      prestataireNom: p?['nom'] as String? ?? '-',
       prestataireTel:
           (p?['contactTechnique'] ?? p?['contactCommercial']) as String?,
     );

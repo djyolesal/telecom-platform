@@ -87,7 +87,7 @@ export default function GardiennagePage() {
                   <td className="px-3 py-3 text-right tabular-nums text-gray-400">{s.nonRenseigne}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-indigo-400" title="Passages de jour sur des postes de nuit - absence normale, exclue du taux">{s.horsPlage ?? 0}</td>
                   <td className="px-3 py-3 pr-5 text-right tabular-nums">
-                    {s.tauxAbsencePct == null ? <span className="text-gray-300">—</span> : (
+                    {s.tauxAbsencePct == null ? <span className="text-gray-300">-</span> : (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.tauxAbsencePct === 0 ? 'bg-green-100 text-green-700' : s.tauxAbsencePct <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                         {s.tauxAbsencePct} %
                       </span>

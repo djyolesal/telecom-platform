@@ -15,7 +15,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
       <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '—'}</span>
+      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '-'}</span>
     </div>
   );
 }
@@ -49,7 +49,7 @@ export default function ReleveDetailPage() {
       />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
-        <Row label="Site" value={r.site?.nom ?? '—'} />
+        <Row label="Site" value={r.site?.nom ?? '-'} />
         <Row label="Date" value={fmtDateTime(r.dateReleve)} />
         {r.provenance && <Row label="Provenance" value={r.provenance} />}
         <Row label="Source" value={<Badge className={SOURCE_COLOR[r.source] || 'bg-gray-100 text-gray-600'}>{SOURCES_ENERGIE.find((x) => x.value === r.source)?.label ?? r.source}</Badge>} />
@@ -61,7 +61,7 @@ export default function ReleveDetailPage() {
         {r.groupe?.numero != null && <Row label="Groupe électrogène" value={`GE n°${r.groupe.numero}${r.groupe.puissanceKva != null ? ` · ${fmtNumber(Number(r.groupe.puissanceKva))} kVA` : ''}`} />}
         {r.puissanceKva != null && <Row label="Puissance solaire" value={`${fmtNumber(Number(r.puissanceKva))} kVA`} />}
         {r.coutEstime != null && <Row label="Coût estimé" value={fmtFCFA(Number(r.coutEstime))} />}
-        <Row label="Technicien" value={r.technicien ? `${r.technicien.prenom} ${r.technicien.nom}` : '—'} />
+        <Row label="Technicien" value={r.technicien ? `${r.technicien.prenom} ${r.technicien.nom}` : '-'} />
         {r.observations && <Row label="Observations" value={r.observations} />}
       </div>
 
@@ -71,7 +71,7 @@ export default function ReleveDetailPage() {
           <Row label="Type" value={TYPES_MAINTENANCE.find((x) => x.value === m.type)?.label ?? m.type} />
           <Row label="Catégorie" value={CATEGORIES_EQUIPEMENT.find((x) => x.value === m.categorie)?.label ?? m.categorie} />
           <Row label="Équipement" value={m.equipement} />
-          <Row label="Clôturée le" value={m.dateFin ? fmtDateTime(m.dateFin) : '—'} />
+          <Row label="Clôturée le" value={m.dateFin ? fmtDateTime(m.dateFin) : '-'} />
         </div>
       )}
     </div>

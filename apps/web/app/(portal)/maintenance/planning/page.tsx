@@ -75,7 +75,7 @@ export default function PlanningPage() {
                       <div className="mt-1"><StatutMaintBadge value={m.statut} /></div>
                     </button>
                   ))}
-                  {items.length === 0 && <p className="text-[10px] text-gray-300 text-center pt-4">—</p>}
+                  {items.length === 0 && <p className="text-[10px] text-gray-300 text-center pt-4">-</p>}
                 </div>
               </div>
             );

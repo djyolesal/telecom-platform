@@ -98,7 +98,7 @@ export async function computeSla(opts: { jours?: number } = {}): Promise<SlaRepo
   });
   for (const m of prevs) {
     if (!m.prestataireId) continue;
-    const a = ensure(m.prestataireId, m.prestataire?.nom ?? '—');
+    const a = ensure(m.prestataireId, m.prestataire?.nom ?? '-');
     a.prevPlan += 1;
     const limite = new Date(m.datePlanifiee.getTime() + toleranceJours * 86400000);
     // Le temps SUSPENDU (urgence ordonnée ailleurs) ne compte pas contre le

@@ -96,7 +96,7 @@ function PoulsParc({ ok, faible, critique, stockTotal, autonomie, sitesActifs }:
         {stat(String(faible), 'stock faible', 'text-[#FFB020]')}
         {stat(String(critique), 'critiques / vides', 'text-[#F87171]')}
         {stat(stockTotal >= 10_000 ? `${(stockTotal / 1000).toFixed(0)}k L` : `${Math.round(stockTotal).toLocaleString('fr-FR')} L`, 'stock total')}
-        {stat(autonomie != null ? `${autonomie} j` : '—', 'autonomie médiane')}
+        {stat(autonomie != null ? `${autonomie} j` : '-', 'autonomie médiane')}
       </div>
     </button>
   );

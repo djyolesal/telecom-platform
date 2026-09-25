@@ -166,7 +166,7 @@ describe('rendu des lignes', () => {
 
   it('donne un libellé lisible plutôt qu’un uuid', () => {
     const site = modeleOuErreur('Site');
-    expect(libelleLigne(site, { id: 'abcdef1234', nom: 'Lomé-Centre', code: 'LOM01' })).toBe('Lomé-Centre — LOM01');
+    expect(libelleLigne(site, { id: 'abcdef1234', nom: 'Lomé-Centre', code: 'LOM01' })).toBe('Lomé-Centre - LOM01');
     expect(libelleLigne(site, { id: 'abcdef1234' })).toBe('abcdef12');
   });
 });

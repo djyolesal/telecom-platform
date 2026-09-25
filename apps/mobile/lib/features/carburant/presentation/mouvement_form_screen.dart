@@ -141,7 +141,7 @@ class _MouvementFormScreenState extends State<MouvementFormScreen> {
       if (!mounted) return;
       _snack(res.isQueued
           ? 'Hors-ligne : déclaration mise en file, elle partira à la reconnexion'
-          : 'Déclaration enregistrée — en attente de validation');
+          : 'Déclaration enregistrée - en attente de validation');
       GoRouter.of(context).pop();
     } catch (e) {
       if (mounted) _snack(e is ServerException ? e.message : 'Enregistrement impossible');
@@ -222,7 +222,7 @@ class _MouvementFormScreenState extends State<MouvementFormScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Text('Photos de la cuve — ${_photos.length}/$minPhotos',
+                  child: Text('Photos de la cuve - ${_photos.length}/$minPhotos',
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
                 OutlinedButton.icon(

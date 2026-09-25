@@ -91,7 +91,7 @@ export default function SlaPage() {
                     {p.incidentsResolus}
                     {p.incidentsHorsDelai > 0 && <span className="ml-1 font-semibold text-red-600">({p.incidentsHorsDelai} ⚠)</span>}
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums text-gray-600">{p.delaiResolutionMoyenH != null ? `${p.delaiResolutionMoyenH} h` : '—'}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-gray-600">{p.delaiResolutionMoyenH != null ? `${p.delaiResolutionMoyenH} h` : '-'}</td>
                   <td className="px-3 py-3 text-right tabular-nums">
                     <span className={(p.dispoPassivePct ?? 100) >= data.seuils.dispoPassiveMinPct ? 'text-gray-700' : 'font-semibold text-red-600'}>{p.dispoPassivePct ?? 100}%</span>
                     <span className="ml-1 text-xs text-gray-400">({p.downtimePassifHeures ?? 0} h / {p.nbSites ?? 0} sites)</span>
@@ -99,10 +99,10 @@ export default function SlaPage() {
                   <td className="px-3 py-3 text-right tabular-nums">
                     {(p.maintenancesInvalidees ?? 0) > 0
                       ? <span className="font-semibold text-red-600" title="Clôtures contestées par un manager : chacune est pénalisée et casse la conformité.">{p.maintenancesInvalidees}</span>
-                      : <span className="text-gray-300">—</span>}
+                      : <span className="text-gray-300">-</span>}
                   </td>
                   <td className={`px-3 py-3 text-right tabular-nums font-semibold ${scoreColor(p.scoreSla)}`}>{p.scoreSla}</td>
-                  <td className="px-3 py-3 pr-5 text-right tabular-nums">{p.penaliteFCFA > 0 ? <span className="font-semibold text-amber-700">{fmtFCFA(p.penaliteFCFA)}</span> : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-3 py-3 pr-5 text-right tabular-nums">{p.penaliteFCFA > 0 ? <span className="font-semibold text-amber-700">{fmtFCFA(p.penaliteFCFA)}</span> : <span className="text-gray-300">-</span>}</td>
                 </tr>
               ))}
             </tbody>

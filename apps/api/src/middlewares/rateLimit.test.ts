@@ -53,7 +53,7 @@ const reqLogin = (email: string, ip = '10.0.0.5') => ({ ip, socket: {}, body: { 
 
 beforeEach(() => { store.clear(); ttls.clear(); redisHS = false; });
 
-describe('rateLimit — mode « échecs seulement » (login)', () => {
+describe('rateLimit - mode « échecs seulement » (login)', () => {
   const login = () => rateLimit({ windowSec: 900, max: 3, ipMax: 5, keyPrefix: 'login', failClosed: true, countOnlyFailures: true });
 
   it('ne compte PAS les connexions réussies : 50 succès d\'affilée passent', async () => {
@@ -107,7 +107,7 @@ describe('rateLimit — mode « échecs seulement » (login)', () => {
   });
 });
 
-describe('rateLimit — refresh par empreinte de jeton', () => {
+describe('rateLimit - refresh par empreinte de jeton', () => {
   const refresh = () => rateLimit({
     windowSec: 900, max: 3, keyPrefix: 'refresh',
     identite: (r: any) => (typeof r.body?.refreshToken === 'string' && r.body.refreshToken ? empreinteJeton(r.body.refreshToken) : ''),

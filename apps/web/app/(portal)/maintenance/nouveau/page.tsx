@@ -176,7 +176,7 @@ export default function NouvelleMaintenancePage() {
               </Field>
               <Field label="Équipement en panne" required>
                 <Select value={form.equipementCode} onChange={(e) => { set('equipementCode', e.target.value); set('actifKey', ''); }} required
-                  options={equipementOptions} placeholder="— Sélectionner l'équipement —" />
+                  options={equipementOptions} placeholder="- Sélectionner l'équipement -" />
               </Field>
               <Field label="Précision (optionnel)">
                 <Input value={form.precision} onChange={(e) => set('precision', e.target.value)} placeholder="ex. : climatiseur nº 2, contacteur amont" />

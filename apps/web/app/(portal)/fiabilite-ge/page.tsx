@@ -92,7 +92,7 @@ export default function FiabiliteGePage() {
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums text-gray-600">{fmtNumber(m.heuresTotales)} h</td>
                     <td className="px-3 py-3 pr-5 text-right tabular-nums">
-                      {m.mtbfHeures != null ? <span className="font-medium text-gray-800">{fmtNumber(m.mtbfHeures)} h</span> : <span className="text-gray-300">—</span>}
+                      {m.mtbfHeures != null ? <span className="font-medium text-gray-800">{fmtNumber(m.mtbfHeures)} h</span> : <span className="text-gray-300">-</span>}
                     </td>
                   </tr>
                 ))}

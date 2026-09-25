@@ -23,7 +23,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
       <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '—'}</span>
+      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '-'}</span>
     </div>
   );
 }
@@ -261,16 +261,16 @@ export default function MaintenanceDetailPage() {
             <h3 className="font-semibold text-gray-700 text-sm">Détails</h3>
             <StatutMaintBadge value={m.statut} />
           </div>
-          <Row label="Site" value={m.site?.nom ?? '—'} />
+          <Row label="Site" value={m.site?.nom ?? '-'} />
           <Row label="Type" value={TYPES_MAINTENANCE.find((t) => t.value === m.type)?.label ?? m.type} />
           <Row label="Catégorie" value={`${CATEGORIES_EQUIPEMENT.find((c) => c.value === m.categorie)?.label ?? m.categorie}${isPassive ? ' · passive' : ' · active'}`} />
           <Row label="Équipement" value={m.equipement} />
-          <Row label="Technicien" value={m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '—'} />
+          <Row label="Technicien" value={m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '-'} />
           <Row label="Prestataire" value={m.prestataire?.nom} />
           <Row label="Planifiée" value={fmtDateTime(m.datePlanifiee)} />
           <Row label="Début" value={fmtDateTime(m.dateDebut)} />
           <Row label="Fin" value={fmtDateTime(m.dateFin)} />
-          <Row label="Durée" value={m.dureeMinutes != null ? `${m.dureeMinutes} min` : '—'} />
+          <Row label="Durée" value={m.dureeMinutes != null ? `${m.dureeMinutes} min` : '-'} />
           {(m.dureeSuspendueMinutes > 0 || m.statut === 'SUSPENDUE') && (
             <Row label="Suspension" value={`${m.dureeSuspendueMinutes > 0 ? `${m.dureeSuspendueMinutes} min décomptées` : 'en cours'}${m.motifSuspension ? ` - ${m.motifSuspension}` : ''}`} />
           )}
@@ -339,7 +339,7 @@ export default function MaintenanceDetailPage() {
                     <li className="flex justify-between gap-4">
                       <span className="font-medium text-gray-700">Gasoil consommé</span>
                       <span className="text-gray-500 text-right">
-                        {gasoilRow.gasoilConsommeLitres != null ? `${fmtNumber(gasoilRow.gasoilConsommeLitres)} L` : '—'}
+                        {gasoilRow.gasoilConsommeLitres != null ? `${fmtNumber(gasoilRow.gasoilConsommeLitres)} L` : '-'}
                         {gasoilRow.volumeGasoilLitres != null ? ` · cuve ${fmtNumber(gasoilRow.volumeGasoilLitres)} L` : ''}
                       </span>
                     </li>
@@ -350,7 +350,7 @@ export default function MaintenanceDetailPage() {
                       {/* Même format que CEET : delta (— si pas de relevé précédent) · index SAISI.
                           L'index manquait à l'affichage alors qu'il est exigé à la clôture. */}
                       <span className="text-gray-500 text-right">
-                        {r.heuresFonctGE != null ? `${fmtNumber(r.heuresFonctGE)} h` : '—'}
+                        {r.heuresFonctGE != null ? `${fmtNumber(r.heuresFonctGE)} h` : '-'}
                         {r.indexHeuresGE != null ? ` · index ${fmtNumber(r.indexHeuresGE)} h` : ''}
                       </span>
                     </li>
@@ -367,7 +367,7 @@ export default function MaintenanceDetailPage() {
                       <span className="text-gray-500 text-right">
                         {r.source === 'CEET' && (
                           <>
-                            {r.consommationKwh != null ? `${fmtNumber(r.consommationKwh)} kWh` : '— kWh'}
+                            {r.consommationKwh != null ? `${fmtNumber(r.consommationKwh)} kWh` : '- kWh'}
                             {` · index ${fmtNumber(r.indexCompteur)}`}
                           </>
                         )}

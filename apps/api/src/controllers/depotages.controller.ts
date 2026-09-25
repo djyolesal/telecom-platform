@@ -595,7 +595,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
             site: depotage.site?.nom ?? '',
             litres: String(Math.round(volume)),
             technicien: [tech?.prenom, tech?.nom].filter(Boolean).join(' ') || 'technicien',
-            chauffeur: b.nomChauffeur ? String(b.nomChauffeur) : '—',
+            chauffeur: b.nomChauffeur ? String(b.nomChauffeur) : '-',
             stock: stockApres != null ? `Stock : ${Math.round(stockApres)} L.` : '',
           }),
           'DEPOTAGE_LIVRAISON',

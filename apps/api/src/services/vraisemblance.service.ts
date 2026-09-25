@@ -255,6 +255,6 @@ export async function contexteSaisieSite(siteId: string, groupeIds: string[]) {
 export function traceConfirmation(avertissements: AvertissementSaisie[]): string {
   return [
     '⚠ Valeurs inhabituelles confirmées par le technicien :',
-    ...avertissements.map((a) => `— ${a.message}`),
+    ...avertissements.map((a) => `- ${a.message}`),
   ].join('\n');
 }

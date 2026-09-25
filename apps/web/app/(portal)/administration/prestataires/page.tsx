@@ -144,10 +144,10 @@ export default function PrestatairesPage() {
         {p.isGardiennage && <Badge className="ml-2 bg-amber-50 text-amber-700">Gardiennage</Badge>}
       </span>
     ) },
-    { key: 'contacts', header: 'Contacts (com. / tech.)', render: (p) => `${p.contactCommercial || '—'} / ${p.contactTechnique || '—'}` },
-    { key: 'email', header: 'Email', render: (p) => p.email || '—' },
+    { key: 'contacts', header: 'Contacts (com. / tech.)', render: (p) => `${p.contactCommercial || '-'} / ${p.contactTechnique || '-'}` },
+    { key: 'email', header: 'Email', render: (p) => p.email || '-' },
     { key: 'lots', header: 'Lots attribués', align: 'center', render: (p) => p._count?.assignments ?? 0 },
-    { key: 'sitesGardes', header: 'Sites gardés', align: 'center', render: (p) => p.isGardiennage ? (p._count?.sitesGardes ?? 0) : '—' },
+    { key: 'sitesGardes', header: 'Sites gardés', align: 'center', render: (p) => p.isGardiennage ? (p._count?.sitesGardes ?? 0) : '-' },
     { key: 'isActive', header: 'Statut', render: (p) => <Badge className={p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>{p.isActive ? 'Actif' : 'Inactif'}</Badge> },
     {
       key: 'actions', header: '', align: 'right', render: (p) => (

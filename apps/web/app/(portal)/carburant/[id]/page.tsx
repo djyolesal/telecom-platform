@@ -18,14 +18,14 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
       <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '—'}</span>
+      <span className="text-sm font-medium text-gray-800 text-right">{value ?? '-'}</span>
     </div>
   );
 }
 
 /** Écart signé avec code couleur (vert ≈ 0, rouge négatif/manquant, ambre surplus). */
 function EcartRow({ label, value }: { label: string; value: number | null | undefined }) {
-  if (value == null) return <Row label={label} value="—" />;
+  if (value == null) return <Row label={label} value="-" />;
   const v = Number(value);
   const color = Math.abs(v) < 1 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : 'text-amber-600';
   const signe = v > 0 ? '+' : '';
@@ -119,23 +119,23 @@ export default function DepotageDetailPage() {
       />
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
-        <Row label="Site" value={d.site?.nom ?? '—'} />
+        <Row label="Site" value={d.site?.nom ?? '-'} />
         <Row label="Date" value={fmtDateTime(d.dateDepotage)} />
         <Row label="Volume livré (jauge)" value={`${fmtNumber(Number(d.volumeLitres))} L`} />
-        <Row label="Stock avant" value={d.stockAvantLitres != null ? `${fmtNumber(Number(d.stockAvantLitres))} L${d.hauteurAvantCm != null ? ` (${Number(d.hauteurAvantCm)} cm mesurés)` : ''}` : '—'} />
-        <Row label="Stock après" value={d.stockApresLitres != null ? `${fmtNumber(Number(d.stockApresLitres))} L${d.hauteurApresCm != null ? ` (${Number(d.hauteurApresCm)} cm mesurés)` : ''}` : '—'} />
+        <Row label="Stock avant" value={d.stockAvantLitres != null ? `${fmtNumber(Number(d.stockAvantLitres))} L${d.hauteurAvantCm != null ? ` (${Number(d.hauteurAvantCm)} cm mesurés)` : ''}` : '-'} />
+        <Row label="Stock après" value={d.stockApresLitres != null ? `${fmtNumber(Number(d.stockApresLitres))} L${d.hauteurApresCm != null ? ` (${Number(d.hauteurApresCm)} cm mesurés)` : ''}` : '-'} />
         <Row label="Fournisseur" value={d.fournisseur} />
         <Row label="Bon de livraison" value={d.numeroBonLivraison} />
-        <Row label="Technicien" value={d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '—'} />
+        <Row label="Technicien" value={d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '-'} />
         {d.observations && <Row label="Observations" value={d.observations} />}
       </div>
 
       {hasRecon && (
         <div className="bg-white rounded-xl border border-gray-100 p-5 max-w-2xl">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Réconciliation carburant</h3>
-          <Row label="Volume annoncé (BL)" value={d.volumeAnnonceLitres != null ? `${fmtNumber(Number(d.volumeAnnonceLitres))} L` : '—'} />
+          <Row label="Volume annoncé (BL)" value={d.volumeAnnonceLitres != null ? `${fmtNumber(Number(d.volumeAnnonceLitres))} L` : '-'} />
           <EcartRow label="Écart livraison (jauge − annoncé)" value={d.ecartLivraisonLitres} />
-          <Row label="Gasoil attendu (depuis dernier dépotage)" value={d.gasoilAttenduLitres != null ? `${fmtNumber(Number(d.gasoilAttenduLitres))} L` : '—'} />
+          <Row label="Gasoil attendu (depuis dernier dépotage)" value={d.gasoilAttenduLitres != null ? `${fmtNumber(Number(d.gasoilAttenduLitres))} L` : '-'} />
           <EcartRow label="Écart conso (réel − attendu)" value={d.ecartConsoLitres} />
           {d.analyseDepotage && (
             <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 whitespace-pre-line">{d.analyseDepotage}</div>

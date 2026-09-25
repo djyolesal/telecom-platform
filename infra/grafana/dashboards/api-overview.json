@@ -3,7 +3,7 @@
   "editable": true,
   "graphTooltip": 0,
   "schemaVersion": 39,
-  "title": "API Télécom — Vue d'ensemble",
+  "title": "API Télécom - Vue d'ensemble",
   "uid": "telecom-api",
   "tags": ["telecom", "api"],
   "time": { "from": "now-6h", "to": "now" },

@@ -71,12 +71,12 @@ function IncidentsPageInner() {
   const meta: PaginationMeta | undefined = data?.meta;
 
   const columns: Column<Incident>[] = [
-    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '—'}</span> },
-    { key: 'site', header: 'Site', render: (i) => <span className="font-medium text-gray-800">{i.site?.nom ?? "—"}</span> },
+    { key: 'reference', header: 'Réf.', render: (x: { reference?: string | null }) => <span className="font-mono text-xs text-gray-500">{x.reference ?? '-'}</span> },
+    { key: 'site', header: 'Site', render: (i) => <span className="font-medium text-gray-800">{i.site?.nom ?? "-"}</span> },
     { key: 'type', header: 'Type', render: (i) => labelDe(i.type) },
     { key: 'severite', header: 'Sévérité', render: (i) => <SeveriteBadge value={i.severite} /> },
     { key: 'statut', header: 'Statut', render: (i) => <StatutIncidentBadge value={i.statut} /> },
-    { key: 'technicien', header: 'Technicien', render: (i) => (i.technicien ? `${i.technicien.prenom} ${i.technicien.nom}` : '—') },
+    { key: 'technicien', header: 'Technicien', render: (i) => (i.technicien ? `${i.technicien.prenom} ${i.technicien.nom}` : '-') },
     { key: 'dateOuverture', header: 'Ouverture', render: (i) => fmtDateTime(i.dateOuverture) },
   ];
 

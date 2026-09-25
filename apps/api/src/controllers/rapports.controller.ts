@@ -847,7 +847,7 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
       else if (r.source === 'CEET') { coutCeet += cout; co2CeetKg += co2ReseauKg(kwh, cf); if (bucket) bucket.coutCeet += cout; }
       else if (r.source === 'SOLAIRE') { solaireKwh += kwh; }
 
-      const reg = r.site?.region ?? '—';
+      const reg = r.site?.region ?? '-';
       const pr = parRegion.get(reg) ?? { region: reg, coutEnergie: 0, gasoilLitres: 0, incidents: 0 };
       pr.coutEnergie += cout; pr.gasoilLitres += litres; parRegion.set(reg, pr);
 
@@ -857,7 +857,7 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
       }
     }
     for (const i of incidents) {
-      const reg = i.site?.region ?? '—';
+      const reg = i.site?.region ?? '-';
       const pr = parRegion.get(reg) ?? { region: reg, coutEnergie: 0, gasoilLitres: 0, incidents: 0 };
       pr.incidents += 1; parRegion.set(reg, pr);
     }

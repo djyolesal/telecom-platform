@@ -48,8 +48,8 @@ export default function CorrelationCarburantPage() {
     { key: 'consomme', header: 'Consommé GE (L)', align: 'right', render: (l) => fmtNumber(l.consommeLitres) },
     { key: 'ecart', header: 'Écart (L)', align: 'right', render: (l) => <span className={l.ecartLitres < 0 ? 'text-red-600 font-medium' : 'text-gray-700'}>{l.ecartLitres > 0 ? '+' : ''}{fmtNumber(l.ecartLitres)}</span> },
     { key: 'heures', header: 'Heures GE', align: 'right', render: (l) => fmtNumber(l.heuresGE) },
-    { key: 'ratio', header: 'Livré/Consommé', align: 'center', render: (l) => l.ratio != null ? `${l.ratio.toFixed(2)}×` : '—' },
-    { key: 'anomalie', header: 'Alerte', align: 'center', render: (l) => l.anomalie ? <Badge className="bg-red-100 text-red-700">Anomalie</Badge> : <span className="text-gray-300">—</span> },
+    { key: 'ratio', header: 'Livré/Consommé', align: 'center', render: (l) => l.ratio != null ? `${l.ratio.toFixed(2)}×` : '-' },
+    { key: 'anomalie', header: 'Alerte', align: 'center', render: (l) => l.anomalie ? <Badge className="bg-red-100 text-red-700">Anomalie</Badge> : <span className="text-gray-300">-</span> },
   ];
 
   return (

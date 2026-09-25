@@ -1099,7 +1099,7 @@ export async function createCoupure(req: Request, res: Response, next: NextFunct
           avertissements.push(
             `${avecIncident.length} coupure(s) aval déjà en traitement terrain (${avecIncident
               .map((c) => c.site.nom)
-              .join(', ')}) — non rattachée(s) à cette racine. Pour unifier l'événement : clôturez ou supprimez l'incident de la coupure aval, annulez sa prise en charge, puis rattachez-la en reprenant la prise en charge depuis la racine.`
+              .join(', ')}) - non rattachée(s) à cette racine. Pour unifier l'événement : clôturez ou supprimez l'incident de la coupure aval, annulez sa prise en charge, puis rattachez-la en reprenant la prise en charge depuis la racine.`
           );
         }
         if (aRattacher.length) {
@@ -1525,7 +1525,7 @@ export async function deleteCoupure(req: Request, res: Response, next: NextFunct
     const requalifiee = existante.source === 'OSS' && existante.technologie !== 'SITE';
     const autorise = req.user!.role === 'ADMIN' || existante.source === 'MANUEL' || requalifiee;
     if (!autorise) {
-      throw new AppError('Seules les coupures saisies manuellement ou requalifiées peuvent être supprimées — une détection AUTO site entier se clôture ou se dé-adopte', 422);
+      throw new AppError('Seules les coupures saisies manuellement ou requalifiées peuvent être supprimées - une détection AUTO site entier se clôture ou se dé-adopte', 422);
     }
     // Cascade explicite sur toute la descendance héritée : la FK est en
     // SET NULL — sans ça les héritées resteraient ouvertes à vie, absentes des
@@ -2137,7 +2137,7 @@ async function validerEvenementCloture(
   res: Response,
   coupure: { id: string; source: string; priseEnChargePar: string | null; coupureOrigineId: string | null; dateDebut: Date; dateFin: Date | null; downtimeMinutes: number | null },
 ) {
-  if (coupure.priseEnChargePar) throw new AppError('Événement déjà pris en charge — déjà compté dans la disponibilité.', 422);
+  if (coupure.priseEnChargePar) throw new AppError('Événement déjà pris en charge - déjà compté dans la disponibilité.', 422);
 
   // Remonte à la racine de l'arbre clôturé via le lien stocké coupureOrigineId.
   let rootId = coupure.id;
@@ -2571,7 +2571,7 @@ export async function prendreEnChargeCoupure(req: Request, res: Response, next: 
       success: true,
       data: {
         racineId: racine.id,
-        racineSiteNom: parId.get(racine.siteId)?.nom ?? '—',
+        racineSiteNom: parId.get(racine.siteId)?.nom ?? '-',
         estRacine: racine.id === coupure.id,
         heriteesReclassees: reclassees.count + orphelines.count + imbriquees.count,
         heriteesCreees,
@@ -2658,14 +2658,14 @@ export async function annulerPriseEnCharge(req: Request, res: Response, next: Ne
 function libelleAuditCoupure(action: string, brut: unknown, surCetteLigne: boolean): string {
   const d = (brut ?? {}) as Record<string, unknown>;
   const n = (v: unknown) => (typeof v === 'number' ? v : 0);
-  const suffixeRacine = surCetteLigne ? '' : ' — sur la coupure racine de l\'événement';
+  const suffixeRacine = surCetteLigne ? '' : ' - sur la coupure racine de l\'événement';
   if (action === 'CREATE') {
     const technos = Array.isArray(d.technologies) ? (d.technologies as string[]).join('/') : '';
     const impactes = n(d.sitesImpactes);
-    return `Déclaration de la coupure${technos ? ` (${technos})` : ''}${impactes > 1 ? ` — ${impactes} sites impactés` : ''}`;
+    return `Déclaration de la coupure${technos ? ` (${technos})` : ''}${impactes > 1 ? ` - ${impactes} sites impactés` : ''}`;
   }
   if (action === 'DELETE') {
-    return `Suppression (saisie erronée)${n(d.heriteesSupprimees) ? ` — ${n(d.heriteesSupprimees)} héritée(s) supprimée(s)` : ''}`;
+    return `Suppression (saisie erronée)${n(d.heriteesSupprimees) ? ` - ${n(d.heriteesSupprimees)} héritée(s) supprimée(s)` : ''}`;
   }
   if (action === 'UPDATE') {
     if (d.priseEnCharge === true) {
@@ -2674,13 +2674,13 @@ function libelleAuditCoupure(action: string, brut: unknown, surCetteLigne: boole
       if (n(d.heriteesCreees)) morceaux.push(`${n(d.heriteesCreees)} héritée(s) créée(s)`);
       if (d.incidentCree) morceaux.push('intervention terrain déclenchée');
       if (d.incidentReutilise) morceaux.push('rattachée à l\'incident déjà ouvert');
-      return morceaux.join(' — ') + suffixeRacine;
+      return morceaux.join(' - ') + suffixeRacine;
     }
     if (d.validationCloturee === true) {
-      return `Validation a posteriori — comptée dans la disponibilité (durée ${n(d.dureeMin)} min${n(d.lignesValidees) > 1 ? `, ${n(d.lignesValidees)} lignes` : ''})${suffixeRacine}`;
+      return `Validation a posteriori - comptée dans la disponibilité (durée ${n(d.dureeMin)} min${n(d.lignesValidees) > 1 ? `, ${n(d.lignesValidees)} lignes` : ''})${suffixeRacine}`;
     }
     if (d.annulationPriseEnCharge === true) {
-      return `Annulation de la prise en charge — ${n(d.heriteesRedeclassees)} coupure(s) redevenue(s) locale(s)${n(d.heriteesSupprimees) ? `, ${n(d.heriteesSupprimees)} héritée(s) supprimée(s)` : ''}${suffixeRacine}`;
+      return `Annulation de la prise en charge - ${n(d.heriteesRedeclassees)} coupure(s) redevenue(s) locale(s)${n(d.heriteesSupprimees) ? `, ${n(d.heriteesSupprimees)} héritée(s) supprimée(s)` : ''}${suffixeRacine}`;
     }
     if (d.action === 'reouverture_noc') return 'Réouverture de l\'incident lié (coupure toujours constatée)';
     const morceaux: string[] = [];
@@ -2702,9 +2702,9 @@ function libelleAuditCoupure(action: string, brut: unknown, surCetteLigne: boole
         downtimeMinutes: 'durée',
       };
       const noms = (d.champs as string[]).map((c) => LISIBLE[c] ?? c);
-      return `Modification — ${noms.join(', ')}`;
+      return `Modification - ${noms.join(', ')}`;
     }
-    return morceaux.length ? `Modification — ${morceaux.join(', ')}` : 'Modification de la fiche';
+    return morceaux.length ? `Modification - ${morceaux.join(', ')}` : 'Modification de la fiche';
   }
   return action;
 }
@@ -2739,7 +2739,7 @@ export async function getHistoriqueCoupure(req: Request, res: Response, next: Ne
       success: true,
       data: entrees.map((e) => ({
         date: e.createdAt,
-        par: [e.user?.prenom, e.user?.nom].filter(Boolean).join(' ') || '—',
+        par: [e.user?.prenom, e.user?.nom].filter(Boolean).join(' ') || '-',
         libelle: libelleAuditCoupure(e.action, e.details, e.resourceId === c.id),
       })),
     });
@@ -3271,11 +3271,11 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
       rows: d.lignes.map((l) => ({
         site: l.nom, code: l.code, region: l.region,
         dr1: l.dr1, jours: l.joursDepassement,
-        pireJour: l.pireJour ?? '—', pireMin: l.pireJourMinutes ? fmtMin(l.pireJourMinutes) : '—',
-        total: l.totalMinutes ? fmtMin(l.totalMinutes) : '—',
+        pireJour: l.pireJour ?? '-', pireMin: l.pireJourMinutes ? fmtMin(l.pireJourMinutes) : '-',
+        total: l.totalMinutes ? fmtMin(l.totalMinutes) : '-',
         verdict: l.conforme ? 'Conforme' : 'NON CONFORME',
         dr1Reel: l.reel.dr1, joursReel: l.reel.joursDepassement,
-        totalReel: l.reel.totalMinutes ? fmtMin(l.reel.totalMinutes) : '—',
+        totalReel: l.reel.totalMinutes ? fmtMin(l.reel.totalMinutes) : '-',
         verdictReel: l.reel.conforme ? 'Conforme' : 'NON CONFORME',
       })),
     }], `Mois ${d.mois}${d.moisEnCours ? ' (en cours)' : ''} · durées CONTINUES, sans cumul d'épisodes · colonnes officielles = détections AUTO comptées une fois prises en charge ; colonnes « réelles » = toutes les détections (${d.detectionsNonAdoptees} non adoptée(s) sur le mois)`);

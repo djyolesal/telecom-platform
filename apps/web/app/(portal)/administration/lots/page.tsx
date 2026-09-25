@@ -52,7 +52,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
           <Field label="Code" required><Input value={form.code} onChange={(e) => set('code', e.target.value)} required placeholder="LOT-MAR-01" /></Field>
           <Field label="Nom" required><Input value={form.nom} onChange={(e) => set('nom', e.target.value)} required placeholder="Lot Maritime Sud" /></Field>
-          <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="—" /></Field>
+          <Field label="Région"><Select value={form.region} onChange={(e) => set('region', e.target.value)} options={regionOptions} placeholder="-" /></Field>
           <Field label="Contrat porté par le lot">
             <Select value={form.contrat} onChange={(e) => set('contrat', e.target.value)}
               options={[
@@ -99,7 +99,7 @@ export default function LotsPage() {
     {
       key: 'assignments', header: 'Attributions', render: (l) => (
         <div className="flex flex-wrap gap-1">
-          {l.assignments.length === 0 && <span className="text-gray-400 text-xs">—</span>}
+          {l.assignments.length === 0 && <span className="text-gray-400 text-xs">-</span>}
           {l.assignments.map((a) => (
             <Badge key={a.id} className={SCOPE_COLORS[a.scope] || 'bg-gray-100 text-gray-600'}>
               {a.prestataire.nom} · {scopeLabel(a.scope)}

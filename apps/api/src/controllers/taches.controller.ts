@@ -318,9 +318,9 @@ async function donneesFicheValidation(
   let zone: string;
   if (lotId) {
     const lot = await prisma.lot.findUnique({ where: { id: lotId }, select: { nom: true, region: true } });
-    zone = lot ? `${lot.nom}${lot.region ? ` (${lot.region})` : ''}` : '—';
+    zone = lot ? `${lot.nom}${lot.region ? ` (${lot.region})` : ''}` : '-';
   } else {
-    zone = [...new Set(sites.map((s) => s.region))].join(', ') || '—';
+    zone = [...new Set(sites.map((s) => s.region))].join(', ') || '-';
   }
   return { sites: sites as unknown as SiteEligibilite[], realisesParKey, zone, nbSites: sites.length };
 }

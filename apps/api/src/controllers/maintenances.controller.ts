@@ -1152,7 +1152,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       }
       if (manquants.length) {
         throw new AppError(
-          `Checklist solaire incomplète — statuez chaque opération (Conforme, Non conforme ou N-A) : ${manquants.slice(0, 3).join(' ; ')}${manquants.length > 3 ? ` (+${manquants.length - 3} autres)` : ''}.`,
+          `Checklist solaire incomplète - statuez chaque opération (Conforme, Non conforme ou N-A) : ${manquants.slice(0, 3).join(' ; ')}${manquants.length > 3 ? ` (+${manquants.length - 3} autres)` : ''}.`,
           422
         );
       }
@@ -1659,14 +1659,14 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
         const i = l.incident!;
         const quand = i.dateResolution ?? i.dateOuverture;
         return {
-          reference: i.reference ?? '—',
-          site: i.site?.nom ?? l.site?.nom ?? '—',
+          reference: i.reference ?? '-',
+          site: i.site?.nom ?? l.site?.nom ?? '-',
           statut: i.statut,
           clos: CLOS.includes(i.statut),
-          date: quand ? new Date(quand).toLocaleDateString('fr-FR') : '—',
+          date: quand ? new Date(quand).toLocaleDateString('fr-FR') : '-',
           // Un incident encore ouvert n'a pas d'action corrective : le dire,
           // plutôt que de laisser une case vide qu'on lira comme un oubli.
-          action: i.actionCorrective ?? (CLOS.includes(i.statut) ? '—' : 'en cours de traitement'),
+          action: i.actionCorrective ?? (CLOS.includes(i.statut) ? '-' : 'en cours de traitement'),
         };
       })
       // Les non clôturés d'abord : ce sont eux qui appellent une décision.

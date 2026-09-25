@@ -370,7 +370,7 @@ export function selectionLecture(modele: ModeleDb): Record<string, boolean> {
 /** Libellé lisible d'une ligne (« Lomé-Centre », « BC-2026-0012 »… sinon l'id). */
 export function libelleLigne(modele: ModeleDb, ligne: Record<string, unknown>): string {
   const parts = modele.champsLibelle.map((c) => ligne[c]).filter((v) => v != null && v !== '');
-  if (parts.length) return parts.map(String).join(' — ');
+  if (parts.length) return parts.map(String).join(' - ');
   return String(ligne[modele.idChamp] ?? '').slice(0, 8);
 }
 

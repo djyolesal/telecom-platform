@@ -37,7 +37,7 @@ function fauxReqRes(query: Record<string, string>) {
   return { req, res, next };
 }
 
-describe('getFicheValidation — filtre des réalisations par lot', () => {
+describe('getFicheValidation - filtre des réalisations par lot', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     p.prestataire.findUnique.mockResolvedValue({ id: 'presta1', nom: 'Presta Test', adresse: null, rccm: null, nif: null, contactCommercial: null, contactTechnique: null, logoPath: null });

@@ -297,7 +297,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
           ? 'Jamais'
           : s == 'A_JOUR'
               ? 'À jour'
-              : '—';
+              : '-';
 
   Color _stockColor(String niveau) {
     switch (niveau) {

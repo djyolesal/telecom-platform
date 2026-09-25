@@ -70,4 +70,4 @@ export const L_NIVEAU_STOCK: Record<string, string> = {
 
 /** Libellé d'un code, avec le code lui-même en repli lisible. */
 export const libelle = (table: Record<string, string>, code?: string | null): string =>
-  (code && table[code]) || code || '—';
+  (code && table[code]) || code || '-';

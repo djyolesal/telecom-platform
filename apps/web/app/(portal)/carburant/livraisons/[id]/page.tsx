@@ -233,7 +233,7 @@ function EditHeaderModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
           <Field label="Immatriculation" required><Input value={form.immatriculation} onChange={(e) => set('immatriculation', e.target.value)} required placeholder="TG-1234-AB" /></Field>
           <Field label="Volume chargé (L)" required><Input type="number" value={form.volumeChargeLitres} onChange={(e) => set('volumeChargeLitres', e.target.value)} required /></Field>
           <Field label="Date chargement" required><Input type="date" max={todayStr()} value={form.dateChargement} onChange={(e) => set('dateChargement', e.target.value)} required /></Field>
-          <Field label="Transporteur"><Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="—" options={transporteurs.map((tr) => ({ value: tr.id, label: tr.nom }))} /></Field>
+          <Field label="Transporteur"><Select value={form.transporteurId} onChange={(e) => set('transporteurId', e.target.value)} placeholder="-" options={transporteurs.map((tr) => ({ value: tr.id, label: tr.nom }))} /></Field>
           <Field label="Chauffeur (déclaré au départ)">
             <Input list="chauffeurs-connus-bl" value={form.nomChauffeur} onChange={(e) => set('nomChauffeur', e.target.value)} placeholder="Nom et prénom" />
             <datalist id="chauffeurs-connus-bl">{chauffeurs.map((c) => <option key={c.id} value={c.nom} />)}</datalist>
@@ -292,7 +292,7 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
         <td className="text-gray-600">{l.site.region}</td>
         <td className="text-right">{fmtNumber(Number(l.volumePrevuLitres))}</td>
         <td className="text-right">
-          {l.volumeLivreReel > 0 ? fmtNumber(l.volumeLivreReel) : '—'}
+          {l.volumeLivreReel > 0 ? fmtNumber(l.volumeLivreReel) : '-'}
           {nbDepotages > 0 && (
             <button type="button" onClick={() => setOuvert((o) => !o)}
               className="ml-1.5 text-[11px] text-blue-600 hover:underline">
@@ -301,7 +301,7 @@ function LignePlan({ ligne: l }: { ligne: Ligne }) {
           )}
         </td>
         <td className={`text-right font-medium ${Math.abs(l.ecart) <= 0.5 ? 'text-gray-400' : l.ecart > 0 ? 'text-blue-600' : 'text-amber-600'}`}>
-          {l.volumeLivreReel > 0 ? `${l.ecart > 0 ? '+' : ''}${fmtNumber(l.ecart)}` : '—'}
+          {l.volumeLivreReel > 0 ? `${l.ecart > 0 ? '+' : ''}${fmtNumber(l.ecart)}` : '-'}
         </td>
         <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{L_STATUT_LIGNE[l.statut] ?? l.statut}</Badge></td>
       </tr>
@@ -525,8 +525,8 @@ export default function BonLivraisonDetailPage() {
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl border border-gray-100 p-5">
           <h3 className="font-semibold text-gray-700 text-sm mb-2">Détails du chargement</h3>
-          <Row label="N° client" value={data.numeroClient ?? '—'} />
-          <Row label="Transporteur" value={data.transporteur?.nom ?? '—'} />
+          <Row label="N° client" value={data.numeroClient ?? '-'} />
+          <Row label="Transporteur" value={data.transporteur?.nom ?? '-'} />
           <Row label="Camion" value={data.immatriculation} />
           {/* Le chauffeur déclaré est la référence du contrôle terrain : sans lui,
               la signature manuscrite exigée au dépotage ne valait rien en litige. */}

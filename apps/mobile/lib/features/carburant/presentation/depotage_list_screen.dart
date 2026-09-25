@@ -131,7 +131,7 @@ class _DepotageViewState extends State<_DepotageView> {
                             leading: const CircleAvatar(
                                 child: Icon(Icons.local_gas_station, size: 20)),
                             title: Text(
-                                '${d.siteNom ?? '—'} · ${fmtLitres(d.volumeLitres)}',
+                                '${d.siteNom ?? '-'} · ${fmtLitres(d.volumeLitres)}',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600)),
                             subtitle: Text(

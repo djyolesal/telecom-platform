@@ -73,7 +73,7 @@ function fusionnerPassages(rows: Releve[]): Passage[] {
     let p = parCle.get(cle);
     if (!p) {
       p = {
-        id: r.id, siteNom: r.site?.nom ?? '—', dateReleve: r.dateReleve,
+        id: r.id, siteNom: r.site?.nom ?? '-', dateReleve: r.dateReleve,
         provenance: r.provenance,
         technicien: r.technicien ? `${r.technicien.prenom} ${r.technicien.nom}` : undefined,
         ges: [],
@@ -95,7 +95,7 @@ function fusionnerPassages(rows: Releve[]): Passage[] {
 
 const listeGE = (p: Passage, champ: 'index' | 'marche', suffixe: string) => {
   const vals = p.ges.filter((g) => g[champ] != null);
-  if (!vals.length) return '—';
+  if (!vals.length) return '-';
   if (vals.length === 1) return `${fmtNumber(vals[0][champ]!)}${suffixe}`;
   return vals.map((g) => `n°${g.numero ?? '?'} ${fmtNumber(g[champ]!)}${suffixe}`).join(' · ');
 };
@@ -143,15 +143,15 @@ function RelevesPageInner() {
     { key: 'dateReleve', header: 'Date', render: (p) => fmtDate(p.dateReleve) },
     // Provenance et jauge : calculées côté client (maintenance liée, fusion GE)
     // → pas de tri serveur possible.
-    { key: 'provenance', header: 'Provenance', sortable: false, render: (p) => <Badge className={PROVENANCE_COLOR[p.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{p.provenance ?? '—'}</Badge> },
-    { key: 'technicien', header: 'Technicien', defaultHidden: true, render: (p) => p.technicien ?? '—' },
-    { key: 'jaugeLitres', header: 'Jauge cuve (L)', align: 'right', sortable: false, render: (p) => p.jaugeLitres != null ? fmtNumber(p.jaugeLitres) : '—' },
-    { key: 'gasoilConsommeLitres', header: 'Gasoil conso (L)', align: 'right', render: (p) => p.gasoilConsommeLitres != null ? fmtNumber(p.gasoilConsommeLitres) : '—' },
+    { key: 'provenance', header: 'Provenance', sortable: false, render: (p) => <Badge className={PROVENANCE_COLOR[p.provenance ?? ''] || 'bg-gray-100 text-gray-600'}>{p.provenance ?? '-'}</Badge> },
+    { key: 'technicien', header: 'Technicien', defaultHidden: true, render: (p) => p.technicien ?? '-' },
+    { key: 'jaugeLitres', header: 'Jauge cuve (L)', align: 'right', sortable: false, render: (p) => p.jaugeLitres != null ? fmtNumber(p.jaugeLitres) : '-' },
+    { key: 'gasoilConsommeLitres', header: 'Gasoil conso (L)', align: 'right', render: (p) => p.gasoilConsommeLitres != null ? fmtNumber(p.gasoilConsommeLitres) : '-' },
     { key: 'indexGE', header: 'Index GE (h)', align: 'right', sortable: false, render: (p) => listeGE(p, 'index', '') },
     { key: 'marcheGE', header: 'Marche GE (h)', align: 'right', sortable: false, render: (p) => listeGE(p, 'marche', '') },
-    { key: 'indexCompteur', header: 'Index CEET', align: 'right', render: (p) => p.indexCompteur != null ? fmtNumber(p.indexCompteur) : '—' },
-    { key: 'consommationKwh', header: 'Conso (kWh)', align: 'right', render: (p) => p.consommationKwh != null ? fmtNumber(p.consommationKwh) : '—' },
-    { key: 'puissanceKva', header: 'Solaire (kVA)', align: 'right', defaultHidden: true, render: (p) => p.puissanceKva != null ? fmtNumber(p.puissanceKva) : '—' },
+    { key: 'indexCompteur', header: 'Index CEET', align: 'right', render: (p) => p.indexCompteur != null ? fmtNumber(p.indexCompteur) : '-' },
+    { key: 'consommationKwh', header: 'Conso (kWh)', align: 'right', render: (p) => p.consommationKwh != null ? fmtNumber(p.consommationKwh) : '-' },
+    { key: 'puissanceKva', header: 'Solaire (kVA)', align: 'right', defaultHidden: true, render: (p) => p.puissanceKva != null ? fmtNumber(p.puissanceKva) : '-' },
   ];
 
   const exportQuery = [

@@ -40,7 +40,7 @@ export const CHECKLIST_SOLAIRE: Record<string, ItemChecklist[]> = {
     { cle: 'sol_batt_visuel', libelle: 'Inspection visuelle des éléments batteries et bornes (propreté, corrosion, fissures)' },
     { cle: 'sol_batt_aerations', libelle: 'Aérations naturelles (propreté des filtres…)' },
     { cle: 'sol_batt_tension', libelle: 'Tension de chaque élément batterie', mesure: { placeholder: 'ex. 2,3V ×24 éléments' } },
-    { cle: 'sol_batt_temperature', libelle: 'Température des éléments (batteries sèches — densité sans objet)', mesure: { placeholder: '°C' } },
+    { cle: 'sol_batt_temperature', libelle: 'Température des éléments (batteries sèches - densité sans objet)', mesure: { placeholder: '°C' } },
     { cle: 'sol_batt_nettoyage', libelle: 'Nettoyage et dépoussiérage de l’ensemble des éléments batterie' },
     // ── Régulateur & coffret outdoor ──
     { cle: 'sol_coffret_fixation', libelle: 'Fixation du coffret outdoor' },

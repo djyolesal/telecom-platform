@@ -71,7 +71,7 @@ export async function detectFuelAnomalies(opts: { jours?: number } = {}): Promis
       siteId: d.siteId,
       code: d.site?.code ?? '?',
       nom: d.site?.nom ?? '?',
-      region: d.site?.region ?? '—',
+      region: d.site?.region ?? '-',
       nbDepotages: 0,
       nbAnomalies: 0,
       volumeLivreLitres: 0,

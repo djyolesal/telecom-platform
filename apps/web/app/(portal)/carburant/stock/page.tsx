@@ -54,7 +54,7 @@ export default function StockCarburantPage() {
     { key: 'code', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'stockLitres', header: 'Stock (L)', align: 'right', render: (s) => fmtNumber(s.stockLitres) },
-    { key: 'autonomieJours', header: 'Autonomie', align: 'right', render: (s) => (s.autonomieJours != null ? `${s.autonomieJours} j` : '—') },
+    { key: 'autonomieJours', header: 'Autonomie', align: 'right', render: (s) => (s.autonomieJours != null ? `${s.autonomieJours} j` : '-') },
     // Théorique assumé : cette page lit la formule kVA (budget), pas la mesure.
     // La conso MESURÉE par site est sur « Réapprovisionnement » avec sa source.
     { key: 'litresMois', header: 'Conso/mois théorique (L)', align: 'right', render: (s) => fmtNumber(s.litresMois) },
@@ -79,7 +79,7 @@ export default function StockCarburantPage() {
         <StatCard title="Stock total" value={`${fmtNumber(Math.round((resume.totalLitres ?? 0) / 1000))}k L`} icon={Fuel} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Conso parc" value={`${fmtNumber(Math.round((resume.totalLitresMois ?? 0) / 1000))}k L/mois`} icon={Droplet} color="bg-[rgb(var(--brand-light))]" />
         {/* Coût masqué côté serveur pour les comptes prestataires : « - », pas « 0 M ». */}
-        <StatCard title="Coût mensuel" value={resume.totalCoutMoisFCFA == null ? '—' : `${fmtNumber(Math.round(resume.totalCoutMoisFCFA / 1_000_000))} M`} subtitle="FCFA/mois" icon={Banknote} color="bg-[rgb(var(--brand))]" />
+        <StatCard title="Coût mensuel" value={resume.totalCoutMoisFCFA == null ? '-' : `${fmtNumber(Math.round(resume.totalCoutMoisFCFA / 1_000_000))} M`} subtitle="FCFA/mois" icon={Banknote} color="bg-[rgb(var(--brand))]" />
         <StatCard title="Sites en alerte" value={(resume.nbSitesVides ?? 0) + (resume.nbSitesCritiques ?? 0)} subtitle={`${resume.nbSitesFaibles ?? 0} faibles`} icon={AlertTriangle} color="bg-red-500" />
       </div>
 

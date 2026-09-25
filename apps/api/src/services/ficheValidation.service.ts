@@ -153,7 +153,7 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
   ws.mergeCells('B22:I22');
   const sec = ws.getCell('B22');
   sec.value = d.contrat === 'SOLAIRE'
-    ? 'OPERATION DE MAINTENANCE PREVENTIVE — CONTRAT SOLAIRE'
+    ? 'OPERATION DE MAINTENANCE PREVENTIVE - CONTRAT SOLAIRE'
     : 'OPERATION DE MAINTENANCE PREVENTIVE';
   sec.font = { bold: true };
   sec.alignment = { horizontal: 'center' };

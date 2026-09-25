@@ -138,7 +138,7 @@ function CreateModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Numéro BC" required><Input value={form.numero} onChange={(e) => set('numero', e.target.value)} required placeholder="PO250100005" /></Field>
-            <Field label="Numéro client (optionnel)"><Input value={form.numeroClient} onChange={(e) => set('numeroClient', e.target.value)} placeholder="—" /></Field>
+            <Field label="Numéro client (optionnel)"><Input value={form.numeroClient} onChange={(e) => set('numeroClient', e.target.value)} placeholder="-" /></Field>
             <Field label="Année" required><Input type="number" value={form.annee} onChange={(e) => set('annee', e.target.value)} required /></Field>
             <Field label="Trimestre" required>
               <Select value={form.trimestre} onChange={(e) => set('trimestre', e.target.value)}
@@ -192,7 +192,7 @@ export default function BonsCommandePage() {
   const columns: Column<BonCommande>[] = [
     { key: 'numero', header: 'N° BC', render: (b) => <span className="font-medium text-gray-800">{b.numero}</span> },
     { key: 'periode', header: 'Période', render: (b) => `T${b.trimestre} ${b.annee}` },
-    { key: 'client', header: 'Client', render: (b) => b.numeroClient ?? '—' },
+    { key: 'client', header: 'Client', render: (b) => b.numeroClient ?? '-' },
     { key: 'volume', header: 'Volume prévu (L)', align: 'right', render: (b) => fmtNumber(b.volumesMensuels.reduce((s, v) => s + Number(v.volumePrevuLitres), 0)) },
     { key: 'bl', header: 'Livraisons', align: 'center', render: (b) => b._count?.bonsLivraison ?? 0 },
     { key: 'statut', header: 'Statut', render: (b) => <Badge className={STATUT_COLORS[b.statut] || ''}>{L_STATUT_BC[b.statut] ?? b.statut}</Badge> },

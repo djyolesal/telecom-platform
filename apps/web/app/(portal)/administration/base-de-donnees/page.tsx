@@ -99,7 +99,7 @@ export default function BaseDeDonneesPage() {
                         className="shrink-0 rounded-lg bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-700"
                         title={t.lignesExactes ? undefined : 'Estimation Postgres (table trop volumineuse pour un comptage exact)'}
                       >
-                        {t.lignes < 0 ? '—' : `${t.lignesExactes ? '' : '~'}${fmtNumber(t.lignes)}`}
+                        {t.lignes < 0 ? '-' : `${t.lignesExactes ? '' : '~'}${fmtNumber(t.lignes)}`}
                       </span>
                     </div>
                     <p className="mt-2 text-[11px] text-gray-400">

@@ -171,11 +171,11 @@ export default function ActifsPage() {
 
   const columns: Column<Actif>[] = [
     { key: 'site', header: 'Site', render: (a) => (a.site ? <span className="font-medium text-gray-800">{a.site.nom}</span> : <span className="text-gray-400">Dépôt</span>) },
-    { key: 'numero', header: 'N° GE', render: (a) => (a.numero != null ? <span className="font-semibold text-gray-700">{a.numero}</span> : <span className="text-gray-300">—</span>) },
-    { key: 'libelle', header: 'Actif', render: (a) => <span className="font-medium text-gray-800">{a.actifType === 'GE' ? (a.caracteristique ?? '—') : (a.libelle ?? a.categorie)}</span> },
+    { key: 'numero', header: 'N° GE', render: (a) => (a.numero != null ? <span className="font-semibold text-gray-700">{a.numero}</span> : <span className="text-gray-300">-</span>) },
+    { key: 'libelle', header: 'Actif', render: (a) => <span className="font-medium text-gray-800">{a.actifType === 'GE' ? (a.caracteristique ?? '-') : (a.libelle ?? a.categorie)}</span> },
     { key: 'categorie', header: 'Type', render: (a) => TYPE_OPTIONS.find((t) => t.value === a.actifType)?.label ?? a.actifType },
-    { key: 'numeroSerie', header: 'N° série', render: (a) => a.numeroSerie || '—' },
-    { key: 'marque', header: 'Marque', render: (a) => a.marque || '—' },
+    { key: 'numeroSerie', header: 'N° série', render: (a) => a.numeroSerie || '-' },
+    { key: 'marque', header: 'Marque', render: (a) => a.marque || '-' },
     {
       key: 'statutActif', header: 'Statut', render: (a) => {
         const j = a.statutActif === 'EN_TRANSIT' ? joursTransit(a) : null;
@@ -196,11 +196,11 @@ export default function ActifsPage() {
     },
     {
       key: 'index', header: 'Index heures', render: (a) =>
-        a.dernierIndexHeures == null ? <span className="text-gray-300">—</span> : <span className="text-gray-700">{Math.round(a.dernierIndexHeures).toLocaleString('fr-FR')} h</span>,
+        a.dernierIndexHeures == null ? <span className="text-gray-300">-</span> : <span className="text-gray-700">{Math.round(a.dernierIndexHeures).toLocaleString('fr-FR')} h</span>,
     },
     {
       key: 'vidange', header: 'Vidange', render: (a) =>
-        a.heuresDepuisVidange == null ? <span className="text-gray-300">—</span> : (
+        a.heuresDepuisVidange == null ? <span className="text-gray-300">-</span> : (
           <span className={a.vidangeDue ? 'font-semibold text-amber-700' : 'text-gray-500'}>
             {Math.round(a.heuresDepuisVidange)} h{a.vidangeDue ? ' ⚠' : ''}
           </span>

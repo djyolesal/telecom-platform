@@ -15,7 +15,7 @@ import { Loading, ErrorState } from '@/components/shared/states';
 import { fmtNumber, fmtFCFA } from '@/lib/utils';
 
 const fmtDuree = (min: number | null) =>
-  min == null ? '—' : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60 ? (min % 60) + ' min' : ''}`.trim();
+  min == null ? '-' : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60 ? (min % 60) + ' min' : ''}`.trim();
 
 export default function DirectionPage() {
   const router = useRouter();
@@ -53,7 +53,7 @@ export default function DirectionPage() {
 
       {/* ── KPIs performance ── */}
       <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Respect du préventif" value={k.tauxPreventif != null ? `${k.tauxPreventif}%` : '—'} subtitle={`${k.preventivesRealisees}/${k.preventivesPlanifiees} réalisées`} icon={Wrench} color="bg-[rgb(var(--accent))]" />
+        <StatCard title="Respect du préventif" value={k.tauxPreventif != null ? `${k.tauxPreventif}%` : '-'} subtitle={`${k.preventivesRealisees}/${k.preventivesPlanifiees} réalisées`} icon={Wrench} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Curatives" value={String(k.curatives)} subtitle="interventions correctives" icon={Wrench} color="bg-[#F59E0B]" />
         <StatCard title="Durée moy. coupure" value={fmtDuree(k.mttrMinutes)} subtitle="MTTR incidents" icon={Clock} color="bg-[rgb(var(--brand))]" />
         <StatCard title="Délai moy. intervention" value={fmtDuree(k.mttaMinutes)} subtitle={`${k.incidentsOuverts} incident(s) ouvert(s)`} icon={Clock} color="bg-[rgb(var(--brand-light))]" />

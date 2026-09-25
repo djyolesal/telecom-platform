@@ -106,9 +106,9 @@ export default function ConformiteArcepPage() {
     },
     {
       key: 'pireJourMinutes', header: 'Plus longue coupure continue', align: 'right',
-      render: (l) => (vue(l).pireJour ? <span className="text-gray-700">{fmtMin(vue(l).pireJourMinutes)} <span className="text-xs text-gray-400">({vue(l).pireJour})</span></span> : '—'),
+      render: (l) => (vue(l).pireJour ? <span className="text-gray-700">{fmtMin(vue(l).pireJourMinutes)} <span className="text-xs text-gray-400">({vue(l).pireJour})</span></span> : '-'),
     },
-    { key: 'totalMinutes', header: 'Cumul du mois', align: 'right', render: (l) => <span className="text-gray-500">{vue(l).totalMinutes ? fmtMin(vue(l).totalMinutes) : '—'}</span> },
+    { key: 'totalMinutes', header: 'Cumul du mois', align: 'right', render: (l) => <span className="text-gray-500">{vue(l).totalMinutes ? fmtMin(vue(l).totalMinutes) : '-'}</span> },
     {
       key: 'conforme', header: 'Verdict', align: 'center',
       render: (l) => (
@@ -175,7 +175,7 @@ export default function ConformiteArcepPage() {
 
       <p className="mt-4 max-w-3xl text-xs text-gray-400">
         DR1 : nombre de fois qu&apos;une même station est restée indisponible au moins une heure <b>au cours du mois</b> (seuil ≤ 2 par mois).
-        DR2 : plus longue indisponibilité <b>continue</b> d&apos;une même station au cours d&apos;une journée (seuil ≤ 3 h) —
+        DR2 : plus longue indisponibilité <b>continue</b> d&apos;une même station au cours d&apos;une journée (seuil ≤ 3 h) -
         <b> pas de cumul d&apos;épisodes</b> : deux coupures distinctes de 2 h dans la journée ne font pas 4 h. Le cumul du mois
         est affiché à titre indicatif. Station indisponible = site entièrement
         hors service (y compris entraîné par son site amont). Une même panne fusionnée en un seul épisode.

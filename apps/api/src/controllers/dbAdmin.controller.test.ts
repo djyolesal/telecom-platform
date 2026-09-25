@@ -79,7 +79,7 @@ describe('lecture d’une table', () => {
     await ctrl.listerLignes(req, res, next);
 
     const reponse = (res.json as jest.Mock).mock.calls[0][0];
-    expect(reponse.relations.siteId.s1).toBe('Lomé-Centre — LOM01');
+    expect(reponse.relations.siteId.s1).toBe('Lomé-Centre - LOM01');
   });
 
   it('refuse une table absente du catalogue', async () => {

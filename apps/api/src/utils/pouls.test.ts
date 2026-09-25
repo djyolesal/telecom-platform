@@ -1,6 +1,6 @@
 import { bucketsHoraires, compterParHeure, niveauAgitation } from './pouls';
 
-describe('pouls — ligne de vie 24 h', () => {
+describe('pouls - ligne de vie 24 h', () => {
   const now = new Date('2026-08-29T14:37:22Z');
 
   it('produit 24 seaux horaires, du plus ancien à l\'heure en cours', () => {

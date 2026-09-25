@@ -191,7 +191,7 @@ async function computeManquantsImpl(filter: ManquantsFilter) {
       if (ecartBl > EPS && !clos) a.nbBlEcart++;
       map.set(id, a);
     };
-    pousserAxe(parChauffeurMap, bl.chauffeurId, bl.chauffeur?.nom ?? '—');
+    pousserAxe(parChauffeurMap, bl.chauffeurId, bl.chauffeur?.nom ?? '-');
     pousserAxe(parVehiculeMap, bl.vehiculeId, bl.vehicule?.libelle ?? bl.immatriculation);
 
     // Agrégat mensuel (par bon de commande + mois).

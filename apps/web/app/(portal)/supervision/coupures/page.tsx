@@ -62,7 +62,7 @@ const dureeDepuis = (debut: string) =>
   fmtDowntime(Math.max(0, Math.round((Date.now() - new Date(debut).getTime()) / 60000)));
 
 const fmtDowntime = (min?: number | null) => {
-  if (min == null) return '—';
+  if (min == null) return '-';
   if (min < 60) return `${min} min`;
   if (min < 60 * 48) return `${Math.floor(min / 60)} h ${min % 60 ? (min % 60) + ' min' : ''}`.trim();
   return `${Math.floor(min / 1440)} j ${Math.floor((min % 1440) / 60)} h`;
@@ -216,7 +216,7 @@ export default function CoupuresReseauPage() {
     const racinesParSite = new Map<string, LigneCoupure[]>();
     for (const l of lignes) {
       if (l._sousLigne) continue;
-      const cle = l.site?.nom ?? '—';
+      const cle = l.site?.nom ?? '-';
       const liste = racinesParSite.get(cle) ?? [];
       liste.push(l); racinesParSite.set(cle, liste);
     }
@@ -240,7 +240,7 @@ export default function CoupuresReseauPage() {
         // Sous-ligne : héritée dépliée sous sa racine, indentée.
         <span className="flex items-center pl-4 text-gray-500">
           <span className="mr-1.5 text-purple-400">↳</span>
-          {c.site?.nom ?? '—'}
+          {c.site?.nom ?? '-'}
           <span className="ml-1.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">héritée</span>
           {(c._episode ?? 0) > 0 && (
             <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"
@@ -251,7 +251,7 @@ export default function CoupuresReseauPage() {
         </span>
       ) : (
         <span className="font-medium text-gray-800">
-          {c.site?.nom ?? '—'}
+          {c.site?.nom ?? '-'}
           {(c._episode ?? 0) > 0 && (
             <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"
               title="Ce site a connu plusieurs pannes successives (rebond) : chaque ligne est un épisode réel avec sa propre durée.">
@@ -283,7 +283,7 @@ export default function CoupuresReseauPage() {
             // lignes sont refermées.
             const parSite = new Map<string, boolean>();
             for (const h of c.heritees ?? []) {
-              const nomS = h.site?.nom ?? '—';
+              const nomS = h.site?.nom ?? '-';
               parSite.set(nomS, (parSite.get(nomS) ?? false) || !h.dateFin);
             }
             const n = parSite.size || c._count!.heritees;
@@ -350,26 +350,26 @@ export default function CoupuresReseauPage() {
       : c.typeAlarme },
     { key: 'cause', header: 'Cause', render: (c) => c.cause
       ? <span className="text-gray-600">{c.cause}</span>
-      : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : 'text-gray-600'} title={c.origine !== 'HERITEE' ? 'Cause à renseigner' : undefined}>—</span> },
+      : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : 'text-gray-600'} title={c.origine !== 'HERITEE' ? 'Cause à renseigner' : undefined}>-</span> },
     // Colonnes complémentaires : masquées par défaut pour garder le tableau
     // lisible, mais proposées dans le sélecteur « Colonnes » (choix mémorisé).
-    { key: 'region', header: 'Région', defaultHidden: true, sortValue: (c) => c.site?.region, render: (c) => c.site?.region ?? '—' },
-    { key: 'frequence', header: 'Fréquence', defaultHidden: true, render: (c) => c.frequence ?? '—' },
-    { key: 'secteur', header: 'Secteur', defaultHidden: true, render: (c) => c.secteur ?? '—' },
+    { key: 'region', header: 'Région', defaultHidden: true, sortValue: (c) => c.site?.region, render: (c) => c.site?.region ?? '-' },
+    { key: 'frequence', header: 'Fréquence', defaultHidden: true, render: (c) => c.frequence ?? '-' },
+    { key: 'secteur', header: 'Secteur', defaultHidden: true, render: (c) => c.secteur ?? '-' },
     {
       key: 'causeCategorie', header: 'Classement', defaultHidden: true,
       render: (c) => c.causeCategorie === 'ACTIF' ? 'Actif' : c.causeCategorie === 'PASSIF' ? 'Passif'
-        : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : undefined} title={c.origine !== 'HERITEE' ? 'Classement actif/passif à renseigner' : undefined}>—</span>,
+        : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : undefined} title={c.origine !== 'HERITEE' ? 'Classement actif/passif à renseigner' : undefined}>-</span>,
     },
     { key: 'actions', header: 'Actions effectuées', defaultHidden: true, render: (c) => c.actions
       ? <span className="text-gray-600">{c.actions}</span>
-      : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : 'text-gray-600'} title={c.origine !== 'HERITEE' ? 'Actions effectuées à renseigner' : undefined}>—</span> },
-    { key: 'technicienContacte', header: 'Technicien contacté', defaultHidden: true, render: (c) => c.technicienContacte ?? '—' },
-    { key: 'intervenants', header: 'Intervenant(s)', defaultHidden: true, render: (c) => c.intervenants ?? '—' },
-    { key: 'observations', header: 'Observations', defaultHidden: true, render: (c) => <span className="text-gray-600">{c.observations ?? '—'}</span> },
+      : <span className={c.origine !== 'HERITEE' ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800' : 'text-gray-600'} title={c.origine !== 'HERITEE' ? 'Actions effectuées à renseigner' : undefined}>-</span> },
+    { key: 'technicienContacte', header: 'Technicien contacté', defaultHidden: true, render: (c) => c.technicienContacte ?? '-' },
+    { key: 'intervenants', header: 'Intervenant(s)', defaultHidden: true, render: (c) => c.intervenants ?? '-' },
+    { key: 'observations', header: 'Observations', defaultHidden: true, render: (c) => <span className="text-gray-600">{c.observations ?? '-'}</span> },
     {
       key: 'incident', header: 'Incident', defaultHidden: true, sortable: false,
-      render: (c) => c.incident ? `${c.incident.reference ?? c.incident.id.slice(0, 8)} (${c.incident.statut})` : '—',
+      render: (c) => c.incident ? `${c.incident.reference ?? c.incident.id.slice(0, 8)} (${c.incident.statut})` : '-',
     },
     {
       key: 'source', header: 'Source', defaultHidden: true,
@@ -409,7 +409,7 @@ export default function CoupuresReseauPage() {
       {voitAlertesReferentiel && (stats?.syncOss?.disconnectedNonRapproches?.length ?? 0) > 0 && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">
-            {stats!.syncOss!.disconnectedNonRapproches.length} eNodeB en panne côté OSS ne sont rattachés à aucun site — invisibles de la détection automatique.
+            {stats!.syncOss!.disconnectedNonRapproches.length} eNodeB en panne côté OSS ne sont rattachés à aucun site - invisibles de la détection automatique.
           </p>
           <p className="mt-1 text-xs">
             Dernière synchronisation : {new Date(stats!.syncOss!.quand).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ·{' '}
@@ -418,7 +418,7 @@ export default function CoupuresReseauPage() {
           </p>
           <p className="mt-1 text-xs">
             Pour les couvrir : renseignez le champ <b>Identifiant réseau (NodeID)</b> de la fiche du site avec le numéro indiqué
-            (chiffres seuls, ex. « 5159 » pour Macro-5159). Si la fiche porte déjà un autre NodeID, corrigez-le — le rapprochement
+            (chiffres seuls, ex. « 5159 » pour Macro-5159). Si la fiche porte déjà un autre NodeID, corrigez-le - le rapprochement
             par nom refuse d&apos;écraser un identifiant existant.
           </p>
         </div>
@@ -437,7 +437,7 @@ export default function CoupuresReseauPage() {
           </p>
           <p className="mt-1 text-xs">
             Les détections automatiques sont figées : aucune nouvelle coupure ne sera vue, et celles en cours ne se
-            clôtureront pas — même si les sites sont déjà rétablis. Vérifiez le collecteur sur noeud1
+            clôtureront pas - même si les sites sont déjà rétablis. Vérifiez le collecteur sur noeud1
             (<code>tail /var/log/collecteur-oss.log</code>) : un passage bloqué retient le verrou et fait sortir en
             silence tous les suivants.
           </p>
@@ -473,7 +473,7 @@ export default function CoupuresReseauPage() {
       {voitAlertesReferentiel && (stats?.syncOss?.coupuresOssSansSignal?.length ?? 0) > 0 && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <p className="font-semibold">
-            {stats!.syncOss!.coupuresOssSansSignal!.length} coupure(s) automatique(s) en cours sans aucun signal OSS — elles ne se clôtureront pas toutes seules.
+            {stats!.syncOss!.coupuresOssSansSignal!.length} coupure(s) automatique(s) en cours sans aucun signal OSS - elles ne se clôtureront pas toutes seules.
           </p>
           <p className="mt-1 text-xs">
             {stats!.syncOss!.coupuresOssSansSignal!.slice(0, 8).join(' · ')}
@@ -502,7 +502,7 @@ export default function CoupuresReseauPage() {
             <p className="text-xs text-gray-500">Plus ancienne en cours</p>
             {stats.plusAncienne ? (
               <p className="mt-0.5 truncate text-sm font-bold text-gray-800" title={stats.plusAncienne.site?.nom}>
-                {stats.plusAncienne.site?.nom ?? '—'}
+                {stats.plusAncienne.site?.nom ?? '-'}
                 <span className="ml-1.5 rounded-full bg-red-50 px-1.5 py-0.5 text-xs font-bold text-red-700">
                   {dureeDepuis(stats.plusAncienne.dateDebut)}
                 </span>
@@ -954,7 +954,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
             garde son heure de début, et entre dans « à qualifier ». Tant qu&apos;il reste rattaché, sa cause est
             imputée à l&apos;amont et il échappe aux compteurs du NOC.
             {coupure.dateFin && <> Cette coupure est <b>clôturée</b> : le détachement ne touche ni son début, ni sa fin,
-            ni sa durée — seulement l&apos;imputation de sa cause.</>}
+            ni sa durée - seulement l&apos;imputation de sa cause.</>}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input
@@ -983,7 +983,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
             Si cette coupure n&apos;est en réalité qu&apos;une conséquence de cette panne amont, rattachez-la : elle
             cessera de compter comme une cause propre et suivra le sort de sa racine.
             {coupure.dateFin
-              ? <> Cette coupure est <b>clôturée</b> : le rattachement ne touche ni ses horaires ni sa durée — il corrige
+              ? <> Cette coupure est <b>clôturée</b> : le rattachement ne touche ni ses horaires ni sa durée - il corrige
                   l&apos;imputation de sa cause, donc les compteurs du NOC et l&apos;analyse des pannes.</>
               : null}
           </p>
@@ -1158,7 +1158,7 @@ function HistoriqueBloc({ coupureId }: { coupureId: string }) {
       {isLoading && <p className="text-xs text-gray-400">Chargement…</p>}
       {entrees && entrees.length === 0 && (
         <p className="text-xs text-gray-400">
-          Aucune action tracée — les lignes issues d&apos;un import de rapport n&apos;ont pas d&apos;historique individuel avant leur première action.
+          Aucune action tracée - les lignes issues d&apos;un import de rapport n&apos;ont pas d&apos;historique individuel avant leur première action.
         </p>
       )}
       {entrees && entrees.length > 0 && (
@@ -1228,7 +1228,7 @@ function PriseEnChargeBloc({ coupureId, technicienInitial, onDone }: { coupureId
           <p className="mb-2">
             Détection automatique <b>non prise en charge</b>. La prise en charge fait entrer
             l&apos;événement au rapport NOC et analyse la topologie : racine amont, aval reclassé en
-            héritées — une seule panne, une seule ligne.
+            héritées - une seule panne, une seule ligne.
           </p>
           <p className="mb-2 rounded-md bg-red-50 p-2 text-xs text-red-800">
             <b>Le terrain sera déclenché</b> : incident de sévérité critique sur la racine,
@@ -1276,7 +1276,7 @@ function ValidationClotureeBloc({ coupureId, technicienInitial, onDone }: { coup
         <>
           <p className="mb-2">
             Détection automatique <b>déjà rétablie</b> et <b>non prise en charge</b> : elle n&apos;entre pas
-            dans la disponibilité. La valider la fait <b>compter a posteriori</b> — sans rien déclencher
+            dans la disponibilité. La valider la fait <b>compter a posteriori</b> - sans rien déclencher
             (aucun incident, aucun SMS, c&apos;est terminé).
           </p>
           <div className="mb-2">
@@ -1305,7 +1305,7 @@ function EscaladeTerrainBloc({ coupureId, siteEntier, onDone }: {
   const [ref, setRef] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: () => api.post(`/coupures-reseau/${coupureId}/escalader-terrain`).then((r) => r.data.data),
-    onSuccess: (d: { reference?: string | null }) => { setRef(d?.reference ?? '—'); onDone(); },
+    onSuccess: (d: { reference?: string | null }) => { setRef(d?.reference ?? '-'); onDone(); },
   });
   const errMsg = (mutation.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
 
@@ -1490,7 +1490,7 @@ function SuggestionsMotifs({ valeurs, valeur, onChoisir, champ }: {
   if (!valeurs.length) {
     return (
       <p className="mt-1 text-[11px] text-gray-400">
-        Aucune formulation enregistrée pour {champ === 'cause' ? 'les causes' : 'les actions'} —
+        Aucune formulation enregistrée pour {champ === 'cause' ? 'les causes' : 'les actions'} -
         Administration → Motifs de coupure.
       </p>
     );

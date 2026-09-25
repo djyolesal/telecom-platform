@@ -239,8 +239,8 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _row('Région', inc.region ?? '—'),
-                      _row('Technicien', inc.technicien ?? '—'),
+                      _row('Région', inc.region ?? '-'),
+                      _row('Technicien', inc.technicien ?? '-'),
                       _row('Ouverture', fmtDateTime(inc.dateOuverture)),
                       if (inc.dateIntervention != null)
                         _row('Intervention', fmtDateTime(inc.dateIntervention)),

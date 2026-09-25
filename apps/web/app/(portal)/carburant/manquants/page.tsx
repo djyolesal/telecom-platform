@@ -47,10 +47,10 @@ const TABS = [
   { key: 'attente', label: 'À traiter', icon: ClipboardList },
 ] as const;
 
-const mq = (v: number) => <span className={v > 0 ? 'font-semibold text-red-600' : 'text-gray-400'}>{v > 0 ? fmtNumber(v) : '—'}</span>;
+const mq = (v: number) => <span className={v > 0 ? 'font-semibold text-red-600' : 'text-gray-400'}>{v > 0 ? fmtNumber(v) : '-'}</span>;
 // Sur-livré : anomalie de sens inverse (bleu, jamais rouge) - le volume n'est pas
 // perdu, il manque forcément ailleurs.
-const sl = (v: number) => <span className={v > 0 ? 'font-semibold text-blue-600' : 'text-gray-300'}>{v > 0 ? `+${fmtNumber(v)}` : '—'}</span>;
+const sl = (v: number) => <span className={v > 0 ? 'font-semibold text-blue-600' : 'text-gray-300'}>{v > 0 ? `+${fmtNumber(v)}` : '-'}</span>;
 const LIGNE_COLORS: Record<string, string> = { PREVU: 'bg-gray-100 text-gray-600', PARTIEL: 'bg-amber-100 text-amber-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 
 // Drill-down : quels BL ont laissé ce site à découvert.
@@ -99,7 +99,7 @@ function SiteDrillModal({ site, bcId, mois, onClose }: { site: ParSite; bcId: st
                   <td className="text-gray-600">{l.immatriculation}</td>
                   <td className="text-gray-600">{fmtDate(l.dateChargement)}{l.enRetard && <span className="ml-1 text-red-600">· {l.jours}j</span>}</td>
                   <td className="text-right">{fmtNumber(l.prevu)}</td>
-                  <td className="text-right">{l.livre > 0 ? fmtNumber(l.livre) : '—'}</td>
+                  <td className="text-right">{l.livre > 0 ? fmtNumber(l.livre) : '-'}</td>
                   <td className="text-right">{mq(l.manquant)}</td>
                   <td><Badge className={LIGNE_COLORS[l.statut] || ''}>{L_STATUT_LIGNE[l.statut] ?? l.statut}</Badge></td>
                 </tr>
@@ -151,13 +151,13 @@ export default function ManquantsPage() {
     { key: 'livre', header: 'Livré (L)', align: 'right', render: (s) => fmtNumber(s.livre) },
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (s) => mq(s.manquant) },
     { key: 'surLivre', header: 'Sur-livré (L)', align: 'right', render: (s) => sl(s.surLivre) },
-    { key: 'etat', header: 'État', align: 'center', render: (s) => s.nbCritiques > 0 ? <Badge className="bg-red-600 text-white">Critique</Badge> : s.nbEnRetard > 0 ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">—</span> },
+    { key: 'etat', header: 'État', align: 'center', render: (s) => s.nbCritiques > 0 ? <Badge className="bg-red-600 text-white">Critique</Badge> : s.nbEnRetard > 0 ? <Badge className="bg-amber-100 text-amber-700">En retard</Badge> : <span className="text-gray-300">-</span> },
   ];
   const colsCamion: Column<ParCamion>[] = [
     { key: 'numeroBL', header: 'N° BL', render: (c) => <span className="font-medium text-gray-800">{c.numeroBL}</span> },
     { key: 'bcNumero', header: 'BC' },
     { key: 'immatriculation', header: 'Camion' },
-    { key: 'transporteur', header: 'Transporteur', render: (c) => c.transporteur ?? '—' },
+    { key: 'transporteur', header: 'Transporteur', render: (c) => c.transporteur ?? '-' },
     { key: 'charge', header: 'Chargé (L)', align: 'right', render: (c) => fmtNumber(c.charge) },
     { key: 'distribue', header: 'Distribué (L)', align: 'right', render: (c) => fmtNumber(c.distribue) },
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (c) => mq(c.manquant) },
@@ -184,7 +184,7 @@ export default function ManquantsPage() {
     { key: 'manquant', header: 'Manquant (L)', align: 'right', render: (a) => mq(a.manquant) },
     { key: 'taux', header: 'Taux', align: 'right', render: (a) => (
       <span className={a.tauxManquantPct >= 2 ? 'font-semibold text-red-600' : a.tauxManquantPct > 0 ? 'text-amber-700' : 'text-gray-400'}>
-        {a.tauxManquantPct > 0 ? `${a.tauxManquantPct.toLocaleString('fr-FR')} %` : '—'}
+        {a.tauxManquantPct > 0 ? `${a.tauxManquantPct.toLocaleString('fr-FR')} %` : '-'}
       </span>
     ) },
     { key: 'nbBl', header: 'Chargements', align: 'right', render: (a) => `${a.nbBlEcart} / ${a.nbBl}` },
@@ -305,9 +305,9 @@ function ListeAttente({ titre, aide, lignes, onOuvrir }: { titre: string; aide: 
             {lignes.map((b) => (
               <tr key={b.id} className="cursor-pointer border-b last:border-0 hover:bg-gray-50" onClick={() => onOuvrir(b.id)}>
                 <td className="px-3 py-2 font-medium text-gray-800">{b.numeroBL}</td>
-                <td className="text-gray-600">{b.bcNumero ?? '—'}</td>
+                <td className="text-gray-600">{b.bcNumero ?? '-'}</td>
                 <td className="text-gray-600">{b.immatriculation}</td>
-                <td className="text-gray-600">{b.transporteur ?? '—'}</td>
+                <td className="text-gray-600">{b.transporteur ?? '-'}</td>
                 <td className="text-right">{fmtNumber(b.volumeChargeLitres)}</td>
                 <td className="px-3 text-right font-semibold text-amber-700">{b.jours} j</td>
               </tr>
