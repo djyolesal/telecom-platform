@@ -25,13 +25,16 @@ const SAFE_SELECT = {
 
 export async function getUsers(req: Request, res: Response, next: NextFunction) {
   try {
-    const { role, region, is_active, search, page = '1', limit = '20' } = req.query as Record<string, string>;
+    const { role, region, is_active, search, prestataire_id, page = '1', limit = '20' } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     // Un compte rattaché à un prestataire ne voit que SES collègues : sans cela,
     // l'annuaire complet (emails, téléphones, rôles, y compris les ADMIN) était
     // lisible par tout superviseur — base idéale de hameçonnage ciblé.
     const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { prestataireId: true } });
     if (moi?.prestataireId) where.prestataireId = moi.prestataireId;
+    // Filtre par société : sert à proposer les destinataires d'un envoi. Il ne
+    // peut qu'AFFINER le cloisonnement ci-dessus, jamais l'ouvrir.
+    if (prestataire_id && !moi?.prestataireId) where.prestataireId = prestataire_id;
     if (role) where.role = role;
     if (region) where.region = region;
     if (is_active != null) where.isActive = is_active === 'true';

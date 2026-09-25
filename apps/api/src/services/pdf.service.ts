@@ -266,6 +266,210 @@ function grillePhotos(doc: PDFKit.PDFDocument, titre: string, photos: Buffer[], 
 }
 
 /**
+ * RAPPORT D'INTERVENTION COMPACT : tient sur UNE page, par construction.
+ *
+ * Dans le rapport mensuel d'activité, une intervention qui déborde sur une
+ * seconde page casse la lecture : on feuillette un dossier de trente
+ * interventions en s'attendant à une page chacune, et une signature isolée en
+ * haut de page suivante se lit comme celle de l'intervention d'après.
+ *
+ * Le débordement est donc IMPOSSIBLE et non pas improbable : aucune section
+ * n'ouvre de page, les textes libres sont tronqués à leur cadre (`ellipsis`),
+ * les listes sont plafonnées, les signatures occupent un emplacement fixe en
+ * bas de page, et les photos prennent ce qui reste - jamais davantage.
+ */
+function dessinerRapportCompact(doc: PDFKit.PDFDocument, m: MaintenancePdfData): void {
+  const w = doc.page.width;
+  const X = 50, LARGEUR = w - 100;
+  const BAS = doc.page.height - 60;
+
+  // ── Bandeau : identité de l'intervention, lisible en feuilletant ──
+  doc.rect(0, 0, w, 46).fill(BRAND);
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('white')
+    .text(m.site?.nom ?? 'Site', X, 10, { width: 320, height: 15, ellipsis: true });
+  doc.font('Helvetica').fontSize(8.5).fillColor('#cdd9e8')
+    .text(`${m.site?.code ?? '-'} · ${m.site?.region ?? '-'} · ${libelle(L_TYPE_MAINTENANCE, m.type)} · ${libelle(L_CATEGORIE_EQUIPEMENT, m.categorie)}`,
+      X, 27, { width: 330, height: 11, ellipsis: true });
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('white')
+    .text(`Réf. ${m.reference ?? m.id.slice(0, 8).toUpperCase()}`, w - 250, 11, { width: 200, align: 'right', lineBreak: false });
+  doc.font('Helvetica').fontSize(8.5).fillColor('#cdd9e8')
+    .text(fmtDate(m.dateFin ?? m.datePlanifiee), w - 250, 27, { width: 200, align: 'right', lineBreak: false });
+  doc.fillColor('black');
+
+  /** Titre de section compact : ne saute JAMAIS de page. */
+  const titre = (texte: string, y: number): number => {
+    doc.roundedRect(X, y, LARGEUR, 15, 2).fill('#EEF3F8');
+    doc.rect(X, y, 3, 15).fill(ACCENT);
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(BRAND).text(texte, X + 9, y + 4, { lineBreak: false });
+    doc.font('Helvetica').fillColor('black');
+    return y + 19;
+  };
+  /**
+   * Ligne libellé / valeur sur une colonne.
+   *
+   * `height` borne le texte à UNE ligne : sans lui, une valeur trop longue
+   * (« Groupe électrogène PERKINS 22 kVA n°2 ») repassait à la ligne et se
+   * dessinait par-dessus la ligne suivante.
+   */
+  const ligne = (label: string, valeur: string, x: number, y: number, largeur: number) => {
+    doc.font('Helvetica').fontSize(8.5).fillColor('#6B7280')
+      .text(label, x, y, { width: 88, height: 11, ellipsis: true });
+    doc.fillColor('#111')
+      .text(valeur || '-', x + 90, y, { width: largeur - 90, height: 11, ellipsis: true });
+  };
+
+  // ── Identité : deux colonnes, l'essentiel d'un coup d'œil ──
+  let y = 58;
+  const colL = X, colR = X + LARGEUR / 2 + 8, largeurCol = LARGEUR / 2 - 8;
+  const gauche: Array<[string, string]> = [
+    ['Équipement', m.equipement],
+    ['Technicien', m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : '-'],
+    ['Prestataire', m.prestataire?.nom ?? 'Interne'],
+  ];
+  if (m.nomAgentSecurite) gauche.push(['Agent de sécurité', m.nomAgentSecurite]);
+  const droite: Array<[string, string]> = [
+    ['Début', fmtDate(m.dateDebut)],
+    ['Fin', fmtDate(m.dateFin)],
+    ['Durée', m.dureeMinutes != null
+      ? `${m.dureeMinutes} min${m.dureeSuspendueMinutes ? ` (hors ${m.dureeSuspendueMinutes} min susp.)` : ''}`
+      : '-'],
+    ['Statut', libelle(L_STATUT_MAINTENANCE, m.statut)],
+  ];
+  const lignes = Math.max(gauche.length, droite.length);
+  for (let i = 0; i < lignes; i++) {
+    if (gauche[i]) ligne(gauche[i][0], gauche[i][1], colL, y + i * 12.5, largeurCol);
+    if (droite[i]) ligne(droite[i][0], droite[i][1], colR, y + i * 12.5, largeurCol);
+  }
+  y += lignes * 12.5 + 6;
+
+  // ── Relevés énergie : une ligne par source, plafonné ──
+  if (m.releves?.length) {
+    const textes: string[] = [];
+    const ge = m.releves.filter((r) => r.source === 'GE');
+    const gasoil = ge.find((r) => r.gasoilConsommeLitres != null) ?? ge.find((r) => r.volumeGasoilLitres != null);
+    if (gasoil) textes.push(`Gasoil : ${fmtN(gasoil.gasoilConsommeLitres, ' L consommés')} · cuve ${fmtN(gasoil.volumeGasoilLitres, ' L')}`);
+    for (const r of ge) textes.push(`GE n°${r.groupeNumero ?? ''} : ${fmtN(r.heuresFonctGE, ' h de marche')} · index ${fmtN(r.indexHeuresGE, ' h')}`);
+    for (const r of m.releves.filter((x) => x.source !== 'GE')) {
+      if (r.source === 'CEET') textes.push(`CEET : ${fmtN(r.consommationKwh, ' kWh')} · index ${fmtN(r.indexCompteur)}`);
+      else if (r.source === 'SOLAIRE') textes.push(`Solaire : ${fmtN(r.puissanceKva, ' kVA')}`);
+    }
+    if (textes.length) {
+      y = titre('Relevés énergie', y);
+      doc.font('Helvetica').fontSize(8.5).fillColor('#111');
+      for (const t of textes.slice(0, 4)) { doc.text(t, X + 2, y, { width: LARGEUR - 4, ellipsis: true, lineBreak: false }); y += 12; }
+      y += 4;
+    }
+  }
+
+  // ── Description et observations : tronquées à leur cadre, jamais au-delà ──
+  const texteLibre = (label: string, valeur: string | null | undefined, maxLignes: number) => {
+    if (!valeur) return;
+    y = titre(label, y);
+    const hauteur = maxLignes * 11;
+    doc.font('Helvetica').fontSize(8.5).fillColor('#111')
+      .text(valeur, X + 2, y, { width: LARGEUR - 4, height: hauteur, ellipsis: true, align: 'justify' });
+    y += hauteur + 4;
+  };
+  texteLibre('Description', m.description, 2);
+  texteLibre('Observations', m.observations, 2);
+  texteLibre('Analyse énergie', m.analyseEnergie, 2);
+
+  // ── Pièces de rechange ──
+  if (m.pieces?.length) {
+    y = titre('Pièces de rechange', y);
+    doc.font('Helvetica').fontSize(8.5).fillColor('#111');
+    for (const p of m.pieces.slice(0, 3)) {
+      doc.text(`${p.quantite}× ${p.nom}${p.reference ? ` · réf. ${p.reference}` : ''}`, X + 2, y, { width: LARGEUR - 4, ellipsis: true, lineBreak: false });
+      y += 12;
+    }
+    if (m.pieces.length > 3) {
+      doc.fontSize(8).fillColor('#888').text(`+ ${m.pieces.length - 3} autre(s) pièce(s).`, X + 2, y, { lineBreak: false });
+      y += 12;
+    }
+    y += 4;
+  }
+
+  // ── Signatures : emplacement FIXE en bas de page ──
+  const slots = [
+    { label: 'Technicien', nom: m.technicien ? `${m.technicien.prenom} ${m.technicien.nom}` : null, image: m.signatureTechnicien ?? null },
+    ...(m.nomAgentSecurite || m.signatureAgent
+      ? [{ label: 'Agent de sécurité', nom: m.nomAgentSecurite ?? null, image: m.signatureAgent ?? null }]
+      : []),
+  ];
+  const hSignature = 50, hPiedSignature = 26;
+  const ySignature = BAS - hSignature - hPiedSignature;
+
+  // ── Photos : ce qui reste entre le contenu et les signatures ──
+  const items = [
+    ...(m.photosAvant ?? []).map((buffer) => ({ buffer, libelle: 'Avant travaux' })),
+    ...(m.photosApres ?? []).map((buffer) => ({ buffer, libelle: 'Après travaux' })),
+  ];
+  const totalAvant = m.totalPhotosAvant ?? (m.photosAvant?.length ?? 0);
+  const totalApres = m.totalPhotosApres ?? (m.photosApres?.length ?? 0);
+  const total = totalAvant + totalApres;
+  const dispo = ySignature - y - 19 - 12 - 10; // titre + légende + marge
+  if (items.length && dispo >= 55) {
+    y = titre(total > items.length ? `Photos (${items.length} sur ${total})` : `Photos (${items.length})`, y);
+    const cols = Math.min(items.length, 3), gap = 10;
+    // Une seule photo ne se met pas dans une vignette du tiers de la page :
+    // elle est la PREUVE du travail fait, elle a droit à un vrai cadre.
+    const cellW = cols === 1 ? 240 : (LARGEUR - gap * (cols - 1)) / cols;
+    const cellH = Math.min(cols === 1 ? 180 : 150, dispo);
+    items.slice(0, cols).forEach((it, i) => {
+      const x = X + i * (cellW + gap);
+      doc.roundedRect(x, y, cellW, cellH, 3).lineWidth(0.5).strokeColor('#d8dee6').stroke();
+      try {
+        doc.image(it.buffer, x + 2, y + 2, { fit: [cellW - 4, cellH - 4], align: 'center', valign: 'center' });
+      } catch { /* image illisible : le cadre et l'étiquette restent */ }
+      doc.font('Helvetica-Bold').fontSize(7.5).fillColor(BRAND)
+        .text(it.libelle, x, y + cellH + 3, { width: cellW, align: 'center', lineBreak: false });
+    });
+    y += cellH + 15;
+    if (total > items.length || items.length > cols) {
+      doc.font('Helvetica').fontSize(7.5).fillColor('#888').text(
+        `${totalAvant} photo(s) avant et ${totalApres} après au total - toutes consultables dans l'application.`,
+        X + 2, y, { width: LARGEUR - 4, lineBreak: false });
+    }
+  } else if (items.length) {
+    // Pas la place : on le DIT, plutôt que de repousser les photos sur une
+    // seconde page et de rompre la règle « une intervention, une page ».
+    doc.font('Helvetica').fontSize(7.5).fillColor('#888')
+      .text(`${total} photo(s) consultable(s) dans l'application.`, X + 2, y, { width: LARGEUR - 4, lineBreak: false });
+  }
+
+  // ── Signatures (emplacement réservé plus haut) ──
+  const gap = 26;
+  // Plafonnée : une signature seule étirée sur toute la largeur ressemble à un
+  // cadre vide, pas à un emplacement à signer.
+  const boxW = Math.min((LARGEUR - gap * (slots.length - 1)) / slots.length, 230);
+  slots.forEach((sl, i) => {
+    const x = X + i * (boxW + gap);
+    doc.roundedRect(x, ySignature, boxW, hSignature, 4).lineWidth(0.8).strokeColor('#cfd8e3').stroke();
+    if (sl.image) {
+      try {
+        doc.image(sl.image, x + 6, ySignature + 5, { fit: [boxW - 12, hSignature - 10], align: 'center', valign: 'center' });
+      } catch {
+        doc.font('Helvetica').fontSize(7.5).fillColor('#bbb')
+          .text('(signature illisible)', x, ySignature + hSignature / 2 - 4, { width: boxW, align: 'center', lineBreak: false });
+      }
+    } else {
+      doc.font('Helvetica').fontSize(7.5).fillColor('#b4b4b4')
+        .text('Signature manquante', x, ySignature + hSignature / 2 - 4, { width: boxW, align: 'center', lineBreak: false });
+    }
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#333')
+      .text(sl.label, x + 2, ySignature + hSignature + 5, { width: boxW, lineBreak: false });
+    doc.font('Helvetica').fontSize(8.5).fillColor('#666')
+      .text(sl.nom || '-', x + 2, ySignature + hSignature + 15, { width: boxW, ellipsis: true, lineBreak: false });
+  });
+  if (m.notePreuves) {
+    doc.font('Helvetica').fontSize(7).fillColor('#888')
+      .text(m.notePreuves, X, BAS - 8, { width: LARGEUR, ellipsis: true, lineBreak: false });
+  }
+  doc.font('Helvetica').fillColor('black');
+  doc.y = BAS;
+}
+
+/**
  * Dessine UN rapport d'intervention dans un document déjà ouvert.
  *
  * Extrait de `generateMaintenancePdf` pour qu'un recueil de plusieurs
@@ -664,9 +868,13 @@ export async function generateMaintenancesRecueilPdf(
     const yVisa = Math.max(doc.y + 10, doc.page.height - 58 - hVisa);
     cadresVisa(doc, yVisa, 60, 80 + largeurVisa, largeurVisa, nomVisa, garde.client);
 
+    // UNE PAGE PAR INTERVENTION : le document part par e-mail à des
+    // superviseurs qui valident une facturation. Il doit se feuilleter vite et
+    // tenir dans une pièce jointe - pas reproduire le dossier complet, qui
+    // reste consultable dans l'application.
     liste.forEach((m) => {
       doc.addPage();
-      dessinerRapportMaintenance(doc, m);
+      dessinerRapportCompact(doc, m);
     });
 
     // ── RÉFÉRENCE ET PAGINATION sur CHAQUE page. Un dossier remis se feuillette,

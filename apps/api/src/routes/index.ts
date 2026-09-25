@@ -162,6 +162,7 @@ const INTERNE_ONLY: RegExp[] = [
   // ailleurs réservée à ADMIN ; cette ligne reste le filet qui tiendra si ce
   // rbac s'élargit un jour.
   /^\/maintenances\/export\/rapports\.pdf$/,
+  /^\/maintenances\/export\/rapports\/envoyer$/,
   /^\/rapports\/reapprovisionnement$/,
   /^\/rapports\/anomalies-conso$/,
   /^\/rapports\/anomalies-carburant$/,
@@ -330,6 +331,7 @@ router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGE
 // Recueil PDF : un rapport d'intervention COMPLET par ligne, sur une période
 // et un périmètre choisis, précédé d'une synthèse (curatif, incidents, pièces).
 router.get('/maintenances/export/rapports.pdf', rbac(['ADMIN']), maintenanceCtrl.exportRapportsMaintenances);
+router.post('/maintenances/export/rapports/envoyer', rbac(['ADMIN']), heavyLimit, maintenanceCtrl.envoyerRapportActivite);
 router.post('/maintenances', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
 router.put('/maintenances/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.updateMaintenance);

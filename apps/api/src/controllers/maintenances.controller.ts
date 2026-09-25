@@ -48,6 +48,8 @@ import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { logger } from '../utils/logger';
+import { sendEmail } from '../services/email.service';
+import { reduireJpeg } from '../utils/image';
 import { logoClient } from '../services/logoClient.service';
 import { calculerDuParSite, tachesCataloguePassif } from '../services/conformiteTaches.service';
 import { assertOnSite } from '../utils/geofence';
@@ -1520,14 +1522,20 @@ export async function chargerDonneesRapport(
     const total = options.maxPhotos;
     if (total <= 0) return 0;
     if (!nbAvant || !nbApres) return total;            // une seule phase : tout pour elle
-    // L'APRÈS emporte la part supplémentaire : c'est lui qui atteste le
-    // travail fait, l'AVANT n'a qu'à établir l'état trouvé.
-    return phase === 'AVANT' ? Math.floor(total / 2) || 1 : total - (Math.floor(total / 2) || 1);
+    // L'APRÈS emporte la part supplémentaire, et la TOTALITÉ quand il n'y a
+    // qu'une place : c'est lui qui atteste le travail fait et qui justifie la
+    // facturation ; l'AVANT n'établit que l'état trouvé.
+    if (total === 1) return phase === 'APRES' ? 1 : 0;
+    return phase === 'AVANT' ? Math.floor(total / 2) : total - Math.floor(total / 2);
   };
   const bufsPhase = async (phase: string) => {
     const liste = photos.filter((p) => p.phase === phase);
     const retenues = echantillonner(liste, quota(phase), `${id}:${phase}`);
-    const bufs = (await Promise.all(retenues.map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
+    let bufs = (await Promise.all(retenues.map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
+    // Rapport mensuel d'activité : il part en pièce jointe. Les photos sont
+    // rééchantillonnées pour le poids, pas pour l'écran - elles s'affichent
+    // sur moins de six centimètres.
+    if (options.maxPhotos != null) bufs = bufs.map((b) => reduireJpeg(b));
     return { bufs, total: liste.length };
   };
   const [avant, apres, signatureTechnicien, signatureAgent] = await Promise.all([
@@ -1584,10 +1592,16 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
  * interventions feraient un document de 600 Mo, intransmissible. Au-delà du
  * plafond réglable, on REFUSE en disant quoi resserrer, plutôt que de fabriquer
  * un fichier que personne ne pourra ouvrir.
+ *
+ * Construit le document et le renvoie : le téléchargement et l'ENVOI PAR
+ * E-MAIL passent tous deux par ici, sans quoi les deux chemins de génération
+ * finiraient par diverger - et c'est une pièce de facturation.
  */
-export async function exportRapportsMaintenances(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { mois, du, au, type, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
+async function construireRapportActivite(
+  req: Request,
+  q: Record<string, string>,
+): Promise<{ pdf: Buffer; nomFichier: string; nb: number; periode: string; reference: string; prestataire: string }> {
+    const { mois, du, au, type, prestataire_id, lot_id, site_id } = q;
     // UN PRESTATAIRE, UN LOT, À LA FOIS. Le couple prestataire × lot est le
     // découpage CONTRACTUEL : c'est lui qu'on signe, qu'on facture et qu'on
     // conteste. Un rapport à cheval sur plusieurs lots ou plusieurs
@@ -1632,10 +1646,11 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       ...(restreint ? { AND: [await contratMaintenancePerimetre(req.user!.id)] } : {}),
     };
 
-    // Échantillon de photos par rapport : 3 par défaut (~750 Ko) au lieu des 12
-    // du rapport unitaire (~3 Mo), ce qui autorise un plafond bien plus haut.
-    // 0 = recueil sans photos, quelques Ko par intervention.
-    const photosParRapport = getNum('maintenance.photosParRapportRecueil', 3);
+    // UNE photo par intervention (l'APRÈS, celle qui atteste le travail fait),
+    // rééchantillonnée : le document part par e-mail à des superviseurs qui
+    // valident une facturation, il doit passer les filtres de pièces jointes.
+    // 0 = rapport sans photo, quelques Ko par intervention.
+    const photosParRapport = getNum('maintenance.photosParRapportRecueil', 1);
     const plafond = getNum('maintenance.maxRapportsPdf', 200);
     const total = await prisma.maintenance.count({ where });
     if (total === 0) throw new AppError('Aucune intervention ne correspond à ces critères.', 404);
@@ -1821,13 +1836,118 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
         mois: moisCible, sitesEnDefaut: manquantes.length,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
         pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
-    res.setHeader('Content-Type', 'application/pdf');
     // Le lot est DANS le nom : on édite les lots les uns après les autres, et
     // sans lui les fichiers s'écrasent dans le dossier de téléchargement.
     const lotFichier = (lotDoc?.code ?? 'lot').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-    res.setHeader('Content-Disposition',
-      `attachment; filename="rapport-activite-${lotFichier}-${moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`}.pdf"`);
+    return {
+      pdf,
+      nomFichier: `rapport-activite-${lotFichier}-${moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`}.pdf`,
+      nb: donnees.length,
+      periode: libellePeriode,
+      reference: synthese.reference,
+      prestataire: prestataireGarde?.nom ?? 'Prestataire',
+    };
+}
+
+/** Téléchargement du rapport mensuel d'activité (PDF). */
+export async function exportRapportsMaintenances(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { pdf, nomFichier } = await construireRapportActivite(req, req.query as Record<string, string>);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nomFichier}"`);
     res.send(pdf);
+  } catch (err) { next(err); }
+}
+
+const EMAIL_VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/**
+ * ENVOI du rapport mensuel d'activité aux superviseurs, avec la fiche de
+ * validation en pièce jointe SÉPARÉE.
+ *
+ * Deux fichiers, pas un document fusionné : la fiche se signe et se classe à
+ * part, et le rapport sert à la vérifier. Les joindre ensemble obligerait le
+ * destinataire à découper un PDF pour archiver la pièce contractuelle.
+ *
+ * Le mois entier est exigé : c'est une validation de FACTURATION, et le dû
+ * contractuel se compte par mois.
+ */
+export async function envoyerRapportActivite(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { mois, lot_id, prestataire_id, type, destinataires, message } = req.body as {
+      mois?: string; lot_id?: string; prestataire_id?: string; type?: string;
+      destinataires?: string[]; message?: string;
+    };
+    if (!/^\d{4}-\d{2}$/.test(mois ?? '')) throw new AppError('Mois invalide (format AAAA-MM).', 422);
+    const liste = (destinataires ?? []).map((d) => String(d).trim()).filter(Boolean);
+    if (!liste.length) throw new AppError('Indiquez au moins un destinataire.', 422);
+    if (liste.length > 10) throw new AppError('Dix destinataires au maximum par envoi.', 422);
+    const invalide = liste.find((d) => !EMAIL_VALIDE.test(d));
+    if (invalide) throw new AppError(`Adresse e-mail invalide : ${invalide}`, 422);
+
+    // Le rapport EST celui du téléchargement : mêmes contrôles (prestataire et
+    // lot obligatoires, périmètre du compte), même document.
+    const rapport = await construireRapportActivite(req, {
+      mois: mois!, lot_id: lot_id ?? '', prestataire_id: prestataire_id ?? '', type: type ?? '',
+    });
+
+    const an = Number(mois!.slice(0, 4));
+    const mo = Number(mois!.slice(5));
+    const { genererFicheValidation } = await import('./taches.controller');
+    const fiche = await genererFicheValidation(prestataire_id!, lot_id ?? null, an, mo, { format: 'pdf' });
+
+    const client = process.env.CLIENT_NOM || 'Moov Africa Togo';
+    const sujet = `${client} - Rapport d'activité ${rapport.periode} - ${rapport.prestataire}`;
+    const corps = `
+  <div style="font-family:Segoe UI,Arial,sans-serif;max-width:620px;margin:0 auto;color:#222;">
+    <div style="background:#1B3F6B;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;">
+      <p style="margin:0;font-size:17px;font-weight:700;">Rapport d'activité - ${rapport.periode}</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#cdd9e8;">${rapport.prestataire} · réf. ${rapport.reference}</p>
+    </div>
+    <div style="background:#f7f9fc;border:1px solid #e3e8ef;border-top:0;padding:16px 20px 20px;border-radius:0 0 8px 8px;">
+      <p style="margin:0 0 10px;font-size:14px;">
+        ${rapport.nb} intervention(s) terminée(s) sur la période. Deux pièces jointes :
+      </p>
+      <ul style="margin:0 0 12px;padding-left:18px;font-size:13px;color:#333;">
+        <li><b>Rapport d'activité</b> : le détail des interventions, une page chacune.</li>
+        <li><b>Fiche de validation</b> : les travaux contractuels du mois, à signer.</li>
+      </ul>
+      ${message ? `<p style="margin:0 0 12px;font-size:13px;white-space:pre-line;">${String(message).slice(0, 1000).replace(/</g, '&lt;')}</p>` : ''}
+      <p style="margin:12px 0 0;font-size:11px;color:#8a94a0;">Envoyé depuis E&amp;M OpS.</p>
+    </div>
+  </div>`;
+
+    const envoye = await sendEmail({
+      to: liste,
+      subject: sujet,
+      html: corps,
+      attachments: [
+        { filename: rapport.nomFichier, content: rapport.pdf, contentType: 'application/pdf' },
+        { filename: fiche.nomFichier, content: fiche.buffer, contentType: 'application/pdf' },
+      ],
+    });
+    if (!envoye) {
+      // Ne JAMAIS répondre « envoyé » quand rien n'est parti : le superviseur
+      // attendrait un document qui n'arrivera pas.
+      throw new AppError("Envoi impossible : la messagerie n'est pas configurée sur le serveur.", 503);
+    }
+
+    await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
+      { rapport: 'rapport_activite_mensuel', envoi: 'email', destinataires: liste, mois, lot_id, prestataire_id,
+        nb: rapport.nb, reference: rapport.reference,
+        tailles: { rapport: rapport.pdf.length, fiche: fiche.buffer.length } }, req);
+
+    res.json({
+      success: true,
+      data: {
+        destinataires: liste,
+        reference: rapport.reference,
+        pieces: [
+          { nom: rapport.nomFichier, octets: rapport.pdf.length },
+          { nom: fiche.nomFichier, octets: fiche.buffer.length },
+        ],
+      },
+    });
   } catch (err) { next(err); }
 }
 

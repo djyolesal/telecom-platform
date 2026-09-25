@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText } from 'lucide-react';
+import { FileText, Mail, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { FormCard, Field, Input, Select } from '@/components/shared/Form';
+import { FormCard, Field, Input, Select, Textarea } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
 import { TYPES_MAINTENANCE } from '@/lib/constants';
 
@@ -56,6 +56,56 @@ export default function RapportActiviteMensuelPage() {
     ).values(),
   ] as { value: string; label: string }[];
 
+  // ENVOI PAR E-MAIL : le rapport et la fiche de validation partent en DEUX
+  // pièces jointes distinctes, aux superviseurs qui valident la facturation.
+  const [ouvertEnvoi, setOuvertEnvoi] = useState(false);
+  const [destinataires, setDestinataires] = useState('');
+  const [messageMail, setMessageMail] = useState('');
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
+  const [envoye, setEnvoye] = useState('');
+
+  // Destinataires proposés : les comptes du prestataire qui ont une adresse.
+  const { data: comptes } = useQuery({
+    queryKey: ['utilisateurs-prestataire', prestataireId],
+    queryFn: () => api.get('/users', { params: { prestataire_id: prestataireId, is_active: true, limit: 50 } })
+      .then((r) => r.data.data as Array<{ email: string | null; nom: string; prenom: string }>),
+    enabled: !!prestataireId && ouvertEnvoi,
+  });
+  const ouvrirEnvoi = () => {
+    if (!prestataireId || !lotId) { setError('Sélectionnez un prestataire et un lot.'); return; }
+    setError(''); setEnvoye(''); setOuvertEnvoi(true);
+  };
+  // Pré-remplissage une seule fois : l'utilisateur reste maître de la liste.
+  useEffect(() => {
+    if (!ouvertEnvoi || destinataires || !comptes?.length) return;
+    const adresses = comptes.map((c) => c.email).filter(Boolean).join('\n');
+    if (adresses) setDestinataires(adresses);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ouvertEnvoi, comptes]);
+
+  const envoyer = async () => {
+    const liste = destinataires.split(/[\n,;]+/).map((d) => d.trim()).filter(Boolean);
+    if (!liste.length) { setError('Indiquez au moins un destinataire.'); return; }
+    setError(''); setEnvoiEnCours(true);
+    try {
+      const r = await api.post('/maintenances/export/rapports/envoyer', {
+        mois: `${annee}-${mois}`, lot_id: lotId, prestataire_id: prestataireId,
+        ...(type ? { type } : {}),
+        destinataires: liste, message: messageMail || undefined,
+      });
+      const pieces = (r.data.data.pieces ?? []) as Array<{ nom: string; octets: number }>;
+      const poids = pieces.reduce((t, p) => t + p.octets, 0);
+      setEnvoye(`Envoyé à ${liste.length} destinataire(s) · ${pieces.length} pièces jointes (${Math.round(poids / 1024)} Ko)`);
+      setOuvertEnvoi(false);
+      setMessageMail('');
+    } catch (e) {
+      const rep = (e as { response?: { data?: { error?: string } } }).response;
+      setError(rep?.data?.error ?? 'Envoi impossible - réessayez.');
+    } finally {
+      setEnvoiEnCours(false);
+    }
+  };
+
   const editer = async () => {
     if (!prestataireId || !lotId) { setError('Sélectionnez un prestataire et un lot : le rapport s’édite pour un lot d’un prestataire.'); return; }
     setError(''); setBusy(true);
@@ -103,10 +153,43 @@ export default function RapportActiviteMensuelPage() {
             <Select value={type} onChange={(e) => setType(e.target.value)} options={TYPES_MAINTENANCE} placeholder="Tous types" />
           </Field>
         </div>
-        <div className="mt-5">
+        {envoye && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            <CheckCircle2 size={15} /> {envoye}
+          </div>
+        )}
+        <div className="mt-5 flex flex-wrap gap-2">
           <Button icon={FileText} loading={busy} disabled={!prestataireId || !lotId} onClick={editer}>Éditer le rapport PDF</Button>
+          <Button variant="secondary" icon={Mail} disabled={!prestataireId || !lotId} onClick={ouvrirEnvoi}>
+            Envoyer par e-mail
+          </Button>
         </div>
       </FormCard>
+
+      {ouvertEnvoi && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOuvertEnvoi(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-1 text-lg font-bold text-gray-800">Envoyer le rapport</h2>
+            <p className="mb-4 text-xs text-gray-500">
+              Deux pièces jointes distinctes : le <b>rapport d’activité</b> du mois et la <b>fiche de validation</b> à
+              signer. Une adresse par ligne.
+            </p>
+            {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+            <Field label="Destinataires" required>
+              <Textarea rows={3} value={destinataires} onChange={(e) => setDestinataires(e.target.value)}
+                placeholder="superviseur@prestataire.tg" />
+            </Field>
+            <Field label="Message (facultatif)">
+              <Textarea rows={3} value={messageMail} onChange={(e) => setMessageMail(e.target.value)}
+                placeholder="Bonjour, veuillez trouver ci-joint…" />
+            </Field>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setOuvertEnvoi(false)}>Annuler</Button>
+              <Button type="button" icon={Mail} loading={envoiEnCours} onClick={envoyer}>Envoyer</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

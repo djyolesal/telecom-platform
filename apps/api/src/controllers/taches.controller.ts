@@ -343,6 +343,31 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
 }
 
 /**
+ * Fiche de validation d'un prestataire pour un mois, prête à être jointe.
+ *
+ * Exposée pour l'ENVOI PAR E-MAIL du rapport mensuel d'activité : la fiche y
+ * part en pièce jointe SÉPARÉE, et doit être exactement celle que le portail
+ * télécharge - un second chemin de génération finirait par diverger.
+ */
+export async function genererFicheValidation(
+  prestataireId: string,
+  lotId: string | null,
+  an: number,
+  mo: number,
+  opts: { contrat?: 'PASSIF' | 'SOLAIRE'; format?: FormatFiche; client?: string } = {},
+): Promise<{ buffer: Buffer; nomFichier: string }> {
+  const presta = await prisma.prestataire.findUnique({ where: { id: prestataireId } });
+  if (!presta) throw new AppError('Prestataire introuvable.', 404);
+  const contrat = opts.contrat ?? 'PASSIF';
+  const format = opts.format ?? 'pdf';
+  const clientLogo = (await logoClient()).logo;
+  const buffer = await produceFiche(presta, lotId, an, mo, clientBlock(opts.client), clientLogo, contrat, format);
+  const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');
+  const suffixe = contrat === 'SOLAIRE' ? '-solaire' : '';
+  return { buffer, nomFichier: `fiche-validation${suffixe}-${safeNom}-${String(mo).padStart(2, '0')}-${an}.${format}` };
+}
+
+/**
  * Fiche de validation mensuelle (xlsx) d'un prestataire (et lot optionnel) :
  * pour chaque tâche contractuelle, nb de sites concernés et nb réalisés dans le mois.
  */
