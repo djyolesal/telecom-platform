@@ -1785,7 +1785,6 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       restreint ? 'périmètre du compte' : null,
     ].filter(Boolean).join(' · ') || 'tout le parc';
 
-    const moi = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { nom: true, prenom: true } });
     const minutes = lignes.reduce((t, l) => t + (l.dureeMinutes ?? 0), 0);
     const synthese: RecueilSynthese = {
       periode: libellePeriode,
@@ -1795,7 +1794,6 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       curatives: lignes.filter((l) => l.type !== 'PREVENTIVE').length,
       sites: new Set(lignes.map((l) => l.siteId)).size,
       heures: Math.round(minutes / 60),
-      editePar: moi ? `${moi.prenom} ${moi.nom}`.trim() : 'E&M OpS',
       // Le client est celui de la fiche de validation contractuelle : même
       // source (CLIENT_NOM), pour que les deux documents se répondent.
       client: process.env.CLIENT_NOM || 'Moov Africa Togo',

@@ -324,8 +324,7 @@ export interface RecueilSynthese {
   sites: number;
   /** Heures travaillées cumulées (durées d'intervention). */
   heures: number;
-  /** Qui a édité le document, et pour quel client. */
-  editePar: string;
+  /** Client destinataire du document. */
   client: string;
   /** Référence du document, reportée en pied de CHAQUE page. */
   reference: string;
@@ -517,7 +516,7 @@ export async function generateMaintenancesRecueilPdf(
     cartouche(doc, pose(3), y, largeurCase, 58, `${totalPieces}`, 'pièce(s) remplacée(s)', ACCENT);
     y += 70;
     doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF).text(
-      `${garde.heures} h travaillées cumulées · édité par ${garde.editePar} le ${fmtDate(new Date())}`,
+      `${garde.heures} h travaillées cumulées`,
       60, y, { width: w - 120, align: 'center' },
     );
     doc.fillColor('black');
@@ -551,14 +550,6 @@ export async function generateMaintenancesRecueilPdf(
       garde.pieces.forEach((p) =>
         ligneTableau(doc, [p.nom, p.reference || '-', String(p.quantite), String(p.sites)], L));
     }
-
-    doc.moveDown(0.8);
-    doc.fontSize(8.5).fillColor('#666').text(
-      "Les pages suivantes reprennent chaque intervention dans le format exact du rapport unitaire : "
-      + "relevés énergie, description, pièces, photos avant et après, signatures.",
-      50, doc.y, { width: doc.page.width - 100, align: 'justify' },
-    );
-    doc.fillColor('black');
 
     // ── CE QUI N'A PAS ÉTÉ FAIT. Un recueil ne montre que les interventions
     //    réalisées ; l'auditeur cherche d'abord les manquantes. Même moteur que
