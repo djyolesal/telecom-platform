@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet, Archive } from 'lucide-react';
+import { FileSpreadsheet, FileText, Archive } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -30,6 +30,9 @@ export default function FicheValidationPage() {
   // crasher la page (« Cannot access 'contrat' before initialization »)
   // dès qu'un prestataire avec attributions était sélectionné.
   const [contrat, setContrat] = useState('PASSIF');
+  // Le xlsx sert à travailler (colonnes ajoutées, chiffres recalculés) ;
+  // le PDF sert à signer et à transmettre — mise en page figée.
+  const [format, setFormat] = useState<'xlsx' | 'pdf'>('xlsx');
 
   const { data: prestataires, isLoading: chargePrestataires } = useQuery({
     queryKey: ['prestataires-select'],
@@ -62,7 +65,7 @@ export default function FicheValidationPage() {
       const lotPart = lotId ? `&lot_id=${lotId}` : '';
       const contratPart = contrat === 'SOLAIRE' ? '&contrat=SOLAIRE' : '';
       const suffixe = contrat === 'SOLAIRE' ? '-solaire' : '';
-      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}${contratPart}`, `fiche-validation${suffixe}-${nom}-${mois}-${annee}.xlsx`);
+      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}${contratPart}&format=${format}`, `fiche-validation${suffixe}-${nom}-${mois}-${annee}.${format}`);
     } catch {
       setError('Échec du téléchargement. Vérifiez le prestataire et la période.');
     } finally {
@@ -74,7 +77,7 @@ export default function FicheValidationPage() {
     setError('');
     setBusyAll(true);
     try {
-      await downloadFile(`/rapports/fiches-validation/batch?annee=${annee}&mois=${mois}`, `fiches-validation-${mois}-${annee}.zip`);
+      await downloadFile(`/rapports/fiches-validation/batch?annee=${annee}&mois=${mois}&format=${format}`, `fiches-validation-${mois}-${annee}.zip`);
     } catch {
       setError('Échec de la génération groupée.');
     } finally {
@@ -98,6 +101,10 @@ export default function FicheValidationPage() {
           <Field label="Lot / zone" className="md:col-span-3">
             <Select value={lotId} onChange={(e) => setLotId(e.target.value)} disabled={!prestataireId} options={lotOptions} placeholder={!prestataireId ? 'Choisissez d’abord un prestataire' : chargeLots ? 'Chargement des lots…' : 'Tous les lots du prestataire'} />
           </Field>
+          <Field label="Format" className="md:col-span-3">
+            <Select value={format} onChange={(e) => setFormat(e.target.value as 'xlsx' | 'pdf')}
+              options={[{ value: 'xlsx', label: 'Excel (.xlsx) — pour travailler les chiffres' }, { value: 'pdf', label: 'PDF — mise en page figée, à signer' }]} />
+          </Field>
           <Field label="Mois" required>
             <Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS} />
           </Field>
@@ -107,7 +114,9 @@ export default function FicheValidationPage() {
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button variant="secondary" icon={Archive} loading={busyAll} onClick={downloadAll}>Générer toutes les fiches du mois (.zip)</Button>
-          <Button icon={FileSpreadsheet} loading={busy} onClick={download}>Télécharger la fiche (.xlsx)</Button>
+          <Button icon={format === 'pdf' ? FileText : FileSpreadsheet} loading={busy} onClick={download}>
+            Télécharger la fiche ({format === 'pdf' ? '.pdf' : '.xlsx'})
+          </Button>
         </div>
         <p className="mt-3 text-xs text-gray-500">
           Pour chaque tâche contractuelle : <b>sites concernés</b> (éligibles dans le périmètre passif du prestataire),

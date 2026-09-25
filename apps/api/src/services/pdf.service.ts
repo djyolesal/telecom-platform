@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { L_TYPE_MAINTENANCE, L_STATUT_MAINTENANCE, L_CATEGORIE_EQUIPEMENT, libelle } from '../utils/libelles';
 import QRCode from 'qrcode';
+import { FicheValidationData, LigneFiche, lignesFiche } from './ficheValidation.service';
 
 const BRAND = '#1B3F6B';
 const GRIS_PDF = '#6B7280';
@@ -363,6 +364,84 @@ function ligneTableau(
   doc.y = y + hauteur;
 }
 
+/**
+ * Tableau des lignes contractuelles de la fiche de validation.
+ *
+ * Partagé par la fiche autonome (PDF) et la page 2 du rapport mensuel
+ * d'activité : les deux documents circulent ensemble, ils ne peuvent pas
+ * s'afficher différemment.
+ */
+function tableauFiche(doc: PDFKit.PDFDocument, lignes: LigneFiche[]) {
+  const L = [26, 252, 76, 66, 76];
+  ligneTableau(doc, ['N°', 'Description', 'Sites concernés', 'Réalisés', 'Fréq./6 mois'], L, true);
+  lignes.forEach((l) => {
+    // Un écart entre concernés et réalisés est CE QUE LE LECTEUR CHERCHE :
+    // il doit sauter aux yeux sans relire deux colonnes de chiffres.
+    const manque = l.realises < l.concernes;
+    const y0 = doc.y;
+    // Multiligne : les descriptions contractuelles font deux à trois lignes.
+    ligneTableau(doc, [String(l.numero), l.description, String(l.concernes), String(l.realises), String(l.freq6)], L, false, true);
+    if (manque) {
+      // Le repère épouse la hauteur RÉELLE de la ligne, pas une hauteur
+      // supposée : sinon il déborde sur la ligne voisine.
+      doc.save().rect(46, y0 - 1, 3, Math.max(10, doc.y - y0 - 3)).fill('#C0392B').restore();
+    }
+    doc.moveTo(50, doc.y - 2).lineTo(doc.page.width - 50, doc.y - 2).lineWidth(0.3).stroke('#E7EBF0');
+  });
+}
+
+/**
+ * Hauteur d'un cadre de visa : elle suit le NOM le plus long. Un nom de
+ * prestataire qui passe à la ligne recouvrait « Nom : », dont la position
+ * était figée — et c'est précisément la ligne que le signataire doit remplir.
+ */
+function hauteurVisa(doc: PDFKit.PDFDocument, noms: string[], largeur: number): number {
+  doc.font('Helvetica-Bold').fontSize(9);
+  return Math.max(...noms.map((n) => doc.heightOfString(`Pour ${n}`, { width: largeur - 20 }))) + 78;
+}
+
+/** Deux cadres de visa : exécutant à gauche, donneur d'ordre à droite. */
+function cadresVisa(
+  doc: PDFKit.PDFDocument, y: number, xGauche: number, xDroite: number, largeur: number,
+  nomGauche: string, nomDroite: string,
+) {
+  const hauteur = hauteurVisa(doc, [nomGauche, nomDroite], largeur);
+  const hTitre = hauteur - 78;
+  ([[xGauche, nomGauche], [xDroite, nomDroite]] as [number, string][]).forEach(([x, nom]) => {
+    doc.roundedRect(x, y, largeur, hauteur, 5).lineWidth(0.7).stroke('#D8DEE6');
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND).text(`Pour ${nom}`, x + 10, y + 10, { width: largeur - 20 });
+    const yLignes = y + 16 + hTitre;
+    doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF)
+      .text('Nom :', x + 10, yLignes)
+      .text('Date :', x + 10, yLignes + 16)
+      .text('Signature et cachet :', x + 10, yLignes + 32);
+    doc.fillColor('black');
+  });
+  return hauteur;
+}
+
+/**
+ * Référence du document et « page i / n » sur CHAQUE page.
+ *
+ * La marge basse est neutralisée le temps de l'écriture : PDFKit traite un
+ * texte posé sous la marge comme un débordement et OUVRE UNE PAGE — laquelle
+ * reçoit à son tour son pied de page, et ainsi de suite. Le document finissait
+ * par des pages blanches, et la numérotation elle-même ne s'imprimait pas.
+ */
+function piedDePage(doc: PDFKit.PDFDocument, gauche: string) {
+  const total = doc.bufferedPageRange().count;
+  for (let i = 0; i < total; i++) {
+    doc.switchToPage(i);
+    const basPrecedent = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
+    doc.font('Helvetica').fontSize(7.5).fillColor('#9AA5B1');
+    doc.text(gauche, 50, doc.page.height - 32, { width: 320, lineBreak: false });
+    doc.text(`page ${i + 1} / ${total}`, doc.page.width - 150, doc.page.height - 32, { width: 100, align: 'right', lineBreak: false });
+    doc.fillColor('black');
+    doc.page.margins.bottom = basPrecedent;
+  }
+}
+
 /** Cartouche de chiffre clé de la page de garde. */
 function cartouche(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number,
                    valeur: string, libelle: string, couleur = BRAND) {
@@ -380,7 +459,7 @@ export async function generateMaintenancesRecueilPdf(
     /** Fiche de validation du mois, quand elle a un sens (1 prestataire, mois entier). */
     fiche?: {
       prestataire: string; zone: string; nbSites: number;
-      lignes: Array<{ numero: number; description: string; concernes: number; realises: number; freq6: number }>;
+      lignes: LigneFiche[];
     };
   } & RecueilSynthese,
 ): Promise<Buffer> {
@@ -512,20 +591,12 @@ export async function generateMaintenancesRecueilPdf(
     // ── VISA. Un recueil « contractuel » qui ne se signe pas ne vaut pas mieux
     //    qu'un listing : deux cadres, exactement comme la fiche de validation
     //    mensuelle que ces mêmes lecteurs signent déjà.
-    if (doc.y > doc.page.height - 160) doc.addPage();
-    const yVisa = Math.max(doc.y + 10, doc.page.height - 150);
     const largeurVisa = (doc.page.width - 140) / 2;
-    [[garde.prestataire?.nom ?? 'le prestataire', 60],
-     [garde.client, 80 + largeurVisa]].forEach(([nom, x]) => {
-      doc.roundedRect(x as number, yVisa, largeurVisa, 92, 5).lineWidth(0.7).stroke('#D8DEE6');
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND)
-        .text(`Pour ${nom}`, (x as number) + 10, yVisa + 10, { width: largeurVisa - 20 });
-      doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF)
-        .text('Nom :', (x as number) + 10, yVisa + 30)
-        .text('Date :', (x as number) + 10, yVisa + 46)
-        .text('Signature et cachet :', (x as number) + 10, yVisa + 62);
-      doc.fillColor('black');
-    });
+    const nomVisa = garde.prestataire?.nom ?? 'le prestataire';
+    const hVisa = hauteurVisa(doc, [nomVisa, garde.client], largeurVisa);
+    if (doc.y + hVisa + 20 > doc.page.height - 60) doc.addPage();
+    const yVisa = Math.max(doc.y + 10, doc.page.height - 58 - hVisa);
+    cadresVisa(doc, yVisa, 60, 80 + largeurVisa, largeurVisa, nomVisa, garde.client);
 
     // ── FICHE DE VALIDATION en page 2, quand le recueil couvre UN prestataire
     //    sur un mois entier. Mêmes lignes contractuelles et mêmes chiffres que
@@ -541,25 +612,10 @@ export async function generateMaintenancesRecueilPdf(
           50, 70, { width: w2 - 100, align: 'center' });
       doc.fillColor('black');
       doc.y = 96;
-      const L = [26, 252, 76, 66, 76];
-      ligneTableau(doc, ['N°', 'Description', 'Sites concernés', 'Réalisés', 'Fréq./6 mois'], L, true);
-      garde.fiche.lignes.forEach((l) => {
-        // Un écart entre concernés et réalisés est CE QUE LE LECTEUR CHERCHE :
-        // il doit sauter aux yeux sans relire deux colonnes de chiffres.
-        const manque = l.realises < l.concernes;
-        const y0 = doc.y;
-        // Multiligne : les descriptions contractuelles font deux à trois lignes.
-        ligneTableau(doc, [String(l.numero), l.description, String(l.concernes), String(l.realises), String(l.freq6)], L, false, true);
-        if (manque) {
-          // Le repère épouse la hauteur RÉELLE de la ligne, pas une hauteur
-          // supposée : sinon il déborde sur la ligne voisine.
-          doc.save().rect(46, y0 - 1, 3, Math.max(10, doc.y - y0 - 3)).fill('#C0392B').restore();
-        }
-        doc.moveTo(50, doc.y - 2).lineTo(doc.page.width - 50, doc.y - 2).lineWidth(0.3).stroke('#E7EBF0');
-      });
+      tableauFiche(doc, garde.fiche.lignes);
       doc.moveDown(0.6);
       doc.fontSize(8).fillColor(GRIS_PDF).text(
-        'Chiffres identiques à la fiche de validation mensuelle (xlsx) : même calcul, même périmètre contractuel. '
+        'Chiffres identiques à la fiche de validation mensuelle (Excel ou PDF) : même calcul, même périmètre contractuel. '
         + 'Un repère rouge signale une ligne où tous les sites concernés n’ont pas été traités.',
         50, doc.y, { width: w2 - 100, align: 'justify' });
       doc.fillColor('black');
@@ -573,14 +629,103 @@ export async function generateMaintenancesRecueilPdf(
     // ── RÉFÉRENCE ET PAGINATION sur CHAQUE page. Un dossier remis se feuillette,
     //    se photocopie, se scanne : sans numérotation, personne ne peut dire
     //    qu'il est complet, ni citer une page en réunion.
-    const total = doc.bufferedPageRange().count;
-    for (let i = 0; i < total; i++) {
-      doc.switchToPage(i);
-      doc.font('Helvetica').fontSize(7.5).fillColor('#9AA5B1');
-      doc.text(`${garde.reference} · émis par E&M OpS`, 50, doc.page.height - 32, { width: 250 });
-      doc.text(`page ${i + 1} / ${total}`, doc.page.width - 150, doc.page.height - 32, { width: 100, align: 'right' });
-      doc.fillColor('black');
+    piedDePage(doc, `${garde.reference} · émis par E&M OpS`);
+  }, { bufferPages: true });
+}
+
+/**
+ * FICHE DE VALIDATION MENSUELLE — version PDF de la fiche xlsx.
+ *
+ * Le xlsx sert à travailler (on y ajoute des colonnes, on recalcule) ; le PDF
+ * sert à SIGNER et à transmettre : mise en page figée, identique chez tout le
+ * monde, et rigoureusement les mêmes chiffres, puisque les lignes viennent du
+ * calcul partagé `lignesFiche`.
+ */
+export async function buildFicheValidationPdf(d: FicheValidationData): Promise<Buffer> {
+  const moisLabel = MOIS[d.mois - 1] ?? '';
+  const dernierJour = new Date(d.annee, d.mois, 0).getDate();
+  const jj = (n: number) => String(n).padStart(2, '0');
+  const fin = `${jj(dernierJour)}/${jj(d.mois)}/${d.annee}`;
+
+  return render((doc) => {
+    const w = doc.page.width;
+    const p = d.prestataire;
+
+    // ── Logos : EXÉCUTANT à gauche, DONNEUR D'ORDRE à droite — la disposition
+    //    du xlsx que les mêmes lecteurs signent déjà.
+    const poserLogo = (logo: { buffer: Buffer } | null | undefined, x: number, aDroite = false) => {
+      if (!logo) return;
+      // Un logo illisible ne doit pas faire perdre la fiche : on l'omet.
+      try { doc.image(logo.buffer, x, 34, { fit: [150, 54], ...(aDroite ? { align: 'right' as const } : {}) }); } catch { /* ignoré */ }
+    };
+    poserLogo(d.prestataireLogo, 50);
+    poserLogo(d.clientLogo, w - 200, true);
+
+    // ── Identités ──
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND).text(p.nom, 50, 100, { width: 260 });
+    doc.font('Helvetica').fontSize(8).fillColor('#111');
+    let yg = doc.y + 2;
+    for (const ligne of [
+      p.adresse, p.rccm ? `RCCM : ${p.rccm}` : null, p.nif ? `NIF : ${p.nif}` : null,
+      p.contactCommercial ? `Contact commercial : ${p.contactCommercial}` : null,
+      p.contactTechnique ? `Contact technique : ${p.contactTechnique}` : null,
+    ]) {
+      if (!ligne) continue;
+      doc.text(ligne, 50, yg, { width: 260 });
+      yg = doc.y + 1;
     }
+
+    const xd = w - 250;
+    doc.font('Helvetica').fontSize(8.5).fillColor(GRIS_PDF).text(`Lomé, le ${fin}`, xd, 100, { width: 200, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND).text(d.client.nom, xd, 118, { width: 200, align: 'right' });
+    doc.font('Helvetica').fontSize(8).fillColor('#111');
+    let yd = doc.y + 1;
+    for (const ligne of d.client.adresse.slice(0, 3)) {
+      doc.text(ligne, xd, yd, { width: 200, align: 'right' });
+      yd = doc.y + 1;
+    }
+
+    let y = Math.max(yg, yd) + 10;
+    doc.rect(50, y, w - 100, 3).fill(BRAND);
+    doc.rect(50, y + 3, w - 100, 1.5).fill('#FFB020');
+    y += 16;
+
+    // ── Périmètre : ce que la signature engage ──
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#111').text(`Zone : ${d.zone}`, 50, y, { width: w - 100 });
+    doc.font('Helvetica').fontSize(8.5).fillColor(GRIS_PDF)
+      .text(`Nombre de sites : ${d.nbSites}   ·   Période du 01 au ${fin}`, 50, doc.y + 2, { width: w - 100 });
+    y = doc.y + 12;
+
+    doc.rect(50, y, w - 100, 26).fill(BRAND);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('white')
+      .text(`TRAVAUX DE MAINTENANCE DES SITES ${d.client.nom.toUpperCase()} : MOIS DE ${moisLabel.toUpperCase()} ${d.annee}`,
+        56, y + 8, { width: w - 112, align: 'center' });
+    y += 30;
+
+    doc.rect(50, y, w - 100, 18).fill('#D6E4F0');
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND).text(
+      d.contrat === 'SOLAIRE' ? 'OPÉRATION DE MAINTENANCE PRÉVENTIVE — CONTRAT SOLAIRE' : 'OPÉRATION DE MAINTENANCE PRÉVENTIVE',
+      56, y + 5, { width: w - 112, align: 'center' });
+    doc.fillColor('black');
+    doc.y = y + 26;
+
+    tableauFiche(doc, lignesFiche(d));
+
+    doc.moveDown(0.6);
+    doc.font('Helvetica').fontSize(8).fillColor(GRIS_PDF).text(
+      'Sites concernés : sites du périmètre éligibles à la tâche. Réalisés : sites distincts traités dans le mois. '
+      + 'Un repère rouge signale une ligne où tous les sites concernés n’ont pas été traités.',
+      50, doc.y, { width: w - 100, align: 'justify' });
+    doc.fillColor('black');
+
+    // ── Visas : le document n'existe que pour être signé des deux côtés ──
+    const largeur = (w - 120) / 2;
+    const hVisa = hauteurVisa(doc, [p.nom, d.client.nom], largeur);
+    let yVisa = doc.y + 18;
+    if (yVisa + hVisa > doc.page.height - 60) { doc.addPage(); yVisa = 60; }
+    cadresVisa(doc, yVisa, 50, w - 50 - largeur, largeur, p.nom, d.client.nom);
+
+    piedDePage(doc, `Fiche de validation ${jj(d.mois)}/${d.annee} · émise par E&M OpS`);
   }, { bufferPages: true });
 }
 

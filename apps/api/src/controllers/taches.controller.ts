@@ -9,7 +9,8 @@ import { auditLog } from '../services/audit.service';
 import { genererPlanningPreventif } from '../services/planning.service';
 import { dateReferenceTaches } from '../services/settings.service';
 import JSZip from 'jszip';
-import { buildFicheValidationXlsx, FicheLogo } from '../services/ficheValidation.service';
+import { buildFicheValidationXlsx, FicheLogo, FicheValidationData } from '../services/ficheValidation.service';
+import { buildFicheValidationPdf } from '../services/pdf.service';
 import { getObjectBuffer } from '../services/storage.service';
 import { setXlsxHeaders } from '../utils/excel';
 
@@ -338,16 +339,21 @@ export async function donneesFicheValidation(
   return { sites: sites as unknown as SiteEligibilite[], realisesParKey, zone, nbSites: sites.length };
 }
 
-/** Génère le buffer xlsx d'une fiche pour un prestataire (et un lot optionnel). */
-async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null, contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF'): Promise<Buffer> {
+/** Format de sortie d'une fiche : le xlsx pour travailler, le PDF pour signer. */
+export type FormatFiche = 'xlsx' | 'pdf';
+
+/** Génère le buffer d'une fiche pour un prestataire (et un lot optionnel). */
+async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null, contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF', format: FormatFiche = 'xlsx'): Promise<Buffer> {
   const { sites, realisesParKey, zone } = await donneesFicheValidation(presta, lotId, an, mo, contrat);
   const prestataireLogo = await loadLogo(presta.logoPath);
-  return buildFicheValidationXlsx({
+  // Mêmes DONNÉES pour les deux formats : seule la mise en page change.
+  const data: FicheValidationData = {
     prestataire: { nom: presta.nom, adresse: presta.adresse, rccm: presta.rccm, nif: presta.nif, contactCommercial: presta.contactCommercial, contactTechnique: presta.contactTechnique },
     client: cb,
     zone, nbSites: sites.length, annee: an, mois: mo,
     sites: sites as unknown as SiteEligibilite[], realisesParKey, prestataireLogo, clientLogo, contrat,
-  });
+  };
+  return format === 'pdf' ? buildFicheValidationPdf(data) : buildFicheValidationXlsx(data);
 }
 
 /**
@@ -356,7 +362,7 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
  */
 export async function getFicheValidation(req: Request, res: Response, next: NextFunction) {
   try {
-    const { prestataire_id, annee, mois, client, lot_id, contrat } = req.query as Record<string, string>;
+    const { prestataire_id, annee, mois, client, lot_id, contrat, format } = req.query as Record<string, string>;
     if (!prestataire_id) throw new AppError('Sélectionnez un prestataire.', 400);
     const an = parseInt(annee) || new Date().getFullYear();
     const mo = parseInt(mois);
@@ -366,12 +372,19 @@ export async function getFicheValidation(req: Request, res: Response, next: Next
     if (!presta) throw new AppError('Prestataire introuvable.', 404);
 
     const typeContrat: 'PASSIF' | 'SOLAIRE' = contrat === 'SOLAIRE' ? 'SOLAIRE' : 'PASSIF';
+    const fmt: FormatFiche = format === 'pdf' ? 'pdf' : 'xlsx';
     const clientLogo = await loadLogo(process.env.CLIENT_LOGO_KEY);
-    const buf = await produceFiche(presta, lot_id || null, an, mo, clientBlock(client), clientLogo, typeContrat);
+    const buf = await produceFiche(presta, lot_id || null, an, mo, clientBlock(client), clientLogo, typeContrat, fmt);
 
     const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');
     const suffixe = typeContrat === 'SOLAIRE' ? '-solaire' : '';
-    setXlsxHeaders(res, `fiche-validation${suffixe}-${safeNom}-${String(mo).padStart(2, '0')}-${an}.xlsx`);
+    const nomFichier = `fiche-validation${suffixe}-${safeNom}-${String(mo).padStart(2, '0')}-${an}.${fmt}`;
+    if (fmt === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${nomFichier}"`);
+    } else {
+      setXlsxHeaders(res, nomFichier);
+    }
     res.send(buf);
   } catch (err) { next(err); }
 }
@@ -382,7 +395,8 @@ export async function getFicheValidation(req: Request, res: Response, next: Next
  */
 export async function getFichesBatch(req: Request, res: Response, next: NextFunction) {
   try {
-    const { annee, mois, client } = req.query as Record<string, string>;
+    const { annee, mois, client, format } = req.query as Record<string, string>;
+    const fmt: FormatFiche = format === 'pdf' ? 'pdf' : 'xlsx';
     const an = parseInt(annee) || new Date().getFullYear();
     const mo = parseInt(mois);
     if (!(mo >= 1 && mo <= 12)) throw new AppError('Mois invalide (1-12).', 422);
@@ -403,9 +417,9 @@ export async function getFichesBatch(req: Request, res: Response, next: NextFunc
       if (seen.has(k)) continue;
       seen.add(k);
       const solaire = a.lot.contrat === 'SOLAIRE';
-      const buf = await produceFiche(a.prestataire, a.lotId, an, mo, cb, clientLogo, solaire ? 'SOLAIRE' : 'PASSIF');
+      const buf = await produceFiche(a.prestataire, a.lotId, an, mo, cb, clientLogo, solaire ? 'SOLAIRE' : 'PASSIF', fmt);
       const safe = (s: string) => s.replace(/[^a-z0-9]+/gi, '_');
-      zip.file(`${safe(a.prestataire.nom)}__${safe(a.lot.code)}${solaire ? '__SOLAIRE' : ''}.xlsx`, buf);
+      zip.file(`${safe(a.prestataire.nom)}__${safe(a.lot.code)}${solaire ? '__SOLAIRE' : ''}.${fmt}`, buf);
       count++;
     }
     if (count === 0) throw new AppError('Aucun couple prestataire/lot à exporter.', 404);

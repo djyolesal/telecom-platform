@@ -1799,8 +1799,7 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
     if (moisCible && idsPrestataires.size === 1 && idPrestataireFiche) {
       try {
         const { donneesFicheValidation } = await import('./taches.controller');
-        const { FICHE_ROWS } = await import('../services/ficheValidation.service');
-        const { TASK_BY_KEY } = await import('../utils/tachesPreventives');
+        const { lignesFiche } = await import('../services/ficheValidation.service');
         const an = Number(moisCible.slice(0, 4));
         const mo = Number(moisCible.slice(5));
         const d = await donneesFicheValidation({ id: idPrestataireFiche }, lot_id || null, an, mo, 'PASSIF');
@@ -1808,16 +1807,9 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
           prestataire: prestataireGarde?.nom ?? 'Prestataire',
           zone: d.zone,
           nbSites: d.nbSites,
-          lignes: FICHE_ROWS.map((r) => {
-            const t = TASK_BY_KEY[r.key];
-            return {
-              numero: r.numero,
-              description: r.description,
-              concernes: t ? d.sites.filter((x) => t.eligible(x)).length : 0,
-              realises: d.realisesParKey[r.key] ?? 0,
-              freq6: r.freq6,
-            };
-          }),
+          // Même calcul que la fiche exportée (xlsx ET PDF) : cette page-ci ne
+          // peut pas afficher d'autres chiffres que le document signé.
+          lignes: lignesFiche({ ...d, contrat: 'PASSIF' }),
         };
       } catch (e) {
         // La fiche est un PLUS : son échec ne doit pas emporter le recueil.

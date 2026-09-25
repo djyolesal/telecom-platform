@@ -26,6 +26,39 @@ export const FICHE_ROWS_SOLAIRE: { numero: number; description: string; key: str
   { numero: 3, key: 'solaire_semestriel', freq6: 1, description: "Grande visite semestrielle : panneaux (inspection, câblage, fixations, mises à la terre, mesures Isc/Voc par string), batteries (visuel, aérations, tension et température par élément, nettoyage), régulateur et coffret outdoor (fixation, parafoudres, ventilation, alarmes, nettoyage)" },
 ];
 
+export interface LigneFiche {
+  numero: number;
+  description: string;
+  /** Sites du périmètre éligibles à la tâche. */
+  concernes: number;
+  /** Sites distincts traités dans le mois. */
+  realises: number;
+  freq6: number;
+}
+
+/**
+ * Lignes chiffrées de la fiche. UN SEUL calcul pour les trois sorties — xlsx,
+ * PDF, et la page 2 du rapport mensuel d'activité. La fiche est un document
+ * signé : deux calculs parallèles finiraient par se contredire, et personne ne
+ * saurait lequel fait foi.
+ */
+export function lignesFiche(d: {
+  sites: SiteEligibilite[];
+  realisesParKey: Record<string, number>;
+  contrat?: 'PASSIF' | 'SOLAIRE';
+}): LigneFiche[] {
+  return (d.contrat === 'SOLAIRE' ? FICHE_ROWS_SOLAIRE : FICHE_ROWS).map((row) => {
+    const t = TASK_BY_KEY[row.key];
+    return {
+      numero: row.numero,
+      description: row.description,
+      concernes: t ? d.sites.filter((s) => t.eligible(s)).length : 0,
+      realises: d.realisesParKey[row.key] ?? 0,
+      freq6: row.freq6,
+    };
+  });
+}
+
 const MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 export interface FichePrestataire {
@@ -150,16 +183,13 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
 
   // ── Lignes des tâches ──
   let r = 24;
-  for (const row of (d.contrat === 'SOLAIRE' ? FICHE_ROWS_SOLAIRE : FICHE_ROWS)) {
-    const t = TASK_BY_KEY[row.key];
-    const concernes = t ? d.sites.filter((s) => t.eligible(s)).length : 0;
-    const realises = d.realisesParKey[row.key] ?? 0;
+  for (const row of lignesFiche(d)) {
     ws.mergeCells(`C${r}:F${r}`);
     const xl = ws.getRow(r);
     xl.getCell(2).value = row.numero;
     xl.getCell(3).value = row.description;
-    xl.getCell(7).value = concernes;
-    xl.getCell(8).value = realises;
+    xl.getCell(7).value = row.concernes;
+    xl.getCell(8).value = row.realises;
     xl.getCell(9).value = row.freq6;
     xl.getCell(2).alignment = { horizontal: 'center' };
     xl.getCell(3).alignment = { wrapText: true, vertical: 'middle' };

@@ -15,7 +15,7 @@ const RAPPORTS: Array<{
 }> = [
   { href: '/rapports/mensuel', icon: CalendarRange, title: 'Rapport mensuel', desc: 'Synthèse PDF complète par mois, à consulter ou envoyer par email.', roles: ['MANAGER', 'ADMIN', 'DIRECTION'] },
   { href: '/rapports/activite-mensuelle', icon: FileText, title: 'Rapport mensuel d\u2019activit\u00e9 (prestataire)', desc: 'Fiche de validation du mois, t\u00e2ches dues non r\u00e9alis\u00e9es, et chaque intervention au format du rapport unitaire \u2014 avec visa contractuel.' },
-  { href: '/rapports/fiche-validation', icon: FileSpreadsheet, title: 'Fiche de validation (prestataire)', desc: 'Export xlsx des travaux contractuels réalisés par prestataire et par mois, au format de validation.', internesSeulement: true },
+  { href: '/rapports/fiche-validation', icon: FileSpreadsheet, title: 'Fiche de validation (prestataire)', desc: 'Export Excel ou PDF des travaux contractuels réalisés par prestataire et par mois, au format de validation.', internesSeulement: true },
   { href: '/rapports/echeancier-preventif', icon: CalendarClock, title: 'Échéancier préventif', desc: 'Tâches contractuelles dues / en retard par site et prestataire, et génération du planning.' },
   { href: '/rapports/conformite', icon: ClipboardCheck, title: 'Conformité maintenances', desc: 'Maintenances passives clôturées avec relevés énergie, par prestataire.' },
   { href: '/rapports/sla', icon: ShieldCheck, title: 'SLA prestataires', desc: 'Respect des délais et du préventif par prestataire, pénalités estimées.' },
