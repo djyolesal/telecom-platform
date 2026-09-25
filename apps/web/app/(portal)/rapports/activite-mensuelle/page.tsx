@@ -8,7 +8,7 @@ import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
-import { regionOptions, STATUTS_MAINTENANCE, TYPES_MAINTENANCE } from '@/lib/constants';
+import { STATUTS_MAINTENANCE, TYPES_MAINTENANCE } from '@/lib/constants';
 
 /**
  * Rapport mensuel d'activité : couverture co-signée, tâches dues non réalisées,
@@ -31,7 +31,6 @@ export default function RapportActiviteMensuelPage() {
   const [mois, setMois] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const [prestataireId, setPrestataireId] = useState('');
   const [lotId, setLotId] = useState('');
-  const [region, setRegion] = useState('');
   const [type, setType] = useState('');
   const [statut, setStatut] = useState('TERMINEE');
   const [busy, setBusy] = useState(false);
@@ -43,10 +42,10 @@ export default function RapportActiviteMensuelPage() {
   });
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
-  // Lots du prestataire choisi : proposer TOUS les lots quand aucun
-  // prestataire n'est sélectionné n'aiderait pas — le lot sert à resserrer un
-  // périmètre déjà attribué.
-  const { data: prestaDetail } = useQuery({
+  // PRESTATAIRE puis LOT : le document couvre un couple contractuel, et la
+  // liste des lots est celle du prestataire choisi. Proposer tous les lots du
+  // parc laisserait composer un périmètre qui n'existe dans aucun contrat.
+  const { data: prestaDetail, isFetching: chargeLots } = useQuery({
     queryKey: ['prestataire-lots', prestataireId],
     queryFn: () => api.get(`/prestataires/${prestataireId}`).then((r) => r.data.data),
     enabled: !!prestataireId,
@@ -59,10 +58,10 @@ export default function RapportActiviteMensuelPage() {
   ] as { value: string; label: string }[];
 
   const editer = async () => {
+    if (!prestataireId || !lotId) { setError('Sélectionnez un prestataire et un lot : le rapport s’édite pour un lot d’un prestataire.'); return; }
     setError(''); setBusy(true);
     const q = new URLSearchParams({ mois: `${annee}-${mois}`, statut });
     if (type) q.set('type', type);
-    if (region) q.set('region', region);
     if (lotId) q.set('lot_id', lotId);
     if (prestataireId) q.set('prestataire_id', prestataireId);
     try {
@@ -96,29 +95,26 @@ export default function RapportActiviteMensuelPage() {
           <Field label="Statut">
             <Select value={statut} onChange={(e) => setStatut(e.target.value)} options={STATUTS_MAINTENANCE} placeholder="Tous statuts" />
           </Field>
-          <Field label="Prestataire">
+          <Field label="Prestataire" required>
             <Select value={prestataireId} onChange={(e) => { setPrestataireId(e.target.value); setLotId(''); }}
-              options={prestataireOptions} placeholder="Tous prestataires" />
+              options={prestataireOptions} placeholder="Sélectionner un prestataire…" />
           </Field>
-          <Field label="Lot">
-            <Select value={lotId} onChange={(e) => setLotId(e.target.value)} options={lotOptions}
-              placeholder={prestataireId ? 'Tous ses lots' : 'Choisir un prestataire d’abord'} />
-          </Field>
-          <Field label="Région">
-            <Select value={region} onChange={(e) => setRegion(e.target.value)} options={regionOptions} placeholder="Toutes régions" />
+          <Field label="Lot" required>
+            <Select value={lotId} onChange={(e) => setLotId(e.target.value)} options={lotOptions} disabled={!prestataireId}
+              placeholder={!prestataireId ? 'Choisir un prestataire d’abord' : chargeLots ? 'Chargement des lots…' : 'Sélectionner un lot…'} />
           </Field>
           <Field label="Type">
             <Select value={type} onChange={(e) => setType(e.target.value)} options={TYPES_MAINTENANCE} placeholder="Tous types" />
           </Field>
         </div>
         <p className="mt-4 text-xs text-gray-500">
-          Le <b>logo du prestataire</b> n’apparaît que si le rapport ne couvre qu’un prestataire - sur un périmètre
-          mixte, afficher l’un des logos laisserait croire que le document ne concerne que celui-là. La <b>fiche de
+          Un rapport pour <b>un prestataire et un lot</b> à la fois : c’est le découpage contractuel, celui que le
+          prestataire signe et qu’on facture. Éditez les lots les uns après les autres. La <b>fiche de
           validation</b> du mois s’exporte à part (Rapports → Fiche de validation), en Excel ou en PDF.
           Chaque intervention embarque un échantillon de photos ; au-delà du plafond réglé, le serveur demande de resserrer le périmètre.
         </p>
         <div className="mt-4">
-          <Button icon={FileText} loading={busy} onClick={editer}>Éditer le rapport PDF</Button>
+          <Button icon={FileText} loading={busy} disabled={!prestataireId || !lotId} onClick={editer}>Éditer le rapport PDF</Button>
         </div>
       </FormCard>
     </div>

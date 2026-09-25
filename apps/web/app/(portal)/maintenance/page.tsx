@@ -14,7 +14,7 @@ import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Button, ButtonLink } from '@/components/shared/Button';
-import { Field, Input } from '@/components/shared/Form';
+import { Field, Input, Select } from '@/components/shared/Form';
 import { StatutMaintBadge } from '@/components/shared/Badge';
 import { TYPES_MAINTENANCE, STATUTS_MAINTENANCE, CATEGORIES_EQUIPEMENT } from '@/lib/constants';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -126,7 +126,7 @@ function MaintenancePageInner() {
         actions={
           <>
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
-            {roleExport === 'ADMIN' && equipeInterne && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} />}
+            {roleExport === 'ADMIN' && equipeInterne && <RecueilPdfBouton type={type} statut={statut} prestataireId={prestataireId} prestataireOptions={prestataireOptions} />}
             {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"/>}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
@@ -163,26 +163,48 @@ function MaintenancePageInner() {
 }
 
 /**
- * RECUEIL PDF d'une période : un rapport d'intervention complet par ligne,
- * précédé d'une synthèse (curatif, incidents clôturés ou non, pièces).
+ * RAPPORT MENSUEL D'ACTIVITÉ d'un LOT : un rapport d'intervention complet par
+ * ligne, précédé d'une synthèse (curatif, incidents clôturés ou non, pièces).
  *
- * Période par défaut : le mois en cours. Les filtres de l'écran sont repris —
+ * Période par défaut : le mois en cours. Les filtres de l'écran sont repris -
  * un document qui ne correspondrait pas à ce que l'utilisateur voit à l'écran
- * serait un piège.
+ * serait un piège. Le LOT, lui, se choisit ici : c'est le découpage
+ * contractuel du document, et l'écran des maintenances ne filtre pas dessus.
  */
-function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statut: string; prestataireId: string }) {
+function RecueilPdfBouton(
+  { type, statut, prestataireId, prestataireOptions }:
+  { type: string; statut: string; prestataireId: string; prestataireOptions: { value: string; label: string }[] },
+) {
   const [ouvert, setOuvert] = useState(false);
   // MENSUEL : le dû contractuel se compte par mois, c'est lui qui rend les
   // tâches manquantes opposables.
   const [mois, setMois] = useState(new Date().toISOString().slice(0, 7));
+  // Le PRESTATAIRE de l'écran sert de départ, mais il reste modifiable ici :
+  // le document se demande pour un couple prestataire × lot, et l'écran n'a
+  // pas de filtre lot.
+  const [presta, setPresta] = useState(prestataireId);
+  const [lotId, setLotId] = useState('');
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState('');
+  useEffect(() => { setPresta(prestataireId); setLotId(''); }, [prestataireId]);
+
+  const { data: prestaDetail, isFetching: chargeLots } = useQuery({
+    queryKey: ['prestataire-lots', presta],
+    queryFn: () => api.get(`/prestataires/${presta}`).then((r) => r.data.data),
+    enabled: ouvert && !!presta,
+  });
+  const lotOptions = [
+    ...new Map(
+      (prestaDetail?.assignments ?? []).map((a: { lot: { id: string; code: string; nom: string } }) =>
+        [a.lot.id, { value: a.lot.id, label: `${a.lot.code} - ${a.lot.nom}` }]),
+    ).values(),
+  ] as { value: string; label: string }[];
 
   const editer = async () => {
+    if (!presta || !lotId) { setErreur('Sélectionnez un prestataire et un lot : le rapport s’édite pour un lot d’un prestataire.'); return; }
     setErreur(''); setEnCours(true);
-    const q = new URLSearchParams({ mois, statut: statut || 'TERMINEE' });
+    const q = new URLSearchParams({ mois, statut: statut || 'TERMINEE', lot_id: lotId, prestataire_id: presta });
     if (type) q.set('type', type);
-    if (prestataireId) q.set('prestataire_id', prestataireId);
     try {
       await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${mois}.pdf`);
       setOuvert(false);
@@ -207,11 +229,19 @@ function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statu
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-1 text-lg font-bold text-gray-800">Rapport mensuel d&apos;activité</h2>
             <p className="mb-4 text-xs text-gray-500">
-              Tâches dues non réalisées, puis chaque intervention au format du rapport unitaire. Les filtres de
-              l&apos;écran sont repris. Pour choisir un prestataire, un lot ou une région :
-              Rapports → Rapport mensuel d&apos;activité.
+              Tâches dues non réalisées, puis chaque intervention au format du rapport unitaire. Un rapport pour
+              <b> un prestataire et un lot</b> : c&apos;est le découpage contractuel, celui que le prestataire signe.
+              Les filtres type et statut de l&apos;écran sont repris.
             </p>
             {erreur && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erreur}</div>}
+            <Field label="Prestataire" required>
+              <Select value={presta} onChange={(e) => { setPresta(e.target.value); setLotId(''); }}
+                options={prestataireOptions} placeholder="Sélectionner un prestataire…" />
+            </Field>
+            <Field label="Lot" required>
+              <Select value={lotId} onChange={(e) => setLotId(e.target.value)} options={lotOptions} disabled={!presta}
+                placeholder={!presta ? 'Choisir un prestataire d’abord' : chargeLots ? 'Chargement des lots…' : 'Sélectionner un lot…'} />
+            </Field>
             <Field label="Mois"><Input type="month" value={mois} onChange={(e) => setMois(e.target.value)} /></Field>
             <p className="mt-2 text-[11px] text-gray-400">
               Statut retenu : {statut ? statut.toLowerCase() : 'terminée'}. Le logo du prestataire n&apos;apparaît
@@ -219,7 +249,7 @@ function RecueilPdfBouton({ type, statut, prestataireId }: { type: string; statu
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setOuvert(false)}>Annuler</Button>
-              <Button type="button" loading={enCours} onClick={editer}>Éditer le PDF</Button>
+              <Button type="button" loading={enCours} disabled={!presta || !lotId} onClick={editer}>Éditer le PDF</Button>
             </div>
           </div>
         </div>

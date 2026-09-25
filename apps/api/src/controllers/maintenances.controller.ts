@@ -1579,8 +1579,16 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
  */
 export async function exportRapportsMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
-    const { mois, du, au, statut, type, region, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
+    const { mois, du, au, statut, type, prestataire_id, lot_id, site_id } = req.query as Record<string, string>;
     const statutCible = statut || 'TERMINEE';
+    // UN PRESTATAIRE, UN LOT, À LA FOIS. Le couple prestataire × lot est le
+    // découpage CONTRACTUEL : c'est lui qu'on signe, qu'on facture et qu'on
+    // conteste. Un rapport à cheval sur plusieurs lots ou plusieurs
+    // prestataires n'a pas de destinataire unique, donc pas de visa possible -
+    // et il obligeait le lecteur à trier lui-même ce qui le concerne.
+    if (!prestataire_id || !lot_id) {
+      throw new AppError("Sélectionnez un prestataire et un lot : le rapport s'édite pour un lot d'un prestataire.", 422);
+    }
     const champDate = statutCible === 'TERMINEE' ? 'dateFin' : 'datePlanifiee';
 
     // MOIS CALENDAIRE par défaut. Le dû contractuel se compte par mois (une
@@ -1607,7 +1615,7 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
 
     const perimetre = await sitePerimetre(req.user!.id);
     const restreint = isRestreint(perimetre);
-    const filtreSite = { ...(region ? { region } : {}), ...(lot_id ? { lotId: lot_id } : {}), ...(restreint ? perimetre : {}) };
+    const filtreSite = { lotId: lot_id, ...(restreint ? perimetre : {}) };
     const where: Record<string, unknown> = {
       ...(statutCible !== 'TOUS' ? { statut: statutCible } : {}),
       ...(type ? { type } : {}),
@@ -1754,6 +1762,8 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       }
     }
 
+    const lotDoc = await prisma.lot.findUnique({ where: { id: lot_id }, select: { code: true, nom: true } });
+
     const MOIS_FR = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
       'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     const libellePeriode = moisCible
@@ -1765,8 +1775,9 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       // Le prestataire est NOMMÉ quand il n'y en a qu'un — c'est l'information
       // que cherche le lecteur, « prestataire sélectionné » ne dit rien.
       prestataireGarde ? prestataireGarde.nom : (idsPrestataires.size > 1 ? `${idsPrestataires.size} prestataires` : null),
-      region ? `région ${region}` : null,
-      lot_id ? 'lot sélectionné' : null,
+      // Le lot est NOMMÉ : il définit le périmètre du document, « lot
+      // sélectionné » n'apprenait rien à celui qui le reçoit.
+      lotDoc ? `lot ${lotDoc.code}${lotDoc.nom ? ` - ${lotDoc.nom}` : ''}` : null,
       site_id ? 'site sélectionné' : null,
       restreint ? 'périmètre du compte' : null,
     ].filter(Boolean).join(' · ') || 'tout le parc';
@@ -1801,14 +1812,17 @@ export async function exportRapportsMaintenances(req: Request, res: Response, ne
       ...synthese,
     });
     await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
-      { rapport: 'rapport_activite_mensuel', nb: donnees.length, du, au, statut: statutCible, region, lot_id, prestataire_id,
+      { rapport: 'rapport_activite_mensuel', nb: donnees.length, du, au, statut: statutCible, lot_id, prestataire_id,
         prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
         mois: moisCible, sitesEnDefaut: manquantes.length,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
         pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
     res.setHeader('Content-Type', 'application/pdf');
+    // Le lot est DANS le nom : on édite les lots les uns après les autres, et
+    // sans lui les fichiers s'écrasent dans le dossier de téléchargement.
+    const lotFichier = (lotDoc?.code ?? 'lot').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     res.setHeader('Content-Disposition',
-      `attachment; filename="rapport-activite-${moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`}.pdf"`);
+      `attachment; filename="rapport-activite-${lotFichier}-${moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`}.pdf"`);
     res.send(pdf);
   } catch (err) { next(err); }
 }
