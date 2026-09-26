@@ -224,17 +224,107 @@ export interface PageSiteRapport {
      * FAITE : intervention enregistrée ce mois-ci (c'est ce qui se facture).
      * A_JOUR : rien n'était dû ce mois-ci, la tâche reste conforme.
      * NON_FAITE : due et non réalisée. HORS_CONTRAT : curatif, dépannage.
+     * INVALIDEE : intervention contestée par un manager - elle ne compte ni
+     * pour la conformité ni pour la facturation, mais elle doit rester VISIBLE
+     * avec son motif : la faire disparaître donnerait la même page qu'une
+     * intervention jamais effectuée, et personne ne saurait qu'il y a litige.
      */
-    etat: 'FAITE' | 'A_JOUR' | 'NON_FAITE' | 'HORS_CONTRAT';
+    etat: 'FAITE' | 'A_JOUR' | 'NON_FAITE' | 'HORS_CONTRAT' | 'INVALIDEE';
     date: string;
     technicien: string;
     duree: string;
     reference: string;
   }>;
   pieces: string[];
+  /** Interventions refusées : référence, date et motif, sous le tableau. */
+  invalidations: string[];
   photos: Array<{ buffer: Buffer; legende: string }>;
   /** Photos du mois pour ce site, toutes phases confondues. */
   totalPhotos: number;
+}
+
+/**
+ * RÉCAPITULATIF PAR SITE, juste après la couverture.
+ *
+ * Sur un lot de quarante sites, le verdict tenait dans quarante pages qu'il
+ * fallait feuilleter une à une. Ici une ligne par site donne l'essentiel - dû,
+ * réalisé, manquant, curatif, refusé - et les pages qui suivent deviennent la
+ * justification de ces chiffres.
+ *
+ * Le tableau court sur plusieurs pages si nécessaire, en réimprimant son
+ * en-tête : une colonne de chiffres sans titre ne se lit pas.
+ */
+export function dessinerRecapitulatifSites(
+  doc: PDFKit.PDFDocument,
+  pages: PageSiteRapport[],
+  entete: { periode: string; perimetre: string },
+): void {
+  const w = doc.page.width;
+  const X = 50, LARGEUR = w - 100, BAS = doc.page.height - 60;
+  const COLS = [188, 46, 58, 66, 52, 52, 33];
+  const ENTETES = ['Site', 'Dues', 'Réalisées', 'Manquantes', 'Curatifs', 'Refusées', 'Ph.'];
+
+  const bandeau = () => {
+    doc.rect(0, 0, w, 46).fill(BRAND);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('white')
+      .text('Récapitulatif par site', X, 10, { width: 330, height: 15, ellipsis: true });
+    doc.font('Helvetica').fontSize(8.5).fillColor('#cdd9e8')
+      .text(`${pages.length} site(s) - ${entete.perimetre}`, X, 27, { width: 330, height: 11, ellipsis: true });
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('white')
+      .text(entete.periode, w - 250, 11, { width: 200, align: 'right', lineBreak: false });
+    doc.fillColor('black');
+  };
+  const cellule = (texte: string, x: number, y: number, largeur: number, gras = false, couleur = '#111') => {
+    doc.font(gras ? 'Helvetica-Bold' : 'Helvetica').fontSize(8).fillColor(couleur)
+      .text(texte, x + 2, y, { width: largeur - 4, height: 10, ellipsis: true });
+  };
+  const ligneEntete = (y: number): number => {
+    let x = X;
+    ENTETES.forEach((t, i) => { cellule(t, x, y, COLS[i], true, GRIS_PDF); x += COLS[i]; });
+    doc.moveTo(X, y + 11).lineTo(X + LARGEUR, y + 11).lineWidth(0.5).stroke('#D8DEE6');
+    return y + 14;
+  };
+
+  bandeau();
+  let y = ligneEntete(58);
+  let totalDues = 0, totalFaites = 0, totalManquantes = 0;
+
+  for (const page of pages) {
+    if (y + 12 > BAS - 20) {          // place pour la ligne de total
+      doc.addPage();
+      bandeau();
+      y = ligneEntete(58);
+    }
+    const dues = page.taches.filter((t) => t.etat === 'FAITE' || t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE').length;
+    const faites = page.taches.filter((t) => t.etat === 'FAITE').length;
+    const manquantes = page.taches.filter((t) => t.etat === 'NON_FAITE').length;
+    const curatifs = page.taches.filter((t) => t.etat === 'HORS_CONTRAT').length;
+    const refusees = page.taches.filter((t) => t.etat === 'INVALIDEE').length;
+    totalDues += dues; totalFaites += faites; totalManquantes += manquantes;
+
+    let x = X;
+    cellule([page.code, page.site].filter(Boolean).join(' - '), x, y, COLS[0]); x += COLS[0];
+    cellule(String(dues), x, y, COLS[1]); x += COLS[1];
+    cellule(String(faites), x, y, COLS[2], false, faites ? ACCENT : '#111'); x += COLS[2];
+    // Le manquant est la seule colonne qu'on cherche : il est rouge, et « - »
+    // quand il n'y en a pas, pour qu'un zéro ne se confonde pas avec un chiffre.
+    cellule(manquantes ? String(manquantes) : '-', x, y, COLS[3], !!manquantes, manquantes ? '#C0392B' : GRIS_PDF); x += COLS[3];
+    cellule(curatifs ? String(curatifs) : '-', x, y, COLS[4], false, curatifs ? '#B26A00' : GRIS_PDF); x += COLS[4];
+    cellule(refusees ? String(refusees) : '-', x, y, COLS[5], !!refusees, refusees ? '#C0392B' : GRIS_PDF); x += COLS[5];
+    cellule(String(page.photos.length), x, y, COLS[6], false, GRIS_PDF);
+    y += 12;
+    doc.moveTo(X, y - 1).lineTo(X + LARGEUR, y - 1).lineWidth(0.25).stroke('#EEF1F5');
+  }
+
+  y += 3;
+  doc.moveTo(X, y).lineTo(X + LARGEUR, y).lineWidth(0.5).stroke('#D8DEE6');
+  y += 4;
+  let x = X;
+  cellule('Total', x, y, COLS[0], true); x += COLS[0];
+  cellule(String(totalDues), x, y, COLS[1], true); x += COLS[1];
+  cellule(String(totalFaites), x, y, COLS[2], true, ACCENT); x += COLS[2];
+  cellule(totalManquantes ? String(totalManquantes) : '-', x, y, COLS[3], true, totalManquantes ? '#C0392B' : GRIS_PDF);
+  doc.font('Helvetica').fillColor('black');
 }
 
 /**
@@ -282,7 +372,10 @@ export function dessinerPageSite(
   // Le titre compte ce qui a été FAIT ce mois-ci : c'est la question que se
   // pose celui qui valide une facture, pas l'état de conformité général.
   const faites = p.taches.filter((t) => t.etat === 'FAITE').length;
-  const dues = p.taches.filter((t) => t.etat === 'FAITE' || t.etat === 'NON_FAITE').length;
+  // Une tâche dont l'intervention a été REFUSÉE reste due : même dénominateur
+  // que le récapitulatif, sinon le document affiche deux comptes différents
+  // pour un même site à deux pages d'intervalle.
+  const dues = p.taches.filter((t) => t.etat === 'FAITE' || t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE').length;
   let y = titre(`Tâches du mois (${faites} réalisée(s) sur ${dues} due(s))`, 58);
 
   const cellule = (texte: string, x: number, yy: number, largeur: number, gras = false, couleur = '#111') => {
@@ -306,9 +399,10 @@ export function dessinerPageSite(
     // confondre ferait payer une prestation qui n'a pas eu lieu.
     const etat = t.etat === 'FAITE' ? 'Réalisée'
       : t.etat === 'NON_FAITE' ? 'Non réalisée'
+      : t.etat === 'INVALIDEE' ? 'Invalidée'
       : t.etat === 'A_JOUR' ? 'À jour' : 'Curatif';
     const couleur = t.etat === 'FAITE' ? ACCENT
-      : t.etat === 'NON_FAITE' ? '#C0392B'
+      : t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE' ? '#C0392B'
       : t.etat === 'A_JOUR' ? GRIS_PDF : '#B26A00';
     x = X;
     cellule(t.libelle, x, y, COLS[0]); x += COLS[0];
@@ -326,6 +420,16 @@ export function dessinerPageSite(
     y += 11;
   }
   y += 5;
+
+  if (p.invalidations.length) {
+    doc.font('Helvetica').fontSize(7.5).fillColor('#C0392B');
+    for (const motif of p.invalidations.slice(0, 3)) {
+      doc.text(`Invalidée - ${motif}`, X + 2, y, { width: LARGEUR - 4, height: 10, ellipsis: true });
+      y += 10;
+    }
+    y += 4;
+    doc.fillColor('black');
+  }
 
   if (p.pieces.length) {
     y = titre('Pièces remplacées', y);
@@ -759,6 +863,13 @@ export async function generateMaintenancesRecueilPdf(
     if (doc.y + hVisa + 20 > doc.page.height - 60) doc.addPage();
     const yVisa = Math.max(doc.y + 10, doc.page.height - 58 - hVisa);
     cadresVisa(doc, yVisa, 60, 80 + largeurVisa, largeurVisa, nomVisa, garde.client);
+
+    // RÉCAPITULATIF d'abord : le verdict du lot en une page, avant les pages
+    // qui le justifient.
+    if ((garde.sitesPages ?? []).length > 1) {
+      doc.addPage();
+      dessinerRecapitulatifSites(doc, garde.sitesPages!, { periode: garde.periode, perimetre: garde.perimetre });
+    }
 
     // UNE PAGE PAR SITE : c'est la maille de la validation et de la
     // facturation. Le détail intervention par intervention reste dans

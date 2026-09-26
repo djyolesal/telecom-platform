@@ -1648,6 +1648,7 @@ async function construireRapportActivite(
       select: {
         id: true, type: true, prestataireId: true, siteId: true, dureeMinutes: true,
         reference: true, dateFin: true, equipement: true, tachePreventiveKey: true,
+        invalideeLe: true, motifInvalidation: true,
         technicien: { select: { nom: true, prenom: true } },
         prestataire: { select: { nom: true, logoPath: true } },
         site: { select: { nom: true } },
@@ -1661,10 +1662,16 @@ async function construireRapportActivite(
       },
     });
 
+    // Une intervention INVALIDÉE (contestée par un manager) ne compte NULLE
+    // PART : ni dans les totaux, ni dans les pièces, ni dans les heures. Elle
+    // reste visible sur la page du site, avec son motif - mais la facturer
+    // reviendrait à payer un travail refusé.
+    const lignesValides = lignes.filter((l) => !l.invalideeLe);
+
     // ── SYNTHÈSE. Ce qu'aucune page individuelle ne peut donner : l'état des
     //    incidents à la date d'édition, et le cumul des pièces remplacées.
     const CLOS = ['RESOLU', 'CLOS'];
-    const incidents = lignes
+    const incidents = lignesValides
       .filter((l) => l.incident)
       .map((l) => {
         const i = l.incident!;
@@ -1687,7 +1694,7 @@ async function construireRapportActivite(
     // avec le nombre de sites concernés (une quantité seule ne dit pas si
     // c'est un site qui consomme ou tout le parc).
     const parPiece = new Map<string, { nom: string; reference: string; quantite: number; sites: Set<string> }>();
-    for (const l of lignes) {
+    for (const l of lignesValides) {
       for (const p of l.pieces) {
         const cle = `${p.nom.trim().toLowerCase()}|${(p.reference ?? '').trim().toLowerCase()}`;
         const e = parPiece.get(cle) ?? { nom: p.nom, reference: p.reference ?? '', quantite: 0, sites: new Set<string>() };
@@ -1705,10 +1712,10 @@ async function construireRapportActivite(
     // ── LOGO DU PRESTATAIRE. Affiché seulement si le recueil ne couvre QU'UN
     //    prestataire : sur un périmètre mixte, montrer l'un des logos laisserait
     //    croire que le document ne concerne que celui-là. Décision du 24/09/2026.
-    const idsPrestataires = new Set(lignes.map((l) => l.prestataireId).filter(Boolean));
+    const idsPrestataires = new Set(lignesValides.map((l) => l.prestataireId).filter(Boolean));
     let prestataireGarde: { nom: string; logo?: Buffer | null } | undefined;
     if (idsPrestataires.size === 1) {
-      const p = lignes.find((l) => l.prestataire)?.prestataire;
+      const p = lignesValides.find((l) => l.prestataire)?.prestataire;
       if (p) {
         let logo: Buffer | null = null;
         if (p.logoPath) {
@@ -1790,17 +1797,19 @@ async function construireRapportActivite(
           for (const t of catalogue) {
             const statut = etat.statuts[t.key];
             if (statut !== 'OK' && statut !== 'NOK') continue;   // NA : hors équipement du site
-            const faite = interventions.find((i) => i.tachePreventiveKey === t.key);
+            const faite = interventions.find((i) => i.tachePreventiveKey === t.key && !i.invalideeLe);
+            const refusee = faite ? undefined : interventions.find((i) => i.tachePreventiveKey === t.key && i.invalideeLe);
             // FAITE seulement s'il y a une intervention DANS LE MOIS : le
             // moteur de conformité dit « OK » pour une tâche trimestrielle
             // faite le mois dernier - conforme, mais rien à facturer ici.
+            const trace = faite ?? refusee ?? null;
             taches.push({
               libelle: libelleTache.get(t.key) ?? t.key,
-              etat: faite ? 'FAITE' : statut === 'OK' ? 'A_JOUR' : 'NON_FAITE',
-              date: jour(faite?.dateFin ?? null),
-              technicien: nomTech(faite?.technicien ?? null),
-              duree: faite?.dureeMinutes != null ? `${faite.dureeMinutes} min` : '-',
-              reference: faite?.reference ?? '-',
+              etat: faite ? 'FAITE' : refusee ? 'INVALIDEE' : statut === 'OK' ? 'A_JOUR' : 'NON_FAITE',
+              date: jour(trace?.dateFin ?? null),
+              technicien: nomTech(trace?.technicien ?? null),
+              duree: trace?.dureeMinutes != null ? `${trace.dureeMinutes} min` : '-',
+              reference: trace?.reference ?? '-',
             });
           }
         }
@@ -1810,7 +1819,7 @@ async function construireRapportActivite(
           if (i.tachePreventiveKey && etat && (etat.statuts[i.tachePreventiveKey] === 'OK' || etat.statuts[i.tachePreventiveKey] === 'NOK')) continue;
           taches.push({
             libelle: `${i.type === 'PREVENTIVE' ? 'Préventive' : 'Curative'} - ${i.equipement}`,
-            etat: 'HORS_CONTRAT',
+            etat: i.invalideeLe ? 'INVALIDEE' : 'HORS_CONTRAT',
             date: jour(i.dateFin),
             technicien: nomTech(i.technicien),
             duree: i.dureeMinutes != null ? `${i.dureeMinutes} min` : '-',
@@ -1821,8 +1830,12 @@ async function construireRapportActivite(
 
         const piecesSite = new Map<string, number>();
         for (const i of interventions) {
+          if (i.invalideeLe) continue;   // pièces d'une intervention refusée : non facturables
           for (const pc of i.pieces) piecesSite.set(pc.nom, (piecesSite.get(pc.nom) ?? 0) + pc.quantite);
         }
+        const invalidations = interventions
+          .filter((i) => i.invalideeLe)
+          .map((i) => `${i.reference ?? 'intervention'} du ${jour(i.dateFin)} : ${i.motifInvalidation ?? 'motif non précisé'}`);
 
         pagesSites.push({
           site: site.nom,
@@ -1830,6 +1843,7 @@ async function construireRapportActivite(
           region: (site as { region?: string }).region ?? null,
           taches,
           pieces: [...piecesSite.entries()].map(([nom, q]) => `${q}× ${nom}`),
+          invalidations,
           photos: [],
           totalPhotos: 0,
         });
@@ -1841,7 +1855,7 @@ async function construireRapportActivite(
       if (photosParSite > 0) {
         for (const page of pagesSites) {
           const site = sitesPages.find((x) => x.nom === page.site);
-          const ids = (site ? parSite.get(site.id) ?? [] : []).map((i) => i.id);
+          const ids = (site ? parSite.get(site.id) ?? [] : []).filter((i) => !i.invalideeLe).map((i) => i.id);
           if (!ids.length) continue;
           const dates = new Map((site ? parSite.get(site.id) ?? [] : []).map((i) => [i.id, i.dateFin]));
           const cliches = await prisma.photo.findMany({
@@ -1900,13 +1914,13 @@ async function construireRapportActivite(
       restreint ? 'périmètre du compte' : null,
     ].filter(Boolean).join(' · ') || 'tout le parc';
 
-    const minutes = lignes.reduce((t, l) => t + (l.dureeMinutes ?? 0), 0);
+    const minutes = lignesValides.reduce((t, l) => t + (l.dureeMinutes ?? 0), 0);
     const synthese: RecueilSynthese = {
       periode: libellePeriode,
       perimetre: perimetreLibelle,
-      nb: lignes.length,
-      preventives: lignes.filter((l) => l.type === 'PREVENTIVE').length,
-      curatives: lignes.filter((l) => l.type !== 'PREVENTIVE').length,
+      nb: lignesValides.length,
+      preventives: lignesValides.filter((l) => l.type === 'PREVENTIVE').length,
+      curatives: lignesValides.filter((l) => l.type !== 'PREVENTIVE').length,
       // Le chiffre annonce ce que le document CONTIENT : une page par site du
       // lot, visité ou non - un site sans intervention est précisément ce que
       // le validateur doit voir.
