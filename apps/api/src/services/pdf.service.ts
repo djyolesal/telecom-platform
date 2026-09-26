@@ -456,33 +456,89 @@ export function dessinerPageSite(
     y += 24;
   }
 
-  // ── Photos : tout l'espace restant, autant de clichés qu'il en tient ──
+  // ── Cadre d'observations et visa : emplacement FIXE en bas de page, pour
+  //    que la validation se fasse site par site, sur la feuille du site ──
+  const H_VISA = 84;
+  const yVisa = BAS - H_VISA;
+  const basContenu = yVisa - 10;
+
+  // ── Photos : tout l'espace restant. Quand elles sont PEU nombreuses, les
+  //    cadres s'agrandissent au lieu de laisser une demi-page blanche - une
+  //    dalle désherbée ou un filtre remplacé ne se voient pas en quatre
+  //    centimètres, et le fichier ne pèse pas un octet de plus.
   if (!p.photos.length) {
     doc.font('Helvetica').fontSize(8).fillColor('#888')
       .text('Aucune photo sur la période.', X + 2, y, { lineBreak: false });
-    return;
-  }
-  const cols = 4, gap = 8, hLegende = 11;
-  const cellW = (LARGEUR - gap * (cols - 1)) / cols;
-  const cellH = 92;
-  const dispo = BAS - y - 19;
-  const rangees = Math.max(0, Math.floor(dispo / (cellH + hLegende + gap)));
-  const tiennent = Math.min(p.photos.length, rangees * cols);
-  if (tiennent === 0) return;
+  } else {
+    const gap = 8, hLegende = 11, H_MAX = 240;
+    const dispo = basContenu - y - 19;
+    // On essaie 1 à 4 colonnes et on garde la disposition où l'IMAGE est la
+    // plus grande. Ce n'est pas la même chose que « le moins de colonnes » :
+    // deux colonnes donnent des cadres larges mais écrasés en hauteur, donc
+    // une photo 4:3 plus petite que sur trois colonnes.
+    let cols = 0, cellW = 0, cellH = 0, rangees = 0, meilleure = 0;
+    for (const essai of [1, 2, 3, 4]) {
+      const largeur = (LARGEUR - gap * (essai - 1)) / essai;
+      const lignes = Math.ceil(p.photos.length / essai);
+      const hauteur = Math.min(largeur * 0.75, H_MAX, (dispo - (lignes - 1) * gap) / lignes - hLegende);
+      if (hauteur < 55) continue;                       // trop petit pour montrer quoi que ce soit
+      const largeurImage = Math.min(largeur, hauteur * 4 / 3);
+      const aire = largeurImage * largeurImage * 0.75;
+      if (aire > meilleure) {
+        meilleure = aire; cols = essai; cellW = largeur; cellH = hauteur; rangees = lignes;
+      }
+    }
+    // Aucune disposition ne fait tenir toutes les photos : on revient au petit
+    // format et on en montre autant que la page en accepte.
+    if (!cols) {
+      cols = 4;
+      cellW = (LARGEUR - gap * 3) / 4;
+      cellH = Math.min(cellW * 0.75, 92);
+      rangees = Math.max(0, Math.floor(dispo / (cellH + hLegende + gap)));
+    }
+    // Le cadre épouse l'image : sans cette limite, une photo seule s'affichait
+    // dans un cadre pleine largeur bordé de deux bandes blanches. La grille est
+    // alors recentrée.
+    cellW = Math.min(cellW, cellH * 4 / 3 + 4);
+    const xGrille = X + Math.max(0, (LARGEUR - (cols * cellW + (cols - 1) * gap)) / 2);
 
-  y = titre(p.totalPhotos > tiennent ? `Photos (${tiennent} sur ${p.totalPhotos})` : `Photos (${tiennent})`, y);
-  p.photos.slice(0, tiennent).forEach((ph, i) => {
-    const col = i % cols;
-    const ligne = Math.floor(i / cols);
-    const px = X + col * (cellW + gap);
-    const py = y + ligne * (cellH + hLegende + gap);
-    doc.roundedRect(px, py, cellW, cellH, 3).lineWidth(0.5).strokeColor('#d8dee6').stroke();
-    try {
-      doc.image(ph.buffer, px + 2, py + 2, { fit: [cellW - 4, cellH - 4], align: 'center', valign: 'center' });
-    } catch { /* image illisible : le cadre et la légende restent */ }
-    doc.font('Helvetica').fontSize(6.5).fillColor(GRIS_PDF)
-      .text(ph.legende, px, py + cellH + 2, { width: cellW, align: 'center', height: 9, ellipsis: true });
-  });
+    const tiennent = cellH > 0 ? Math.min(p.photos.length, rangees * cols) : 0;
+    if (tiennent > 0) {
+      y = titre(p.totalPhotos > tiennent ? `Photos (${tiennent} sur ${p.totalPhotos})` : `Photos (${tiennent})`, y);
+      p.photos.slice(0, tiennent).forEach((ph, i) => {
+        const col = i % cols;
+        const ligne = Math.floor(i / cols);
+        const px = xGrille + col * (cellW + gap);
+        const py = y + ligne * (cellH + hLegende + gap);
+        doc.roundedRect(px, py, cellW, cellH, 3).lineWidth(0.5).strokeColor('#d8dee6').stroke();
+        try {
+          doc.image(ph.buffer, px + 2, py + 2, { fit: [cellW - 4, cellH - 4], align: 'center', valign: 'center' });
+        } catch { /* image illisible : le cadre et la légende restent */ }
+        doc.font('Helvetica').fontSize(7).fillColor(GRIS_PDF)
+          .text(ph.legende, px, py + cellH + 2, { width: cellW, align: 'center', height: 9, ellipsis: true });
+      });
+    }
+  }
+
+  // ── Observations et visa ──
+  const largeurVisa = 168;
+  const largeurObs = LARGEUR - largeurVisa - 10;
+  doc.roundedRect(X, yVisa, largeurObs, H_VISA, 4).lineWidth(0.7).stroke('#D8DEE6');
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(BRAND)
+    .text('Observations du superviseur', X + 8, yVisa + 7, { lineBreak: false });
+  for (let i = 0; i < 3; i++) {
+    const yl = yVisa + 28 + i * 17;
+    doc.moveTo(X + 8, yl).lineTo(X + largeurObs - 8, yl)
+      .lineWidth(0.5).dash(2, { space: 2 }).stroke('#E3E8EF').undash();
+  }
+  const xVisa = X + largeurObs + 10;
+  doc.roundedRect(xVisa, yVisa, largeurVisa, H_VISA, 4).lineWidth(0.7).stroke('#D8DEE6');
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(BRAND)
+    .text('Visa du site', xVisa + 8, yVisa + 7, { lineBreak: false });
+  doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
+    .text('Nom :', xVisa + 8, yVisa + 26, { lineBreak: false })
+    .text('Date :', xVisa + 8, yVisa + 42, { lineBreak: false })
+    .text('Signature :', xVisa + 8, yVisa + 58, { lineBreak: false });
   doc.font('Helvetica').fillColor('black');
 }
 
