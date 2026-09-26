@@ -2014,12 +2014,21 @@ async function construireRapportActivite(
         mois: moisCible, sitesEnDefaut: manquantes.length,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
         pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
-    // Le lot est DANS le nom : on édite les lots les uns après les autres, et
-    // sans lui les fichiers s'écrasent dans le dossier de téléchargement.
-    const lotFichier = (lotDoc?.code ?? 'lot').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    // Le NOM porte le prestataire, le lot et la période : ces documents
+    // s'accumulent dans un dossier de téléchargement et partent en pièce
+    // jointe. Sans ces trois-là, deux rapports du même mois s'écrasent, et
+    // celui qu'on retrouve six mois plus tard ne dit plus de qui il parle.
+    const morceau = (v: string) => v.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+    const nomFichier = [
+      'rapport-activite',
+      solaire ? 'solaire' : null,
+      morceau(prestataireGarde?.nom ?? 'prestataire'),
+      morceau(lotDoc?.code ?? 'lot'),
+      moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`,
+    ].filter(Boolean).join('-');
     return {
       pdf,
-      nomFichier: `rapport-activite-${lotFichier}-${moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`}.pdf`,
+      nomFichier: `${nomFichier}.pdf`,
       nb: lignes.length,
       periode: libellePeriode,
       reference: synthese.reference,

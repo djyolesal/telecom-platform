@@ -343,6 +343,35 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
 }
 
 /**
+ * Nom du fichier d'une fiche : prestataire, lot et période.
+ *
+ * Ces fiches s'accumulent dans un dossier de téléchargement et partent en
+ * pièce jointe ; sans ces trois éléments, deux fiches du même mois s'écrasent
+ * et celle qu'on rouvre six mois plus tard ne dit plus de qui elle parle. La
+ * période est en AAAA-MM pour que le tri par nom suive le calendrier.
+ */
+async function nomFicheValidation(
+  nomPresta: string,
+  lotId: string | null,
+  an: number,
+  mo: number,
+  contrat: 'PASSIF' | 'SOLAIRE',
+  format: FormatFiche,
+): Promise<string> {
+  const morceau = (v: string) => v.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+  const lot = lotId
+    ? (await prisma.lot.findUnique({ where: { id: lotId }, select: { code: true } }))?.code ?? 'lot'
+    : 'tous-lots';
+  return [
+    'fiche-validation',
+    contrat === 'SOLAIRE' ? 'solaire' : null,
+    morceau(nomPresta),
+    morceau(lot),
+    `${an}-${String(mo).padStart(2, '0')}`,
+  ].filter(Boolean).join('-') + `.${format}`;
+}
+
+/**
  * Fiche de validation d'un prestataire pour un mois, prête à être jointe.
  *
  * Exposée pour l'ENVOI PAR E-MAIL du rapport mensuel d'activité : la fiche y
@@ -362,9 +391,7 @@ export async function genererFicheValidation(
   const format = opts.format ?? 'pdf';
   const clientLogo = (await logoClient()).logo;
   const buffer = await produceFiche(presta, lotId, an, mo, clientBlock(opts.client), clientLogo, contrat, format);
-  const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');
-  const suffixe = contrat === 'SOLAIRE' ? '-solaire' : '';
-  return { buffer, nomFichier: `fiche-validation${suffixe}-${safeNom}-${String(mo).padStart(2, '0')}-${an}.${format}` };
+  return { buffer, nomFichier: await nomFicheValidation(presta.nom, lotId, an, mo, contrat, format) };
 }
 
 /**
@@ -387,9 +414,7 @@ export async function getFicheValidation(req: Request, res: Response, next: Next
     const clientLogo = (await logoClient()).logo;
     const buf = await produceFiche(presta, lot_id || null, an, mo, clientBlock(client), clientLogo, typeContrat, fmt);
 
-    const safeNom = presta.nom.replace(/[^a-z0-9]+/gi, '_');
-    const suffixe = typeContrat === 'SOLAIRE' ? '-solaire' : '';
-    const nomFichier = `fiche-validation${suffixe}-${safeNom}-${String(mo).padStart(2, '0')}-${an}.${fmt}`;
+    const nomFichier = await nomFicheValidation(presta.nom, lot_id || null, an, mo, typeContrat, fmt);
     if (fmt === 'pdf') {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${nomFichier}"`);

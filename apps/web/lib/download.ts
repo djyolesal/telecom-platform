@@ -18,6 +18,11 @@ export async function downloadFile(path: string, filename: string, openInNewTab 
   try {
     const res = await api.get(path, { responseType: 'blob', ...(timeoutMs ? { timeout: timeoutMs } : {}) });
     const contentType = (res.headers['content-type'] as string) || 'application/octet-stream';
+    // Le serveur nomme le document (prestataire, lot, période) : on suit son
+    // nom quand il en donne un, plutôt que d'en recalculer un second ici.
+    const dispo = (res.headers['content-disposition'] as string) || '';
+    const nomServeur = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(dispo)?.[1];
+    if (nomServeur) filename = decodeURIComponent(nomServeur);
     const blob = new Blob([res.data], { type: contentType });
     const url = window.URL.createObjectURL(blob);
 

@@ -65,7 +65,9 @@ export default function FicheValidationPage() {
       const lotPart = lotId ? `&lot_id=${lotId}` : '';
       const contratPart = contrat === 'SOLAIRE' ? '&contrat=SOLAIRE' : '';
       const suffixe = contrat === 'SOLAIRE' ? '-solaire' : '';
-      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}${contratPart}&format=${format}`, `fiche-validation${suffixe}-${nom}-${mois}-${annee}.${format}`);
+      // Le nom final vient du serveur (prestataire, lot, période) ; celui-ci
+      // n'est qu'un repli si l'en-tête n'est pas lisible.
+      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}${contratPart}&format=${format}`, `fiche-validation${suffixe}-${nom}-${annee}-${mois}.${format}`);
     } catch {
       setError('Échec du téléchargement. Vérifiez le prestataire et la période.');
     } finally {

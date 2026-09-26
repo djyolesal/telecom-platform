@@ -124,7 +124,7 @@ export default function RapportActiviteMensuelPage() {
     try {
       // 3 minutes : un lot de quarante sites demande le téléchargement et le
       // rééchantillonnage de centaines de photos à la première édition.
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite${contrat === 'SOLAIRE' ? '-solaire' : ''}-${annee}-${mois}.pdf`, false, 180_000);
+      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite${contrat === 'SOLAIRE' ? '-solaire' : ''}-${annee}-${mois}.pdf`, false, 180_000);   // le serveur renomme : prestataire, lot, période
     } catch (e) {
       // Le serveur porte le message utile (période trop large, aucune
       // intervention) : l'afficher tel quel plutôt qu'un « échec » générique.
