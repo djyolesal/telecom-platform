@@ -50,7 +50,7 @@ import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { logger } from '../utils/logger';
 import { sendEmail } from '../services/email.service';
-import { reduireJpeg } from '../utils/image';
+import { photoAllegee } from '../services/vignettes.service';
 import { logoClient } from '../services/logoClient.service';
 import { calculerDuParSite, tachesCataloguePassif } from '../services/conformiteTaches.service';
 import { assertOnSite } from '../utils/geofence';
@@ -1477,7 +1477,6 @@ export function echantillonner<T>(liste: T[], combien: number, graine: string): 
 
 export async function chargerDonneesRapport(
   id: string,
-  options: { maxPhotos?: number } = {},
 ): Promise<MaintenancePdfData | null> {
   const maintenance = await prisma.maintenance.findUnique({
     where: { id },
@@ -1512,31 +1511,14 @@ export async function chargerDonneesRapport(
     if (!key) return null;
     try { return await getObjectBuffer(key); } catch { return null; }
   };
-  // Rapport unitaire : jusqu'à 6 photos par phase (grille 3 par ligne).
-  // Recueil de période : `maxPhotos` répartit un petit échantillon entre les
-  // deux phases — le PDF signale de lui-même les photos non reprises, qui
-  // restent consultables dans l'application.
-  const nbAvant = photos.filter((p) => p.phase === 'AVANT').length;
-  const nbApres = photos.filter((p) => p.phase === 'APRES').length;
-  const quota = (phase: string): number => {
-    if (options.maxPhotos == null) return 6;
-    const total = options.maxPhotos;
-    if (total <= 0) return 0;
-    if (!nbAvant || !nbApres) return total;            // une seule phase : tout pour elle
-    // L'APRÈS emporte la part supplémentaire, et la TOTALITÉ quand il n'y a
-    // qu'une place : c'est lui qui atteste le travail fait et qui justifie la
-    // facturation ; l'AVANT n'établit que l'état trouvé.
-    if (total === 1) return phase === 'APRES' ? 1 : 0;
-    return phase === 'AVANT' ? Math.floor(total / 2) : total - Math.floor(total / 2);
-  };
+  // Rapport unitaire : jusqu'à 6 photos par phase (grille 3 par ligne). Le
+  // rapport mensuel d'activité, lui, charge ses photos par SITE et ne passe
+  // plus par ici.
+  const quota = (): number => 6;
   const bufsPhase = async (phase: string) => {
     const liste = photos.filter((p) => p.phase === phase);
-    const retenues = echantillonner(liste, quota(phase), `${id}:${phase}`);
-    let bufs = (await Promise.all(retenues.map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
-    // Rapport mensuel d'activité : il part en pièce jointe. Les photos sont
-    // rééchantillonnées pour le poids, pas pour l'écran - elles s'affichent
-    // sur moins de six centimètres.
-    if (options.maxPhotos != null) bufs = bufs.map((b) => reduireJpeg(b));
+    const retenues = echantillonner(liste, quota(), `${id}:${phase}`);
+    const bufs = (await Promise.all(retenues.map((p) => charger(p.minioKey)))).filter(Boolean) as Buffer[];
     return { bufs, total: liste.length };
   };
   const [avant, apres, signatureTechnicien, signatureAgent] = await Promise.all([
@@ -1564,9 +1546,6 @@ export async function chargerDonneesRapport(
     totalPhotosAvant: avant.total,
     photosApres: apres.bufs,
     totalPhotosApres: apres.total,
-    // Échantillon (rapport mensuel d'activité) : le rendu passe en bande
-    // unique étiquetée au lieu d'une grille par phase.
-    echantillon: options.maxPhotos != null,
     signatureTechnicien,
     signatureAgent,
     ...(preuvesIncident
@@ -1885,13 +1864,17 @@ async function construireRapportActivite(
             }
             if (!ajoute) break;
           }
-          for (const ph of tries.slice(0, photosParSite)) {
-            const buf = await charger(ph.minioKey);
-            if (!buf) continue;
-            page.photos.push({
-              buffer: reduireJpeg(buf, 520, 50),
-              legende: `${jour(dates.get(ph.entityId) ?? null)} · ${ph.phase === 'AVANT' ? 'Avant' : 'Après'}`,
-            });
+          // Chargées par paquets : l'attente réseau se recouvre, et la version
+          // allégée est mise en cache pour les éditions suivantes.
+          const retenues = tries.slice(0, photosParSite);
+          for (let i = 0; i < retenues.length; i += 4) {
+            const paquet = await Promise.all(retenues.slice(i, i + 4).map(async (ph) => {
+              const buffer = await photoAllegee(ph.minioKey);
+              return buffer
+                ? { buffer, legende: `${jour(dates.get(ph.entityId) ?? null)} · ${ph.phase === 'AVANT' ? 'Avant' : 'Après'}` }
+                : null;
+            }));
+            page.photos.push(...(paquet.filter(Boolean) as PageSiteRapport['photos']));
           }
         }
       }

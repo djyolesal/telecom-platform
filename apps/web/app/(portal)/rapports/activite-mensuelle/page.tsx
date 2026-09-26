@@ -92,7 +92,7 @@ export default function RapportActiviteMensuelPage() {
         mois: `${annee}-${mois}`, lot_id: lotId, prestataire_id: prestataireId,
         ...(type ? { type } : {}),
         destinataires: liste, message: messageMail || undefined,
-      });
+      }, { timeout: 180_000 });
       const pieces = (r.data.data.pieces ?? []) as Array<{ nom: string; octets: number }>;
       const poids = pieces.reduce((t, p) => t + p.octets, 0);
       setEnvoye(`Envoyé à ${liste.length} destinataire(s) · ${pieces.length} pièces jointes (${Math.round(poids / 1024)} Ko)`);
@@ -114,7 +114,9 @@ export default function RapportActiviteMensuelPage() {
     if (lotId) q.set('lot_id', lotId);
     if (prestataireId) q.set('prestataire_id', prestataireId);
     try {
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${annee}-${mois}.pdf`);
+      // 3 minutes : un lot de quarante sites demande le téléchargement et le
+      // rééchantillonnage de centaines de photos à la première édition.
+      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${annee}-${mois}.pdf`, false, 180_000);
     } catch (e) {
       // Le serveur porte le message utile (période trop large, aucune
       // intervention) : l'afficher tel quel plutôt qu'un « échec » générique.

@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { uploadBuffer } from '../services/storage.service';
+import { photoAllegee } from '../services/vignettes.service';
+import { logger } from '../utils/logger';
 
 // Dossiers de destination autorisés (empêche l'écriture sous un préfixe choisi
 // par le client, ex. « rapports »). Le client ne peut viser que ces zones.
@@ -44,6 +46,14 @@ export async function uploadImage(req: Request, res: Response, next: NextFunctio
       await prisma.photo.create({
         data: { entityType, entityId, url: stored.url, minioKey: stored.key },
       });
+    }
+
+    // Vignette fabriquée TOUT DE SUITE, en arrière-plan : le rapport mensuel
+    // d'activité en a besoin, et la calculer par centaines au moment de
+    // l'édition faisait expirer la requête. Ici le coût est d'une photo, payé
+    // par un téléversement qui n'attend pas après elle.
+    if (stored.key.startsWith('photos/')) {
+      void photoAllegee(stored.key).catch((e) => logger.warn('[upload] vignette non préparée :', e));
     }
 
     res.status(201).json({ success: true, data: stored });

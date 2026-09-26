@@ -206,7 +206,7 @@ function RecueilPdfBouton(
     const q = new URLSearchParams({ mois, lot_id: lotId, prestataire_id: presta });
     if (type) q.set('type', type);
     try {
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${mois}.pdf`);
+      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${mois}.pdf`, false, 180_000);
       setOuvert(false);
     } catch (e) {
       // Le refus du serveur (période trop large, aucune intervention) porte le

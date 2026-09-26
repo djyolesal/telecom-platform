@@ -73,6 +73,15 @@ export async function uploadBuffer(
   return { key, url: publicFileUrl(key) };
 }
 
+/**
+ * Écrit un objet à une clé CHOISIE (et non générée) : sert aux dérivés dont la
+ * clé doit être déductible de l'original, comme les vignettes du rapport
+ * mensuel d'activité.
+ */
+export async function putObjectBrut(key: string, buffer: Buffer, mimeType = 'image/jpeg'): Promise<void> {
+  await minioClient.putObject(MINIO_BUCKET, key, buffer, buffer.length, { 'Content-Type': mimeType });
+}
+
 /** Supprime un objet du bucket. */
 export async function deleteObject(key: string): Promise<void> {
   await minioClient.removeObject(MINIO_BUCKET, key);

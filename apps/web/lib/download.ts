@@ -9,10 +9,14 @@ import { toast, errorMessage } from './toast';
  * @param path   chemin relatif à la base API, ex: '/sites/export/xlsx'
  * @param filename nom du fichier proposé au téléchargement
  * @param openInNewTab ouvre le fichier (PDF) dans un onglet au lieu de le télécharger
+ * @param timeoutMs pour les documents LONGS à fabriquer (rapport mensuel d'un
+ *   lot entier : photos téléchargées, rééchantillonnées puis mises en page).
+ *   Le défaut de 30 s du client fait échouer l'export alors que le serveur
+ *   travaille encore, et l'utilisateur lit « Le serveur met trop de temps ».
  */
-export async function downloadFile(path: string, filename: string, openInNewTab = false): Promise<void> {
+export async function downloadFile(path: string, filename: string, openInNewTab = false, timeoutMs?: number): Promise<void> {
   try {
-    const res = await api.get(path, { responseType: 'blob' });
+    const res = await api.get(path, { responseType: 'blob', ...(timeoutMs ? { timeout: timeoutMs } : {}) });
     const contentType = (res.headers['content-type'] as string) || 'application/octet-stream';
     const blob = new Blob([res.data], { type: contentType });
     const url = window.URL.createObjectURL(blob);

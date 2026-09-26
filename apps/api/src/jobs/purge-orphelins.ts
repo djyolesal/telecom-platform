@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { minioClient, MINIO_BUCKET } from '../config/minio';
 import { logger } from '../utils/logger';
+import { PREFIXE_VIGNETTE, cleVignette } from '../services/vignettes.service';
 
 /**
  * Ménage nocturne du stockage : supprime les objets MinIO ORPHELINS — plus
@@ -39,7 +40,12 @@ async function clesReferencees(): Promise<Set<string>> {
   const ajouter = (...valeurs: Array<string | null | undefined>) => {
     for (const v of valeurs) {
       const cle = cleDe(v);
-      if (cle) refs.add(cle);
+      if (!cle) continue;
+      refs.add(cle);
+      // La vignette d'une photo (cache du rapport mensuel d'activité) vit
+      // aussi longtemps que son original : sans cette ligne, le ménage
+      // nocturne effaçait un cache que le rapport suivant devait recalculer.
+      if (!cle.startsWith(PREFIXE_VIGNETTE)) refs.add(cleVignette(cle));
     }
   };
 
