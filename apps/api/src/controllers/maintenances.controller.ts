@@ -41,7 +41,7 @@ import { auditLog } from '../services/audit.service';
 import {
   generateMaintenancePdf, generateBonMouvementPdf,
   generateMaintenancesRecueilPdf, MaintenancePdfData, RecueilSynthese,
-  PageSiteRapport,
+  PageSiteRapport, nombreFr,
 } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
@@ -1839,6 +1839,7 @@ async function construireRapportActivite(
 
         pagesSites.push({
           site: site.nom,
+          releves: [],
           code: (site as { code?: string }).code ?? null,
           region: (site as { region?: string }).region ?? null,
           taches,
@@ -1847,6 +1848,61 @@ async function construireRapportActivite(
           photos: [],
           totalPhotos: 0,
         });
+      }
+
+      // ── RELEVÉS ÉNERGIE du mois, agrégés par site. Ils permettent le
+      //    contrôle croisé de la facturation carburant : des heures de marche
+      //    sans litres consommés, ou l'inverse, se voient d'un coup d'œil.
+      const idsValides = lignesValides.map((l) => l.id);
+      if (idsValides.length) {
+        const releves = await prisma.releveEnergie.findMany({
+          where: { maintenanceId: { in: idsValides } },
+          select: {
+            siteId: true, source: true, dateReleve: true, indexHeuresGE: true, heuresFonctGE: true,
+            volumeGasoilLitres: true, gasoilConsommeLitres: true, indexCompteur: true,
+            consommationKwh: true, puissanceKva: true,
+          },
+          orderBy: { dateReleve: 'asc' },
+        });
+        const nb = (v: unknown) => (v == null ? null : Number(v));
+        const somme = (liste: Array<number | null>) => {
+          const valeurs = liste.filter((x): x is number => x != null);
+          return valeurs.length ? valeurs.reduce((t, x) => t + x, 0) : null;
+        };
+        const dernier = <T>(liste: T[]) => (liste.length ? liste[liste.length - 1] : null);
+        const fmt = (v: number | null, suffixe = '') => (v == null ? null : `${nombreFr(Math.round(v * 10) / 10)}${suffixe}`);
+
+        for (const page of pagesSites) {
+          const site = sitesPages.find((x) => x.nom === page.site);
+          if (!site) continue;
+          const duSite = releves.filter((r) => r.siteId === site.id);
+          if (!duSite.length) continue;
+
+          const ge = duSite.filter((r) => r.source === 'GE');
+          if (ge.length) {
+            const dernierGe = dernier(ge)!;
+            const morceaux = [
+              fmt(somme(ge.map((r) => nb(r.heuresFonctGE))), ' h de marche'),
+              fmt(somme(ge.map((r) => nb(r.gasoilConsommeLitres))), ' L consommés'),
+              fmt(nb(dernierGe.indexHeuresGE), ' h au compteur'),
+              fmt(nb(dernierGe.volumeGasoilLitres), ' L en cuve'),
+            ].filter(Boolean);
+            if (morceaux.length) page.releves.push(`GE : ${morceaux.join(' · ')}`);
+          }
+          const ceet = duSite.filter((r) => r.source === 'CEET');
+          if (ceet.length) {
+            const morceaux = [
+              fmt(somme(ceet.map((r) => nb(r.consommationKwh))), ' kWh'),
+              fmt(nb(dernier(ceet)!.indexCompteur), ' au compteur'),
+            ].filter(Boolean);
+            if (morceaux.length) page.releves.push(`CEET : ${morceaux.join(' · ')}`);
+          }
+          const solaire = duSite.filter((r) => r.source === 'SOLAIRE');
+          if (solaire.length) {
+            const p = fmt(nb(dernier(solaire)!.puissanceKva), ' kVA');
+            if (p) page.releves.push(`Solaire : ${p}`);
+          }
+        }
       }
 
       // ── PHOTOS, chargées par site et rééchantillonnées. Après travaux

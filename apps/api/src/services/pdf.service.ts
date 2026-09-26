@@ -236,6 +236,8 @@ export interface PageSiteRapport {
     reference: string;
   }>;
   pieces: string[];
+  /** Relevés énergie du mois, une ligne par source (GE, CEET, solaire). */
+  releves: string[];
   /** Interventions refusées : référence, date et motif, sous le tableau. */
   invalidations: string[];
   photos: Array<{ buffer: Buffer; legende: string }>;
@@ -400,7 +402,10 @@ export function dessinerPageSite(
     const etat = t.etat === 'FAITE' ? 'Réalisée'
       : t.etat === 'NON_FAITE' ? 'Non réalisée'
       : t.etat === 'INVALIDEE' ? 'Invalidée'
-      : t.etat === 'A_JOUR' ? 'À jour' : 'Curatif';
+      // « Hors dû » plutôt que « Curatif » : la ligne peut aussi être une
+      // préventive que le contrat ne réclamait pas ce mois-ci. Le libellé, lui,
+      // dit déjà s'il s'agit d'une curative.
+      : t.etat === 'A_JOUR' ? 'À jour' : 'Hors dû';
     const couleur = t.etat === 'FAITE' ? ACCENT
       : t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE' ? '#C0392B'
       : t.etat === 'A_JOUR' ? GRIS_PDF : '#B26A00';
@@ -429,6 +434,19 @@ export function dessinerPageSite(
     }
     y += 4;
     doc.fillColor('black');
+  }
+
+  // Relevés énergie : ils servent au contrôle CROISÉ de la facturation
+  // carburant (heures de marche contre litres consommés). Une ligne par
+  // source suffit - le détail vit dans l'application.
+  if (p.releves.length) {
+    y = titre('Relevés énergie', y);
+    doc.font('Helvetica').fontSize(8).fillColor('#111');
+    for (const ligne of p.releves.slice(0, 3)) {
+      doc.text(ligne, X + 2, y, { width: LARGEUR - 4, height: 10, ellipsis: true });
+      y += 11;
+    }
+    y += 5;
   }
 
   if (p.pieces.length) {
