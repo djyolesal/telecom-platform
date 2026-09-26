@@ -41,6 +41,7 @@ import { auditLog } from '../services/audit.service';
 import {
   generateMaintenancePdf, generateBonMouvementPdf,
   generateMaintenancesRecueilPdf, MaintenancePdfData, RecueilSynthese,
+  PageSiteRapport,
 } from '../services/pdf.service';
 import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
@@ -1646,11 +1647,11 @@ async function construireRapportActivite(
       ...(restreint ? { AND: [await contratMaintenancePerimetre(req.user!.id)] } : {}),
     };
 
-    // UNE photo par intervention (l'APRÈS, celle qui atteste le travail fait),
-    // rééchantillonnée : le document part par e-mail à des superviseurs qui
-    // valident une facturation, il doit passer les filtres de pièces jointes.
-    // 0 = rapport sans photo, quelques Ko par intervention.
-    const photosParRapport = getNum('maintenance.photosParRapportRecueil', 1);
+    // Photos par PAGE SITE : autant que la page en accepte, dans la limite de
+    // ce réglage. Rééchantillonnées, elles pèsent ~12 Ko pièce - le document
+    // part par e-mail à des superviseurs qui valident une facturation.
+    // 0 = rapport sans photo.
+    const photosParSite = getNum('maintenance.photosParSiteRapport', 8);
     const plafond = getNum('maintenance.maxRapportsPdf', 200);
     const total = await prisma.maintenance.count({ where });
     if (total === 0) throw new AppError('Aucune intervention ne correspond à ces critères.', 404);
@@ -1667,6 +1668,8 @@ async function construireRapportActivite(
       orderBy: [{ dateFin: 'asc' }],
       select: {
         id: true, type: true, prestataireId: true, siteId: true, dureeMinutes: true,
+        reference: true, dateFin: true, equipement: true, tachePreventiveKey: true,
+        technicien: { select: { nom: true, prenom: true } },
         prestataire: { select: { nom: true, logoPath: true } },
         site: { select: { nom: true } },
         pieces: { select: { nom: true, reference: true, quantite: true } },
@@ -1718,14 +1721,6 @@ async function construireRapportActivite(
       .map((e) => ({ nom: e.nom, reference: e.reference, quantite: e.quantite, sites: e.sites.size }))
       .sort((a, b) => b.quantite - a.quantite || a.nom.localeCompare(b.nom));
 
-    // Chargement par petits paquets : chaque rapport télécharge jusqu'à 14
-    // fichiers depuis MinIO, tout lancer d'un coup saturerait le pool.
-    const donnees: MaintenancePdfData[] = [];
-    for (let i = 0; i < lignes.length; i += 4) {
-      const paquet = await Promise.all(lignes.slice(i, i + 4).map((l) => chargerDonneesRapport(l.id, { maxPhotos: photosParRapport })));
-      donnees.push(...(paquet.filter(Boolean) as MaintenancePdfData[]));
-    }
-
     // Pas de flèche « → » : la police standard du PDF (Helvetica/WinAnsi) ne la
     // contient pas et l'imprime en « !' ». Constaté à la première édition.
     // ── LOGO DU PRESTATAIRE. Affiché seulement si le recueil ne couvre QU'UN
@@ -1752,21 +1747,25 @@ async function construireRapportActivite(
     //    contrediraient seraient pires que pas de chiffre du tout.
     const manquantes: Array<{ site: string; taches: string[] }> = [];
     let sitesSansDu = 0;
+    // Sites du périmètre contractuel : ils servent DEUX fois - au calcul des
+    // tâches manquantes, et aux pages par site.
+    const sitesPages = await prisma.site.findMany({
+      where: {
+        isActive: true,
+        ...filtreSite,
+        ...(prestataire_id
+          ? { lot: { assignments: { some: { prestataireId: prestataire_id, scope: { in: ['PASSIVE', 'LES_DEUX'] } } } } }
+          : {}),
+      },
+      select: {
+        id: true, nom: true, code: true, region: true, powerConfig: true, typePylone: true,
+        hasClimatiseur: true, hasExtincteurs: true, statutGE: true, cuveVolumeLitres: true,
+      },
+      orderBy: { nom: 'asc' },
+      take: 1000,
+    });
     if (moisCible) {
-      const sitesPerimetre = await prisma.site.findMany({
-        where: {
-          isActive: true,
-          ...filtreSite,
-          ...(prestataire_id
-            ? { lot: { assignments: { some: { prestataireId: prestataire_id, scope: { in: ['PASSIVE', 'LES_DEUX'] } } } } }
-            : {}),
-        },
-        select: {
-          id: true, nom: true, powerConfig: true, typePylone: true,
-          hasClimatiseur: true, hasExtincteurs: true, statutGE: true, cuveVolumeLitres: true,
-        },
-        take: 1000,
-      });
+      const sitesPerimetre = sitesPages;
       if (sitesPerimetre.length) {
         const duParSite = await calculerDuParSite(sitesPerimetre, [moisCible], moisCible);
         const catalogue = tachesCataloguePassif();
@@ -1780,6 +1779,121 @@ async function construireRapportActivite(
           if (nok.length) manquantes.push({ site: site.nom, taches: nok });
         }
         manquantes.sort((a, b) => b.taches.length - a.taches.length || a.site.localeCompare(b.site));
+      }
+    }
+
+    // ── UNE PAGE PAR SITE. Le superviseur valide site par site : ce qui était
+    //    dû ce mois-ci, ce qui a été fait, quand, par qui - et les photos.
+    const pagesSites: PageSiteRapport[] = [];
+    /** Un objet illisible ne doit pas faire échouer le document : on édite sans. */
+    const charger = async (cle: string): Promise<Buffer | null> => {
+      try { return await getObjectBuffer(cle); } catch { return null; }
+    };
+    if (sitesPages.length) {
+      const duParSite = moisCible ? await calculerDuParSite(sitesPages, [moisCible], moisCible) : null;
+      const catalogue = tachesCataloguePassif();
+      const libelleTache = new Map(catalogue.map((t) => [t.key, `${t.numero}. ${t.libelle}`]));
+      const parSite = new Map<string, typeof lignes>();
+      for (const l of lignes) {
+        if (!parSite.has(l.siteId)) parSite.set(l.siteId, []);
+        parSite.get(l.siteId)!.push(l);
+      }
+      const jour = (d: Date | null) => (d ? new Date(d).toLocaleDateString('fr-FR') : '-');
+      const nomTech = (t: { nom: string; prenom: string } | null) => (t ? `${t.prenom} ${t.nom}` : '-');
+
+      for (const site of sitesPages) {
+        const interventions = parSite.get(site.id) ?? [];
+        const taches: PageSiteRapport['taches'] = [];
+        // 1. Le DÛ contractuel du mois : réalisé ou non. C'est la ligne que le
+        //    superviseur coche, et elle existe même sans intervention.
+        const etat = duParSite?.get(site.id);
+        if (etat) {
+          for (const t of catalogue) {
+            const statut = etat.statuts[t.key];
+            if (statut !== 'OK' && statut !== 'NOK') continue;   // NA : hors équipement du site
+            const faite = interventions.find((i) => i.tachePreventiveKey === t.key);
+            // FAITE seulement s'il y a une intervention DANS LE MOIS : le
+            // moteur de conformité dit « OK » pour une tâche trimestrielle
+            // faite le mois dernier - conforme, mais rien à facturer ici.
+            taches.push({
+              libelle: libelleTache.get(t.key) ?? t.key,
+              etat: faite ? 'FAITE' : statut === 'OK' ? 'A_JOUR' : 'NON_FAITE',
+              date: jour(faite?.dateFin ?? null),
+              technicien: nomTech(faite?.technicien ?? null),
+              duree: faite?.dureeMinutes != null ? `${faite.dureeMinutes} min` : '-',
+              reference: faite?.reference ?? '-',
+            });
+          }
+        }
+        // 2. Le CURATIF et tout ce qui n'entre pas dans une case du contrat :
+        //    facturable aussi, et invisible du calcul de conformité.
+        for (const i of interventions) {
+          if (i.tachePreventiveKey && etat && (etat.statuts[i.tachePreventiveKey] === 'OK' || etat.statuts[i.tachePreventiveKey] === 'NOK')) continue;
+          taches.push({
+            libelle: `${i.type === 'PREVENTIVE' ? 'Préventive' : 'Curative'} - ${i.equipement}`,
+            etat: 'HORS_CONTRAT',
+            date: jour(i.dateFin),
+            technicien: nomTech(i.technicien),
+            duree: i.dureeMinutes != null ? `${i.dureeMinutes} min` : '-',
+            reference: i.reference ?? '-',
+          });
+        }
+        if (!taches.length && !interventions.length) continue;   // site sans dû ni activité
+
+        const piecesSite = new Map<string, number>();
+        for (const i of interventions) {
+          for (const pc of i.pieces) piecesSite.set(pc.nom, (piecesSite.get(pc.nom) ?? 0) + pc.quantite);
+        }
+
+        pagesSites.push({
+          site: site.nom,
+          code: (site as { code?: string }).code ?? null,
+          region: (site as { region?: string }).region ?? null,
+          taches,
+          pieces: [...piecesSite.entries()].map(([nom, q]) => `${q}× ${nom}`),
+          photos: [],
+          totalPhotos: 0,
+        });
+      }
+
+      // ── PHOTOS, chargées par site et rééchantillonnées. Après travaux
+      //    d'abord : c'est la preuve du travail fait. Puis les avant, pour
+      //    l'état trouvé. Tri chronologique à l'intérieur de chaque phase.
+      if (photosParSite > 0) {
+        for (const page of pagesSites) {
+          const site = sitesPages.find((x) => x.nom === page.site);
+          const ids = (site ? parSite.get(site.id) ?? [] : []).map((i) => i.id);
+          if (!ids.length) continue;
+          const dates = new Map((site ? parSite.get(site.id) ?? [] : []).map((i) => [i.id, i.dateFin]));
+          const cliches = await prisma.photo.findMany({
+            where: { entityType: 'maintenance', entityId: { in: ids } },
+            select: { minioKey: true, phase: true, entityId: true },
+          });
+          page.totalPhotos = cliches.length;
+          // TOUR DE RÔLE entre interventions : une visite de début de mois ne
+          // doit pas monopoliser la page et masquer celles qui ont suivi.
+          // Dans chaque visite, l'APRÈS d'abord - c'est la preuve du travail.
+          const files = ids.map((id) => {
+            const dIntervention = cliches.filter((c) => c.entityId === id);
+            return [...dIntervention.filter((c) => c.phase !== 'AVANT'), ...dIntervention.filter((c) => c.phase === 'AVANT')];
+          });
+          const tries: typeof cliches = [];
+          for (let rang = 0; tries.length < cliches.length; rang++) {
+            let ajoute = false;
+            for (const file of files) {
+              if (file[rang]) { tries.push(file[rang]); ajoute = true; }
+            }
+            if (!ajoute) break;
+          }
+          for (const ph of tries.slice(0, photosParSite)) {
+            const buf = await charger(ph.minioKey);
+            if (!buf) continue;
+            page.photos.push({
+              buffer: reduireJpeg(buf, 520, 50),
+              legende: `${jour(dates.get(ph.entityId) ?? null)} · ${ph.phase === 'AVANT' ? 'Avant' : 'Après'}`,
+            });
+          }
+        }
       }
     }
 
@@ -1807,10 +1921,13 @@ async function construireRapportActivite(
     const synthese: RecueilSynthese = {
       periode: libellePeriode,
       perimetre: perimetreLibelle,
-      nb: donnees.length,
+      nb: lignes.length,
       preventives: lignes.filter((l) => l.type === 'PREVENTIVE').length,
       curatives: lignes.filter((l) => l.type !== 'PREVENTIVE').length,
-      sites: new Set(lignes.map((l) => l.siteId)).size,
+      // Le chiffre annonce ce que le document CONTIENT : une page par site du
+      // lot, visité ou non - un site sans intervention est précisément ce que
+      // le validateur doit voir.
+      sites: pagesSites.length,
       heures: Math.round(minutes / 60),
       // Le client est celui de la fiche de validation contractuelle : même
       // source (CLIENT_NOM), pour que les deux documents se répondent.
@@ -1822,8 +1939,9 @@ async function construireRapportActivite(
       manquantes,
       moisComplet: !!moisCible,
     };
-    const pdf = await generateMaintenancesRecueilPdf(donnees, {
+    const pdf = await generateMaintenancesRecueilPdf({
       titre: "Rapport mensuel d'activité",
+      sitesPages: pagesSites,
       prestataire: prestataireGarde,
       // Même marque client que la fiche de validation : les deux documents
       // partent ensemble.
@@ -1831,7 +1949,7 @@ async function construireRapportActivite(
       ...synthese,
     });
     await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
-      { rapport: 'rapport_activite_mensuel', nb: donnees.length, du, au, lot_id, prestataire_id,
+      { rapport: 'rapport_activite_mensuel', nb: lignes.length, du, au, lot_id, prestataire_id,
         prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
         mois: moisCible, sitesEnDefaut: manquantes.length,
         incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
@@ -1842,7 +1960,7 @@ async function construireRapportActivite(
     return {
       pdf,
       nomFichier: `rapport-activite-${lotFichier}-${moisCible ?? `${du || 'origine'}_${au || 'ce-jour'}`}.pdf`,
-      nb: donnees.length,
+      nb: lignes.length,
       periode: libellePeriode,
       reference: synthese.reference,
       prestataire: prestataireGarde?.nom ?? 'Prestataire',
