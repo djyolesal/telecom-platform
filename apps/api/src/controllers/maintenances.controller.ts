@@ -52,7 +52,7 @@ import { logger } from '../utils/logger';
 import { sendEmail } from '../services/email.service';
 import { photoAllegee } from '../services/vignettes.service';
 import { logoClient } from '../services/logoClient.service';
-import { calculerDuParSite, tachesCataloguePassif } from '../services/conformiteTaches.service';
+import { calculerDuParSite, tachesCataloguePassif, tachesCatalogueSolaire } from '../services/conformiteTaches.service';
 import { assertOnSite } from '../utils/geofence';
 import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
@@ -1581,7 +1581,11 @@ async function construireRapportActivite(
   req: Request,
   q: Record<string, string>,
 ): Promise<{ pdf: Buffer; nomFichier: string; nb: number; periode: string; reference: string; prestataire: string }> {
-    const { mois, du, au, type, prestataire_id, lot_id, site_id } = q;
+    const { mois, du, au, type, prestataire_id, lot_id, site_id, contrat } = q;
+    // PASSIF ou SOLAIRE : deux contrats, deux découpages de lots, deux
+    // catalogues de tâches. Un rapport ne mélange jamais les deux - ils ne se
+    // signent pas ensemble et parfois pas avec le même prestataire.
+    const solaire = contrat === 'SOLAIRE';
     // UN PRESTATAIRE, UN LOT, À LA FOIS. Le couple prestataire × lot est le
     // découpage CONTRACTUEL : c'est lui qu'on signe, qu'on facture et qu'on
     // conteste. Un rapport à cheval sur plusieurs lots ou plusieurs
@@ -1615,7 +1619,7 @@ async function construireRapportActivite(
 
     const perimetre = await sitePerimetre(req.user!.id);
     const restreint = isRestreint(perimetre);
-    const filtreSite = { lotId: lot_id, ...(restreint ? perimetre : {}) };
+    const filtreSite = { ...(solaire ? { lotSolaireId: lot_id } : { lotId: lot_id }), ...(restreint ? perimetre : {}) };
     const where: Record<string, unknown> = {
       statut: 'TERMINEE',
       ...(type ? { type } : {}),
@@ -1740,7 +1744,9 @@ async function construireRapportActivite(
         isActive: true,
         ...filtreSite,
         ...(prestataire_id
-          ? { lot: { assignments: { some: { prestataireId: prestataire_id, scope: { in: ['PASSIVE', 'LES_DEUX'] } } } } }
+          ? (solaire
+            ? { lotSolaire: { assignments: { some: { prestataireId: prestataire_id, scope: 'SOLAIRE' } } } }
+            : { lot: { assignments: { some: { prestataireId: prestataire_id, scope: { in: ['PASSIVE', 'LES_DEUX'] } } } } })
           : {}),
       },
       select: {
@@ -1753,8 +1759,9 @@ async function construireRapportActivite(
     if (moisCible) {
       const sitesPerimetre = sitesPages;
       if (sitesPerimetre.length) {
-        const duParSite = await calculerDuParSite(sitesPerimetre, [moisCible], moisCible);
-        const catalogue = tachesCataloguePassif();
+        const catalogueManquantes = solaire ? tachesCatalogueSolaire() : tachesCataloguePassif();
+        const duParSite = await calculerDuParSite(sitesPerimetre, [moisCible], moisCible, catalogueManquantes);
+        const catalogue = catalogueManquantes;
         const libelleTache = new Map(catalogue.map((t) => [t.key, `${t.numero}. ${t.libelle}`]));
         for (const site of sitesPerimetre) {
           const etat = duParSite.get(site.id);
@@ -1776,8 +1783,8 @@ async function construireRapportActivite(
       try { return await getObjectBuffer(cle); } catch { return null; }
     };
     if (sitesPages.length) {
-      const duParSite = moisCible ? await calculerDuParSite(sitesPages, [moisCible], moisCible) : null;
-      const catalogue = tachesCataloguePassif();
+      const catalogue = solaire ? tachesCatalogueSolaire() : tachesCataloguePassif();
+      const duParSite = moisCible ? await calculerDuParSite(sitesPages, [moisCible], moisCible, catalogue) : null;
       const libelleTache = new Map(catalogue.map((t) => [t.key, `${t.numero}. ${t.libelle}`]));
       const parSite = new Map<string, typeof lignes>();
       for (const l of lignes) {
@@ -1993,7 +2000,7 @@ async function construireRapportActivite(
       moisComplet: !!moisCible,
     };
     const pdf = await generateMaintenancesRecueilPdf({
-      titre: "Rapport mensuel d'activité",
+      titre: solaire ? "Rapport mensuel d'activité - solaire" : "Rapport mensuel d'activité",
       sitesPages: pagesSites,
       prestataire: prestataireGarde,
       // Même marque client que la fiche de validation : les deux documents
@@ -2045,8 +2052,8 @@ const EMAIL_VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  */
 export async function envoyerRapportActivite(req: Request, res: Response, next: NextFunction) {
   try {
-    const { mois, lot_id, prestataire_id, type, destinataires, message } = req.body as {
-      mois?: string; lot_id?: string; prestataire_id?: string; type?: string;
+    const { mois, lot_id, prestataire_id, type, contrat, destinataires, message } = req.body as {
+      mois?: string; lot_id?: string; prestataire_id?: string; type?: string; contrat?: string;
       destinataires?: string[]; message?: string;
     };
     if (!/^\d{4}-\d{2}$/.test(mois ?? '')) throw new AppError('Mois invalide (format AAAA-MM).', 422);
@@ -2060,12 +2067,17 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
     // lot obligatoires, périmètre du compte), même document.
     const rapport = await construireRapportActivite(req, {
       mois: mois!, lot_id: lot_id ?? '', prestataire_id: prestataire_id ?? '', type: type ?? '',
+      contrat: contrat ?? '',
     });
 
     const an = Number(mois!.slice(0, 4));
     const mo = Number(mois!.slice(5));
     const { genererFicheValidation } = await import('./taches.controller');
-    const fiche = await genererFicheValidation(prestataire_id!, lot_id ?? null, an, mo, { format: 'pdf' });
+    // La fiche suit le MÊME contrat que le rapport : une fiche passive jointe
+    // à un rapport solaire ferait signer le mauvais périmètre.
+    const fiche = await genererFicheValidation(prestataire_id!, lot_id ?? null, an, mo, {
+      format: 'pdf', contrat: contrat === 'SOLAIRE' ? 'SOLAIRE' : 'PASSIF',
+    });
 
     const client = process.env.CLIENT_NOM || 'Moov Africa Togo';
     const sujet = `${client} - Rapport d'activité ${rapport.periode} - ${rapport.prestataire}`;

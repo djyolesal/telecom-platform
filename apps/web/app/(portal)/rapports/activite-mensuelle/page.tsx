@@ -29,6 +29,9 @@ export default function RapportActiviteMensuelPage() {
   const now = new Date();
   const [annee, setAnnee] = useState(String(now.getFullYear()));
   const [mois, setMois] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  // PASSIF ou SOLAIRE : deux contrats, deux découpages de lots. Déclaré AVANT
+  // lotOptions qui en dépend.
+  const [contrat, setContrat] = useState('PASSIF');
   const [prestataireId, setPrestataireId] = useState('');
   const [lotId, setLotId] = useState('');
   const [type, setType] = useState('');
@@ -51,8 +54,11 @@ export default function RapportActiviteMensuelPage() {
   });
   const lotOptions = [
     ...new Map(
-      (prestaDetail?.assignments ?? []).map((a: { lot: { id: string; code: string; nom: string } }) =>
-        [a.lot.id, { value: a.lot.id, label: `${a.lot.code} - ${a.lot.nom}` }]),
+      (prestaDetail?.assignments ?? [])
+        .filter((a: { scope: string }) =>
+          contrat === 'SOLAIRE' ? a.scope === 'SOLAIRE' : a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
+        .map((a: { lot: { id: string; code: string; nom: string } }) =>
+          [a.lot.id, { value: a.lot.id, label: `${a.lot.code} - ${a.lot.nom}` }]),
     ).values(),
   ] as { value: string; label: string }[];
 
@@ -91,6 +97,7 @@ export default function RapportActiviteMensuelPage() {
       const r = await api.post('/maintenances/export/rapports/envoyer', {
         mois: `${annee}-${mois}`, lot_id: lotId, prestataire_id: prestataireId,
         ...(type ? { type } : {}),
+        ...(contrat === 'SOLAIRE' ? { contrat: 'SOLAIRE' } : {}),
         destinataires: liste, message: messageMail || undefined,
       }, { timeout: 180_000 });
       const pieces = (r.data.data.pieces ?? []) as Array<{ nom: string; octets: number }>;
@@ -110,13 +117,14 @@ export default function RapportActiviteMensuelPage() {
     if (!prestataireId || !lotId) { setError('Sélectionnez un prestataire et un lot : le rapport s’édite pour un lot d’un prestataire.'); return; }
     setError(''); setBusy(true);
     const q = new URLSearchParams({ mois: `${annee}-${mois}` });
+    if (contrat === 'SOLAIRE') q.set('contrat', 'SOLAIRE');
     if (type) q.set('type', type);
     if (lotId) q.set('lot_id', lotId);
     if (prestataireId) q.set('prestataire_id', prestataireId);
     try {
       // 3 minutes : un lot de quarante sites demande le téléchargement et le
       // rééchantillonnage de centaines de photos à la première édition.
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${annee}-${mois}.pdf`, false, 180_000);
+      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite${contrat === 'SOLAIRE' ? '-solaire' : ''}-${annee}-${mois}.pdf`, false, 180_000);
     } catch (e) {
       // Le serveur porte le message utile (période trop large, aucune
       // intervention) : l'afficher tel quel plutôt qu'un « échec » générique.
@@ -142,6 +150,10 @@ export default function RapportActiviteMensuelPage() {
           </Field>
           <Field label="Année">
             <Input type="number" min={2024} max={2100} value={annee} onChange={(e) => setAnnee(e.target.value)} />
+          </Field>
+          <Field label="Contrat">
+            <Select value={contrat} onChange={(e) => { setContrat(e.target.value); setLotId(''); }}
+              options={[{ value: 'PASSIF', label: 'Maintenance passive' }, { value: 'SOLAIRE', label: 'Maintenance solaire' }]} />
           </Field>
           <Field label="Prestataire" required>
             <Select value={prestataireId} onChange={(e) => { setPrestataireId(e.target.value); setLotId(''); }}

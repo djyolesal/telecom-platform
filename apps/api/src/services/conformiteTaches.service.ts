@@ -18,7 +18,8 @@ import { dateReferenceTaches } from './settings.service';
  *  - tâche « suivi par les données » (dépotage) : due chaque mois, réalisée
  *    si relevé complet (GE avec carburant + CEET selon la config) OU un
  *    dépotage dans le mois ;
- *  - le contrat SOLAIRE est hors périmètre (rapport dédié).
+ *  - le contrat SOLAIRE a son propre catalogue (paramètre `catalogue`) :
+ *    lots, prestataires et fiche séparés, jamais mélangés au passif.
  */
 
 export interface SiteDuContrat {
@@ -47,6 +48,15 @@ export function tachesCataloguePassif(): TachePreventive[] {
   return CONTRACTUAL_TASKS.filter((t) => t.categorie !== 'SOLAIRE' && FREQUENCE_MOIS[t.frequence] != null);
 }
 
+/**
+ * Catalogue du contrat SOLAIRE : visite mensuelle, nettoyage des panneaux,
+ * grande visite semestrielle. Contrat SÉPARÉ, lots séparés, prestataires
+ * parfois différents - il ne se mélange pas au passif dans un même document.
+ */
+export function tachesCatalogueSolaire(): TachePreventive[] {
+  return CONTRACTUAL_TASKS.filter((t) => t.categorie === 'SOLAIRE' && FREQUENCE_MOIS[t.frequence] != null);
+}
+
 const cleMois = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 
 /**
@@ -57,6 +67,8 @@ export async function calculerDuParSite(
   sites: SiteDuContrat[],
   moisListe: string[],
   moisCible: string,
+  /** Catalogue à appliquer. Le passif par défaut ; le solaire a le sien. */
+  catalogue: TachePreventive[] = tachesCataloguePassif(),
 ): Promise<Map<string, DuSite>> {
   const resultat = new Map<string, DuSite>();
   if (!sites.length || !moisListe.length) return resultat;
@@ -126,7 +138,6 @@ export async function calculerDuParSite(
     return requises.length > 0 && requises.every((x) => vus.has(x));
   };
 
-  const catalogue = tachesCataloguePassif();
   const refTaches = dateReferenceTaches();
 
   for (const site of sites) {
