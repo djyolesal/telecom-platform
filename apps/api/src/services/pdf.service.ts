@@ -980,18 +980,40 @@ export async function buildFicheValidationPdf(d: FicheValidationData): Promise<B
 
     // ── Logos : EXÉCUTANT à gauche, DONNEUR D'ORDRE à droite — la disposition
     //    du xlsx que les mêmes lecteurs signent déjà.
+    const CADRE_LOGO: [number, number] = [150, 54];
+    const BAS_LOGO = 94;   // les identités commencent juste en dessous
+
+    /**
+     * Pose un logo dont le BAS est calé sur `BAS_LOGO`, quelle que soit sa
+     * forme. Un logo large et plat et un logo carré descendaient sinon à des
+     * hauteurs différentes, et l'un des deux flottait loin du texte.
+     */
     const poserLogo = (logo: { buffer: Buffer } | null | undefined, x: number, aDroite = false) => {
       if (!logo) return;
       // Un logo illisible ne doit pas faire perdre la fiche : on l'omet.
-      try { doc.image(logo.buffer, x, 34, { fit: [150, 54], ...(aDroite ? { align: 'right' as const } : {}) }); } catch { /* ignoré */ }
+      try {
+        // `openImage` existe dans PDFKit mais pas dans ses déclarations de
+        // types : c'est ce que `doc.image` appelle lui-même pour mesurer.
+        const mesurer = doc as unknown as { openImage(b: Buffer): { width: number; height: number } };
+        const image = mesurer.openImage(logo.buffer);
+        const echelle = Math.min(CADRE_LOGO[0] / image.width, CADRE_LOGO[1] / image.height);
+        const hauteur = image.height * echelle;
+        doc.image(logo.buffer, x, BAS_LOGO - hauteur, { fit: CADRE_LOGO, ...(aDroite ? { align: 'right' as const } : {}) });
+      } catch { /* ignoré */ }
     };
     poserLogo(d.prestataireLogo, 50);
     poserLogo(d.clientLogo, w - 200, true);
 
     // ── Identités ──
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND).text(p.nom, 50, 100, { width: 260 });
+    // Le nom du prestataire n'est répété SOUS son logo que s'il n'y a pas de
+    // logo : le logo le porte déjà, et l'écrire deux fois éloignait l'adresse
+    // de la marque pour rien.
+    let yg = 100;
+    if (!d.prestataireLogo) {
+      doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND).text(p.nom, 50, yg, { width: 260 });
+      yg = doc.y + 2;
+    }
     doc.font('Helvetica').fontSize(8).fillColor('#111');
-    let yg = doc.y + 2;
     for (const ligne of [
       p.adresse, p.rccm ? `RCCM : ${p.rccm}` : null, p.nif ? `NIF : ${p.nif}` : null,
       p.contactCommercial ? `Contact commercial : ${p.contactCommercial}` : null,
