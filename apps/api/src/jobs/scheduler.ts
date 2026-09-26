@@ -10,6 +10,7 @@ import { manquantAlertJob } from './manquant-alert';
 import { vidangeAlertJob } from './vidange-alert';
 import { situationPeriodiqueJob } from './situation-periodique';
 import { purgeOrphelinsJob } from './purge-orphelins';
+import { vignettesJob } from './vignettes.job';
 import { dailyRecapJob } from './daily-recap';
 
 /**
@@ -52,6 +53,14 @@ export function setupCronJobs() {
   cron.schedule('30 4 * * *', async () => {
     logger.info('[CRON] Démarrage job purge des fichiers orphelins');
     try { await avecVerrou('purgeOrphelins', purgeOrphelinsJob); } catch (e) { logger.error('[CRON] purgeOrphelins error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
+  // ── Vignettes du rapport mensuel — tous les jours à 3h15, AVANT le ménage
+  // de 4h30 : les vignettes créées cette nuit sont ainsi déjà référencées
+  // quand le ménage passe, et la sauvegarde de 3h les emporte au passage ──
+  cron.schedule('15 3 * * *', async () => {
+    logger.info('[CRON] Démarrage job préparation des vignettes');
+    try { await avecVerrou('vignettes', vignettesJob); } catch (e) { logger.error('[CRON] vignettes error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Vérif stock carburant — tous les jours à 8h ─────────────
@@ -116,5 +125,5 @@ export function setupCronJobs() {
     try { await avecVerrou('situationPeriodique', situationPeriodiqueJob); } catch (e) { logger.error('[CRON] situationPeriodique error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 10 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
+  logger.info('✅ 11 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
 }

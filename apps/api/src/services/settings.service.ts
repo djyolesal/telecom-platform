@@ -111,6 +111,8 @@ export function settingsCatalog(): SettingMeta[] {
     // passage, signature du rebond. Une reconnexion isolée clôture aussitôt.
     { key: 'oss.stabiliteRetablissementMin', label: 'Attente avant clôture lors d\'un rebond régional (0 = clôture immédiate)', groupe: 'Supervision', unite: 'min', defaut: 20 },
     { key: 'maintenance.maxRapportsPdf', label: 'Interventions maximum dans un recueil PDF', groupe: 'Maintenance', unite: 'interventions', defaut: 200 },
+    { key: 'vignettes.maxParNuit', label: 'Vignettes préparées par nuit pour le rapport mensuel (0 = désactivé)', groupe: 'Maintenance', unite: 'photos', defaut: 400 },
+    { key: 'vignettes.budgetMinutes', label: 'Temps maximum accordé chaque nuit à la préparation des vignettes', groupe: 'Maintenance', unite: 'min', defaut: 20 },
     { key: 'maintenance.photosParSiteRapport', label: 'Photos par site dans le rapport mensuel d\'activité (0 = aucune ; la page en affiche autant qu\'elle peut)', groupe: 'Maintenance', unite: 'photos', defaut: 8 },
     { key: 'coupures.importRapportActif', label: 'Autoriser l\'import du rapport de supervision NOC (0 = désactivé)', groupe: 'Supervision', unite: '0/1', defaut: 0 },
     { key: 'oss.delaiReclassementAvalMin', label: 'Attente avant qu\'un aval encore coupé cesse d\'être rattaché à son amont rétabli', groupe: 'Supervision', unite: 'min', defaut: 20 },
