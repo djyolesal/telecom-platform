@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { FileText, Fuel, Zap, Wrench, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock, FileSpreadsheet , ShieldCheck, Shield, Leaf, WifiOff } from 'lucide-react';
+import { FileText, Fuel, Zap, Wrench, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock, FileSpreadsheet , ShieldCheck, Shield, Leaf, WifiOff, Download } from 'lucide-react';
 
 // `internesSeulement` = bloqué serveur pour les comptes prestataires (liste
 // INTERNE_ONLY de l'API) : la carte ne doit pas s'afficher pour eux.
@@ -14,6 +14,7 @@ const RAPPORTS: Array<{
   title: string; desc: string; roles?: string[]; internesSeulement?: boolean;
 }> = [
   { href: '/rapports/mensuel', icon: CalendarRange, title: 'Rapport mensuel', desc: 'Synthèse PDF complète par mois, à consulter ou envoyer par email.', roles: ['MANAGER', 'ADMIN', 'DIRECTION'] },
+  { href: '/rapports/publies', icon: Download, title: 'Rapports mensuels publiés', desc: 'Rapport d\u2019activit\u00e9 et fiche de validation par lot et par mois, du plus r\u00e9cent au plus ancien.' },
   { href: '/rapports/activite-mensuelle', icon: FileText, title: 'Rapport mensuel d\u2019activit\u00e9 (prestataire)', desc: 'T\u00e2ches dues non r\u00e9alis\u00e9es et chaque intervention au format du rapport unitaire, sous une couverture co-sign\u00e9e.', roles: ['ADMIN'], internesSeulement: true },
   { href: '/rapports/fiche-validation', icon: FileSpreadsheet, title: 'Fiche de validation (prestataire)', desc: 'Export Excel ou PDF des travaux contractuels réalisés par prestataire et par mois, au format de validation.', internesSeulement: true },
   { href: '/rapports/echeancier-preventif', icon: CalendarClock, title: 'Échéancier préventif', desc: 'Tâches contractuelles dues / en retard par site et prestataire, et génération du planning.' },

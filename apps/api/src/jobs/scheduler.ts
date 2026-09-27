@@ -11,6 +11,7 @@ import { vidangeAlertJob } from './vidange-alert';
 import { situationPeriodiqueJob } from './situation-periodique';
 import { purgeOrphelinsJob } from './purge-orphelins';
 import { vignettesJob } from './vignettes.job';
+import { archiverMoisEcoule } from '../services/rapportsMensuels.service';
 import { dailyRecapJob } from './daily-recap';
 
 /**
@@ -53,6 +54,14 @@ export function setupCronJobs() {
   cron.schedule('30 4 * * *', async () => {
     logger.info('[CRON] Démarrage job purge des fichiers orphelins');
     try { await avecVerrou('purgeOrphelins', purgeOrphelinsJob); } catch (e) { logger.error('[CRON] purgeOrphelins error:', e); }
+  }, { timezone: 'Africa/Lome' });
+
+  // ── Publication des rapports mensuels d'activité — le 1er à 6h15 ──
+  // Le mois qui vient de s'achever, lot par lot. Après le rapport mensuel de
+  // 6h (qui lit les mêmes données) pour ne pas doubler la charge à la minute.
+  cron.schedule('15 6 1 * *', async () => {
+    logger.info('[CRON] Publication des rapports mensuels d\'activité');
+    try { await avecVerrou('rapportsMensuels', () => archiverMoisEcoule()); } catch (e) { logger.error('[CRON] rapportsMensuels error:', e); }
   }, { timezone: 'Africa/Lome' });
 
   // ── Vignettes du rapport mensuel — tous les jours à 3h15, AVANT le ménage
@@ -125,5 +134,5 @@ export function setupCronJobs() {
     try { await avecVerrou('situationPeriodique', situationPeriodiqueJob); } catch (e) { logger.error('[CRON] situationPeriodique error:', e); }
   }, { timezone: 'Africa/Lome' });
 
-  logger.info('✅ 11 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
+  logger.info('✅ 12 cron jobs planifiés (TZ: Africa/Lome ; sauvegarde = cron système hôte)');
 }

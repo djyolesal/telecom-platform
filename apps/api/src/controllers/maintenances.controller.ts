@@ -1640,10 +1640,12 @@ export async function genererPdfMaintenanceComplet(id: string): Promise<Buffer |
  * E-MAIL passent tous deux par ici, sans quoi les deux chemins de génération
  * finiraient par diverger - et c'est une pièce de facturation.
  */
-async function construireRapportActivite(
-  req: Request,
+export async function construireRapportActivite(
+  /** Qui demande. `null` = le serveur lui-même (archivage mensuel) : aucun
+   *  périmètre de compte ne s'applique alors. */
+  userId: string | null,
   q: Record<string, string>,
-): Promise<{ pdf: Buffer; nomFichier: string; nb: number; periode: string; reference: string; prestataire: string }> {
+): Promise<{ pdf: Buffer; nomFichier: string; nb: number; periode: string; reference: string; prestataire: string; sites: number }> {
     const { mois, du, au, type, prestataire_id, lot_id, site_id, contrat } = q;
     // PASSIF ou SOLAIRE : deux contrats, deux découpages de lots, deux
     // catalogues de tâches. Un rapport ne mélange jamais les deux - ils ne se
@@ -1680,7 +1682,7 @@ async function construireRapportActivite(
       }
     }
 
-    const perimetre = await sitePerimetre(req.user!.id);
+    const perimetre = userId ? await sitePerimetre(userId) : {};
     const restreint = isRestreint(perimetre);
     const filtreSite = { ...(solaire ? { lotSolaireId: lot_id } : { lotId: lot_id }), ...(restreint ? perimetre : {}) };
     const where: Record<string, unknown> = {
@@ -1690,7 +1692,7 @@ async function construireRapportActivite(
       ...(site_id ? { siteId: site_id } : {}),
       ...(Object.keys(bornes).length ? { dateFin: bornes } : {}),
       ...(Object.keys(filtreSite).length ? { site: filtreSite } : {}),
-      ...(restreint ? { AND: [await contratMaintenancePerimetre(req.user!.id)] } : {}),
+      ...(restreint && userId ? { AND: [await contratMaintenancePerimetre(userId)] } : {}),
     };
 
     // Photos par PAGE SITE : autant que la page en accepte, dans la limite de
@@ -2083,12 +2085,16 @@ async function construireRapportActivite(
       clientLogo: (await logoClient()).logo?.buffer ?? null,
       ...synthese,
     });
-    await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
-      { rapport: 'rapport_activite_mensuel', nb: lignes.length, du, au, lot_id, prestataire_id,
-        prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
-        mois: moisCible, sitesEnDefaut: manquantes.length,
-        incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
-        pieces: pieces.reduce((t, p) => t + p.quantite, 0) }, req);
+    // Journalisé seulement quand un UTILISATEUR l'a demandé : l'archivage
+    // mensuel du serveur a sa propre trace (table des rapports archivés).
+    if (userId) {
+      await auditLog(userId, 'EXPORT', 'maintenances', undefined,
+        { rapport: 'rapport_activite_mensuel', nb: lignesValides.length, du, au, lot_id, prestataire_id,
+          prestataires: idsPrestataires.size, logo: !!prestataireGarde?.logo,
+          mois: moisCible, sitesEnDefaut: manquantes.length,
+          incidents: incidents.length, incidentsOuverts: incidents.filter((i) => !i.clos).length,
+          pieces: pieces.reduce((t, p) => t + p.quantite, 0) });
+    }
     // Le NOM porte le prestataire, le lot et la période : ces documents
     // s'accumulent dans un dossier de téléchargement et partent en pièce
     // jointe. Sans ces trois-là, deux rapports du même mois s'écrasent, et
@@ -2104,17 +2110,18 @@ async function construireRapportActivite(
     return {
       pdf,
       nomFichier: `${nomFichier}.pdf`,
-      nb: lignes.length,
+      nb: lignesValides.length,
       periode: libellePeriode,
       reference: synthese.reference,
       prestataire: prestataireGarde?.nom ?? 'Prestataire',
+      sites: pagesSites.length,
     };
 }
 
 /** Téléchargement du rapport mensuel d'activité (PDF). */
 export async function exportRapportsMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
-    const { pdf, nomFichier } = await construireRapportActivite(req, req.query as Record<string, string>);
+    const { pdf, nomFichier } = await construireRapportActivite(req.user!.id, req.query as Record<string, string>);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nomFichier}"`);
     res.send(pdf);
@@ -2149,7 +2156,7 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
 
     // Le rapport EST celui du téléchargement : mêmes contrôles (prestataire et
     // lot obligatoires, périmètre du compte), même document.
-    const rapport = await construireRapportActivite(req, {
+    const rapport = await construireRapportActivite(req.user!.id, {
       mois: mois!, lot_id: lot_id ?? '', prestataire_id: prestataire_id ?? '', type: type ?? '',
       contrat: contrat ?? '',
     });

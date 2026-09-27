@@ -775,6 +775,7 @@ model Prestataire {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
+  rapportsMensuels RapportMensuel[]
   assignments   LotAssignment[]
   users         User[]
   maintenances  Maintenance[]
@@ -854,6 +855,7 @@ model Lot {
   sites         Site[]
   sitesSolaires Site[]          @relation("SitesSolaires")
   assignments   LotAssignment[]
+  rapportsMensuels RapportMensuel[]
 
   @@map("lots")
 }
@@ -1191,4 +1193,31 @@ model CoupureReseau {
   // Imputation SLA passive par prestataire.
   @@index([causeCategorie, origine])
   @@map("coupures_reseau")
+}
+
+/// Rapport mensuel d'activité PUBLIÉ sur la plateforme (un par mois, lot,
+/// prestataire et contrat). L'e-mail ne passe pas - dix mégaoctets de pièce
+/// jointe, des relais qui refusent sans prévenir : chacun vient le chercher.
+model RapportMensuel {
+  id              String   @id @default(uuid())
+  mois            String   @db.VarChar(7)
+  lotId           String   @map("lot_id")
+  prestataireId   String   @map("prestataire_id")
+  contrat         String   @default("PASSIF") @db.VarChar(10)
+  reference       String   @db.VarChar(30)
+  minioKey        String   @map("minio_key")
+  ficheMinioKey   String?  @map("fiche_minio_key")
+  tailleOctets    Int      @default(0) @map("taille_octets")
+  nbSites         Int      @default(0) @map("nb_sites")
+  nbInterventions Int      @default(0) @map("nb_interventions")
+  genereLe        DateTime @default(now()) @map("genere_le")
+  /// NULL = archivage automatique de fin de mois.
+  generePar       String?  @map("genere_par")
+
+  lot         Lot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  prestataire Prestataire @relation(fields: [prestataireId], references: [id], onDelete: Cascade)
+
+  @@unique([mois, lotId, prestataireId, contrat])
+  @@index([mois])
+  @@map("rapports_mensuels")
 }

@@ -14,6 +14,7 @@ import * as authCtrl from '../controllers/auth.controller';
 import * as sitesCtrl from '../controllers/sites.controller';
 import * as contactsCtrl from '../controllers/contacts.controller';
 import * as maintenanceCtrl from '../controllers/maintenances.controller';
+import * as rapportsMensuelsCtrl from '../controllers/rapportsMensuels.controller';
 import * as actifsCtrl from '../controllers/actifs.controller';
 import * as depotagesCtrl from '../controllers/depotages.controller';
 import * as relevesCtrl from '../controllers/releves.controller';
@@ -331,6 +332,15 @@ router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGE
 // Recueil PDF : un rapport d'intervention COMPLET par ligne, sur une période
 // et un périmètre choisis, précédé d'une synthèse (curatif, incidents, pièces).
 router.get('/maintenances/export/rapports.pdf', rbac(['ADMIN']), maintenanceCtrl.exportRapportsMaintenances);
+
+// ── Rapports mensuels PUBLIÉS ─────────────────────────────────
+// La lecture est ouverte aux superviseurs, y compris ceux d'un prestataire :
+// le contrôleur limite chacun à SON périmètre. Ils REÇOIVENT le document qui
+// les évalue - ils ne le fabriquent pas, la publication reste à l'ADMIN.
+router.get('/rapports-mensuels', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), rapportsMensuelsCtrl.listerRapportsMensuels);
+router.get('/rapports-mensuels/mois-par-defaut', rbac(['ADMIN']), rapportsMensuelsCtrl.moisParDefaut);
+router.get('/rapports-mensuels/:id/pdf', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), heavyLimit, rapportsMensuelsCtrl.telechargerRapportMensuel);
+router.post('/rapports-mensuels/publier', rbac(['ADMIN']), heavyLimit, rapportsMensuelsCtrl.publierRapportMensuel);
 router.post('/maintenances/export/rapports/envoyer', rbac(['ADMIN']), heavyLimit, maintenanceCtrl.envoyerRapportActivite);
 router.post('/maintenances', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), maintenanceCtrl.createMaintenance);
 router.get('/maintenances/:id', maintenanceCtrl.getMaintenanceById);
