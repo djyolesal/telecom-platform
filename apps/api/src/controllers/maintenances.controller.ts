@@ -49,7 +49,7 @@ import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
 import { logger } from '../utils/logger';
-import { sendEmail } from '../services/email.service';
+import { envoyerEmail } from '../services/email.service';
 import { photoAllegee } from '../services/vignettes.service';
 import { logoClient } from '../services/logoClient.service';
 import { calculerDuParSite, tachesCataloguePassif, tachesCatalogueSolaire } from '../services/conformiteTaches.service';
@@ -2184,7 +2184,7 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
     </div>
   </div>`;
 
-    const envoye = await sendEmail({
+    const envoi = await envoyerEmail({
       to: liste,
       subject: sujet,
       html: corps,
@@ -2193,21 +2193,35 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
         { filename: fiche.nomFichier, content: fiche.buffer, contentType: 'application/pdf' },
       ],
     });
-    if (!envoye) {
+    if (!envoi.ok) {
       // Ne JAMAIS répondre « envoyé » quand rien n'est parti : le superviseur
-      // attendrait un document qui n'arrivera pas.
-      throw new AppError("Envoi impossible : la messagerie n'est pas configurée sur le serveur.", 503);
+      // attendrait un document qui n'arrivera pas. On rend le motif du relais
+      // tel quel - c'est lui qui explique le refus (expéditeur non autorisé,
+      // boîte inconnue, quota).
+      throw new AppError(
+        envoi.erreur
+          ? `La messagerie a refusé l'envoi : ${envoi.erreur}`
+          : "Envoi impossible : la messagerie n'est pas configurée sur le serveur.",
+        503,
+      );
     }
 
     await auditLog(req.user!.id, 'EXPORT', 'maintenances', undefined,
       { rapport: 'rapport_activite_mensuel', envoi: 'email', destinataires: liste, mois, lot_id, prestataire_id,
         nb: rapport.nb, reference: rapport.reference,
+        // Ce que la messagerie a réellement accepté : c'est cette trace qui
+        // permet de trancher « pas reçu » entre le relais et le destinataire.
+        acceptes: envoi.acceptes, refuses: envoi.refuses, reponseSmtp: envoi.reponse,
         tailles: { rapport: rapport.pdf.length, fiche: fiche.buffer.length } }, req);
 
     res.json({
       success: true,
       data: {
         destinataires: liste,
+        // L'écran annonce ce qui est ACCEPTÉ, pas ce qui est demandé : un
+        // destinataire refusé par le relais ne doit pas être compté comme servi.
+        acceptes: envoi.acceptes,
+        refuses: envoi.refuses,
         reference: rapport.reference,
         pieces: [
           { nom: rapport.nomFichier, octets: rapport.pdf.length },

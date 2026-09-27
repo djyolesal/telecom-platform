@@ -102,7 +102,14 @@ export default function RapportActiviteMensuelPage() {
       }, { timeout: 180_000 });
       const pieces = (r.data.data.pieces ?? []) as Array<{ nom: string; octets: number }>;
       const poids = pieces.reduce((t, p) => t + p.octets, 0);
-      setEnvoye(`Envoyé à ${liste.length} destinataire(s) · ${pieces.length} pièces jointes (${Math.round(poids / 1024)} Ko)`);
+      // On annonce les destinataires ACCEPTÉS par la messagerie, pas ceux
+      // qu'on a demandés : un refus du relais doit se voir tout de suite.
+      const acceptes = (r.data.data.acceptes ?? liste) as string[];
+      const refuses = (r.data.data.refuses ?? []) as string[];
+      setEnvoye(
+        `Accepté par la messagerie pour ${acceptes.length} destinataire(s) · ${pieces.length} pièces jointes (${Math.round(poids / 1024)} Ko)`
+        + (refuses.length ? ` · REFUSÉS : ${refuses.join(', ')}` : '')
+      );
       setOuvertEnvoi(false);
       setMessageMail('');
     } catch (e) {
