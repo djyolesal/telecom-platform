@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import JSZip from 'jszip';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { getObjectBuffer } from '../services/storage.service';
@@ -46,7 +47,11 @@ export async function listerRapportsMensuels(req: Request, res: Response, next: 
   } catch (err) { next(err); }
 }
 
-/** Téléchargement d'un rapport publié (ou de sa fiche de validation). */
+/**
+ * Téléchargement d'un rapport publié : le rapport, sa fiche, ou les DEUX dans
+ * une archive (`piece=zip`) - c'est ce qu'on transmet en une fois quand on
+ * remet le mois à un prestataire.
+ */
 export async function telechargerRapportMensuel(req: Request, res: Response, next: NextFunction) {
   try {
     const rapport = await prisma.rapportMensuel.findFirst({
@@ -58,24 +63,43 @@ export async function telechargerRapportMensuel(req: Request, res: Response, nex
     });
     if (!rapport) throw new AppError('Rapport introuvable.', 404);
 
-    const fiche = req.query.piece === 'fiche';
-    const cle = fiche ? rapport.ficheMinioKey : rapport.minioKey;
-    if (!cle) throw new AppError("La fiche de validation n'a pas été archivée avec ce rapport.", 404);
-
-    const pdf = await getObjectBuffer(cle).catch(() => null);
-    if (!pdf) throw new AppError('Le fichier archivé est introuvable dans le stockage.', 404);
-
+    const piece = String(req.query.piece ?? 'rapport');
     const morceau = (v: string) => v.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
-    const nom = [
-      fiche ? 'fiche-validation' : 'rapport-activite',
+    const suffixe = [
       rapport.contrat === 'SOLAIRE' ? 'solaire' : null,
       morceau(rapport.prestataire.nom), morceau(rapport.lot.code), rapport.mois,
     ].filter(Boolean).join('-');
+    const lire = async (cle: string) => {
+      const buf = await getObjectBuffer(cle).catch(() => null);
+      if (!buf) throw new AppError('Le fichier archivé est introuvable dans le stockage.', 404);
+      return buf;
+    };
+
+    if (piece === 'zip') {
+      // Les deux pièces d'un même mois, sous leurs propres noms : c'est le
+      // paquet qu'on transmet au prestataire, et il reste lisible une fois
+      // décompressé n'importe où.
+      const zip = new JSZip();
+      zip.file(`rapport-activite-${suffixe}.pdf`, await lire(rapport.minioKey));
+      if (rapport.ficheMinioKey) zip.file(`fiche-validation-${suffixe}.pdf`, await lire(rapport.ficheMinioKey));
+      const archive = await zip.generateAsync({ type: 'nodebuffer' });
+      await auditLog(req.user!.id, 'EXPORT', 'rapports_mensuels', req.params.id,
+        { piece: 'zip', mois: rapport.mois }, req);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="rapport-mensuel-${suffixe}.zip"`);
+      res.send(archive);
+      return;
+    }
+
+    const fiche = piece === 'fiche';
+    const cle = fiche ? rapport.ficheMinioKey : rapport.minioKey;
+    if (!cle) throw new AppError("La fiche de validation n'a pas été archivée avec ce rapport.", 404);
+    const pdf = await lire(cle);
 
     await auditLog(req.user!.id, 'EXPORT', 'rapports_mensuels', req.params.id,
       { piece: fiche ? 'fiche' : 'rapport', mois: rapport.mois }, req);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${nom}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${fiche ? 'fiche-validation' : 'rapport-activite'}-${suffixe}.pdf"`);
     res.send(pdf);
   } catch (err) { next(err); }
 }

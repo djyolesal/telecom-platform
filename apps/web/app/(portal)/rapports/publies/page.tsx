@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, FileText, RefreshCw, ClipboardCheck } from 'lucide-react';
+import { Download, FileText, RefreshCw, ClipboardCheck, Archive } from 'lucide-react';
 import { api } from '@/lib/api';
 import { downloadFileNommeParServeur } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -52,12 +52,13 @@ export default function RapportsPubliesPage() {
     queryFn: () => api.get('/rapports-mensuels').then((r) => r.data.data as RapportPublie[]),
   });
 
-  const telecharger = async (r: RapportPublie, fiche = false) => {
-    setBusy(`${r.id}${fiche ? '-f' : ''}`);
+  const telecharger = async (r: RapportPublie, piece: 'rapport' | 'fiche' | 'zip' = 'rapport') => {
+    setBusy(`${r.id}-${piece}`);
+    const nom = piece === 'zip' ? 'rapport-mensuel' : piece === 'fiche' ? 'fiche-validation' : 'rapport-activite';
     try {
       await downloadFileNommeParServeur(
-        `/rapports-mensuels/${r.id}/pdf${fiche ? '?piece=fiche' : ''}`,
-        `${fiche ? 'fiche-validation' : 'rapport-activite'}-${r.lot.code}-${r.mois}.pdf`,
+        `/rapports-mensuels/${r.id}/pdf?piece=${piece}`,
+        `${nom}-${r.lot.code}-${r.mois}.${piece === 'zip' ? 'zip' : 'pdf'}`,
         120_000,
       );
     } finally {
@@ -125,13 +126,19 @@ export default function RapportsPubliesPage() {
                       {r.prestataire.nom} · {r.nbSites} site(s) · {r.nbInterventions} intervention(s) · {poids(r.tailleOctets)}
                     </p>
                   </div>
-                  <Button variant="secondary" icon={FileText} loading={busy === r.id} onClick={() => telecharger(r)}>
+                  <Button variant="secondary" icon={FileText} loading={busy === `${r.id}-rapport`} onClick={() => telecharger(r, 'rapport')}>
                     Rapport
                   </Button>
                   {r.avecFiche && (
-                    <Button variant="secondary" icon={ClipboardCheck} loading={busy === `${r.id}-f`} onClick={() => telecharger(r, true)}>
-                      Fiche
-                    </Button>
+                    <>
+                      <Button variant="secondary" icon={ClipboardCheck} loading={busy === `${r.id}-fiche`} onClick={() => telecharger(r, 'fiche')}>
+                        Fiche
+                      </Button>
+                      {/* Les deux d'un coup : c'est ce qu'on transmet au prestataire. */}
+                      <Button icon={Archive} loading={busy === `${r.id}-zip`} onClick={() => telecharger(r, 'zip')}>
+                        Les deux (ZIP)
+                      </Button>
+                    </>
                   )}
                 </div>
               ))}
