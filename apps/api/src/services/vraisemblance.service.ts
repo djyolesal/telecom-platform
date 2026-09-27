@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { getNum } from './settings.service';
 import { configCuveDuSite } from './cuve.service';
+import { logger } from '../utils/logger';
 
 /**
  * Contrôles de vraisemblance des saisies terrain (relevés énergie, dépotages).
@@ -11,9 +12,29 @@ import { configCuveDuSite } from './cuve.service';
  * (observations + journal d'audit) pour la supervision.
  */
 
+/**
+ * Codes STABLES des contrôles. Le message est en français et change avec la
+ * rédaction ; le code, lui, sert à compter, filtrer et comparer d'un mois sur
+ * l'autre - c'est lui qui rend l'analyse exploitable.
+ */
+export type CodeAnomalie =
+  | 'CUVE_DEPASSEE'          // volume gasoil saisi au-dessus de la capacité
+  | 'INDEX_GE_RECULE'        // compteur horaire en baisse
+  | 'HEURES_GE_ABERRANTES'   // bond d'heures supérieur au temps écoulé
+  | 'INDEX_CEET_RECULE'      // index cumulé en baisse
+  | 'CONSO_CEET_ABERRANTE'   // consommation au-dessus du plausible
+  | 'STOCK_AVANT_CUVE'       // stock avant dépotage au-dessus de la cuve
+  | 'STOCK_APRES_CUVE'       // stock après dépotage au-dessus de la cuve
+  | 'STOCK_AVANT_HAUSSE'     // niveau remonté sans dépotage
+  | 'DEPOTAGE_DOUBLON';      // seconde livraison du même site dans la fenêtre
+
 export interface AvertissementSaisie {
+  code: CodeAnomalie;
   champ: string;
   message: string;
+  /** Valeur saisie et repère attendu : de quoi trancher sans rouvrir la fiche. */
+  valeurSaisie?: number | null;
+  valeurAttendue?: string | null;
 }
 
 const fmtDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -36,8 +57,26 @@ export async function verifierClotureEnergie(
   site: SiteCloture,
   e: Record<string, unknown>,
   sources: string[],
-  maintenanceId: string
+  /**
+   * Saisie à EXCLURE de la comparaison : l'intervention en cours de clôture,
+   * ou le relevé qu'on vient d'écrire. On ne se compare pas à soi-même.
+   */
+  exclure: { maintenanceId?: string; releveId?: string } | string,
 ): Promise<AvertissementSaisie[]> {
+  // Ancienne signature (un id de maintenance) toujours acceptée.
+  const aExclure = typeof exclure === 'string' ? { maintenanceId: exclure } : exclure;
+  /**
+   * Les relevés saisis HORS intervention portent `maintenanceId = NULL`, et
+   * `{ not: X }` les écartait tous : en SQL, `NULL <> X` ne vaut pas VRAI.
+   * Le contrôle était donc AVEUGLE aux relevés du portail - un site suivi
+   * depuis le web n'avait jamais de référence à laquelle se comparer.
+   */
+  const saufLaSaisieEnCours = {
+    ...(aExclure.maintenanceId
+      ? { OR: [{ maintenanceId: null }, { maintenanceId: { not: aExclure.maintenanceId } }] }
+      : {}),
+    ...(aExclure.releveId ? { id: { not: aExclure.releveId } } : {}),
+  };
   const avertissements: AvertissementSaisie[] = [];
   const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
   const maintenant = new Date();
@@ -51,8 +90,11 @@ export async function verifierClotureEnergie(
     const cuve = site.cuveVolumeLitres != null ? Number(site.cuveVolumeLitres) : null;
     if (jauge != null && cuve != null && cuve > 0 && jauge > cuve * (1 + margeCuvePct / 100)) {
       avertissements.push({
+        code: 'CUVE_DEPASSEE',
         champ: 'volumeGasoilLitres',
         message: `Volume gasoil saisi (${fmtNum(jauge)} L) supérieur à la capacité de la cuve du site (${fmtNum(cuve)} L).`,
+        valeurSaisie: jauge,
+        valeurAttendue: `${fmtNum(cuve)} L maximum`,
       });
     }
 
@@ -67,7 +109,7 @@ export async function verifierClotureEnergie(
       const prev = await prisma.releveEnergie.findFirst({
         where: {
           siteId: site.id, source: 'GE', indexHeuresGE: { not: null },
-          maintenanceId: { not: maintenanceId },
+          ...saufLaSaisieEnCours,
           ...(c.groupeId ? { groupeId: c.groupeId } : {}),
         },
         orderBy: { dateReleve: 'desc' },
@@ -78,15 +120,21 @@ export async function verifierClotureEnergie(
       const libGE = site.groupes.length > 1 ? `GE n°${c.numero}` : 'GE';
       if (c.saisi < dernier) {
         avertissements.push({
+          code: 'INDEX_GE_RECULE',
           champ: 'indexHeuresGE',
           message: `Index horaire ${libGE} saisi (${fmtNum(c.saisi)} h) inférieur au dernier index connu (${fmtNum(dernier)} h le ${fmtDate(prev.dateReleve)}) - un compteur horaire ne recule pas.`,
+          valeurSaisie: c.saisi,
+          valeurAttendue: `≥ ${fmtNum(dernier)} h (relevé du ${fmtDate(prev.dateReleve)})`,
         });
       } else {
         const deltaMax = joursEntre(prev.dateReleve, maintenant) * maxHeuresJour + 1;
         if (c.saisi - dernier > deltaMax) {
           avertissements.push({
+            code: 'HEURES_GE_ABERRANTES',
             champ: 'indexHeuresGE',
             message: `Index horaire ${libGE} : bond de ${fmtNum(c.saisi - dernier)} h depuis le dernier relevé (${fmtNum(dernier)} h le ${fmtDate(prev.dateReleve)}), alors que ${fmtNum(deltaMax)} h au maximum ont pu s'écouler.`,
+            valeurSaisie: c.saisi,
+            valeurAttendue: `≤ ${fmtNum(dernier + deltaMax)} h`,
           });
         }
       }
@@ -98,7 +146,7 @@ export async function verifierClotureEnergie(
     const saisi = num(e.indexCompteur);
     if (saisi != null) {
       const prev = await prisma.releveEnergie.findFirst({
-        where: { siteId: site.id, source: 'CEET', indexCompteur: { not: null }, maintenanceId: { not: maintenanceId } },
+        where: { siteId: site.id, source: 'CEET', indexCompteur: { not: null }, ...saufLaSaisieEnCours },
         orderBy: { dateReleve: 'desc' },
         select: { indexCompteur: true, dateReleve: true },
       });
@@ -106,15 +154,21 @@ export async function verifierClotureEnergie(
         const dernier = Number(prev.indexCompteur);
         if (saisi < dernier) {
           avertissements.push({
+            code: 'INDEX_CEET_RECULE',
             champ: 'indexCompteur',
             message: `Index compteur CEET saisi (${fmtNum(saisi)} kWh) inférieur au dernier index connu (${fmtNum(dernier)} kWh le ${fmtDate(prev.dateReleve)}) - un index cumulé ne recule pas (sauf remplacement du compteur).`,
+            valeurSaisie: saisi,
+            valeurAttendue: `≥ ${fmtNum(dernier)} (relevé du ${fmtDate(prev.dateReleve)})`,
           });
         } else {
           const deltaMax = (joursEntre(prev.dateReleve, maintenant) + 1) * maxKwhJour;
           if (saisi - dernier > deltaMax) {
             avertissements.push({
+              code: 'CONSO_CEET_ABERRANTE',
               champ: 'indexCompteur',
               message: `Consommation CEET de ${fmtNum(saisi - dernier)} kWh depuis le dernier relevé (${fmtDate(prev.dateReleve)}) - très au-dessus du plausible (~${fmtNum(maxKwhJour)} kWh/jour max).`,
+              valeurSaisie: saisi,
+              valeurAttendue: `≤ ${fmtNum(dernier + deltaMax)} kWh`,
             });
           }
         }
@@ -141,14 +195,20 @@ export async function verifierDepotage(
   if (plafond != null) {
     if (valeurs.stockAvant != null && valeurs.stockAvant > plafond) {
       avertissements.push({
+        code: 'STOCK_AVANT_CUVE',
         champ: 'stockAvantLitres',
         message: `Stock avant dépotage (${fmtNum(valeurs.stockAvant)} L) supérieur à la capacité de la cuve du site (${fmtNum(cuve!)} L).`,
+        valeurSaisie: valeurs.stockAvant,
+        valeurAttendue: `${fmtNum(cuve!)} L maximum`,
       });
     }
     if (valeurs.stockApres != null && valeurs.stockApres > plafond) {
       avertissements.push({
+        code: 'STOCK_APRES_CUVE',
         champ: 'stockApresLitres',
         message: `Stock après dépotage (${fmtNum(valeurs.stockApres)} L) supérieur à la capacité de la cuve du site (${fmtNum(cuve!)} L).`,
+        valeurSaisie: valeurs.stockApres,
+        valeurAttendue: `${fmtNum(cuve!)} L maximum`,
       });
     }
   }
@@ -175,8 +235,11 @@ export async function verifierDepotage(
     const dernier = candidats.sort((a, b) => b.date.getTime() - a.date.getTime())[0];
     if (dernier && valeurs.stockAvant > dernier.valeur + margeStockL) {
       avertissements.push({
+        code: 'STOCK_AVANT_HAUSSE',
         champ: 'stockAvantLitres',
         message: `Stock avant dépotage (${fmtNum(valeurs.stockAvant)} L) supérieur au dernier niveau connu (${fmtNum(dernier.valeur)} L le ${fmtDate(dernier.date)}) - sans dépotage entre-temps, le niveau ne peut qu'avoir baissé.`,
+        valeurSaisie: valeurs.stockAvant,
+        valeurAttendue: `≤ ${fmtNum(dernier.valeur + margeStockL)} L`,
       });
     }
   }
@@ -252,6 +315,49 @@ export async function contexteSaisieSite(siteId: string, groupeIds: string[]) {
 }
 
 /** Ligne de traçabilité ajoutée aux observations quand le technicien confirme malgré avertissements. */
+/**
+ * ENREGISTRE les anomalies détectées, pour qu'elles existent ailleurs que dans
+ * une phrase d'observations.
+ *
+ * Écriture « au mieux » : une anomalie non enregistrée ne doit jamais faire
+ * échouer la clôture ou le dépotage qui, eux, portent le travail du terrain.
+ */
+export async function enregistrerAnomalies(
+  avertissements: AvertissementSaisie[],
+  contexte: {
+    source: 'MAINTENANCE' | 'DEPOTAGE' | 'RELEVE';
+    siteId: string;
+    maintenanceId?: string | null;
+    depotageId?: string | null;
+    releveId?: string | null;
+    technicienId?: string | null;
+    /** Le technicien a vu l'avertissement et confirmé sa saisie. */
+    confirmee: boolean;
+  },
+): Promise<void> {
+  if (!avertissements.length) return;
+  try {
+    await prisma.anomalieSaisie.createMany({
+      data: avertissements.map((a) => ({
+        code: a.code,
+        champ: a.champ,
+        message: a.message,
+        valeurSaisie: a.valeurSaisie ?? null,
+        valeurAttendue: a.valeurAttendue ?? null,
+        source: contexte.source,
+        siteId: contexte.siteId,
+        maintenanceId: contexte.maintenanceId ?? null,
+        depotageId: contexte.depotageId ?? null,
+        releveId: contexte.releveId ?? null,
+        technicienId: contexte.technicienId ?? null,
+        confirmee: contexte.confirmee,
+      })),
+    });
+  } catch (e) {
+    logger.warn('[vraisemblance] anomalies non enregistrées :', e);
+  }
+}
+
 export function traceConfirmation(avertissements: AvertissementSaisie[]): string {
   return [
     '⚠ Valeurs inhabituelles confirmées par le technicien :',

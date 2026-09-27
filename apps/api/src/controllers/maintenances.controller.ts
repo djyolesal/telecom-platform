@@ -58,7 +58,7 @@ import { idempotencyKey, memeAuteur } from '../utils/idempotency';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
 import { rapprocherPieces, PieceSaisie } from '../services/piecesRef.service';
-import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite } from '../services/vraisemblance.service';
+import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite, enregistrerAnomalies } from '../services/vraisemblance.service';
 import { TASK_BY_KEY } from '../utils/tachesPreventives';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
@@ -1258,6 +1258,15 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       // Confirmation malgré avertissements de vraisemblance → tracée et visible (fiche + PDF).
       avertissements.length && confirmeVraisemblance ? traceConfirmation(avertissements) : '',
     ].filter(Boolean).join('\n') || undefined;
+
+    // Les anomalies confirmées deviennent des DONNÉES : la phrase ajoutée aux
+    // observations reste lisible sur la fiche, mais elle ne se compte pas.
+    if (avertissements.length && confirmeVraisemblance) {
+      await enregistrerAnomalies(avertissements, {
+        source: 'MAINTENANCE', siteId: existing.siteId, maintenanceId: existing.id,
+        technicienId: existing.technicienId ?? req.user!.id, confirmee: true,
+      });
+    }
 
     // Pièces assainies + rapprochées AVANT d'ouvrir la transaction : la lecture
     // du catalogue n'a rien à faire sous le verrou consultatif du site.

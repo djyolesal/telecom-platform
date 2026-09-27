@@ -216,6 +216,7 @@ model Site {
   mouvementsCarburant    MouvementCarburant[] @relation("MouvementsSite")
   mouvementsContrepartie MouvementCarburant[] @relation("MouvementsContrepartie")
   releves                ReleveEnergie[]
+  anomaliesSaisie        AnomalieSaisie[]
   incidents              Incident[]
   groupes                GroupeElectrogene[]
   baremage               BaremageCuve[]
@@ -1220,4 +1221,39 @@ model RapportMensuel {
   @@unique([mois, lotId, prestataireId, contrat])
   @@index([mois])
   @@map("rapports_mensuels")
+}
+
+/// Résultat d'un contrôle de vraisemblance, enregistré comme DONNÉE : une
+/// phrase dans les observations ne se compte pas, ne se filtre pas et ne se
+/// compare pas d'un mois sur l'autre.
+model AnomalieSaisie {
+  id              String    @id @default(uuid())
+  code            String    @db.VarChar(40)
+  champ           String    @db.VarChar(40)
+  message         String
+  valeurSaisie    Decimal?  @map("valeur_saisie") @db.Decimal(12, 2)
+  valeurAttendue  String?   @map("valeur_attendue") @db.VarChar(120)
+  /// MAINTENANCE, DEPOTAGE ou RELEVE : d'où vient la saisie contrôlée.
+  source          String    @db.VarChar(20)
+  siteId          String    @map("site_id")
+  maintenanceId   String?   @map("maintenance_id")
+  depotageId      String?   @map("depotage_id")
+  releveId        String?   @map("releve_id")
+  technicienId    String?   @map("technicien_id")
+  /// Le technicien a vu l'avertissement et confirmé. Faux si le contrôle a eu
+  /// lieu après coup : personne n'a rien confirmé, l'anomalie reste réelle.
+  confirmee       Boolean   @default(false)
+  statut          String    @default("A_VERIFIER") @db.VarChar(12)
+  traiteePar      String?   @map("traitee_par")
+  traiteeLe       DateTime? @map("traitee_le")
+  motifTraitement String?   @map("motif_traitement")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([siteId])
+  @@index([code])
+  @@index([statut])
+  @@map("anomalies_saisie")
 }

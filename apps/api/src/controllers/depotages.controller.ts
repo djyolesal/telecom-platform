@@ -22,7 +22,7 @@ import { expectedGasoilGE, analyseGasoilCoherence, analyseLivraison } from '../u
 import { genererReference } from '../services/reference.service';
 import { getNum } from '../services/settings.service';
 import { publicFileUrl, getObjectBuffer } from '../services/storage.service';
-import { verifierDepotage, traceConfirmation } from '../services/vraisemblance.service';
+import { verifierDepotage, traceConfirmation, enregistrerAnomalies } from '../services/vraisemblance.service';
 import { generateDepotagePdf } from '../services/pdf.service';
 import { logger } from '../utils/logger';
 import { io } from '../server';
@@ -443,6 +443,7 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
       });
       if (recent) {
         avertissements.push({
+          code: 'DEPOTAGE_DOUBLON',
           champ: 'volumeLitres',
           message: `Un dépotage de ${Math.round(Number(recent.volumeLitres))} L (${recent.reference ?? 'sans référence'}) a déjà été enregistré sur ce site à ${recent.createdAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lome' })}${recent.technicien ? ` par ${[recent.technicien.prenom, recent.technicien.nom].filter(Boolean).join(' ')}` : ''}. Vérifiez qu'il ne s'agit pas d'un double enregistrement de la même livraison.`,
         });
@@ -565,6 +566,14 @@ export async function createDepotage(req: Request, res: Response, next: NextFunc
     // renvoyer 500 (sinon la sync mobile rejouerait et créerait un doublon).
     clearMemo(); // toujours : nouvelles données → invalide manquants/forecast (avant la sync, pour ne pas le sauter en cas d'échec)
     try {
+      // Anomalies confirmées : enregistrées APRÈS le commit, comme l'audit - un
+      // échec ici ne doit pas renvoyer 500 sur un dépotage déjà créé.
+      if (avertissements.length && confirmeVraisemblance) {
+        await enregistrerAnomalies(avertissements, {
+          source: 'DEPOTAGE', siteId: depotage.siteId, depotageId: depotage.id,
+          technicienId: depotage.technicienId ?? req.user!.id, confirmee: true,
+        });
+      }
       await auditLog(req.user!.id, 'CREATE', 'depotages', depotage.id, req.body, req);
       const firstPhotoKey = photosIn.find((p) => p && p.key)?.key;
       io.of('/supervision').emit('stock:updated', {

@@ -9,6 +9,7 @@ import { paginate } from '../utils/paginator';
 import { triListe } from '../utils/triListe';
 import { configCuveDuSite, litresPourHauteur } from '../services/cuve.service';
 import { auditLog } from '../services/audit.service';
+import { verifierClotureEnergie, enregistrerAnomalies, AvertissementSaisie } from '../services/vraisemblance.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 
@@ -172,8 +173,41 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
         coutEstime,
       },
     });
-    await auditLog(req.user!.id, 'CREATE', 'releves', releve.id, { siteId: b.siteId, source: b.source }, req);
-    res.status(201).json({ success: true, data: releve });
+    // ── CONTRÔLE DE VRAISEMBLANCE, jusqu'ici absent de cette porte d'entrée.
+    //    Les clôtures de maintenance et les dépotages étaient vérifiés ; un
+    //    index aberrant saisi ICI - portail ou mobile, hors intervention -
+    //    passait sans un mot, et devenait la référence du site.
+    //
+    //    On n'exige PAS de confirmation : contrairement à une clôture, il n'y a
+    //    pas de formulaire à reprendre, et refuser le relevé perdrait la
+    //    mesure. On l'enregistre, on signale l'anomalie, et l'appelant la voit
+    //    dans la réponse.
+    const site = await prisma.site.findUnique({
+      where: { id: String(b.siteId) },
+      select: { id: true, cuveVolumeLitres: true, groupes: { select: { id: true, numero: true } } },
+    });
+    let avertissements: AvertissementSaisie[] = [];
+    if (site) {
+      avertissements = await verifierClotureEnergie(
+        site,
+        {
+          volumeGasoilLitres: volumeGasoil,
+          indexCompteur: bounded(b.indexCompteur, 1e8),
+          indexHeuresGE: bounded(b.indexHeuresGE, 1e9),
+          ...(b.groupeId ? { geHours: { [String(b.groupeId)]: bounded(b.indexHeuresGE, 1e9) } } : {}),
+        },
+        [String(b.source)],
+        { releveId: releve.id },   // on ne se compare pas à soi-même
+      );
+      await enregistrerAnomalies(avertissements, {
+        source: 'RELEVE', siteId: site.id, releveId: releve.id,
+        technicienId: req.user!.id, confirmee: false,
+      });
+    }
+
+    await auditLog(req.user!.id, 'CREATE', 'releves', releve.id,
+      { siteId: b.siteId, source: b.source, ...(avertissements.length ? { anomalies: avertissements.map((a) => a.code) } : {}) }, req);
+    res.status(201).json({ success: true, data: releve, ...(avertissements.length ? { avertissements } : {}) });
   } catch (err) { next(err); }
 }
 
