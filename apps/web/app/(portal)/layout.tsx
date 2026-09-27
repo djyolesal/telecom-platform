@@ -63,6 +63,9 @@ const NAV_ITEMS = [
   { groupe: 'supervision', href: '/supervision/incidents', label: 'Incidents live',  icon: Activity, roles: ['SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { groupe: 'supervision', href: '/supervision/coupures',  label: 'Coupures réseau', icon: WifiOff,  roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
   { groupe: 'supervision', href: '/supervision/topologie', label: 'Topologie',       icon: Network,  roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC'] },
+  // Contrôles de vraisemblance : réservé aux équipes internes (le serveur
+  // refuse déjà la route à un compte prestataire).
+  { groupe: 'supervision', href: '/supervision/anomalies', label: 'Anomalies de saisie', icon: AlertTriangle, roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   // Entrée directe pour le NOC (les autres rôles y accèdent via la page Rapports :
   // `menu` restreint l'affichage dans la barre, `roles` reste la liste d'accès).
   { groupe: 'supervision', href: '/rapports/disponibilite-reseau', label: 'Dispo réseau', icon: BarChart3, roles: ['NOC','SUPERVISEUR','MANAGER','ADMIN','DIRECTION'], menu: ['NOC'] },

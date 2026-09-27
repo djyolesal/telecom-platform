@@ -15,6 +15,7 @@ import * as sitesCtrl from '../controllers/sites.controller';
 import * as contactsCtrl from '../controllers/contacts.controller';
 import * as maintenanceCtrl from '../controllers/maintenances.controller';
 import * as rapportsMensuelsCtrl from '../controllers/rapportsMensuels.controller';
+import * as anomaliesCtrl from '../controllers/anomalies.controller';
 import * as actifsCtrl from '../controllers/actifs.controller';
 import * as depotagesCtrl from '../controllers/depotages.controller';
 import * as relevesCtrl from '../controllers/releves.controller';
@@ -162,6 +163,7 @@ const INTERNE_ONLY: RegExp[] = [
   // reçoit le document signé par ses donneurs d'ordre. La route est par
   // ailleurs réservée à ADMIN ; cette ligne reste le filet qui tiendra si ce
   // rbac s'élargit un jour.
+  /^\/anomalies-saisie(\/|$)/,
   /^\/maintenances\/export\/rapports\.pdf$/,
   /^\/maintenances\/export\/rapports\/envoyer$/,
   /^\/rapports\/reapprovisionnement$/,
@@ -332,6 +334,13 @@ router.get('/maintenances/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGE
 // Recueil PDF : un rapport d'intervention COMPLET par ligne, sur une période
 // et un périmètre choisis, précédé d'une synthèse (curatif, incidents, pièces).
 router.get('/maintenances/export/rapports.pdf', rbac(['ADMIN']), maintenanceCtrl.exportRapportsMaintenances);
+
+// ── Anomalies de saisie (contrôles de vraisemblance) ──────────
+// Lecture et traitement réservés aux équipes INTERNES : c'est un contrôle
+// exercé SUR les saisies du terrain, pas un écran de travail du prestataire.
+router.get('/anomalies-saisie', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), anomaliesCtrl.listerAnomalies);
+router.get('/anomalies-saisie/stats', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), anomaliesCtrl.statsAnomalies);
+router.patch('/anomalies-saisie/:id', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN']), anomaliesCtrl.traiterAnomalie);
 
 // ── Rapports mensuels PUBLIÉS ─────────────────────────────────
 // La lecture est ouverte aux superviseurs, y compris ceux d'un prestataire :
