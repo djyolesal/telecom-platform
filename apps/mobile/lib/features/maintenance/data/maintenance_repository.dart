@@ -245,6 +245,9 @@ class MaintenanceRepository {
     // Identité vérifiée par l'appareil (empreinte, visage ou code) juste avant
     // de clôturer, ou verrou d'écran indisponible sur ce téléphone.
     bool verificationLocale = false,
+    // 'BIOMETRIE', 'CODE' ou 'AUCUN' : le serveur distingue une empreinte d'un
+    // code d'écran, qui se prête aussi bien que le téléphone.
+    String verificationFacteur = 'AUCUN',
     bool verificationIndisponible = false,
   }) async {
     final attachments = <Map<String, String>>[
@@ -276,6 +279,7 @@ class MaintenanceRepository {
         if (pieces.isNotEmpty) 'pieces': pieces,
         if (confirmerVraisemblance) 'confirmerVraisemblance': true,
         'verificationLocale': verificationLocale,
+        'verificationFacteur': verificationFacteur,
         if (verificationIndisponible) 'verificationIndisponible': true,
         // Position au moment de la clôture (vérification "sur site" côté serveur).
         if (latitude != null) 'latitude': latitude,

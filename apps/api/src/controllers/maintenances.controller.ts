@@ -1003,13 +1003,14 @@ export async function retablirMaintenance(req: Request, res: Response, next: Nex
 /** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), photos (préventive), PDF. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { observations, pieces, signaturePath, energie, photos, latitude, longitude, agentPresent, nomAgentSecurite, signatureAgentSecuritePath, verificationLocale, verificationIndisponible } = req.body as {
+    const { observations, pieces, signaturePath, energie, photos, latitude, longitude, agentPresent, nomAgentSecurite, signatureAgentSecuritePath, verificationLocale, verificationIndisponible, verificationFacteur } = req.body as {
       observations?: string;
       agentPresent?: boolean;
       nomAgentSecurite?: string;
       signatureAgentSecuritePath?: string;
       verificationLocale?: boolean;
       verificationIndisponible?: boolean;
+      verificationFacteur?: string;
       pieces?: Record<string, unknown>[];
       signaturePath?: string;
       energie?: Record<string, unknown>;
@@ -1087,6 +1088,9 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // alors une clôture non vérifiée plutôt que d'enfermer un technicien
     // dehors. Le réglage permet de lever l'exigence sans redéploiement.
     const verifLocale = verificationLocale === true;
+    const facteur = ['BIOMETRIE', 'CODE', 'AUCUN'].includes(String(verificationFacteur))
+      ? String(verificationFacteur)
+      : (verifLocale ? 'CODE' : 'AUCUN');   // APK qui ne déclare pas : on ne présume pas la biométrie
     if (
       getNum('maintenance.verificationLocaleCloture', 1) === 1
       && appSaitVerifierLocalement(req)
@@ -1095,6 +1099,20 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     ) {
       throw new AppError(
         "Vérifiez votre identité (empreinte, visage ou code) avant de clôturer l'intervention.",
+        403,
+      );
+    }
+    // MODE STRICT : le code d'écran se prête aussi bien que le téléphone,
+    // l'empreinte non. Tant qu'il est à 0, le code reste accepté mais
+    // ENREGISTRÉ comme tel - de quoi mesurer sa fréquence avant de durcir.
+    if (
+      getNum('maintenance.biometrieStricteCloture', 0) === 1
+      && appSaitVerifierLocalement(req)
+      && facteur !== 'BIOMETRIE'
+    ) {
+      throw new AppError(
+        "Cette clôture exige une empreinte ou une reconnaissance faciale : le code de l'appareil ne suffit pas. "
+        + 'Enregistrez votre empreinte dans les réglages du téléphone.',
         403,
       );
     }
@@ -1270,6 +1288,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       // été fait est déjà en couverture, dans les tâches dues non réalisées.
       statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath,
             verifieeLocalement: verifLocale,
+            verificationFacteur: facteur,
             ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}),
             ...(nomAgentSecurite ? { nomAgentSecurite: String(nomAgentSecurite).slice(0, 100) } : {}),
             ...(signatureAgentSecuritePath ? { signatureAgentSecuritePath: String(signatureAgentSecuritePath) } : {}),

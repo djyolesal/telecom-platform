@@ -115,6 +115,37 @@ class AuthRepository {
   Future<bool> get biometricEnabled => _storage.biometricEnabled;
   Future<void> setBiometricEnabled(bool v) => _storage.setBiometricEnabled(v);
 
+  /// Vérifie l'identité pour un acte ENGAGEANT (clôture d'intervention) et dit
+  /// PAR QUEL facteur.
+  ///
+  /// L'empreinte ou le visage d'abord (`biometricOnly: true`) : le code de
+  /// l'appareil se prête aussi facilement que le téléphone, une empreinte non.
+  /// S'il n'y en a aucune d'enregistrée - téléphone d'entrée de gamme, capteur
+  /// hors service - on retombe sur le code plutôt que d'empêcher de
+  /// travailler, mais le serveur enregistre que c'était le code.
+  ///
+  /// Renvoie 'BIOMETRIE', 'CODE' ou null si la vérification a échoué.
+  Future<String?> verifierIdentite() async {
+    try {
+      final biometrie = await _localAuth.authenticate(
+        localizedReason: 'Vérifiez votre identité pour clôturer l\'intervention',
+        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true),
+      );
+      if (biometrie) return 'BIOMETRIE';
+    } catch (_) {
+      // Aucune biométrie enregistrée sur cet appareil : on tente le code.
+    }
+    try {
+      final code = await _localAuth.authenticate(
+        localizedReason: 'Vérifiez votre identité pour clôturer l\'intervention',
+        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: false),
+      );
+      return code ? 'CODE' : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Demande l'authentification biométrique de l'utilisateur.
   /// `biometricOnly: false` : si l'empreinte échoue (doigts mouillés, capteur),
   /// Android propose le code/schéma de l'appareil en repli. Sans ce repli, un

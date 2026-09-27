@@ -291,10 +291,10 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       // verrou, on le déclare au serveur, qui enregistre une clôture non
       // vérifiée plutôt que de bloquer le technicien.
       final verrouDisponible = await auth.verrouDisponible;
-      var verifie = false;
+      String? facteur;
       if (verrouDisponible) {
-        verifie = await auth.verifierIdentite();
-        if (!verifie) {
+        facteur = await auth.verifierIdentite();
+        if (facteur == null) {
           if (mounted) {
             _snack('Identité non vérifiée : la clôture est annulée.');
             setState(() => _busy = false);
@@ -305,7 +305,8 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
       Future<SubmitResult> envoyer(bool confirmer) => repo.close(
             widget.id,
-            verificationLocale: verifie,
+            verificationLocale: facteur != null,
+            verificationFacteur: facteur ?? 'AUCUN',
             verificationIndisponible: !verrouDisponible,
             agentPresent: result['agentPresent'] as bool,
             observations: result['observations'] as String?,
