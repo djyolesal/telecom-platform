@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { FileText, Fuel, Zap, Wrench, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock, FileSpreadsheet , ShieldCheck, Shield, Leaf, WifiOff, Download } from 'lucide-react';
+import { FileText, Fuel, Zap, AlertTriangle, CalendarRange, ClipboardCheck, CalendarClock, FileSpreadsheet , ShieldCheck, Shield, Leaf, WifiOff, Download } from 'lucide-react';
 
 // `internesSeulement` = bloqué serveur pour les comptes prestataires (liste
 // INTERNE_ONLY de l'API) : la carte ne doit pas s'afficher pour eux.
@@ -27,7 +27,6 @@ const RAPPORTS: Array<{
   { href: '/rapports/empreinte-carbone', icon: Leaf, title: 'Empreinte carbone', desc: 'Émissions de CO₂ (gasoil GE, réseau CEET) et émissions évitées par le solaire, par mois, région et site.', internesSeulement: true },
   { href: '/rapports/arcep', icon: ShieldCheck, title: 'Conformité ARCEP (DR1/DR2)', desc: 'Seuils réglementaires : indisponibilités ≥ 1 h par mois (DR1) et durée par jour (DR2), station par station.' },
   { href: '/rapports/disponibilite-reseau', icon: WifiOff, title: 'Disponibilité réseau', desc: 'Coupures radio (NOC) : downtime par site, coupures en cours, part imputable à l\u2019énergie.' },
-  { href: '/maintenance', icon: Wrench, title: 'Maintenances', desc: 'Suivi des interventions préventives et curatives.' },
   { href: '/incidents/kpis', icon: AlertTriangle, title: 'KPIs incidents', desc: 'MTTR, MTTI et taux de résolution.' },
 ];
 
