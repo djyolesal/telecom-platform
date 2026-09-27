@@ -39,7 +39,11 @@ const NAV_ITEMS = [
   { groupe: 'terrain', href: '/energie/bilan', label: 'Bilan énergie', icon: Zap,           roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
 
   // ── Carburant : stock, appro et flotte ──
-  { groupe: 'carburant', href: '/carburant/stock',      label: 'Stock carburant',  icon: Fuel,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
+  // DIRECTION ajoutée : elle lisait le stock par la carte du hub Rapports, qui
+  // n'a pas à héberger un écran d'exploitation - mais retirer la carte sans
+  // ouvrir le menu l'aurait privée d'un accès qu'elle avait (l'API le lui
+  // accorde déjà : rbac de /rapports/stock-carburant).
+  { groupe: 'carburant', href: '/carburant/stock',      label: 'Stock carburant',  icon: Fuel,           roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   // Bilan sur période libre : stock aux bornes + conso par conservation.
   { groupe: 'carburant', href: '/carburant/bilan',      label: 'Bilan conso & stock', icon: BarChart3,   roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { groupe: 'carburant', href: '/carburant/commandes',  label: 'Appro. carburant', icon: Truck,          roles: ['TRANSPORTEUR','MANAGER','ADMIN'] },
