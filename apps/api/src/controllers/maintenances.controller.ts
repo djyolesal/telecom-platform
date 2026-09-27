@@ -43,7 +43,7 @@ import {
   generateMaintenancesRecueilPdf, MaintenancePdfData, RecueilSynthese,
   PageSiteRapport, nombreFr,
 } from '../services/pdf.service';
-import { uploadBuffer, publicFileUrl, getObjectBuffer } from '../services/storage.service';
+import { uploadBuffer, publicFileUrl, getObjectBuffer, signerCle } from '../services/storage.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
@@ -2163,6 +2163,24 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
       format: 'pdf', contrat: contrat === 'SOLAIRE' ? 'SOLAIRE' : 'PASSIF',
     });
 
+    // ── PIÈCE JOINTE OU LIEN. Un rapport de quarante sites avec photos pèse
+    //    une dizaine de mégaoctets ; encodé pour l'e-mail, il en fait treize et
+    //    la plupart des relais le refusent - parfois APRÈS avoir accepté la
+    //    connexion, si bien que rien n'arrive et que personne n'est prévenu.
+    //    Au-delà du seuil, le rapport part donc en LIEN signé et la fiche, qui
+    //    est légère, reste en pièce jointe.
+    //
+    //    Le lien vaut 6 jours : le ménage nocturne efface les objets non
+    //    référencés au bout de 7, l'un ne survit donc jamais à l'autre.
+    const seuilMo = Math.max(1, getNum('rapport.tailleMaxPieceJointeMo', 5));
+    const parLien = rapport.pdf.length > seuilMo * 1024 * 1024;
+    let lienRapport: string | null = null;
+    if (parLien) {
+      const stocke = await uploadBuffer(rapport.pdf, rapport.nomFichier, 'application/pdf', 'rapports');
+      lienRapport = `${env.APP_URL}/api/v1/files/${stocke.key.split('/').map(encodeURIComponent).join('/')}?t=${signerCle(stocke.key, 6 * 24 * 3600)}`;
+    }
+    const tailleMo = (o: number) => (o / (1024 * 1024)).toFixed(1).replace('.', ',');
+
     const client = process.env.CLIENT_NOM || 'Moov Africa Togo';
     const sujet = `${client} - Rapport d'activité ${rapport.periode} - ${rapport.prestataire}`;
     const corps = `
@@ -2176,8 +2194,13 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
         ${rapport.nb} intervention(s) terminée(s) sur la période. Deux pièces jointes :
       </p>
       <ul style="margin:0 0 12px;padding-left:18px;font-size:13px;color:#333;">
-        <li><b>Rapport d'activité</b> : le détail des interventions, une page chacune.</li>
-        <li><b>Fiche de validation</b> : les travaux contractuels du mois, à signer.</li>
+        <li><b>Rapport d'activité</b> : une page par site - tâches du mois, relevés, photos.
+        ${parLien
+          ? `Trop volumineux pour une pièce jointe (${tailleMo(rapport.pdf.length)} Mo) : `
+            + `<a href="${lienRapport}" style="color:#1B3F6B;font-weight:700;">télécharger le rapport</a> `
+            + '(lien valable 6 jours).'
+          : 'En pièce jointe.'}</li>
+        <li><b>Fiche de validation</b> : les travaux contractuels du mois, à signer. En pièce jointe.</li>
       </ul>
       ${message ? `<p style="margin:0 0 12px;font-size:13px;white-space:pre-line;">${String(message).slice(0, 1000).replace(/</g, '&lt;')}</p>` : ''}
       <p style="margin:12px 0 0;font-size:11px;color:#8a94a0;">Envoyé depuis E&amp;M OpS.</p>
@@ -2189,7 +2212,7 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
       subject: sujet,
       html: corps,
       attachments: [
-        { filename: rapport.nomFichier, content: rapport.pdf, contentType: 'application/pdf' },
+        ...(parLien ? [] : [{ filename: rapport.nomFichier, content: rapport.pdf, contentType: 'application/pdf' }]),
         { filename: fiche.nomFichier, content: fiche.buffer, contentType: 'application/pdf' },
       ],
     });
@@ -2212,6 +2235,7 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
         // Ce que la messagerie a réellement accepté : c'est cette trace qui
         // permet de trancher « pas reçu » entre le relais et le destinataire.
         acceptes: envoi.acceptes, refuses: envoi.refuses, reponseSmtp: envoi.reponse,
+        rapportParLien: parLien,
         tailles: { rapport: rapport.pdf.length, fiche: fiche.buffer.length } }, req);
 
     res.json({
@@ -2223,9 +2247,11 @@ export async function envoyerRapportActivite(req: Request, res: Response, next: 
         acceptes: envoi.acceptes,
         refuses: envoi.refuses,
         reference: rapport.reference,
+        // `lien: true` = envoyé par lien plutôt qu'en pièce jointe : l'écran
+        // doit le dire, sinon l'expéditeur croit avoir joint le document.
         pieces: [
-          { nom: rapport.nomFichier, octets: rapport.pdf.length },
-          { nom: fiche.nomFichier, octets: fiche.buffer.length },
+          { nom: rapport.nomFichier, octets: rapport.pdf.length, lien: parLien },
+          { nom: fiche.nomFichier, octets: fiche.buffer.length, lien: false },
         ],
       },
     });

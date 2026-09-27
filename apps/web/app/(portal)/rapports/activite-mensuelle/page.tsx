@@ -100,14 +100,20 @@ export default function RapportActiviteMensuelPage() {
         ...(contrat === 'SOLAIRE' ? { contrat: 'SOLAIRE' } : {}),
         destinataires: liste, message: messageMail || undefined,
       }, { timeout: 180_000 });
-      const pieces = (r.data.data.pieces ?? []) as Array<{ nom: string; octets: number }>;
-      const poids = pieces.reduce((t, p) => t + p.octets, 0);
+      const pieces = (r.data.data.pieces ?? []) as Array<{ nom: string; octets: number; lien?: boolean }>;
+      const jointes = pieces.filter((p) => !p.lien);
+      const parLien = pieces.filter((p) => p.lien);
+      const poids = jointes.reduce((t, p) => t + p.octets, 0);
       // On annonce les destinataires ACCEPTÉS par la messagerie, pas ceux
       // qu'on a demandés : un refus du relais doit se voir tout de suite.
       const acceptes = (r.data.data.acceptes ?? liste) as string[];
       const refuses = (r.data.data.refuses ?? []) as string[];
       setEnvoye(
-        `Accepté par la messagerie pour ${acceptes.length} destinataire(s) · ${pieces.length} pièces jointes (${Math.round(poids / 1024)} Ko)`
+        `Accepté par la messagerie pour ${acceptes.length} destinataire(s) · `
+        + `${jointes.length} pièce(s) jointe(s) (${Math.round(poids / 1024)} Ko)`
+        + (parLien.length
+          ? ` · le rapport (${(parLien[0].octets / 1048576).toFixed(1).replace('.', ',')} Mo) part en lien de téléchargement, valable 6 jours`
+          : '')
         + (refuses.length ? ` · REFUSÉS : ${refuses.join(', ')}` : '')
       );
       setOuvertEnvoi(false);
