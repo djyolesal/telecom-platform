@@ -13,16 +13,16 @@ import { toast, errorMessage } from './toast';
  *   lot entier : photos téléchargées, rééchantillonnées puis mises en page).
  *   Le défaut de 30 s du client fait échouer l'export alors que le serveur
  *   travaille encore, et l'utilisateur lit « Le serveur met trop de temps ».
+ *
+ * Le nom vient de l'APPELANT : c'est l'écran qui connaît son titre et ses
+ * filtres (« Rapport de supervision du 1er au 31/08 »), pas l'API. Les deux
+ * documents contractuels font exception et passent par
+ * `downloadFileNommeParServeur`.
  */
 export async function downloadFile(path: string, filename: string, openInNewTab = false, timeoutMs?: number): Promise<void> {
   try {
     const res = await api.get(path, { responseType: 'blob', ...(timeoutMs ? { timeout: timeoutMs } : {}) });
     const contentType = (res.headers['content-type'] as string) || 'application/octet-stream';
-    // Le serveur nomme le document (prestataire, lot, période) : on suit son
-    // nom quand il en donne un, plutôt que d'en recalculer un second ici.
-    const dispo = (res.headers['content-disposition'] as string) || '';
-    const nomServeur = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(dispo)?.[1];
-    if (nomServeur) filename = decodeURIComponent(nomServeur);
     const blob = new Blob([res.data], { type: contentType });
     const url = window.URL.createObjectURL(blob);
 
@@ -41,13 +41,49 @@ export async function downloadFile(path: string, filename: string, openInNewTab 
     a.remove();
     window.URL.revokeObjectURL(url);
   } catch (err) {
-    // Un export/PDF qui échoue (403, 500, timeout) ne doit plus être silencieux :
-    // la réponse blob masque le message, on le récupère du corps d'erreur.
-    let message = errorMessage(err, 'Échec du téléchargement');
-    const data = (err as { response?: { data?: unknown } }).response?.data;
-    if (data instanceof Blob && data.type.includes('json')) {
-      try { message = JSON.parse(await data.text())?.error ?? message; } catch { /* garde le défaut */ }
-    }
-    toast(message, 'error');
+    toast(await messageErreur(err), 'error');
   }
+}
+
+/**
+ * Téléchargement dont le nom est décidé PAR LE SERVEUR (`Content-Disposition`).
+ *
+ * Réservé aux documents dont l'identité est contractuelle - rapport mensuel
+ * d'activité et fiche de validation, nommés par prestataire, lot et période :
+ * le portail ne connaît pas toujours le code du lot, et deux constructions du
+ * même nom finiraient par diverger. `filename` sert de repli si l'en-tête
+ * n'est pas lisible.
+ */
+export async function downloadFileNommeParServeur(
+  path: string, filename: string, timeoutMs?: number,
+): Promise<void> {
+  try {
+    const res = await api.get(path, { responseType: 'blob', ...(timeoutMs ? { timeout: timeoutMs } : {}) });
+    const dispo = (res.headers['content-disposition'] as string) || '';
+    const nomServeur = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(dispo)?.[1];
+    const blob = new Blob([res.data], { type: (res.headers['content-type'] as string) || 'application/octet-stream' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomServeur ? decodeURIComponent(nomServeur) : filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    toast(await messageErreur(err), 'error');
+  }
+}
+
+/**
+ * Un export qui échoue (403, 500, timeout) ne doit pas être silencieux : la
+ * réponse blob masque le message du serveur, on le récupère dans le corps.
+ */
+async function messageErreur(err: unknown): Promise<string> {
+  let message = errorMessage(err, 'Échec du téléchargement');
+  const data = (err as { response?: { data?: unknown } }).response?.data;
+  if (data instanceof Blob && data.type.includes('json')) {
+    try { message = JSON.parse(await data.text())?.error ?? message; } catch { /* garde le défaut */ }
+  }
+  return message;
 }

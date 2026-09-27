@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Download, CalendarDays, Camera, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
-import { downloadFile } from '@/lib/download';
+import { downloadFile, downloadFileNommeParServeur } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -206,7 +206,7 @@ function RecueilPdfBouton(
     const q = new URLSearchParams({ mois, lot_id: lotId, prestataire_id: presta });
     if (type) q.set('type', type);
     try {
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${mois}.pdf`, false, 180_000);
+      await downloadFileNommeParServeur(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite-${mois}.pdf`, 180_000);
       setOuvert(false);
     } catch (e) {
       // Le refus du serveur (période trop large, aucune intervention) porte le

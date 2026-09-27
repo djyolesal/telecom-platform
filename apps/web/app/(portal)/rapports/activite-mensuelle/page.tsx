@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Mail, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { downloadFile } from '@/lib/download';
+import { downloadFile, downloadFileNommeParServeur } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select, Textarea } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
@@ -124,7 +124,7 @@ export default function RapportActiviteMensuelPage() {
     try {
       // 3 minutes : un lot de quarante sites demande le téléchargement et le
       // rééchantillonnage de centaines de photos à la première édition.
-      await downloadFile(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite${contrat === 'SOLAIRE' ? '-solaire' : ''}-${annee}-${mois}.pdf`, false, 180_000);   // le serveur renomme : prestataire, lot, période
+      await downloadFileNommeParServeur(`/maintenances/export/rapports.pdf?${q}`, `rapport-activite${contrat === 'SOLAIRE' ? '-solaire' : ''}-${annee}-${mois}.pdf`, 180_000);   // le serveur renomme : prestataire, lot, période
     } catch (e) {
       // Le serveur porte le message utile (période trop large, aucune
       // intervention) : l'afficher tel quel plutôt qu'un « échec » générique.

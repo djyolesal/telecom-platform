@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileSpreadsheet, FileText, Archive } from 'lucide-react';
 import { api } from '@/lib/api';
-import { downloadFile } from '@/lib/download';
+import { downloadFile, downloadFileNommeParServeur } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FormCard, Field, Input, Select } from '@/components/shared/Form';
 import { Button } from '@/components/shared/Button';
@@ -67,7 +67,7 @@ export default function FicheValidationPage() {
       const suffixe = contrat === 'SOLAIRE' ? '-solaire' : '';
       // Le nom final vient du serveur (prestataire, lot, période) ; celui-ci
       // n'est qu'un repli si l'en-tête n'est pas lisible.
-      await downloadFile(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}${contratPart}&format=${format}`, `fiche-validation${suffixe}-${nom}-${annee}-${mois}.${format}`);
+      await downloadFileNommeParServeur(`/rapports/fiche-validation?prestataire_id=${prestataireId}&annee=${annee}&mois=${mois}${lotPart}${contratPart}&format=${format}`, `fiche-validation${suffixe}-${nom}-${annee}-${mois}.${format}`);
     } catch {
       setError('Échec du téléchargement. Vérifiez le prestataire et la période.');
     } finally {
