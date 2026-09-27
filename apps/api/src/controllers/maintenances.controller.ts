@@ -341,6 +341,22 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
 }
 
 /**
+ * L'APK sait-il vérifier l'identité localement avant de clôturer ?
+ *
+ * Il le dit par `X-App-Version` (« 1.8.0+47 »). Un en-tête absent ou une
+ * version antérieure signifie « non » : on n'exige alors rien de lui. Sans
+ * cette exemption, la règle aurait bloqué net tout le terrain resté sur un
+ * ancien APK, sans qu'il ait le moindre moyen de s'y conformer.
+ */
+const BUILD_VERIF_LOCALE = 47;
+function appSaitVerifierLocalement(req: Request): boolean {
+  const brut = req.headers['x-app-version'];
+  const version = String(Array.isArray(brut) ? brut[0] : brut ?? '');
+  const build = Number(version.split('+')[1]);
+  return Number.isFinite(build) && build >= BUILD_VERIF_LOCALE;
+}
+
+/**
  * Emplacements de signature d'une maintenance (fiche ET PDF). Un emplacement
  * attendu mais vide sort avec url null (« Signature manquante ») — sauf pour
  * une curative AUTO-CRÉÉE à la résolution d'un incident : ses preuves vivent
@@ -987,11 +1003,13 @@ export async function retablirMaintenance(req: Request, res: Response, next: Nex
 /** Clôture une maintenance : durée calculée, pièces ajoutées, relevés énergie (passive), photos (préventive), PDF. */
 export async function closeMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { observations, pieces, signaturePath, energie, photos, latitude, longitude, agentPresent, nomAgentSecurite, signatureAgentSecuritePath } = req.body as {
+    const { observations, pieces, signaturePath, energie, photos, latitude, longitude, agentPresent, nomAgentSecurite, signatureAgentSecuritePath, verificationLocale, verificationIndisponible } = req.body as {
       observations?: string;
       agentPresent?: boolean;
       nomAgentSecurite?: string;
       signatureAgentSecuritePath?: string;
+      verificationLocale?: boolean;
+      verificationIndisponible?: boolean;
       pieces?: Record<string, unknown>[];
       signaturePath?: string;
       energie?: Record<string, unknown>;
@@ -1049,11 +1067,36 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       throw new AppError('La signature du technicien est requise pour clôturer.', 422);
     }
 
-    // Agent de gardiennage PRÉSENT ⇒ il signe (même règle que le dépotage) :
-    // sa déclaration nourrit le rapport gardiennage — sans signature, elle ne
-    // repose que sur la parole du technicien.
+    // Agent de gardiennage PRÉSENT ⇒ il signe ET il se nomme. Une signature
+    // anonyme n'atteste rien : c'est le seul témoin INDÉPENDANT du téléphone
+    // du technicien, encore faut-il pouvoir le retrouver et l'interroger.
     if (agentPresent === true && !signatureAgentSecuritePath) {
       throw new AppError("L'agent est déclaré présent : sa signature est requise.", 422);
+    }
+    if (agentPresent === true && !String(nomAgentSecurite ?? '').trim()) {
+      throw new AppError("L'agent est déclaré présent : son nom est requis.", 422);
+    }
+
+    // VÉRIFICATION LOCALE de l'identité (empreinte, visage ou code de
+    // l'appareil) juste avant de clôturer. Le verrou d'appareil prouve le
+    // téléphone ; ceci prouve que son porteur était là - un téléphone prêté
+    // déverrouillé passait sans laisser de trace.
+    //
+    // Exemptions volontaires : les APK antérieurs (qui ne savent pas le faire)
+    // et les appareils sans verrou d'écran, qui le DÉCLARENT - on enregistre
+    // alors une clôture non vérifiée plutôt que d'enfermer un technicien
+    // dehors. Le réglage permet de lever l'exigence sans redéploiement.
+    const verifLocale = verificationLocale === true;
+    if (
+      getNum('maintenance.verificationLocaleCloture', 1) === 1
+      && appSaitVerifierLocalement(req)
+      && !verifLocale
+      && verificationIndisponible !== true
+    ) {
+      throw new AppError(
+        "Vérifiez votre identité (empreinte, visage ou code) avant de clôturer l'intervention.",
+        403,
+      );
     }
 
     // Maintenance préventive → minimum de photos requis pour clôturer.
@@ -1226,6 +1269,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       // vides et ferait signer un travail qui n'a pas eu lieu. Ce qui n'a pas
       // été fait est déjà en couverture, dans les tâches dues non réalisées.
       statut: 'TERMINEE', dateFin, dureeMinutes, observations: obsFinal, signaturePath,
+            verifieeLocalement: verifLocale,
             ...(typeof agentPresent === 'boolean' ? { agentPresent } : {}),
             ...(nomAgentSecurite ? { nomAgentSecurite: String(nomAgentSecurite).slice(0, 100) } : {}),
             ...(signatureAgentSecuritePath ? { signatureAgentSecuritePath: String(signatureAgentSecuritePath) } : {}),
@@ -1653,6 +1697,7 @@ async function construireRapportActivite(
         id: true, type: true, prestataireId: true, siteId: true, dureeMinutes: true,
         reference: true, dateFin: true, equipement: true, tachePreventiveKey: true,
         invalideeLe: true, motifInvalidation: true,
+        nomAgentSecurite: true, signatureAgentSecuritePath: true,
         technicien: { select: { nom: true, prenom: true } },
         prestataire: { select: { nom: true, logoPath: true } },
         site: { select: { nom: true } },
@@ -1821,6 +1866,7 @@ async function construireRapportActivite(
               technicien: nomTech(trace?.technicien ?? null),
               duree: trace?.dureeMinutes != null ? `${trace.dureeMinutes} min` : '-',
               reference: numero(trace?.reference ?? null),
+              agent: !!trace?.signatureAgentSecuritePath,
             });
           }
         }
@@ -1835,6 +1881,7 @@ async function construireRapportActivite(
             technicien: nomTech(i.technicien),
             duree: i.dureeMinutes != null ? `${i.dureeMinutes} min` : '-',
             reference: numero(i.reference),
+            agent: !!i.signatureAgentSecuritePath,
           });
         }
         if (!taches.length && !interventions.length) continue;   // site sans dû ni activité

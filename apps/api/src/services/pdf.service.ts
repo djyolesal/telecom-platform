@@ -234,6 +234,8 @@ export interface PageSiteRapport {
     technicien: string;
     duree: string;
     reference: string;
+    /** Attestée par l'agent de gardiennage présent sur site. */
+    agent: boolean;
   }>;
   pieces: string[];
   /** Relevés énergie du mois, une ligne par source (GE, CEET, solaire). */
@@ -370,7 +372,7 @@ export function dessinerPageSite(
   };
 
   // ── Tableau des tâches ──
-  const COLS = [196, 62, 58, 92, 42, 45];
+  const COLS = [166, 60, 56, 86, 40, 43, 44];
   // Le titre compte ce qui a été FAIT ce mois-ci : c'est la question que se
   // pose celui qui valide une facture, pas l'état de conformité général.
   const faites = p.taches.filter((t) => t.etat === 'FAITE').length;
@@ -385,7 +387,7 @@ export function dessinerPageSite(
       .text(texte, x + 2, yy, { width: largeur - 4, height: 10, ellipsis: true });
   };
   let x = X;
-  ['Tâche', 'État', 'Date', 'Technicien', 'Durée', 'Réf.'].forEach((t, i) => {
+  ['Tâche', 'État', 'Date', 'Technicien', 'Durée', 'Réf.', 'Agent'].forEach((t, i) => {
     cellule(t, x, y, COLS[i], true, GRIS_PDF);
     x += COLS[i];
   });
@@ -415,7 +417,10 @@ export function dessinerPageSite(
     cellule(t.date || '-', x, y, COLS[2]); x += COLS[2];
     cellule(t.technicien || '-', x, y, COLS[3]); x += COLS[3];
     cellule(t.duree || '-', x, y, COLS[4]); x += COLS[4];
-    cellule(t.reference || '-', x, y, COLS[5]);
+    cellule(t.reference || '-', x, y, COLS[5]); x += COLS[5];
+    // L'agent de gardiennage est le seul témoin INDÉPENDANT du téléphone du
+    // technicien : sa signature vaut plus qu'une preuve technique de plus.
+    cellule(t.agent ? 'Attesté' : '-', x, y, COLS[6], t.agent, t.agent ? ACCENT : GRIS_PDF);
     y += 11;
     doc.moveTo(X, y - 1).lineTo(X + LARGEUR, y - 1).lineWidth(0.25).stroke('#EEF1F5');
   }

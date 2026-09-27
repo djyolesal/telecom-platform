@@ -17,6 +17,7 @@ import '../../../core/widgets/photo_gallery.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
+import '../../auth/presentation/auth_cubit.dart';
 import '../../../core/theme/app_theme.dart';
 
 class MaintenanceDetailScreen extends StatefulWidget {
@@ -219,6 +220,9 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   Future<void> _close(Maintenance m) async {
     final repo = context.read<MaintenanceRepository>();
     final navigator = Navigator.of(context);
+    // Capturé AVANT le premier `await` : le contexte ne doit pas être relu
+    // après une attente (l'écran peut avoir disparu entre-temps).
+    final auth = context.read<AuthCubit>();
 
     // 0. Durée minimale 1h depuis le démarrage.
     final debut = m.dateDebut;
@@ -277,8 +281,32 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
         return;
       }
 
+      // VÉRIFICATION LOCALE, juste avant l'envoi : empreinte, visage ou code de
+      // l'appareil. Le verrou d'appareil prouve le téléphone ; ceci prouve que
+      // son porteur est là. Un téléphone prêté déverrouillé passait sans
+      // laisser de trace.
+      //
+      // Le repli du plugin accepte le code d'écran : un capteur sale ou un
+      // doigt mouillé n'enferme personne dehors. Et si l'appareil n'a AUCUN
+      // verrou, on le déclare au serveur, qui enregistre une clôture non
+      // vérifiée plutôt que de bloquer le technicien.
+      final verrouDisponible = await auth.verrouDisponible;
+      var verifie = false;
+      if (verrouDisponible) {
+        verifie = await auth.verifierIdentite();
+        if (!verifie) {
+          if (mounted) {
+            _snack('Identité non vérifiée : la clôture est annulée.');
+            setState(() => _busy = false);
+          }
+          return;
+        }
+      }
+
       Future<SubmitResult> envoyer(bool confirmer) => repo.close(
             widget.id,
+            verificationLocale: verifie,
+            verificationIndisponible: !verrouDisponible,
             agentPresent: result['agentPresent'] as bool,
             observations: result['observations'] as String?,
             signatureLocalPath: signaturePath,

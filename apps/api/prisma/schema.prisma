@@ -357,6 +357,10 @@ model Maintenance {
   technicienId               String?             @map("technicien_id")
   prestataireId              String?             @map("prestataire_id")
   signaturePath              String?             @map("signature_path")
+  // Identité vérifiée par l'appareil (empreinte, visage ou code) au moment de
+  // la clôture : le verrou d'appareil prouve le téléphone, ceci prouve que son
+  // porteur était présent. `false` = non vérifiée (ou APK antérieur à b47).
+  verifieeLocalement         Boolean             @default(false) @map("verifiee_localement")
   rapportPdfPath             String?             @map("rapport_pdf_path")
   observations               String?
   analyseEnergie             String?             @map("analyse_energie")

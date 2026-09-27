@@ -112,6 +112,15 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Verrou d'écran disponible sur cet appareil (empreinte, visage ou code).
+  Future<bool> get verrouDisponible => _repo.biometricAvailable;
+
+  /// Vérifie l'identité du PORTEUR avant un acte engageant (clôture d'une
+  /// intervention). À ne pas confondre avec `unlockWithBiometric`, qui ouvre
+  /// une session : ici la session est déjà ouverte, c'est la personne qu'on
+  /// vérifie - un téléphone prêté déverrouillé ne prouve rien.
+  Future<bool> verifierIdentite() => _repo.authenticateBiometric();
+
   /// Déverrouillage par biométrie d'une session existante.
   Future<void> unlockWithBiometric() async {
     final ok = await _repo.authenticateBiometric();

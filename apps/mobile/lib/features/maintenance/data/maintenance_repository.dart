@@ -242,6 +242,10 @@ class MaintenanceRepository {
     double? longitude,
     // Le technicien a vu les avertissements de vraisemblance et confirme sa saisie.
     bool confirmerVraisemblance = false,
+    // Identité vérifiée par l'appareil (empreinte, visage ou code) juste avant
+    // de clôturer, ou verrou d'écran indisponible sur ce téléphone.
+    bool verificationLocale = false,
+    bool verificationIndisponible = false,
   }) async {
     final attachments = <Map<String, String>>[
       for (final p in photoPaths) {'path': p, 'kind': 'photo'},
@@ -271,6 +275,8 @@ class MaintenanceRepository {
         if (checklist.isNotEmpty) 'checklist': checklist,
         if (pieces.isNotEmpty) 'pieces': pieces,
         if (confirmerVraisemblance) 'confirmerVraisemblance': true,
+        'verificationLocale': verificationLocale,
+        if (verificationIndisponible) 'verificationIndisponible': true,
         // Position au moment de la clôture (vérification "sur site" côté serveur).
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
