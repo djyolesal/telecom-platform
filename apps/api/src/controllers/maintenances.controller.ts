@@ -1792,6 +1792,10 @@ async function construireRapportActivite(
         parSite.get(l.siteId)!.push(l);
       }
       const jour = (d: Date | null) => (d ? new Date(d).toLocaleDateString('fr-FR') : '-');
+      // « MNT-2026-00412 » ne tient pas dans la colonne et s'affichait
+      // « MNT-202… », c'est-à-dire rien d'utile. Le numéro de fin, lui, suffit
+      // à retrouver l'intervention dans l'application.
+      const numero = (ref: string | null) => (ref ? ref.split('-').pop() || ref : '-');
       const nomTech = (t: { nom: string; prenom: string } | null) => (t ? `${t.prenom} ${t.nom}` : '-');
 
       for (const site of sitesPages) {
@@ -1816,7 +1820,7 @@ async function construireRapportActivite(
               date: jour(trace?.dateFin ?? null),
               technicien: nomTech(trace?.technicien ?? null),
               duree: trace?.dureeMinutes != null ? `${trace.dureeMinutes} min` : '-',
-              reference: trace?.reference ?? '-',
+              reference: numero(trace?.reference ?? null),
             });
           }
         }
@@ -1830,7 +1834,7 @@ async function construireRapportActivite(
             date: jour(i.dateFin),
             technicien: nomTech(i.technicien),
             duree: i.dureeMinutes != null ? `${i.dureeMinutes} min` : '-',
-            reference: i.reference ?? '-',
+            reference: numero(i.reference),
           });
         }
         if (!taches.length && !interventions.length) continue;   // site sans dû ni activité
@@ -1972,7 +1976,12 @@ async function construireRapportActivite(
       prestataireGarde ? prestataireGarde.nom : (idsPrestataires.size > 1 ? `${idsPrestataires.size} prestataires` : null),
       // Le lot est NOMMÉ : il définit le périmètre du document, « lot
       // sélectionné » n'apprenait rien à celui qui le reçoit.
-      lotDoc ? `lot ${lotDoc.code}${lotDoc.nom ? ` - ${lotDoc.nom}` : ''}` : null,
+      // Le nom n'est ajouté que s'il APPREND quelque chose : beaucoup de lots
+      // portent leur code comme nom, et « lot LOME7 - LOME7 » ne dit rien de
+      // plus que « lot LOME7 ».
+      lotDoc
+        ? `lot ${lotDoc.code}${lotDoc.nom && lotDoc.nom.trim().toLowerCase() !== lotDoc.code.trim().toLowerCase() ? ` - ${lotDoc.nom}` : ''}`
+        : null,
       site_id ? 'site sélectionné' : null,
       restreint ? 'périmètre du compte' : null,
     ].filter(Boolean).join(' · ') || 'tout le parc';
