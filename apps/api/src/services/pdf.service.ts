@@ -775,8 +775,13 @@ function piedDePage(doc: PDFKit.PDFDocument, gauche: string) {
     doc.switchToPage(i);
     const basPrecedent = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
+    // Signature de la plateforme : l'écrou-signal, vectoriel donc net à toute
+    // échelle, devant la mention d'émission. Un document qui circule par
+    // e-mail et se photocopie doit dire d'où il sort, sur CHAQUE page - la
+    // mention seule passait inaperçue.
+    drawLogo(doc, 50, doc.page.height - 40, 16, '#9AA5B1');
     doc.font('Helvetica').fontSize(7.5).fillColor('#9AA5B1');
-    doc.text(gauche, 50, doc.page.height - 32, { width: 320, lineBreak: false });
+    doc.text(gauche, 72, doc.page.height - 32, { width: 300, lineBreak: false });
     doc.text(`page ${i + 1} / ${total}`, doc.page.width - 150, doc.page.height - 32, { width: 100, align: 'right', lineBreak: false });
     doc.fillColor('black');
     doc.page.margins.bottom = basPrecedent;
@@ -839,6 +844,21 @@ export async function generateMaintenancesRecueilPdf(
     }
     doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
       .text('Client', w - 260, hautBloc + 64, { width: 200, align: 'right' });
+
+    // ── ÉMETTEUR, au centre : le document est co-signé par le prestataire et
+    //    le client, mais c'est la plateforme qui l'établit. Discret et entre
+    //    les deux marques, il dit d'où sortent les chiffres sans se mettre au
+    //    rang des signataires.
+    drawLogo(doc, w / 2 - 13, hautBloc + 6, 26, BRAND);
+    // Deux couleurs, donc deux écritures : un `continued` recentré à chaque
+    // morceau les superposait (« E&MOpS »). On mesure et on place.
+    doc.font('Helvetica-Bold').fontSize(9);
+    const lEm = doc.widthOfString('E&M ');
+    const xMarque = w / 2 - (lEm + doc.widthOfString('OpS')) / 2;
+    doc.fillColor(BRAND).text('E&M ', xMarque, hautBloc + 38, { lineBreak: false });
+    doc.fillColor(ACCENT).text('OpS', xMarque + lEm, hautBloc + 38, { lineBreak: false });
+    doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
+      .text('Établi par', w / 2 - 60, hautBloc + 64, { width: 120, align: 'center' });
 
     doc.rect(0, 112, w, 4).fill(BRAND);
     doc.rect(0, 116, w, 2).fill('#FFB020');
