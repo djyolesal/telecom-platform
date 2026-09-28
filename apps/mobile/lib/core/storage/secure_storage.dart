@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
 
 /// Stockage sécurisé (Keychain iOS / Keystore Android) pour les jetons et la session.
@@ -44,6 +45,26 @@ class SecureStorage {
       _storage.write(key: AppConstants.kBiometricEnabled, value: enabled.toString());
   Future<bool> get biometricEnabled async =>
       (await _storage.read(key: AppConstants.kBiometricEnabled)) == 'true';
+
+  /// IDENTIFIANT DE L'APPAREIL, tiré une fois pour toutes au premier lancement.
+  ///
+  /// Le verrou d'appareil utilisait `AndroidDeviceInfo.id`, qui est `Build.ID` :
+  /// l'identifiant du FIRMWARE, identique sur tous les téléphones d'un même
+  /// modèle. Treize comptes se retrouvaient ainsi « sur le même appareil », et
+  /// le verrou bilatéral aurait refusé la connexion à douze techniciens
+  /// innocents. Un UUID tiré au sort ici ne peut, lui, désigner qu'un seul
+  /// téléphone.
+  ///
+  /// Il vit dans le Keystore : il traverse les mises à jour de l'APK, et
+  /// disparaît avec l'application - une réinstallation redemande donc une
+  /// déliaison par un administrateur, ce qui est le bon sens de l'erreur.
+  Future<String> appareilUuid() async {
+    final existant = await _storage.read(key: AppConstants.kAppareilUuid);
+    if (existant != null && existant.isNotEmpty) return existant;
+    final nouveau = const Uuid().v4();
+    await _storage.write(key: AppConstants.kAppareilUuid, value: nouveau);
+    return nouveau;
+  }
 
   Future<bool> get hasSession async => (await refreshToken) != null;
 

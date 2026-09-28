@@ -17,6 +17,12 @@ class AppConstants {
   static const String kUserJson = 'user_json';
   static const String kBiometricEnabled = 'biometric_enabled';
 
+  /// Identifiant de CE téléphone, tiré au premier lancement et conservé dans
+  /// le Keystore/Keychain. Survit aux mises à jour de l'application ; disparaît
+  /// avec elle (désinstallation, effacement des données), ce qui délie de fait
+  /// l'appareil et impose une nouvelle liaison par un administrateur.
+  static const String kAppareilUuid = 'appareil_uuid';
+
   // Box Hive
   static const String kSettingsBox = 'settings';
 

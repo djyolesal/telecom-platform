@@ -60,6 +60,7 @@ import { genererReference } from '../services/reference.service';
 import { rapprocherPieces, PieceSaisie } from '../services/piecesRef.service';
 import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite, enregistrerAnomalies } from '../services/vraisemblance.service';
 import { TASK_BY_KEY } from '../utils/tachesPreventives';
+import { appAuMoins } from '../utils/versionApp';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -350,10 +351,7 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
  */
 const BUILD_VERIF_LOCALE = 47;
 function appSaitVerifierLocalement(req: Request): boolean {
-  const brut = req.headers['x-app-version'];
-  const version = String(Array.isArray(brut) ? brut[0] : brut ?? '');
-  const build = Number(version.split('+')[1]);
-  return Number.isFinite(build) && build >= BUILD_VERIF_LOCALE;
+  return appAuMoins(req, BUILD_VERIF_LOCALE);
 }
 
 /**

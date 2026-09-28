@@ -16,24 +16,31 @@ class AuthRepository {
   AuthRepository(this._client, this._storage, [LocalAuthentication? localAuth])
       : _localAuth = localAuth ?? LocalAuthentication();
 
-  /// Identifiant stable de l'appareil (verrou du compte terrain sur le premier
-  /// mobile connecté) : Android ID, ou identifierForVendor côté iOS.
+  /// Identifiant de CE téléphone (verrou du compte terrain sur le premier
+  /// mobile connecté), et son modèle pour l'affichage côté administration.
+  ///
+  /// L'identifiant venait d'`AndroidDeviceInfo.id`, que le commentaire prenait
+  /// pour l'Android ID alors que c'est `Build.ID` : le numéro du FIRMWARE,
+  /// identique sur tous les exemplaires d'un même modèle. Le verrou liait donc
+  /// un modèle de téléphone, pas un téléphone - jusqu'à treize comptes sur un
+  /// seul « appareil ». On tire désormais un UUID, conservé dans le Keystore.
+  ///
+  /// Le modèle, lui, reste l'étiquette lisible : il ne sert qu'à nommer
+  /// l'appareil à l'écran, jamais à l'identifier.
   Future<({String? id, String? label})> _appareil() async {
+    final id = await _storage.appareilUuid();
     try {
       final plugin = DeviceInfoPlugin();
       if (Platform.isAndroid) {
         final info = await plugin.androidInfo;
-        return (
-          id: info.id,
-          label: '${info.manufacturer} ${info.model}'.trim()
-        );
+        return (id: id, label: '${info.manufacturer} ${info.model}'.trim());
       }
       if (Platform.isIOS) {
         final info = await plugin.iosInfo;
-        return (id: info.identifierForVendor, label: info.utsname.machine);
+        return (id: id, label: info.utsname.machine);
       }
-    } catch (_) {/* identité indisponible → le serveur n'arme pas le verrou */}
-    return (id: null, label: null);
+    } catch (_) {/* modèle indisponible : l'identifiant, lui, suffit au verrou */}
+    return (id: id, label: null);
   }
 
   /// Connexion par email/mot de passe. Stocke les jetons et l'utilisateur.

@@ -10,6 +10,7 @@ import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
 import { enregistrerSession, effacerSession, sessionValide, revoquerToutesSessions, Plateforme } from '../services/session.service';
 import { logger } from '../utils/logger';
+import { appAuMoins, BUILD_APPAREIL_UNIQUE } from '../utils/versionApp';
 
 const SALT_ROUNDS = 12;
 // Hash bcrypt LEURRE (mot de passe aléatoire jamais divulgué) : comparé quand le
@@ -138,7 +139,15 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
     // Verrou d'appareil des comptes terrain : le compte se lie au PREMIER mobile
     // qui se connecte ; tout autre appareil est refusé jusqu'à déliaison admin.
-    if (plt === 'MOBILE' && (user.role === 'TECHNICIEN' || user.role === 'TRANSPORTEUR')) {
+    //
+    // ARMÉ SEULEMENT À PARTIR DE b48. Les APK antérieurs envoyaient `Build.ID`
+    // d'Android, c'est-à-dire le numéro du FIRMWARE : le même sur tous les
+    // exemplaires d'un modèle. Le verrou liait un modèle de téléphone, pas un
+    // téléphone - et l'appliquer à ces identifiants refuserait la connexion à
+    // des dizaines de techniciens qui n'ont jamais partagé d'appareil. Tant que
+    // l'app ne sait pas dire QUEL téléphone elle est, il n'y a rien à verrouiller.
+    if (plt === 'MOBILE' && (user.role === 'TECHNICIEN' || user.role === 'TRANSPORTEUR')
+        && appAuMoins(req, BUILD_APPAREIL_UNIQUE)) {
       const deviceId = String((req.body as { deviceId?: unknown }).deviceId ?? '').slice(0, 100);
       const deviceLabel = String((req.body as { deviceLabel?: unknown }).deviceLabel ?? '').slice(0, 80);
       // Le verrou serait purement déclaratif si un client pouvait l'esquiver en
