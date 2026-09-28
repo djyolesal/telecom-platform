@@ -29,6 +29,9 @@ interface User {
   isActive: boolean;
   lastLoginAt?: string;
   appareilLabel?: string | null;
+  // Empreinte courte de l'identifiant : le libellé est le MODÈLE, deux
+  // téléphones identiques sont donc indiscernables sans elle.
+  appareilEmpreinte?: string | null;
   appareilLieLe?: string | null;
   appVersion?: string | null;
   appVersionLe?: string | null;
@@ -191,7 +194,7 @@ export default function UtilisateursPage() {
     queryKey: ['appareils-partages'],
     queryFn: () => api.get('/users/appareils-partages').then(
       (r) => r.data.data as Array<{
-        appareilId: string; appareilLabel: string | null;
+        appareilEmpreinte: string; appareilLabel: string | null;
         comptes: Array<{ id: string; nom: string; prenom: string; appareilLieLe: string | null }>;
       }>
     ),
@@ -217,10 +220,14 @@ export default function UtilisateursPage() {
     { key: 'lastLoginAt', header: 'Dern. connexion', render: (u) => <span className="whitespace-nowrap text-xs">{fmtDateTime(u.lastLoginAt)}</span> },
     {
       key: 'appareil', header: 'Appareil lié',
-      render: (u) => u.appareilLabel
+      // L'ÉTIQUETTE EST LE MODÈLE : deux « Samsung A14 » s'affichaient à
+      // l'identique, et on ne savait pas lequel on déliait. L'empreinte, en
+      // dessous, distingue les deux téléphones.
+      render: (u) => u.appareilEmpreinte
         ? (
-          <span className="block max-w-[110px] truncate text-xs text-gray-600" title={`${u.appareilLabel} - lié le ${fmtDateTime(u.appareilLieLe)}`}>
-            {u.appareilLabel}
+          <span className="block max-w-[130px]" title={`${u.appareilLabel ?? 'Appareil'} #${u.appareilEmpreinte} - lié le ${fmtDateTime(u.appareilLieLe)}`}>
+            <span className="block truncate text-xs text-gray-600">{u.appareilLabel ?? 'Appareil'}</span>
+            <span className="block font-mono text-[10px] text-gray-400">#{u.appareilEmpreinte}</span>
           </span>
         )
         : <span className="text-xs text-gray-300">-</span>,
@@ -255,10 +262,10 @@ export default function UtilisateursPage() {
           <button onClick={() => setEditUser(u)} title="Modifier" className="p-1.5 rounded hover:bg-gray-100"><Pencil size={15} className="text-gray-500" /></button>
           <button onClick={() => toggle.mutate(u.id)} title={u.isActive ? 'Désactiver' : 'Activer'} className="p-1.5 rounded hover:bg-gray-100"><Power size={15} className={u.isActive ? 'text-green-600' : 'text-gray-400'} /></button>
           <button onClick={() => { if (confirm(`Réinitialiser le mot de passe de ${u.prenom} ${u.nom} ?`)) reset.mutate(u.id); }} title="Réinitialiser le mot de passe" className="p-1.5 rounded hover:bg-gray-100"><KeyRound size={15} className="text-gray-500" /></button>
-          {u.appareilLabel && (
+          {u.appareilEmpreinte && (
             <button
-              onClick={() => { if (confirm(`Délier l'appareil « ${u.appareilLabel} » de ${u.prenom} ${u.nom} ?\nLe prochain téléphone qui se connectera deviendra le nouvel appareil lié.`)) delier.mutate(u.id); }}
-              title={`Délier l'appareil (${u.appareilLabel})`}
+              onClick={() => { if (confirm(`Délier l'appareil « ${u.appareilLabel ?? 'Appareil'} #${u.appareilEmpreinte} » de ${u.prenom} ${u.nom} ?\nLe prochain téléphone qui se connectera deviendra le nouvel appareil lié.`)) delier.mutate(u.id); }}
+              title={`Délier l'appareil (${u.appareilLabel ?? 'Appareil'} #${u.appareilEmpreinte})`}
               className="p-1.5 rounded hover:bg-gray-100"
             >
               <SmartphoneNfc size={15} className="text-[#7D3C98]" />
@@ -297,8 +304,9 @@ export default function UtilisateursPage() {
           </p>
           <ul className="mt-2 space-y-1 text-xs">
             {partages.map((p) => (
-              <li key={p.appareilId}>
-                <b>{p.appareilLabel ?? p.appareilId.slice(0, 12)}</b> :{' '}
+              <li key={p.appareilEmpreinte}>
+                <b>{p.appareilLabel ?? 'Appareil'}</b>{' '}
+                <span className="font-mono text-[10px] text-amber-700">#{p.appareilEmpreinte}</span> :{' '}
                 {p.comptes.map((c) => `${c.prenom} ${c.nom}`).join(', ')}
               </li>
             ))}

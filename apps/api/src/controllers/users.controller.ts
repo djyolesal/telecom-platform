@@ -18,9 +18,36 @@ const SAFE_SELECT = {
   id: true, nom: true, prenom: true, email: true, telephone: true,
   role: true, region: true, isActive: true, lastLoginAt: true, createdAt: true,
   prestataireId: true, equipe: true,
-  appareilLabel: true, appareilLieLe: true,
+  appareilId: true, appareilLabel: true, appareilLieLe: true,
   appVersion: true, appVersionLe: true,
   prestataire: { select: { id: true, nom: true } },
+};
+
+/**
+ * EMPREINTE D'APPAREIL : l'étiquette enregistrée à la liaison est le MODÈLE du
+ * téléphone (« Samsung A14 »). Deux appareils identiques portaient donc le même
+ * nom à l'écran alors que ce sont bien deux téléphones : on ne savait plus
+ * lequel délier. Ces six caractères, dérivés de l'identifiant, les séparent.
+ *
+ * L'identifiant, lui, ne sort JAMAIS de l'API : il est la moitié secrète du
+ * verrou d'appareil - le connaître, avec des identifiants volés, suffirait à se
+ * faire passer pour le téléphone lié. Une empreinte se compare, elle ne se
+ * remonte pas.
+ */
+export const empreinteAppareil = (id: string | null | undefined): string | null =>
+  id ? crypto.createHash('sha256').update(id).digest('hex').slice(0, 6).toUpperCase() : null;
+
+/** « Samsung A14 · #4F2A9C » - pour les exports, qui n'ont pas d'infobulle. */
+const libelleAppareil = (u: { appareilId?: string | null; appareilLabel?: string | null }): string => {
+  const empreinte = empreinteAppareil(u.appareilId);
+  if (!empreinte) return u.appareilLabel ?? '';
+  return u.appareilLabel ? `${u.appareilLabel} · #${empreinte}` : `#${empreinte}`;
+};
+
+/** Remplace l'identifiant brut par son empreinte dans tout ce qui part au client. */
+const vueAppareil = <T extends { appareilId?: string | null }>(u: T) => {
+  const { appareilId, ...reste } = u;
+  return { ...reste, appareilEmpreinte: empreinteAppareil(appareilId) };
 };
 
 export async function getUsers(req: Request, res: Response, next: NextFunction) {
@@ -49,7 +76,7 @@ export async function getUsers(req: Request, res: Response, next: NextFunction) 
       { where, orderBy: { nom: 'asc' }, select: SAFE_SELECT },
       { page: parseInt(page), limit: parseInt(limit) }
     );
-    res.json({ success: true, data, meta });
+    res.json({ success: true, data: (data as Array<{ appareilId?: string | null }>).map(vueAppareil), meta });
   } catch (err) { next(err); }
 }
 
@@ -61,7 +88,7 @@ export async function getUserById(req: Request, res: Response, next: NextFunctio
     if (!user || (moi?.prestataireId && user.prestataireId !== moi.prestataireId)) {
       throw new AppError('Utilisateur introuvable', 404);
     }
-    res.json({ success: true, data: user });
+    res.json({ success: true, data: vueAppareil(user) });
   } catch (err) { next(err); }
 }
 
@@ -100,7 +127,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
       });
     }
 
-    res.status(201).json({ success: true, data: user });
+    res.status(201).json({ success: true, data: vueAppareil(user) });
   } catch (err) { next(err); }
 }
 
@@ -129,7 +156,7 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
     // Jamais le hash en clair dans le journal d'audit (lisible via /admin/audit
     // et présent dans toutes les sauvegardes).
     await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { champs: Object.keys(data) }, req);
-    res.json({ success: true, data: user });
+    res.json({ success: true, data: vueAppareil(user) });
   } catch (err) { next(err); }
 }
 
@@ -161,7 +188,7 @@ export async function toggleActive(req: Request, res: Response, next: NextFuncti
     // jusqu'à expiration).
     if (!user.isActive) await revoquerToutesSessions(existing.id);
     await auditLog(req.user!.id, 'UPDATE', 'users', existing.id, { isActive: user.isActive }, req);
-    res.json({ success: true, data: user });
+    res.json({ success: true, data: vueAppareil(user) });
   } catch (err) { next(err); }
 }
 
@@ -218,7 +245,7 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
       const lines = users.map((u) =>
         [u.nom, u.prenom, u.email, u.telephone ?? '', u.role, u.region ?? '',
           u.isActive ? 'Oui' : 'Non', u.lastLoginAt?.toISOString() ?? '',
-          versionApp(u), u.appVersionLe?.toISOString() ?? '', u.appareilLabel ?? ''].map(csvCell).join(';')
+          versionApp(u), u.appVersionLe?.toISOString() ?? '', libelleAppareil(u)].map(csvCell).join(';')
       );
       const csv = '﻿' + [header, ...lines].join('\n');
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -239,7 +266,7 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
         { header: 'Dernière connexion', key: 'connexion', width: 18 },
         { header: 'Version app', key: 'version', width: 16 },
         { header: 'Version vue le', key: 'versionLe', width: 18 },
-        { header: 'Appareil lié', key: 'appareil', width: 20 },
+        { header: 'Appareil lié', key: 'appareil', width: 28 },
       ],
       rows: users.map((u) => ({
         nom: u.nom,
@@ -252,7 +279,7 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
         connexion: u.lastLoginAt ? u.lastLoginAt.toLocaleString('fr-FR') : '',
         version: versionApp(u),
         versionLe: u.appVersionLe ? u.appVersionLe.toLocaleString('fr-FR') : '',
-        appareil: u.appareilLabel ?? '',
+        appareil: libelleAppareil(u),
       })),
     }]);
   } catch (err) { next(err); }
@@ -292,12 +319,14 @@ export async function appareilsPartages(_req: Request, res: Response, next: Next
 
     res.json({
       success: true,
+      // L'identifiant sert de clé de regroupement côté serveur, jamais de champ
+      // de réponse : seule son empreinte sort (cf. empreinteAppareil).
       data: ids.map((appareilId) => ({
-        appareilId,
+        appareilEmpreinte: empreinteAppareil(appareilId),
         // L'étiquette vient du premier compte qui l'a renseignée : c'est le
         // modèle du téléphone, il est le même pour tous.
         appareilLabel: comptes.find((c) => c.appareilId === appareilId && c.appareilLabel)?.appareilLabel ?? null,
-        comptes: comptes.filter((c) => c.appareilId === appareilId),
+        comptes: comptes.filter((c) => c.appareilId === appareilId).map(vueAppareil),
       })),
     });
   } catch (err) { next(err); }
