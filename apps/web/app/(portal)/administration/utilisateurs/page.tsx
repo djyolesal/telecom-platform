@@ -184,6 +184,19 @@ export default function UtilisateursPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
 
+  // APPAREILS PARTAGÉS : liaisons héritées d'avant le verrou bilatéral, où un
+  // même téléphone servait plusieurs comptes. Elles restent actives tant que
+  // personne ne les démêle - donc on les montre en haut, pas au fond d'un écran.
+  const { data: partages } = useQuery({
+    queryKey: ['appareils-partages'],
+    queryFn: () => api.get('/users/appareils-partages').then(
+      (r) => r.data.data as Array<{
+        appareilId: string; appareilLabel: string | null;
+        comptes: Array<{ id: string; nom: string; prenom: string; appareilLieLe: string | null }>;
+      }>
+    ),
+  });
+
   const rows: User[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
 
@@ -271,6 +284,27 @@ export default function UtilisateursPage() {
           </>
         }
       />
+
+      {!!partages?.length && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            {partages.length} téléphone(s) lié(s) à plusieurs comptes
+          </p>
+          <p className="mt-0.5 text-xs">
+            Un appareil ne doit servir qu’à un technicien. Déliez les comptes en trop (icône appareil dans la
+            ligne) : la connexion du second compte est désormais refusée, mais ces liaisons antérieures restent
+            actives.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {partages.map((p) => (
+              <li key={p.appareilId}>
+                <b>{p.appareilLabel ?? p.appareilId.slice(0, 12)}</b> :{' '}
+                {p.comptes.map((c) => `${c.prenom} ${c.nom}`).join(', ')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <FilterBar
         search={search}

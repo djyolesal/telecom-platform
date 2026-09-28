@@ -129,6 +129,9 @@ model User {
   passwordHash    String             @map("password_hash")
   // Verrou d'appareil (terrain) : le compte se lie au PREMIER mobile connecté ;
   // tout autre appareil est refusé jusqu'à déliaison par un admin.
+  /// Un appareil ne sert qu'à UN compte terrain : vérifié à chaque connexion
+  /// (l'index sert cette recherche). Pas de contrainte unique en base tant que
+  /// le parc peut contenir des doublons hérités.
   appareilId      String?            @map("appareil_id") @db.VarChar(100)
   appareilLabel   String?            @map("appareil_label") @db.VarChar(80)
   appareilLieLe   DateTime?          @map("appareil_lie_le")
@@ -161,6 +164,7 @@ model User {
   notifications         Notification[]
 
   @@index([prestataireId])
+  @@index([appareilId])
   @@map("users")
 }
 

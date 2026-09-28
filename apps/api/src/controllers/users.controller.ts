@@ -262,6 +262,47 @@ export async function exportUsers(req: Request, res: Response, next: NextFunctio
  * Délie l'appareil mobile d'un compte terrain (remplacement/perte de téléphone) :
  * le prochain login mobile du compte liera le nouvel appareil.
  */
+/**
+ * APPAREILS PARTAGÉS : téléphones liés à PLUSIEURS comptes.
+ *
+ * Le verrou attachait le compte au téléphone, jamais l'inverse : le même
+ * identifiant a pu être écrit sur plusieurs comptes avant le correctif. Ces
+ * liaisons héritées restent valides tant que personne ne les démêle - cet
+ * écran les montre, la déliaison les résout.
+ */
+export async function appareilsPartages(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const groupes = await prisma.user.groupBy({
+      by: ['appareilId'],
+      where: { appareilId: { not: null }, isActive: true },
+      _count: { _all: true },
+      having: { appareilId: { _count: { gt: 1 } } },
+    });
+    const ids = groupes.map((g) => g.appareilId!).filter(Boolean);
+    if (!ids.length) return res.json({ success: true, data: [] });
+
+    const comptes = await prisma.user.findMany({
+      where: { appareilId: { in: ids }, isActive: true },
+      select: {
+        id: true, nom: true, prenom: true, email: true, role: true,
+        appareilId: true, appareilLabel: true, appareilLieLe: true, appVersion: true,
+      },
+      orderBy: [{ appareilId: 'asc' }, { appareilLieLe: 'asc' }],
+    });
+
+    res.json({
+      success: true,
+      data: ids.map((appareilId) => ({
+        appareilId,
+        // L'étiquette vient du premier compte qui l'a renseignée : c'est le
+        // modèle du téléphone, il est le même pour tous.
+        appareilLabel: comptes.find((c) => c.appareilId === appareilId && c.appareilLabel)?.appareilLabel ?? null,
+        comptes: comptes.filter((c) => c.appareilId === appareilId),
+      })),
+    });
+  } catch (err) { next(err); }
+}
+
 export async function delierAppareil(req: Request, res: Response, next: NextFunction) {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, appareilLabel: true } });

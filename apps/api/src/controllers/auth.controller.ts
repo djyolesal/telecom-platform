@@ -151,6 +151,36 @@ export async function login(req: Request, res: Response, next: NextFunction) {
         );
       }
       {
+        // UN APPAREIL, UN COMPTE. Le verrou liait le compte au téléphone, mais
+        // pas l'inverse : le même identifiant pouvait être écrit sur plusieurs
+        // comptes, et deux techniciens se relayer sur le même appareil - ce que
+        // le verrou était précisément censé empêcher.
+        //
+        // La vérification a lieu à CHAQUE connexion, pas seulement à la
+        // liaison : un appareil déjà pris le reste tant qu'un administrateur ne
+        // l'a pas délié de l'autre compte.
+        if (user.appareilId !== deviceId) {
+          const dejaPris = await prisma.user.findFirst({
+            where: { appareilId: deviceId, id: { not: user.id }, isActive: true },
+            select: { id: true, nom: true, prenom: true },
+          });
+          if (dejaPris) {
+            // L'autre titulaire est nommé dans le JOURNAL, pas dans la réponse :
+            // qui tient le téléphone n'a pas à apprendre à qui appartient le
+            // compte qu'il vient d'essayer.
+            await auditLog(user.id, 'LOGIN', 'auth', undefined, {
+              success: false,
+              appareilDejaLie: deviceLabel || deviceId,
+              titulaire: `${dejaPris.prenom} ${dejaPris.nom}`.trim(),
+            }, req);
+            throw new AppError(
+              'Ce téléphone est déjà lié à un autre compte E&M OpS. '
+              + 'Un appareil ne peut servir qu\'à un seul technicien : contactez votre superviseur.',
+              403,
+            );
+          }
+        }
+
         if (!user.appareilId) {
           await prisma.user.update({
             where: { id: user.id },

@@ -504,6 +504,9 @@ router.post('/rapports/mensuel/send', rbac(['MANAGER','ADMIN']), rapportsCtrl.se
 router.get('/users', rbac(['SUPERVISEUR','MANAGER','ADMIN']), usersCtrl.getUsers);
 router.get('/users/export/:format(csv|xlsx|pdf)', rbac(['ADMIN']), usersCtrl.exportUsers);
 router.post('/users', rbac(['ADMIN']), usersCtrl.createUser);
+// AVANT `/users/:id` : Express prend la première route qui matche, et
+// « appareils-partages » se lirait comme un identifiant.
+router.get('/users/appareils-partages', rbac(['ADMIN']), usersCtrl.appareilsPartages);
 router.get('/users/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), usersCtrl.getUserById);
 router.put('/users/:id', rbac(['ADMIN']), usersCtrl.updateUser);
 router.delete('/users/:id', rbac(['ADMIN']), usersCtrl.deleteUser);
