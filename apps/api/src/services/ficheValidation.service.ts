@@ -197,13 +197,15 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
   }
 
   // ── Signatures ──
+  // TROIS visas, comme le PDF : l'exécutant, le donneur d'ordre et l'éditeur
+  // de la plateforme, qui établit les chiffres du tableau. Les deux formats de
+  // la fiche doivent se signer de la même façon - c'est le même document.
   r += 2;
-  ws.getCell(`B${r}`).value = `Pour ${p.nom}`;
-  ws.getCell(`B${r}`).font = { bold: true };
-  ws.getCell(`H${r}`).value = `Pour ${d.client.nom}`;
-  ws.getCell(`H${r}`).font = { bold: true };
-  ws.getCell(`B${r + 1}`).value = 'Nom :';
-  ws.getCell(`H${r + 1}`).value = 'Nom :';
+  for (const [colonne, nom] of [['B', p.nom], ['E', 'E&M OpS'], ['H', d.client.nom]] as [string, string][]) {
+    ws.getCell(`${colonne}${r}`).value = `Pour ${nom}`;
+    ws.getCell(`${colonne}${r}`).font = { bold: true };
+    ws.getCell(`${colonne}${r + 1}`).value = 'Nom :';
+  }
 
   const ab = await wb.xlsx.writeBuffer();
   return Buffer.from(ab);
