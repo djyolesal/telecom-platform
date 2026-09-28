@@ -746,17 +746,14 @@ function hauteurVisa(doc: PDFKit.PDFDocument, noms: string[], largeur: number): 
   return Math.max(...noms.map((n) => doc.heightOfString(`Pour ${n}`, { width: largeur - 20 }))) + 78;
 }
 
-/**
- * Cadres de visa côte à côte, dans l'ordre où ils sont donnés : l'exécutant,
- * le donneur d'ordre, et sur la fiche de validation l'éditeur de la plateforme.
- * Tous prennent la hauteur du titre le plus long, pour rester alignés.
- */
+/** Deux cadres de visa : exécutant à gauche, donneur d'ordre à droite. */
 function cadresVisa(
-  doc: PDFKit.PDFDocument, y: number, largeur: number, cases: Array<{ x: number; nom: string }>,
+  doc: PDFKit.PDFDocument, y: number, xGauche: number, xDroite: number, largeur: number,
+  nomGauche: string, nomDroite: string,
 ) {
-  const hauteur = hauteurVisa(doc, cases.map((c) => c.nom), largeur);
+  const hauteur = hauteurVisa(doc, [nomGauche, nomDroite], largeur);
   const hTitre = hauteur - 78;
-  cases.forEach(({ x, nom }) => {
+  ([[xGauche, nomGauche], [xDroite, nomDroite]] as [number, string][]).forEach(([x, nom]) => {
     doc.roundedRect(x, y, largeur, hauteur, 5).lineWidth(0.7).stroke('#D8DEE6');
     doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND).text(`Pour ${nom}`, x + 10, y + 10, { width: largeur - 20 });
     const yLignes = y + 16 + hTitre;
@@ -964,10 +961,7 @@ export async function generateMaintenancesRecueilPdf(
     const hVisa = hauteurVisa(doc, [nomVisa, garde.client], largeurVisa);
     if (doc.y + hVisa + 20 > doc.page.height - 60) doc.addPage();
     const yVisa = Math.max(doc.y + 10, doc.page.height - 58 - hVisa);
-    cadresVisa(doc, yVisa, largeurVisa, [
-      { x: 60, nom: nomVisa },
-      { x: 80 + largeurVisa, nom: garde.client },
-    ]);
+    cadresVisa(doc, yVisa, 60, 80 + largeurVisa, largeurVisa, nomVisa, garde.client);
 
     // RÉCAPITULATIF d'abord : le verdict du lot en une page, avant les pages
     // qui le justifient.
@@ -1098,22 +1092,12 @@ export async function buildFicheValidationPdf(d: FicheValidationData): Promise<B
       50, doc.y, { width: w - 100, align: 'justify' });
     doc.fillColor('black');
 
-    // ── Visas : le document n'existe que pour être signé ──
-    //
-    // TROIS cadres : l'exécutant, le donneur d'ordre, et l'éditeur de la
-    // plateforme. Les chiffres du tableau ne sont pas déclarés par le
-    // prestataire, ils sont établis par E&M OpS à partir des interventions
-    // tracées : celui qui les produit signe donc ce qu'il avance, au lieu de
-    // se contenter d'une mention en pied de page.
-    const ECART = 14;
-    const largeur = (w - 100 - 2 * ECART) / 3;
-    // Ordre calqué sur l'en-tête : le prestataire à gauche, le client à droite,
-    // l'éditeur au milieu - chaque visa tombe sous le nom qu'il engage.
-    const noms = [p.nom, 'E&M OpS', d.client.nom];
-    const hVisa = hauteurVisa(doc, noms, largeur);
+    // ── Visas : le document n'existe que pour être signé des deux côtés ──
+    const largeur = (w - 120) / 2;
+    const hVisa = hauteurVisa(doc, [p.nom, d.client.nom], largeur);
     let yVisa = doc.y + 18;
     if (yVisa + hVisa > doc.page.height - 60) { doc.addPage(); yVisa = 60; }
-    cadresVisa(doc, yVisa, largeur, noms.map((nom, i) => ({ x: 50 + i * (largeur + ECART), nom })));
+    cadresVisa(doc, yVisa, 50, w - 50 - largeur, largeur, p.nom, d.client.nom);
 
     piedDePage(doc, `Fiche de validation ${jj(d.mois)}/${d.annee} · émise par E&M OpS`);
   }, { bufferPages: true });
