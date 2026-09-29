@@ -292,22 +292,37 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
       // vérifiée plutôt que de bloquer le technicien.
       final verrouDisponible = await auth.verrouDisponible;
       String? facteur;
+      var echecVerification = false;
       if (verrouDisponible) {
         facteur = await auth.verifierIdentite();
         if (facteur == null) {
-          if (mounted) {
-            _snack('Identité non vérifiée : la clôture est annulée.');
-            setState(() => _busy = false);
+          // JAMAIS D'IMPASSE SUR LE TERRAIN. Un capteur sale, un code d'écran
+          // qu'on ne connaît pas sur un téléphone de service, une invite qui
+          // se referme : le technicien avait déjà pris ses photos et signé, et
+          // se retrouvait sans aucun moyen de clôturer. On propose de
+          // réessayer, ou de clôturer en DÉCLARANT l'échec - le serveur décide
+          // alors, selon sa politique, d'accepter en l'enregistrant ou de
+          // refuser. La règle appartient au serveur, pas à l'app.
+          final poursuivre = await _confirmerSansVerification();
+          if (!poursuivre) {
+            if (mounted) {
+              _snack('Clôture annulée. Réessayez la vérification d\'identité.');
+              setState(() => _busy = false);
+            }
+            return;
           }
-          return;
+          echecVerification = true;
         }
       }
 
       Future<SubmitResult> envoyer(bool confirmer) => repo.close(
             widget.id,
             verificationLocale: facteur != null,
-            verificationFacteur: facteur ?? 'AUCUN',
+            // ECHEC ≠ AUCUN : « j'ai essayé et ça n'a pas marché » n'est pas
+            // « cet appareil n'a pas de verrou ». Les deux se comptent à part.
+            verificationFacteur: facteur ?? (echecVerification ? 'ECHEC' : 'AUCUN'),
             verificationIndisponible: !verrouDisponible,
+            verificationEchec: echecVerification,
             agentPresent: result['agentPresent'] as bool,
             observations: result['observations'] as String?,
             signatureLocalPath: signaturePath,
@@ -359,6 +374,36 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
 
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  /// La vérification d'identité a échoué : réessayer, ou clôturer en le
+  /// déclarant. Le choix est explicite et tracé côté serveur - il ne doit ni
+  /// passer inaperçu, ni enfermer le technicien sur le site.
+  Future<bool> _confirmerSansVerification() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Identité non vérifiée'),
+        content: const Text(
+          'L\'empreinte, le visage ou le code n\'a pas été validé.\n\n'
+          'Réessayez de préférence : la vérification protège votre compte. '
+          'Si le capteur ne répond pas, vous pouvez clôturer quand même - '
+          'la clôture sera enregistrée comme NON VÉRIFIÉE et votre superviseur la verra.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Réessayer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Clôturer sans vérification'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
 
   /// Message clair selon le type d'erreur (au lieu d'une exception brute).
   String _errMsg(Object e) {

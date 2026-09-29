@@ -366,9 +366,12 @@ model Maintenance {
   // la clôture : le verrou d'appareil prouve le téléphone, ceci prouve que son
   // porteur était présent. `false` = non vérifiée (ou APK antérieur à b47).
   verifieeLocalement         Boolean             @default(false) @map("verifiee_localement")
-  // BIOMETRIE (empreinte/visage), CODE (schéma ou PIN de l'appareil) ou AUCUN
-  // (pas de verrou d'écran). Le code se PRÊTE aussi bien que le téléphone :
-  // distinguer les deux est ce qui rend le contrôle exploitable.
+  // BIOMETRIE (empreinte/visage), CODE (schéma ou PIN de l'appareil), AUCUN
+  // (l'appareil n'a pas de verrou d'écran) ou ECHEC (vérification tentée, non
+  // aboutie, et le technicien l'a déclaré pour pouvoir clôturer). Le code se
+  // PRÊTE aussi bien que le téléphone, et ECHEC n'est pas AUCUN : distinguer
+  // ces quatre cas est ce qui rend le contrôle exploitable - et ce qui dira
+  // s'il faut durcir vers la biométrie seule.
   verificationFacteur        String?             @map("verification_facteur") @db.VarChar(12)
   rapportPdfPath             String?             @map("rapport_pdf_path")
   observations               String?

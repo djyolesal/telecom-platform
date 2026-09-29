@@ -249,6 +249,9 @@ class MaintenanceRepository {
     // code d'écran, qui se prête aussi bien que le téléphone.
     String verificationFacteur = 'AUCUN',
     bool verificationIndisponible = false,
+    /// Vérification TENTÉE et échouée, déclarée par le technicien. À distinguer
+    /// d'un appareil sans verrou : le serveur les compte séparément.
+    bool verificationEchec = false,
   }) async {
     final attachments = <Map<String, String>>[
       for (final p in photoPaths) {'path': p, 'kind': 'photo'},
@@ -281,6 +284,7 @@ class MaintenanceRepository {
         'verificationLocale': verificationLocale,
         'verificationFacteur': verificationFacteur,
         if (verificationIndisponible) 'verificationIndisponible': true,
+        if (verificationEchec) 'verificationEchec': true,
         // Position au moment de la clôture (vérification "sur site" côté serveur).
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
