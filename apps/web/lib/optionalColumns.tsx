@@ -23,6 +23,8 @@ export interface SiteOptionnel {
   societeGardiennage?: string | null;
   telephoneSite?: string | null;
   typePylone?: string | null;
+  typeSite?: string | null;
+  dateMiseEnService?: string | null;
   cuveVolumeLitres?: number | string | null;
 }
 
@@ -76,6 +78,30 @@ const COLONNES_SITES: ColonneOptionnelle[] = [
       ) : ('-'),
   },
   { key: 'typePylone', header: 'Type de pylône', description: 'Référentiel des types de pylône', render: (s: SiteOptionnel) => (s.typePylone ? (TYPES_PYLONE.find((t) => t.value === s.typePylone)?.label ?? s.typePylone) : '-') },
+  {
+    key: 'dateMiseEnService', header: 'Mise en service',
+    description: 'Date de mise en service du site, et son âge',
+    sortValue: (s: SiteOptionnel) => s.dateMiseEnService ?? null,
+    // L'âge à côté de la date : c'est lui qu'on lit quand on cherche les sites
+    // vieillissants, pas le millésime.
+    render: (s: SiteOptionnel) => {
+      if (!s.dateMiseEnService) return <span className="text-gray-300">-</span>;
+      const d = new Date(s.dateMiseEnService);
+      if (Number.isNaN(d.getTime())) return <span className="text-gray-300">-</span>;
+      const ans = Math.floor((Date.now() - d.getTime()) / (365.25 * 86_400_000));
+      return (
+        <span className="whitespace-nowrap">
+          {fmtDate(s.dateMiseEnService)}
+          {ans >= 0 && <span className="ml-1.5 text-xs text-gray-400">{ans} ans</span>}
+        </span>
+      );
+    },
+  },
+  {
+    key: 'typeSite', header: 'Nature du site',
+    description: 'Centre technique, BTS… - sert à cibler les exclusions contractuelles',
+    render: (s: SiteOptionnel) => s.typeSite ?? <span className="text-gray-300">-</span>,
+  },
   {
     key: 'prestataires', header: 'Prestataires',
     description: 'Titulaires des contrats du site (passif/actif et solaire)',

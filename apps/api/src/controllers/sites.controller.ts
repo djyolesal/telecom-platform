@@ -18,6 +18,7 @@ import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission, assertSansCycle } from '../utils/transmission';
 import { ConfigCuve, cuveCalculable, hauteurMaxCm, volumeMaxLitres } from '../utils/cuve';
 import { publicFileUrl } from '../services/storage.service';
+import { memo } from '../utils/memo';
 
 /**
  * Configurations énergie éligibles au contrat SOLAIRE : celles qui embarquent
@@ -43,6 +44,7 @@ const IMPORT_COLUMNS = [
   { key: 'puissanceGEkva', header: 'puissanceGEkva' },
   { key: 'lot', header: 'lot' },
   { key: 'typePylone', header: 'typePylone' },
+  { key: 'typeSite', header: 'typeSite' },
   { key: 'dateMiseEnService', header: 'dateMiseEnService' },
   { key: 'hasClimatiseur', header: 'climatiseur' },
   { key: 'hasExtincteurs', header: 'extincteurs' },
@@ -98,6 +100,8 @@ const HEADER_ALIASES: Record<string, string> = {
   nodeid: 'nodeId', enodeb: 'nodeId', enodebid: 'nodeId',
   societegardiennage: 'societeGardiennage', gardiennage: 'societeGardiennage', societedegardiennage: 'societeGardiennage',
   telephonesite: 'telephoneSite', telephone: 'telephoneSite', tel: 'telephoneSite', contact: 'telephoneSite',
+  datemiseenservice: 'dateMiseEnService', miseenservice: 'dateMiseEnService', datemiseservice: 'dateMiseEnService',
+  typesite: 'typeSite', naturesite: 'typeSite', naturedusite: 'typeSite',
   marquege: 'marqueGE', marque: 'marqueGE',
   marquege2: 'marqueGE2',
 };
@@ -184,6 +188,10 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
         puissanceGEkva: (s) => ({ puissanceGEkva: s }),
         // Colonnes optionnelles (catalogue /config).
         typePylone: (s) => ({ typePylone: s }),
+        typeSite: (s) => ({ typeSite: s }),
+        // Tri par ancienneté : la question « quels sont mes sites les plus
+        // vieux » se pose depuis l'en-tête, pas par un export.
+        dateMiseEnService: (s) => ({ dateMiseEnService: s }),
         cuveVolumeLitres: (s) => ({ cuveVolumeLitres: s }),
         telephoneSite: (s) => ({ telephoneSite: s }),
         gardiennage: (s) => ({ societeGardiennage: s }),
@@ -208,7 +216,9 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
       { page: parseInt(page), limit: parseInt(limit) }
     );
 
-    res.json({ success: true, data, meta });
+    const rangs = await rangsAnciennete();
+    const avecRang = (data as { id: string }[]).map((s) => ({ ...s, rangAnciennete: rangs.get(s.id) ?? null }));
+    res.json({ success: true, data: avecRang, meta });
   } catch (err) { next(err); }
 }
 
@@ -720,6 +730,26 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
     const formeByNorm = new Map((Object.values(FormeCuve) as string[]).map((v) => [norm(v), v]));
     const TRUE_SET = new Set(['1', 'oui', 'true', 'vrai', 'x', 'yes', 'y']);
     const toBool = (s: string) => TRUE_SET.has(norm(s));
+    /** « 2022-10-03 » ou « 3-oct.-22 » → Date ; tout le reste → null. */
+    const MOIS_FR: Record<string, number> = {
+      janv: 1, fevr: 2, mars: 3, avr: 4, mai: 5, juin: 6,
+      juil: 7, aout: 8, sept: 9, oct: 10, nov: 11, dec: 12,
+    };
+    const dateOrNull = (v: string): Date | null => {
+      const t = v.trim();
+      if (!t) return null;
+      const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+      const fr = t.match(/^(\d{1,2})[-/\s]([^\s\-/.]+)\.?[-/\s](\d{2,4})$/);
+      if (!fr) return null;
+      const mois = MOIS_FR[norm(fr[2])];
+      if (!mois) return null;
+      let an = Number(fr[3]);
+      // Pivot à 70 : les plus anciens sites du parc datent de juin 1999.
+      if (an < 100) an += an >= 70 ? 1900 : 2000;
+      const d = new Date(Date.UTC(an, mois - 1, Number(fr[1])));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
 
     // Préchargement des lots pour résoudre le rattachement (par code, puis nom).
     const lots = await prisma.lot.findMany({ select: { id: true, code: true, nom: true } });
@@ -803,6 +833,12 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           ...(colByField.gardiennageNuitSeulement != null ? { gardiennageNuitSeulement: toBool(cellText(row, 'gardiennageNuitSeulement')) } : {}),
           ...(colByField.societeGardiennage != null ? { societeGardiennage: cellText(row, 'societeGardiennage') || null } : {}),
           ...(colByField.telephoneSite != null ? { telephoneSite: cellText(row, 'telephoneSite') || null } : {}),
+          // Mise en service : ISO (2022-10-03) ou français abrégé (3-oct.-22),
+          // les deux circulant dans les fichiers d'exploitation. Illisible =
+          // champ laissé tel quel, jamais une date approximative.
+          ...(colByField.dateMiseEnService != null
+            ? { dateMiseEnService: dateOrNull(cellText(row, 'dateMiseEnService')) } : {}),
+          ...(colByField.typeSite != null ? { typeSite: cellText(row, 'typeSite') || null } : {}),
           // Dimensions internes de la cuve (cm) — conversion hauteur → litres.
           ...(colByField.cuveLongueurCm != null ? { cuveLongueurCm: numOrNull(cellText(row, 'cuveLongueurCm')) } : {}),
           ...(colByField.cuveLargeurCm != null ? { cuveLargeurCm: numOrNull(cellText(row, 'cuveLargeurCm')) } : {}),
@@ -864,6 +900,30 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
     await cacheService.invalidate('sites:geojson*');
     res.json({ success: true, data: results });
   } catch (err) { next(err); }
+}
+
+
+/**
+ * RANG D'ANCIENNETÉ du site : 1 = le plus ancien du parc.
+ *
+ * Calculé sur TOUT le parc, jamais sur la page affichée. Un numéro qui change
+ * quand on trie par nom ou qu'on passe à la page suivante n'est pas une
+ * numérotation, c'est un compteur de lignes - et il ne vaut rien dans un export
+ * qu'on rapproche d'un autre.
+ *
+ * Les sites sans date de mise en service n'ont PAS de rang : on ne leur invente
+ * pas une ancienneté. Départage par code à date égale, pour que deux exports
+ * successifs donnent le même numéro au même site.
+ */
+function rangsAnciennete(): Promise<Map<string, number>> {
+  return memo('sites:rangs-anciennete', 60_000, async () => {
+    const sites = await prisma.site.findMany({
+      where: { isActive: true, dateMiseEnService: { not: null } },
+      orderBy: [{ dateMiseEnService: 'asc' }, { code: 'asc' }],
+      select: { id: true },
+    });
+    return new Map(sites.map((s, i) => [s.id, i + 1]));
+  });
 }
 
 /** GeoJSON pour Leaflet — avec mise en cache Redis 5min */
@@ -1137,13 +1197,21 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
 
     await auditLog(req.user!.id, 'EXPORT', 'sites', undefined, { count: sites.length }, req);
     const oui = (b: boolean) => (b ? 'oui' : 'non');
+    // Rang d'ancienneté en tête de fichier. Colonne de LECTURE : l'import
+    // l'ignore (aucun alias d'en-tête), car elle se déduit de la date de mise
+    // en service - la saisir serait ouvrir deux vérités pour un seul fait.
+    const rangs = await rangsAnciennete();
     await sendTabular(res, req.params.format, 'sites', 'Parc de sites (modèle de mise à jour - ré-importable)', [{
       name: 'Sites',
-      columns: IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key, width: 16 })),
+      columns: [
+        { header: 'n° ancienneté', key: 'rangAnciennete', width: 13 },
+        ...IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key, width: 16 })),
+      ],
       rows: sites.map((s) => {
         const ge1 = s.groupes[0];
         const ge2 = s.groupes[1];
         return {
+          rangAnciennete: rangs.get(s.id) ?? '',
           code: s.code,
           nom: s.nom,
           region: s.region,
@@ -1156,6 +1224,8 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
           puissanceGEkva: ge1 ? Number(ge1.puissanceKva) : Number(s.puissanceGEkva),
           lot: s.lot?.code ?? '',
           typePylone: s.typePylone ?? '',
+          typeSite: s.typeSite ?? '',
+          dateMiseEnService: s.dateMiseEnService ? s.dateMiseEnService.toISOString().slice(0, 10) : '',
           hasClimatiseur: oui(s.hasClimatiseur),
           hasExtincteurs: oui(s.hasExtincteurs),
           cuveVolumeLitres: s.cuveVolumeLitres != null ? Number(s.cuveVolumeLitres) : '',

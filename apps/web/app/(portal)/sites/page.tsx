@@ -21,6 +21,8 @@ import { SiteOptionnel } from '@/lib/optionalColumns';
 import { useColonnesOptionnelles } from '@/lib/hooks/useColonnesOptionnelles';
 
 interface Site extends SiteOptionnel {
+  /** Rang d'ancienneté dans le parc (1 = le plus ancien), null sans date. */
+  rangAnciennete?: number | null;
   id: string;
   code: string;
   nom: string;
@@ -100,6 +102,16 @@ function SitesPageInner() {
   const colonnesOptionnelles = useColonnesOptionnelles<Site>('sites');
 
   const columns: Column<Site>[] = [
+    {
+      // RANG D'ANCIENNETÉ, calculé sur tout le parc côté serveur : 1 = le site
+      // le plus ancien. Ce n'est pas un numéro de ligne - il ne bouge ni quand
+      // on trie par nom, ni quand on change de page, et c'est ce qui le rend
+      // utile dans un export qu'on rapproche d'un autre fichier.
+      key: 'rangAnciennete', header: 'N°', align: 'right',
+      render: (s) => s.rangAnciennete != null
+        ? <span className="tabular-nums text-xs text-gray-500">{s.rangAnciennete}</span>
+        : <span className="text-gray-300" title="Sans date de mise en service : pas de rang d'ancienneté.">-</span>,
+    },
     { key: 'nom', header: 'Nom', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },
     { key: 'region', header: 'Région' },
     { key: 'ville', header: 'Ville', render: (s) => s.ville || '-' },
