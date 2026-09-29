@@ -116,7 +116,7 @@ export default function BilanCarburantPage() {
     <div>
       <PageHeader
         title="Bilan conso & stock"
-        subtitle="Période libre - stock aux deux bornes, consommation par conservation, courbe 12 mois"
+        subtitle="Stock aux deux bornes, consommation et courbe 12 mois - méthode bilan matière sur les mois entiers"
         backHref="/carburant/stock"
         actions={<ExportButtons base="/rapports/bilan-carburant/export" name="bilan-carburant" query={query} />}
       />
@@ -178,10 +178,14 @@ export default function BilanCarburantPage() {
         </div>
 
         <p className="mb-4 text-xs text-gray-500">
-          Stocks et consommation totalisés sur les <b>{t!.nbSitesMesures} sites mesurés</b> (jauge relevée avant chaque borne).
-          Le « livré » couvre tous les sites - la logistique est toujours connue. Théorique total : {fmtNumber(t!.consoTheoriqueLitres)} L.
+          Stocks et consommation totalisés sur les <b>{t!.nbSitesMesures} sites mesurés</b>
+          {data.methode === 'BILAN_MATIERE' ? ' (au moins un relevé de cuve dans chaque mois)' : ' (jauge relevée avant chaque borne)'}.
+          Le « livré » couvre tous les sites - la logistique est toujours connue. Théorique total : {fmtNumber(t!.consoTheoriqueLitres)} L,
+          budget de référence et non mesure : il ne sert jamais à conclure qu&apos;il manque du gasoil.
         </p>
 
+        {/* La courbe passe TOUJOURS par la méthode validée : ses points sont des
+            mois, et deux séries mensuelles différentes ne peuvent pas coexister. */}
         {/* ── Courbe 12 mois ── */}
         <div className="mb-4 rounded-xl border border-gray-100 bg-white p-5">
           <h3 className="mb-1 text-sm font-semibold text-gray-700">Livré et consommé - 12 derniers mois</h3>

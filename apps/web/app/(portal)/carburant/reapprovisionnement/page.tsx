@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { AlertTriangle, Droplet, Truck, MapPin, Check, Sparkles, ShieldAlert } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -226,7 +227,17 @@ export default function ReapprovisionnementPage() {
 
       {tab === 'anomalies' && (
         <div>
-          <p className="text-xs text-gray-500 mb-3">Consommation réelle (relevés) comparée à la consommation théorique (puissance × heures GE). Un écart fort signale une fuite, un vol, ou des heures GE mal déclarées - d&apos;autant plus si le site a aussi un manquant de livraison.</p>
+          {/* CE N'EST PAS UN VERDICT. L'écart au théorique kVA est un budget
+              d'approvisionnement : il sert à savoir quoi livrer, pas à conclure
+              qu'on vole. La conclusion se lit sur « Pertes carburant », où le
+              bilan matière tranche. Sans ce rappel, l'écran faisait une
+              quatrième voix sur la même question. */}
+          <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            Écart entre la consommation relevée et la consommation <b>théorique</b> (puissance × heures GE). C&apos;est un signal
+            d&apos;<b>approvisionnement</b> : il dit quels sites consomment autrement que prévu, donc quoi livrer.
+            Pour savoir si du gasoil <b>disparaît</b>, la référence est le bilan matière -{' '}
+            <Link href="/carburant/pertes" className="underline">Pertes carburant</Link>, qui tranche et dit sur quoi il s&apos;appuie.
+          </div>
           {!anomData?.anomalies.length ? (
             <EmptyState title="Aucune anomalie détectée" hint="La consommation réelle des sites suit l'attendu (dans la tolérance configurée)." />
           ) : (

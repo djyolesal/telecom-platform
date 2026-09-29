@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Droplet, Flame } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -49,7 +50,11 @@ export default function CorrelationCarburantPage() {
     { key: 'ecart', header: 'Écart (L)', align: 'right', render: (l) => <span className={l.ecartLitres < 0 ? 'text-red-600 font-medium' : 'text-gray-700'}>{l.ecartLitres > 0 ? '+' : ''}{fmtNumber(l.ecartLitres)}</span> },
     { key: 'heures', header: 'Heures GE', align: 'right', render: (l) => fmtNumber(l.heuresGE) },
     { key: 'ratio', header: 'Livré/Consommé', align: 'center', render: (l) => l.ratio != null ? `${l.ratio.toFixed(2)}×` : '-' },
-    { key: 'anomalie', header: 'Alerte', align: 'center', render: (l) => l.anomalie ? <Badge className="bg-red-100 text-red-700">Anomalie</Badge> : <span className="text-gray-300">-</span> },
+    // « À couvrir » et non « Anomalie » : cet écran ne regarde ni le stock ni
+    // les heures de marche, il compare ce qu'on a livré à ce que les relevés
+    // déclarent consommé. C'est un écart de COUVERTURE logistique, pas un
+    // verdict de perte - celui-là se lit sur « Pertes carburant ».
+    { key: 'anomalie', header: 'Couverture', align: 'center', render: (l) => l.anomalie ? <Badge className="bg-amber-100 text-amber-800">À couvrir</Badge> : <span className="text-gray-300">-</span> },
   ];
 
   return (
@@ -64,7 +69,7 @@ export default function CorrelationCarburantPage() {
         <StatCard title="Total livré" value={`${fmtNumber(Math.round(totaux.livreLitres / 1000))}k L`} icon={Droplet} color="bg-[rgb(var(--brand-light))]" />
         <StatCard title="Total consommé GE" value={`${fmtNumber(Math.round(totaux.consommeLitres / 1000))}k L`} icon={Flame} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Écart global" value={`${fmtNumber(Math.round(totaux.ecartLitres / 1000))}k L`} icon={Droplet} color="bg-[rgb(var(--brand))]" />
-        <StatCard title="Sites en anomalie" value={String(data?.nbAnomalies ?? 0)} icon={AlertTriangle} color="bg-[#C0392B]" />
+        <StatCard title="Sites sous-livrés" value={String(data?.nbAnomalies ?? 0)} subtitle="conso déclarée > livré" icon={AlertTriangle} color="bg-[#B8860B]" />
       </div>
 
       <FilterBar
@@ -75,7 +80,10 @@ export default function CorrelationCarburantPage() {
       />
 
       <div className="mb-3 text-xs text-gray-500">
-        Une <span className="font-medium text-red-600">anomalie</span> signale une consommation GE nettement supérieure au carburant livré (ratio &lt; 0,85) - à vérifier : pertes, vol, dépotage non enregistré ou heures GE surévaluées.
+        Un site « <span className="font-medium text-amber-700">à couvrir</span> » consomme nettement plus que ce qui lui a été livré sur la période (ratio &lt; 0,85) :
+        dépotage non enregistré, sous-approvisionnement, ou heures GE surévaluées. C&apos;est une lecture <b>logistique</b> - elle ignore
+        le stock en cuve aux deux bornes. Pour savoir si du gasoil disparaît, la référence est le bilan matière :{' '}
+        <Link href="/carburant/pertes" className="underline">Pertes carburant</Link>.
       </div>
 
       {lignes.length === 0 ? (

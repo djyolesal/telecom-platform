@@ -75,13 +75,15 @@ export function moisEntiers(debut: Date, fin: Date): Array<{ annee: number; mois
   // Début au 1er à 00:00 UTC, fin au dernier jour du mois (la page borne à
   // 23:59:59 ou au 1er du mois suivant : les deux sont acceptés).
   if (d.getUTCDate() !== 1 || d.getUTCHours() || d.getUTCMinutes()) return null;
-  const finMoisSuivant = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 1));
-  const finExclusive = f.getUTCDate() === 1 && !f.getUTCHours() && !f.getUTCMinutes()
-    ? f                       // borne exclusive : 1er du mois suivant
-    : finMoisSuivant;         // borne inclusive : dernier jour du mois
+  // Deux écritures acceptées pour la même borne : « au 1er du mois suivant »
+  // (exclusive) et « au dernier jour du mois » (inclusive, ce que produit la
+  // page, horodatée à 23:59:59).
+  const bornExclusive = f.getUTCDate() === 1 && !f.getUTCHours() && !f.getUTCMinutes();
+  const finExclusive = bornExclusive ? f : new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 1));
   if (finExclusive <= d) return null;
-  // Le dernier jour doit bien fermer le mois.
-  if (finExclusive !== f) {
+  // Forme inclusive : le jour donné doit bien FERMER son mois, sinon la période
+  // s'arrête en cours de mois et la méthode calendaire ne s'applique pas.
+  if (!bornExclusive) {
     const dernierJour = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 0)).getUTCDate();
     if (f.getUTCDate() !== dernierJour) return null;
   }
