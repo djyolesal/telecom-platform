@@ -1,6 +1,6 @@
 import { prisma } from '../config/database';
 import { addMonths } from 'date-fns';
-import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, exigePremiereManuelle, SiteEligibilite, TachePreventive } from '../utils/tachesPreventives';
+import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, exigePremiereManuelle, SiteEligibilite, TachePreventive, ExclusionPerimetre, estExclue } from '../utils/tachesPreventives';
 import { sourcesForConfig } from '../utils/energy';
 import { dateReferenceTaches } from './settings.service';
 
@@ -83,7 +83,7 @@ export async function calculerDuParSite(
 
   // Exécutions VALIDES : la fenêtre en détail + la DERNIÈRE antérieure par
   // (site, tâche) - seule elle compte pour la dueness (historique borné).
-  const [execsFenetre, dernieresAvant, depotagesFenetre, relevesFenetre] = await Promise.all([
+  const [execsFenetre, dernieresAvant, depotagesFenetre, relevesFenetre, exclusions] = await Promise.all([
     prisma.maintenance.findMany({
       where: {
         statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
@@ -107,7 +107,20 @@ export async function calculerDuParSite(
       where: { siteId: { in: idsSites }, dateReleve: { gte: since, lt: finFenetre }, source: { in: ['GE', 'CEET'] } },
       select: { siteId: true, dateReleve: true, source: true, volumeGasoilLitres: true },
     }),
+    // PÉRIMÈTRE CONTRACTUEL : toutes les exclusions du site, y compris closes -
+    // un mois passé doit se relire avec le périmètre qui avait cours alors.
+    prisma.exclusionContractuelle.findMany({
+      where: { siteId: { in: idsSites } },
+      select: { siteId: true, tacheKey: true, debutLe: true, finLe: true },
+    }),
   ]);
+
+  const exclusionsParSite = new Map<string, ExclusionPerimetre[]>();
+  for (const e of exclusions) {
+    const arr = exclusionsParSite.get(e.siteId) ?? [];
+    arr.push({ tacheKey: e.tacheKey, debut: e.debutLe, fin: e.finLe });
+    exclusionsParSite.set(e.siteId, arr);
+  }
 
   const execsParCle = new Map<string, Date[]>();
   for (const g of dernieresAvant) {
@@ -149,16 +162,30 @@ export async function calculerDuParSite(
       if (realisee) c.realisees++;
       if (mois === moisCible && !realisee) statuts[t.key] = 'NOK';
     };
+    const siteEl = {
+      ...(site as unknown as SiteEligibilite),
+      exclusions: exclusionsParSite.get(site.id) ?? [],
+    };
+    // Le périmètre s'apprécie au DERNIER JOUR du mois : une exclusion qui prend
+    // effet en cours de mois retire la tâche de ce mois-là, le mois étant
+    // l'unité de la fiche de validation comme du rapport.
+    const finDeMois = (b: { fin: Date }) => new Date(b.fin.getTime() - 1);
+
     for (const t of catalogue) {
-      if (!t.eligible(site as unknown as SiteEligibilite)) { statuts[t.key] = 'NA'; continue; }
-      statuts[t.key] = 'OK'; // à jour par défaut ; NOK si un dû du mois cible n'est pas réalisé
+      if (!t.eligible(siteEl)) { statuts[t.key] = 'NA'; continue; }
+      const horsContrat = (b: { fin: Date }) => estExclue(siteEl, t.key, finDeMois(b));
+      const borneCible = bornes.find((b) => b.mois === moisCible);
+      // Hors contrat sur le mois cible : NA (« pas dû »), surtout pas NOK
+      // (« en retard ») - on ne reproche pas un manquement hors périmètre.
+      statuts[t.key] = borneCible && horsContrat(borneCible) ? 'NA' : 'OK';
       if (t.suiviParDonnees) {
-        for (const b of bornes) compter(b.mois, suiviOk(site, b.mois), t);
+        for (const b of bornes) if (!horsContrat(b)) compter(b.mois, suiviOk(site, b.mois), t);
         continue;
       }
       const freq = FREQUENCE_MOIS[t.frequence]!;
       const histo = execsParCle.get(`${site.id}:${t.key}`) ?? [];
       for (const b of bornes) {
+        if (horsContrat(b)) continue;
         let derniereAvant: Date | null = null;
         let realisee = false;
         for (const d of histo) {

@@ -2,7 +2,7 @@ import { addMonths } from 'date-fns';
 import { ScopeMaintenance } from '@prisma/client';
 import { genererReference } from './reference.service';
 import { prisma } from '../config/database';
-import { FREQUENCE_MOIS, tachesPlanifiables, exigePremiereManuelle, SiteEligibilite } from '../utils/tachesPreventives';
+import { FREQUENCE_MOIS, tachesPlanifiables, exigePremiereManuelle, SiteEligibilite, ExclusionPerimetre } from '../utils/tachesPreventives';
 import { dateReferenceTaches } from './settings.service';
 
 const SCOPES_PASSIFS: ScopeMaintenance[] = ['PASSIVE', 'LES_DEUX'];
@@ -58,12 +58,30 @@ export async function genererPlanningPreventif(horizonJours = 0): Promise<Planni
   });
   const ouvertSet = new Set(ouverts.map((o) => `${o.siteId}:${o.tachePreventiveKey}`));
 
+  // PÉRIMÈTRE CONTRACTUEL : on ne génère pas un ticket pour une tâche qui
+  // n'est pas au contrat sur ce site - le technicien se déplacerait pour un
+  // travail que personne ne paie, et le site sortirait « en retard ».
+  const exclusions = await prisma.exclusionContractuelle.findMany({
+    select: { siteId: true, tacheKey: true, debutLe: true, finLe: true },
+  });
+  const exclusionsParSite = new Map<string, ExclusionPerimetre[]>();
+  for (const e of exclusions) {
+    const arr = exclusionsParSite.get(e.siteId) ?? [];
+    arr.push({ tacheKey: e.tacheKey, debut: e.debutLe, fin: e.finLe });
+    exclusionsParSite.set(e.siteId, arr);
+  }
+
   let crees = 0;
   let ignoresSansPrestataire = 0;
   const aCreer: { siteId: string; categorie: string; equipement: string; key: string; datePlanifiee: Date; prestataireId: string }[] = [];
 
+  const aujourdhui = new Date();
   for (const site of sites) {
-    for (const t of tachesPlanifiables(site as unknown as SiteEligibilite)) {
+    const siteEl = {
+      ...(site as unknown as SiteEligibilite),
+      exclusions: exclusionsParSite.get(site.id) ?? [],
+    };
+    for (const t of tachesPlanifiables(siteEl, aujourdhui)) {
       // Suivi par les données (relevés/dépotages) : jamais de ticket généré.
       if (t.suiviParDonnees) continue;
       const prestataireId = t.categorie === 'SOLAIRE'

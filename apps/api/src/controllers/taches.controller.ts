@@ -22,6 +22,8 @@ import {
   tachesPlanifiables,
   effectiveCatalogue,
   SiteEligibilite,
+  ExclusionPerimetre,
+  estDue,
   exigePremiereManuelle,
 } from '../utils/tachesPreventives';
 
@@ -268,6 +270,24 @@ async function donneesFicheValidation(
           }),
     },
   });
+  // PÉRIMÈTRE CONTRACTUEL du mois : un site dont la tâche est hors contrat ne
+  // compte pas dans les « sites concernés » de la fiche - qui est signée.
+  const exclusions = await prisma.exclusionContractuelle.findMany({
+    where: { siteId: { in: sites.map((x) => x.id) } },
+    select: { siteId: true, tacheKey: true, debutLe: true, finLe: true },
+  });
+  const exclusionsParSite = new Map<string, ExclusionPerimetre[]>();
+  for (const e of exclusions) {
+    const arr = exclusionsParSite.get(e.siteId) ?? [];
+    arr.push({ tacheKey: e.tacheKey, debut: e.debutLe, fin: e.finLe });
+    exclusionsParSite.set(e.siteId, arr);
+  }
+  const sitesAvecPerimetre = sites.map((x) => ({
+    ...(x as unknown as SiteEligibilite),
+    id: x.id,
+    exclusions: exclusionsParSite.get(x.id) ?? [],
+  }));
+
   const monthStart = new Date(an, mo - 1, 1);
   const monthEnd = new Date(an, mo, 1);
   const done = await prisma.maintenance.findMany({
@@ -309,8 +329,9 @@ async function donneesFicheValidation(
       if (x.source === 'GE') { if (x.volumeGasoilLitres != null) poserF(x.siteId, 'GE'); }
       else poserF(x.siteId, 'CEET');
     }
-    realisesParKey['depotage'] = sites.filter((x) =>
-      TASK_BY_KEY['depotage'].eligible(x as unknown as SiteEligibilite)
+    const finDuMois = new Date(Date.UTC(an, mo, 0));
+    realisesParKey['depotage'] = sitesAvecPerimetre.filter((x) =>
+      estDue(TASK_BY_KEY['depotage'], x, finDuMois)
       && suiviMoisValide(vusFiche.get(x.id), x.powerConfig)
     ).length;
   }
@@ -322,7 +343,7 @@ async function donneesFicheValidation(
   } else {
     zone = [...new Set(sites.map((s) => s.region))].join(', ') || '-';
   }
-  return { sites: sites as unknown as SiteEligibilite[], realisesParKey, zone, nbSites: sites.length };
+  return { sites: sitesAvecPerimetre, realisesParKey, zone, nbSites: sites.length };
 }
 
 /** Format de sortie d'une fiche : le xlsx pour travailler, le PDF pour signer. */

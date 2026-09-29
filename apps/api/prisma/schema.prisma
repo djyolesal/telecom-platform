@@ -152,16 +152,17 @@ model User {
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
-  prestataire           Prestataire?         @relation(fields: [prestataireId], references: [id])
-  maintenances          Maintenance[]        @relation("TechnicienMaintenances")
-  depotages             Depotage[]           @relation("TechnicienDepotages")
-  bonsLivraisonClotures BonLivraison[]       @relation("ClotureBonsLivraison")
+  prestataire           Prestataire?             @relation(fields: [prestataireId], references: [id])
+  maintenances          Maintenance[]            @relation("TechnicienMaintenances")
+  depotages             Depotage[]               @relation("TechnicienDepotages")
+  bonsLivraisonClotures BonLivraison[]           @relation("ClotureBonsLivraison")
   mouvementsCarburant   MouvementCarburant[]
   releves               ReleveEnergie[]
-  incidents             Incident[]           @relation("TechnicienIncidents")
-  incidentsDeclares     Incident[]           @relation("DeclarantIncidents")
+  incidents             Incident[]               @relation("TechnicienIncidents")
+  incidentsDeclares     Incident[]               @relation("DeclarantIncidents")
   auditLogs             AuditLog[]
   notifications         Notification[]
+  exclusionsCreees      ExclusionContractuelle[] @relation("ExclusionsCreees")
 
   @@index([prestataireId])
   @@index([appareilId])
@@ -184,6 +185,11 @@ model Site {
   hasClimatiseur           Boolean     @default(false) @map("has_climatiseur")
   hasExtincteurs           Boolean     @default(false) @map("has_extincteurs")
   typePylone               String?     @map("type_pylone") @db.VarChar(40) // code du référentiel types_pylone
+  // Nature du site (code du référentiel types_site) : centre technique, BTS…
+  // DESCRIPTIF UNIQUEMENT. Le moteur de conformité ne le lit jamais - c'est
+  // `ExclusionContractuelle` qui dit ce qui est dû. Ce champ sert à reconnaître
+  // une population et à poser les exclusions en masse.
+  typeSite                 String?     @map("type_site") @db.VarChar(40)
   cuveVolumeLitres         Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
   formeCuve                FormeCuve?  @map("forme_cuve")
   cuveDimensions           String?     @map("cuve_dimensions") @db.VarChar(100) // texte libre hérité (lecture seule)
@@ -212,31 +218,32 @@ model Site {
   createdAt                DateTime    @default(now()) @map("created_at")
   updatedAt                DateTime    @updatedAt @map("updated_at")
 
-  lot                    Lot?                 @relation(fields: [lotId], references: [id])
-  lotSolaire             Lot?                 @relation("SitesSolaires", fields: [lotSolaireId], references: [id])
-  gardiennagePrestataire Prestataire?         @relation("GardiennageSites", fields: [gardiennagePrestataireId], references: [id])
+  lot                    Lot?                     @relation(fields: [lotId], references: [id])
+  lotSolaire             Lot?                     @relation("SitesSolaires", fields: [lotSolaireId], references: [id])
+  gardiennagePrestataire Prestataire?             @relation("GardiennageSites", fields: [gardiennagePrestataireId], references: [id])
   maintenances           Maintenance[]
   depotages              Depotage[]
-  mouvementsCarburant    MouvementCarburant[] @relation("MouvementsSite")
-  mouvementsContrepartie MouvementCarburant[] @relation("MouvementsContrepartie")
+  mouvementsCarburant    MouvementCarburant[]     @relation("MouvementsSite")
+  mouvementsContrepartie MouvementCarburant[]     @relation("MouvementsContrepartie")
   releves                ReleveEnergie[]
   anomaliesSaisie        AnomalieSaisie[]
   incidents              Incident[]
   groupes                GroupeElectrogene[]
   baremage               BaremageCuve[]
   coupuresReseau         CoupureReseau[]
+  exclusions             ExclusionContractuelle[]
   // Topologie de transmission : site AMONT dont dépend le lien de ce site.
-  parentTransmissionId   String?              @map("parent_transmission_id")
-  parentTransmission     Site?                @relation("TransmissionSite", fields: [parentTransmissionId], references: [id])
+  parentTransmissionId   String?                  @map("parent_transmission_id")
+  parentTransmission     Site?                    @relation("TransmissionSite", fields: [parentTransmissionId], references: [id])
   // Type de la liaison vers le site amont (FIBER, TN, ML, RTN…) — le référentiel
   // (famille fibre/FH, constructeur) est paramétrable dans SystemSettings.
-  typeLiaison            String?              @map("type_liaison")
-  enfantsTransmission    Site[]               @relation("TransmissionSite")
+  typeLiaison            String?                  @map("type_liaison")
+  enfantsTransmission    Site[]                   @relation("TransmissionSite")
   equipementsActifs      EquipementActif[]
   lignesLivraison        LigneLivraison[]
   // Accès difficile : le camion citerne ne peut pas atteindre le site, la
   // livraison se termine par un véhicule de transfert (« pickup »).
-  accesPickup            Boolean              @default(false) @map("acces_pickup")
+  accesPickup            Boolean                  @default(false) @map("acces_pickup")
 
   @@index([region])
   @@index([statutGE])
@@ -1236,6 +1243,35 @@ model RapportMensuel {
 /// Résultat d'un contrôle de vraisemblance, enregistré comme DONNÉE : une
 /// phrase dans les observations ne se compte pas, ne se filtre pas et ne se
 /// compare pas d'un mois sur l'autre.
+/// PÉRIMÈTRE CONTRACTUEL : une tâche du catalogue qui n'est PAS due sur ce site.
+///
+/// L'éligibilité technique répond à « ce site a-t-il un GE ? ». Ceci répond à
+/// « son entretien est-il au contrat ? » - deux questions différentes, que
+/// confondre rendrait la première inexploitable dès la deuxième exception.
+///
+/// DATÉE : la fiche de validation compte les « sites concernés » et se signe.
+/// Une exclusion sans date rendrait faux des mois déjà signés.
+model ExclusionContractuelle {
+  id        String    @id @default(uuid())
+  siteId    String    @map("site_id")
+  /// Clé du catalogue (ge_secours, curage_cuve…) - non contrainte en base :
+  /// une clé retirée du code ne doit pas empêcher de relire l'historique.
+  tacheKey  String    @map("tache_key") @db.VarChar(40)
+  motif     String    @db.VarChar(300)
+  debutLe   DateTime  @map("debut_le") @db.Date
+  /// NULL = toujours en vigueur.
+  finLe     DateTime? @map("fin_le") @db.Date
+  creePar   String?   @map("cree_par")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  site   Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  auteur User? @relation("ExclusionsCreees", fields: [creePar], references: [id])
+
+  @@index([siteId], map: "exclusions_contractuelles_site_idx")
+  @@index([tacheKey], map: "exclusions_contractuelles_tache_idx")
+  @@map("exclusions_contractuelles")
+}
+
 model AnomalieSaisie {
   id              String    @id @default(uuid())
   code            String    @db.VarChar(40)

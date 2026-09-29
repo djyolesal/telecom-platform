@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { TASK_BY_KEY, SiteEligibilite } from '../utils/tachesPreventives';
+import { TASK_BY_KEY, SiteEligibilite, estDue } from '../utils/tachesPreventives';
 
 /** Lignes de la fiche : libellés contractuels, clé catalogue et fréquence sur 6 mois. */
 export const FICHE_ROWS: { numero: number; description: string; key: string; freq6: number }[] = [
@@ -43,13 +43,23 @@ export function lignesFiche(d: {
   sites: SiteEligibilite[];
   realisesParKey: Record<string, number>;
   contrat?: 'PASSIF' | 'SOLAIRE';
+  /** Mois de la fiche : les exclusions de périmètre s'apprécient à cette date. */
+  annee?: number;
+  mois?: number;
 }): LigneFiche[] {
+  // Dernier jour du mois : une exclusion qui prend effet EN COURS de mois
+  // retire la tâche de ce mois-là. Le mois est l'unité du document.
+  const le = d.annee && d.mois
+    ? new Date(Date.UTC(d.annee, d.mois, 0))
+    : new Date();
   return (d.contrat === 'SOLAIRE' ? FICHE_ROWS_SOLAIRE : FICHE_ROWS).map((row) => {
     const t = TASK_BY_KEY[row.key];
     return {
       numero: row.numero,
       description: row.description,
-      concernes: t ? d.sites.filter((s) => t.eligible(s)).length : 0,
+      // Périmètre CONTRACTUEL, pas seulement technique : un centre technique
+      // dont le GE n'est pas au contrat ne compte pas parmi les concernés.
+      concernes: t ? d.sites.filter((s) => estDue(t, s, le)).length : 0,
       realises: d.realisesParKey[row.key] ?? 0,
       freq6: row.freq6,
     };

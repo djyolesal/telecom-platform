@@ -27,6 +27,16 @@ export const FREQUENCE_LABEL: Record<Frequence, string> = {
   AU_BESOIN: 'Au besoin',
 };
 
+/**
+ * Une exclusion de périmètre : cette tâche n'est pas au contrat sur ce site,
+ * pendant cette période. `fin` null = toujours en vigueur.
+ */
+export interface ExclusionPerimetre {
+  tacheKey: string;
+  debut: Date;
+  fin: Date | null;
+}
+
 /** Attributs de site nécessaires à l'évaluation de l'éligibilité. */
 export interface SiteEligibilite {
   typePylone: string | null;
@@ -35,6 +45,38 @@ export interface SiteEligibilite {
   powerConfig: string;
   statutGE: string;
   cuveVolumeLitres: unknown; // Decimal | number | null
+  /**
+   * Exclusions contractuelles du site. ABSENT = aucune exclusion connue, et
+   * non « pas encore chargées » : un appelant qui les oublie obtient le dû
+   * complet, ce qui est le comportement d'avant - jamais un dû silencieusement
+   * amputé.
+   */
+  exclusions?: ExclusionPerimetre[];
+}
+
+/**
+ * LA TÂCHE EST-ELLE DUE SUR CE SITE, À CETTE DATE ?
+ *
+ * Deux conditions de nature différente, et il faut les deux :
+ *   - ÉLIGIBILITÉ TECHNIQUE : le site a-t-il l'équipement ? (`eligible`)
+ *   - PÉRIMÈTRE CONTRACTUEL : l'entretien est-il au contrat ? (exclusions)
+ *
+ * Les confondre - par exemple en retirant les centres techniques dans le
+ * prédicat `eligible` - rendrait ce dernier inexploitable dès la deuxième
+ * exception, et invisible pour qui lit le catalogue.
+ *
+ * La DATE compte : une exclusion posée en octobre ne doit rien changer aux
+ * mois de janvier à septembre, dont les fiches de validation sont signées.
+ */
+export function estDue(t: TachePreventive, s: SiteEligibilite, le: Date): boolean {
+  if (!t.eligible(s)) return false;
+  return !estExclue(s, t.key, le);
+}
+
+export function estExclue(s: SiteEligibilite, tacheKey: string, le: Date): boolean {
+  return (s.exclusions ?? []).some(
+    (e) => e.tacheKey === tacheKey && e.debut <= le && (e.fin == null || e.fin >= le),
+  );
 }
 
 const hasCuve = (s: SiteEligibilite) => s.cuveVolumeLitres != null && Number(s.cuveVolumeLitres) > 0;
@@ -185,12 +227,15 @@ export function effectiveCatalogue(): TachePreventive[] {
   return CONTRACTUAL_TASKS.map(withOverride);
 }
 
-/** Tâches contractuelles applicables à un site donné (libellé/fréquence effectifs). */
-export function tachesForSite(s: SiteEligibilite): TachePreventive[] {
-  return CONTRACTUAL_TASKS.filter((t) => t.eligible(s)).map(withOverride);
+/**
+ * Tâches contractuelles applicables à un site donné (libellé/fréquence
+ * effectifs), à une date. Sans date : aujourd'hui - le cas courant des écrans.
+ */
+export function tachesForSite(s: SiteEligibilite, le: Date = new Date()): TachePreventive[] {
+  return CONTRACTUAL_TASKS.filter((t) => estDue(t, s, le)).map(withOverride);
 }
 
 /** Tâches périodiques (hors « au besoin ») applicables — celles qui se planifient. */
-export function tachesPlanifiables(s: SiteEligibilite): TachePreventive[] {
-  return tachesForSite(s).filter((t) => FREQUENCE_MOIS[t.frequence] != null);
+export function tachesPlanifiables(s: SiteEligibilite, le: Date = new Date()): TachePreventive[] {
+  return tachesForSite(s, le).filter((t) => FREQUENCE_MOIS[t.frequence] != null);
 }
