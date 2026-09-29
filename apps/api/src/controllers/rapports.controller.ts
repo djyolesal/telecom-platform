@@ -1131,7 +1131,11 @@ export async function exportBilanCarburant(req: Request, res: Response, next: Ne
     `Du ${debut.toLocaleDateString('fr-FR')} au ${fin.toLocaleDateString('fr-FR')} · ` +
     `stock ${b.totaux.stockDebutLitres.toLocaleString('fr-FR')} → ${b.totaux.stockFinLitres.toLocaleString('fr-FR')} L · ` +
     `livré ${b.totaux.livreLitres.toLocaleString('fr-FR')} L · consommé ${b.totaux.consoLitres.toLocaleString('fr-FR')} L ` +
-    `(${b.totaux.nbSitesMesures}/${b.totaux.nbSites} sites mesurés)`);
+    `(${b.totaux.nbSitesMesures}/${b.totaux.nbSites} sites mesurés) · ` +
+    // Un export circule sans son écran : il doit porter sa méthode.
+    (b.methode === 'BILAN_MATIERE'
+      ? 'méthode bilan matière validée 07/09/2026 (frontières interpolées)'
+      : 'méthode conservation aux bornes - période libre, stocks en report de jauge'));
   } catch (err) { next(err); }
 }
 

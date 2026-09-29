@@ -217,23 +217,31 @@ export function bilanMensuelSite(opts: {
   };
 }
 
-/** Charge les données et déroule la méthode sur tout le parc pour (annee, mois). */
-export async function stocksMensuels(opts: { annee: number; mois: number; region?: string }): Promise<LigneStockMensuel[]> {
-  const suivant = new Date(Date.UTC(opts.annee, opts.mois, 1));
-  const sites = await prisma.site.findMany({
-    where: { isActive: true, ...(opts.region ? { region: opts.region } : {}) },
-    select: { id: true, nom: true, region: true },
-  });
-  const ids = sites.map((s) => s.id);
-  // Toute l'antériorité disponible : le débit lissé et la fenêtre élargie en vivent.
+/** Séries carburant d'un site : tout ce dont la méthode a besoin. */
+export interface SerieCarburant {
+  releves: ReleveStockLite[];
+  livraisons: LivraisonLite[];
+  mouvements: MouvementLite[];
+}
+
+/**
+ * CHARGEUR UNIQUE des séries carburant, partagé par le bilan mensuel et le
+ * bilan sur période.
+ *
+ * Toute l'antériorité disponible est chargée : le débit lissé et
+ * l'élargissement de fenêtre en vivent, et une série tronquée changerait
+ * silencieusement le résultat. Charger une fois pour douze mois de courbe
+ * évite aussi douze relectures du parc.
+ */
+export async function chargerSeries(siteIds: string[], avant: Date): Promise<Map<string, SerieCarburant>> {
   const [releves, depots, mvts] = await Promise.all([
     prisma.releveEnergie.findMany({
-      where: { siteId: { in: ids }, source: 'GE', dateReleve: { lt: suivant } },
+      where: { siteId: { in: siteIds }, source: 'GE', dateReleve: { lt: avant } },
       select: { siteId: true, dateReleve: true, volumeGasoilLitres: true, indexHeuresGE: true, groupeId: true },
       orderBy: { dateReleve: 'asc' },
     }),
     prisma.depotage.findMany({
-      where: { siteId: { in: ids }, dateDepotage: { lt: suivant } },
+      where: { siteId: { in: siteIds }, dateDepotage: { lt: avant } },
       select: { siteId: true, dateDepotage: true, volumeLitres: true },
     }),
     // SEULS les mouvements VALIDÉS bougent le stock : une déclaration du
@@ -241,47 +249,55 @@ export async function stocksMensuels(opts: { annee: number; mois: number; region
     // la réconciliation des dépotages).
     prisma.mouvementCarburant.findMany({
       where: {
-        siteId: { in: ids }, dateMouvement: { lt: suivant },
+        siteId: { in: siteIds }, dateMouvement: { lt: avant },
         type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] }, statut: 'VALIDE',
       },
       select: { siteId: true, dateMouvement: true, type: true, volumeLitres: true },
     }),
   ]);
-  const relParSite = new Map<string, ReleveStockLite[]>();
+
+  const series = new Map<string, SerieCarburant>();
+  const de = (id: string): SerieCarburant => {
+    let s = series.get(id);
+    if (!s) { s = { releves: [], livraisons: [], mouvements: [] }; series.set(id, s); }
+    return s;
+  };
   for (const r of releves) {
-    const arr = relParSite.get(r.siteId) ?? [];
-    arr.push({
+    de(r.siteId).releves.push({
       date: r.dateReleve,
       volume: r.volumeGasoilLitres != null ? Number(r.volumeGasoilLitres) : null,
       index: r.indexHeuresGE != null ? Number(r.indexHeuresGE) : null,
       groupeId: r.groupeId,
     });
-    relParSite.set(r.siteId, arr);
   }
-  const livParSite = new Map<string, LivraisonLite[]>();
-  for (const d of depots) {
-    const arr = livParSite.get(d.siteId) ?? [];
-    arr.push({ date: d.dateDepotage, litres: Number(d.volumeLitres) });
-    livParSite.set(d.siteId, arr);
-  }
-
-  const mvtParSite = new Map<string, MouvementLite[]>();
+  for (const d of depots) de(d.siteId).livraisons.push({ date: d.dateDepotage, litres: Number(d.volumeLitres) });
   for (const m of mvts) {
     if (!m.siteId) continue;
-    const arr = mvtParSite.get(m.siteId) ?? [];
-    arr.push({ date: m.dateMouvement, litres: signeMouvement(m.type) * Number(m.volumeLitres) });
-    mvtParSite.set(m.siteId, arr);
+    de(m.siteId).mouvements.push({ date: m.dateMouvement, litres: signeMouvement(m.type) * Number(m.volumeLitres) });
   }
+  return series;
+}
+
+const SERIE_VIDE: SerieCarburant = { releves: [], livraisons: [], mouvements: [] };
+
+/** Déroule la méthode sur les séries déjà chargées. */
+export function bilanMensuelSerie(serie: SerieCarburant | undefined, annee: number, mois: number) {
+  const s = serie ?? SERIE_VIDE;
+  return bilanMensuelSite({ releves: s.releves, livraisons: s.livraisons, mouvements: s.mouvements, annee, mois });
+}
+
+/** Charge les données et déroule la méthode sur tout le parc pour (annee, mois). */
+export async function stocksMensuels(opts: { annee: number; mois: number; region?: string }): Promise<LigneStockMensuel[]> {
+  const suivant = new Date(Date.UTC(opts.annee, opts.mois, 1));
+  const sites = await prisma.site.findMany({
+    where: { isActive: true, ...(opts.region ? { region: opts.region } : {}) },
+    select: { id: true, nom: true, region: true },
+  });
+  const series = await chargerSeries(sites.map((s) => s.id), suivant);
 
   const out: LigneStockMensuel[] = [];
   for (const s of sites) {
-    const bilan = bilanMensuelSite({
-      releves: relParSite.get(s.id) ?? [],
-      livraisons: livParSite.get(s.id) ?? [],
-      mouvements: mvtParSite.get(s.id) ?? [],
-      annee: opts.annee,
-      mois: opts.mois,
-    });
+    const bilan = bilanMensuelSerie(series.get(s.id), opts.annee, opts.mois);
     if (bilan) out.push({ siteId: s.id, site: s.nom, region: s.region, ...bilan });
   }
   return out.sort((a, b) => a.site.localeCompare(b.site));

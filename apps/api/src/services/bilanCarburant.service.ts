@@ -3,6 +3,7 @@ import { litresMoisGE } from '../utils/calculator';
 import { geParams } from './settings.service';
 import { signeMouvement } from './mouvementsCarburant.service';
 import { memo } from '../utils/memo';
+import { chargerSeries, bilanMensuelSerie, SerieCarburant } from './stocksMensuels.service';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 const r0 = (v: number) => Math.round(v);
@@ -23,9 +24,21 @@ const JOUR_MS = 86_400_000;
  * consommation fantôme. Les sites non mesurables sont listés avec leur motif,
  * et le « livré » y reste compté : la logistique, elle, est toujours connue.
  *
- * La courbe des 12 mois applique la même équation mois par mois, au niveau du
- * parc : chaque point indique combien de sites étaient mesurables — une conso
- * mensuelle mesurée sur 30 sites sur 200 se lit comme telle.
+ * MAIS dès que la période demandée couvre des MOIS ENTIERS - ce que font les
+ * trois raccourcis de la page, et la courbe par construction - c'est la méthode
+ * validée avec l'exploitant le 07/09/2026 qui s'applique (stocksMensuels) :
+ * frontières interpolées, fenêtre d'au moins 10 jours, gardes sur l'index GE.
+ *
+ * Deux moteurs publiaient jusqu'ici le même mois par deux chemins différents,
+ * dans deux menus différents. Le report brut de la jauge aux frontières
+ * SURESTIME systématiquement - c'est le constat qui a fait naître la méthode
+ * validée ; le garder en parallèle revenait à publier deux « stock au 1er »
+ * sans dire lequel fait foi. L'équation de conservation ci-dessus ne sert donc
+ * plus qu'aux périodes libres, et la réponse le signale (`methode`).
+ *
+ * La courbe des 12 mois indique, pour chaque point, combien de sites étaient
+ * mesurables : une conso mensuelle mesurée sur 30 sites sur 200 se lit
+ * comme telle.
  */
 
 export interface LigneBilanSite {
@@ -47,6 +60,37 @@ export interface PointCourbe {
   conso: number | null;            // conservation parc, sites mesurables
   nbSitesMesures: number;
   nbSites: number;
+}
+
+/**
+ * La période demandée couvre-t-elle des MOIS CALENDAIRES ENTIERS ?
+ *
+ * Si oui, c'est la méthode validée qui s'applique, mois par mois. Les trois
+ * raccourcis de la page (mois en cours, mois dernier, trimestre) tombent tous
+ * dans ce cas ; une période saisie à la main, rarement.
+ */
+export function moisEntiers(debut: Date, fin: Date): Array<{ annee: number; mois: number }> | null {
+  const d = new Date(debut);
+  const f = new Date(fin);
+  // Début au 1er à 00:00 UTC, fin au dernier jour du mois (la page borne à
+  // 23:59:59 ou au 1er du mois suivant : les deux sont acceptés).
+  if (d.getUTCDate() !== 1 || d.getUTCHours() || d.getUTCMinutes()) return null;
+  const finMoisSuivant = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 1));
+  const finExclusive = f.getUTCDate() === 1 && !f.getUTCHours() && !f.getUTCMinutes()
+    ? f                       // borne exclusive : 1er du mois suivant
+    : finMoisSuivant;         // borne inclusive : dernier jour du mois
+  if (finExclusive <= d) return null;
+  // Le dernier jour doit bien fermer le mois.
+  if (finExclusive !== f) {
+    const dernierJour = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 0)).getUTCDate();
+    if (f.getUTCDate() !== dernierJour) return null;
+  }
+  const out: Array<{ annee: number; mois: number }> = [];
+  for (let c = new Date(d); c < finExclusive; c = new Date(Date.UTC(c.getUTCFullYear(), c.getUTCMonth() + 1, 1))) {
+    out.push({ annee: c.getUTCFullYear(), mois: c.getUTCMonth() + 1 });
+    if (out.length > 36) return null; // garde-fou : pas de période démesurée
+  }
+  return out.length ? out : null;
 }
 
 type Evt = { t: number; v: number };
@@ -152,15 +196,63 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
   const t0 = debut.getTime();
   const t1 = fin.getTime();
 
+  // Méthode validée dès que la période tient en mois entiers ; la courbe, elle,
+  // y passe toujours (ses points SONT des mois).
+  const mois = moisEntiers(debut, fin);
+  const series = await chargerSeries(siteIds, new Date(Math.max(fin.getTime(), finMois.getTime())));
+  const MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+  /** Agrège les bilans mensuels validés d'un site sur la période. */
+  function parMois(serie: SerieCarburant | undefined): Pick<LigneBilanSite,
+    'stockDebut' | 'stockFin' | 'livre' | 'mouvements' | 'conso' | 'mesure' | 'motifNonMesure'> {
+    const bilans = mois!.map((m) => ({ m, b: bilanMensuelSerie(serie, m.annee, m.mois) }));
+    const manquant = bilans.find((x) => x.b == null);
+    if (manquant) {
+      return {
+        stockDebut: null, stockFin: null,
+        livre: r0(bilans.reduce((s, x) => s + (x.b?.livraisons ?? 0), 0)),
+        mouvements: r0(bilans.reduce((s, x) => s + (x.b?.mouvements ?? 0), 0)),
+        conso: null, mesure: false,
+        motifNonMesure: `Aucun relevé de cuve en ${MOIS_FR[manquant.m.mois - 1]} ${manquant.m.annee}`,
+      };
+    }
+    const b = bilans.map((x) => x.b!);
+    const incalculable = b.find((x) => x.conso == null);
+    return {
+      stockDebut: b[0].stockDebut,
+      stockFin: b[b.length - 1].stockFin,
+      livre: r0(b.reduce((s, x) => s + x.livraisons, 0)),
+      mouvements: r0(b.reduce((s, x) => s + x.mouvements, 0)),
+      conso: incalculable ? null : r0(b.reduce((s, x) => s + (x.conso ?? 0), 0)),
+      mesure: !incalculable,
+      motifNonMesure: incalculable ? (incalculable.drapeaux[0] ?? 'Consommation incalculable') : null,
+    };
+  }
+
   // ── Détail par site sur la période ──
   const lignes: LigneBilanSite[] = sites.map((site) => {
     const idx = index.get(site.id) ?? { releves: [], depots: [], mvts: [] };
-    const stockDebut = stockA(idx, t0);
-    const stockFin = stockA(idx, t1);
-    const livre = r0(sommeEntre(idx.depots, t0, t1));
-    const mouvements = r0(sommeEntre(idx.mvts, t0, t1));
-    const mesure = stockDebut != null && stockFin != null;
-    const conso = mesure ? r0(stockDebut! + livre + mouvements - stockFin!) : null;
+    let stockDebut: number | null;
+    let stockFin: number | null;
+    let livre: number;
+    let mouvements: number;
+    let conso: number | null;
+    let mesure: boolean;
+    let motifNonMesure: string | null;
+    if (mois) {
+      ({ stockDebut, stockFin, livre, mouvements, conso, mesure, motifNonMesure } = parMois(series.get(site.id)));
+    } else {
+      stockDebut = stockA(idx, t0);
+      stockFin = stockA(idx, t1);
+      livre = r0(sommeEntre(idx.depots, t0, t1));
+      mouvements = r0(sommeEntre(idx.mvts, t0, t1));
+      mesure = stockDebut != null && stockFin != null;
+      conso = mesure ? r0(stockDebut! + livre + mouvements - stockFin!) : null;
+      motifNonMesure = mesure ? null
+        : stockDebut == null && stockFin == null ? 'Aucune jauge relevée avant la période'
+        : stockDebut == null ? 'Pas de jauge avant le début de période'
+        : 'Pas de jauge avant la fin de période';
+    }
 
     // Théorique : somme des GE actifs (repli sur la puissance agrégée du site),
     // prorata des jours de la période.
@@ -177,10 +269,7 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
       conso, consoTheorique,
       ecart: conso != null ? r0(conso - consoTheorique) : null,
       mesure,
-      motifNonMesure: mesure ? null
-        : stockDebut == null && stockFin == null ? 'Aucune jauge relevée avant la période'
-        : stockDebut == null ? 'Pas de jauge avant le début de période'
-        : 'Pas de jauge avant la fin de période',
+      motifNonMesure,
     };
   });
 
@@ -189,17 +278,15 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
   for (let m = 0; m < 12; m++) {
     const b0 = new Date(Date.UTC(debutCourbe.getUTCFullYear(), debutCourbe.getUTCMonth() + m, 1));
     const b1 = new Date(Date.UTC(debutCourbe.getUTCFullYear(), debutCourbe.getUTCMonth() + m + 1, 1));
+    // MÉTHODE VALIDÉE pour chaque point : un point de courbe EST un mois. La
+    // conservation brute donnait ici une seconde série mensuelle, différente de
+    // celle du rapport « Stocks carburant mensuels » pour les mêmes mois.
     let livre = 0, conso = 0, nbMesures = 0;
     for (const site of sites) {
-      const idx = index.get(site.id);
-      if (!idx) continue;
-      livre += sommeEntre(idx.depots, b0.getTime(), b1.getTime());
-      const s0 = stockA(idx, b0.getTime());
-      const s1 = stockA(idx, b1.getTime());
-      if (s0 != null && s1 != null) {
-        conso += s0 + sommeEntre(idx.depots, b0.getTime(), b1.getTime()) + sommeEntre(idx.mvts, b0.getTime(), b1.getTime()) - s1;
-        nbMesures++;
-      }
+      const b = bilanMensuelSerie(series.get(site.id), b0.getUTCFullYear(), b0.getUTCMonth() + 1);
+      if (!b) continue;
+      livre += b.livraisons;
+      if (b.conso != null) { conso += b.conso; nbMesures++; }
     }
     courbe.push({
       annee: b0.getUTCFullYear(), mois: b0.getUTCMonth() + 1,
@@ -214,6 +301,10 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
   return {
     periode: { debut: debut.toISOString(), fin: fin.toISOString(), jours: joursPeriode },
     region: region ?? null,
+    // Le lecteur doit savoir d'où sortent les chiffres qu'il lit : les deux
+    // méthodes ne donnent pas le même « stock au 1er ».
+    methode: mois ? 'BILAN_MATIERE' : 'CONSERVATION',
+    moisCouverts: mois?.length ?? 0,
     totaux: {
       nbSites: lignes.length,
       nbSitesMesures: mesures.length,
