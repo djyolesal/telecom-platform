@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Fuel, AlertTriangle, Droplet, Banknote, History, Truck } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -24,6 +25,8 @@ interface SiteStock {
   coutMoisFCFA: number;
   autonomieJours: number | null;
   niveauAlerte: string;
+  /** Saisies encore à vérifier sur ce site (contrôle de vraisemblance). */
+  saisiesSignalees: { nb: number; codes: string[] } | null;
 }
 
 const ORDRE: Record<string, number> = { VIDE: 0, CRITIQUE: 1, FAIBLE: 2, OK: 3, NA: 4 };
@@ -60,6 +63,20 @@ export default function StockCarburantPage() {
     { key: 'litresMois', header: 'Conso/mois théorique (L)', align: 'right', render: (s) => fmtNumber(s.litresMois) },
     { key: 'coutMoisFCFA', header: 'Coût/mois', align: 'right', render: (s) => fmtFCFA(s.coutMoisFCFA) },
     { key: 'niveauAlerte', header: 'Niveau', align: 'center', render: (s) => <NiveauStockBadge value={s.niveauAlerte} /> },
+    {
+      // Ce stock DÉCOULE de la dernière jauge. Si c'est elle qui est signalée,
+      // il faut le savoir avant d'envoyer un camion - ou de n'en envoyer aucun.
+      key: 'saisies', header: 'Saisies', align: 'center',
+      render: (s) => s.saisiesSignalees
+        ? (
+          <Link href={`/supervision/anomalies?site_id=${s.siteId}`}
+            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-200"
+            title={`${s.saisiesSignalees.nb} saisie(s) à vérifier sur ce site : le stock affiché en découle.`}>
+            <AlertTriangle size={11} /> {s.saisiesSignalees.nb}
+          </Link>
+        )
+        : <span className="text-gray-300">-</span>,
+    },
   ];
 
   return (
@@ -80,7 +97,9 @@ export default function StockCarburantPage() {
         <StatCard title="Conso parc" value={`${fmtNumber(Math.round((resume.totalLitresMois ?? 0) / 1000))}k L/mois`} icon={Droplet} color="bg-[rgb(var(--brand-light))]" />
         {/* Coût masqué côté serveur pour les comptes prestataires : « - », pas « 0 M ». */}
         <StatCard title="Coût mensuel" value={resume.totalCoutMoisFCFA == null ? '-' : `${fmtNumber(Math.round(resume.totalCoutMoisFCFA / 1_000_000))} M`} subtitle="FCFA/mois" icon={Banknote} color="bg-[rgb(var(--brand))]" />
-        <StatCard title="Sites en alerte" value={(resume.nbSitesVides ?? 0) + (resume.nbSitesCritiques ?? 0)} subtitle={`${resume.nbSitesFaibles ?? 0} faibles`} icon={AlertTriangle} color="bg-red-500" />
+        <StatCard title="Sites en alerte" value={(resume.nbSitesVides ?? 0) + (resume.nbSitesCritiques ?? 0)}
+          subtitle={resume.nbSitesSaisiesSignalees ? `${resume.nbSitesFaibles ?? 0} faibles · ${resume.nbSitesSaisiesSignalees} à saisies signalées` : `${resume.nbSitesFaibles ?? 0} faibles`}
+          icon={AlertTriangle} color="bg-red-500" />
       </div>
 
       <FilterBar

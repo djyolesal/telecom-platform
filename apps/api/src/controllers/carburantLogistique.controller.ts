@@ -27,6 +27,7 @@ import { env } from '../config/env';
 import { notificationService } from '../services/notifications.service';
 import { logger } from '../utils/logger';
 import { notifierPlanLivraison } from '../services/sms.service';
+import { anomaliesCarburantParSite } from '../services/anomaliesCarburantSite.service';
 
 const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -1450,10 +1451,19 @@ export async function getStocksMensuels(req: Request, res: Response, next: NextF
     const m = mois != null && mois !== '' ? parseInt(mois) : new Date().getMonth() + 1;
     if (!Number.isFinite(m) || m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
     const lignes = await stocksMensuels({ annee: a, mois: m, region: region || undefined });
+    // Saisies encore à vérifier sur le mois : elles alimentent ces chiffres.
+    // Les montrer ici évite de publier un bilan dont on ignore qu'il repose
+    // sur une jauge signalée.
+    const anomalies = await anomaliesCarburantParSite({
+      siteIds: lignes.map((l) => l.siteId),
+      depuis: new Date(Date.UTC(a, m - 1, 1)),
+      jusqua: new Date(Date.UTC(a, m, 1)),
+    });
+    const avecAnomalies = lignes.map((l) => ({ ...l, anomalies: anomalies.get(l.siteId) ?? null }));
     res.json({
       success: true,
       data: {
-        lignes,
+        lignes: avecAnomalies,
         totaux: {
           sites: lignes.length,
           stockDebut: lignes.reduce((s, l) => s + l.stockDebut, 0),
@@ -1462,6 +1472,7 @@ export async function getStocksMensuels(req: Request, res: Response, next: NextF
           mouvements: lignes.reduce((s, l) => s + l.mouvements, 0),
           conso: lignes.reduce((s, l) => s + (l.conso ?? 0), 0),
           anomalies: lignes.filter((l) => l.drapeaux.some((d) => d.includes('vérifier') || d.includes('expliqué'))).length,
+          sitesSaisiesSignalees: anomalies.size,
         },
       },
     });
@@ -1475,6 +1486,11 @@ export async function exportStocksMensuels(req: Request, res: Response, next: Ne
     const m = mois != null && mois !== '' ? parseInt(mois) : new Date().getMonth() + 1;
     if (!Number.isFinite(m) || m < 1 || m > 12) throw new AppError('Mois invalide.', 400);
     const lignes = await stocksMensuels({ annee: a, mois: m, region: region || undefined });
+    const anomalies = await anomaliesCarburantParSite({
+      siteIds: lignes.map((l) => l.siteId),
+      depuis: new Date(Date.UTC(a, m - 1, 1)),
+      jusqua: new Date(Date.UTC(a, m, 1)),
+    });
     await auditLog(req.user!.id, 'EXPORT', 'stocks_mensuels', undefined, { annee: a, mois: m, sites: lignes.length, format: req.params.format }, req);
     await sendTabular(res, req.params.format, `stocks-${a}-${String(m).padStart(2, '0')}`, `Stocks carburant - ${MOIS[m]} ${a}`,
       [{
@@ -1491,12 +1507,15 @@ export async function exportStocksMensuels(req: Request, res: Response, next: Ne
           { header: 'Débit (L/h)', key: 'lh', width: 11 },
           { header: 'Gasoil non expliqué (L)', key: 'inexplique', width: 20 },
           { header: 'Fenêtre (j)', key: 'fenetre', width: 11 },
+          { header: 'Saisies signalées', key: 'signalees', width: 34 },
           { header: 'Observations', key: 'obs', width: 50 },
         ],
         rows: lignes.map((l) => ({
           site: l.site, region: l.region, debut: l.stockDebut, fin: l.stockFin, liv: l.livraisons,
           mvt: l.mouvements || '', conso: l.conso ?? '', consoJour: l.consoJour ?? '', lh: l.debitLh ?? '',
-          inexplique: l.gasoilInexplique ?? '', fenetre: l.fenetreJours, obs: l.drapeaux.join(' · '),
+          inexplique: l.gasoilInexplique ?? '', fenetre: l.fenetreJours,
+          signalees: anomalies.get(l.siteId)?.codes.join(' · ') ?? '',
+          obs: l.drapeaux.join(' · '),
         })),
       }],
       `${lignes.length} site(s)${region ? ` · ${region}` : ''} · méthode bilan matière validée 07/09/2026`

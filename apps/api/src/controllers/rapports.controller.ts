@@ -23,6 +23,7 @@ import { sitePerimetre, isRestreint, estPrestataire } from '../utils/perimetre';
 import { sourcesForConfig, libellePowerConfig, libelleStatutGE } from '../utils/energy';
 import { stockCourantParSite } from '../services/stockCourant.service';
 import { bucketsHoraires, compterParHeure, niveauAgitation } from '../utils/pouls';
+import { anomaliesCarburantParSite } from '../services/anomaliesCarburantSite.service';
 
 /**
  * Stock par site — délégué à la SOURCE UNIQUE (relevé + dépotages postérieurs).
@@ -240,12 +241,17 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
       orderBy: { code: 'asc' },
     });
     const stockMap = await dernierStockParSite();
+    // Le stock affiché découle de la dernière jauge : si cette jauge est
+    // justement celle qu'un contrôle a signalée, le lecteur doit le voir avant
+    // d'envoyer un camion - ou de n'en envoyer aucun.
+    const anomalies = await anomaliesCarburantParSite({ siteIds: sites.map((x) => x.id) });
 
     const data = sites.map((site) => {
       const stock = calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 }, geParams());
       return {
         siteId: site.id, code: site.code, nom: site.nom, region: site.region, statutGE: site.statutGE,
         ...stock,
+        saisiesSignalees: anomalies.get(site.id) ?? null,
         ...(masquerCouts ? { coutMoisFCFA: null } : {}),
       };
     });
@@ -257,6 +263,7 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
       nbSitesVides: data.filter((x) => x.niveauAlerte === 'VIDE').length,
       nbSitesCritiques: data.filter((x) => x.niveauAlerte === 'CRITIQUE').length,
       nbSitesFaibles: data.filter((x) => x.niveauAlerte === 'FAIBLE').length,
+      nbSitesSaisiesSignalees: data.filter((x) => x.saisiesSignalees).length,
     };
 
     res.json({ success: true, data: { resume, sites: data } });

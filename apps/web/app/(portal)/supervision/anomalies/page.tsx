@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, AlertTriangle, Wrench } from 'lucide-react';
@@ -73,6 +74,11 @@ export default function AnomaliesSaisiePage() {
   const peutTraiter = ['SUPERVISEUR', 'MANAGER', 'ADMIN'].includes(role);
   const queryClient = useQueryClient();
 
+  // ARRIVÉE DEPUIS UN ÉCRAN CARBURANT : les rapports renvoient ici avec le site
+  // en question. Sans ce filtre, le lien retombait sur la liste entière et il
+  // fallait retrouver le site à la main.
+  const params = useSearchParams();
+  const siteId = params.get('site_id') ?? '';
   const [statut, setStatut] = useState('A_VERIFIER');
   const [code, setCode] = useState('');
   const [source, setSource] = useState('');
@@ -83,9 +89,9 @@ export default function AnomaliesSaisiePage() {
   const [busy, setBusy] = useState('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['anomalies', { statut, code, source, page }],
+    queryKey: ['anomalies', { statut, code, source, page, siteId }],
     queryFn: () => api.get('/anomalies-saisie', {
-      params: { page, limit: 30, statut: statut || undefined, code: code || undefined, source: source || undefined },
+      params: { page, limit: 30, statut: statut || undefined, code: code || undefined, source: source || undefined, site_id: siteId || undefined },
     }).then((r) => r.data),
   });
 

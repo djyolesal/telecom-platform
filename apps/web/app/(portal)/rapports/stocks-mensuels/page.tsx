@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Fuel, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -20,7 +21,20 @@ interface Ligne {
   stockDebut: number; stockFin: number; livraisons: number; mouvements: number;
   conso: number | null; consoJour: number | null; debitLh: number | null;
   gasoilInexplique: number | null; fenetreJours: number; drapeaux: string[];
+  /** Saisies du mois encore à vérifier sur ce site (contrôle de vraisemblance). */
+  anomalies: { nb: number; codes: string[] } | null;
 }
+
+/** Libellés courts des codes de vraisemblance, pour l'infobulle. */
+const LIBELLE_CODE: Record<string, string> = {
+  CUVE_DEPASSEE: 'niveau au-dessus de la capacité de la cuve',
+  STOCK_AVANT_CUVE: 'stock avant dépotage au-dessus de la cuve',
+  STOCK_APRES_CUVE: 'stock après dépotage au-dessus de la cuve',
+  STOCK_AVANT_HAUSSE: 'le stock monte sans livraison',
+  DEPOTAGE_DOUBLON: 'livraison peut-être comptée deux fois',
+  INDEX_GE_RECULE: "l'index d'heures GE recule",
+  HEURES_GE_ABERRANTES: "bond d'heures GE supérieur au temps écoulé",
+};
 
 /**
  * Bilan mensuel des stocks carburant - méthode « bilan matière » validée avec
@@ -37,7 +51,7 @@ export default function StocksMensuelsPage() {
     queryKey: ['stocks-mensuels', annee, mois, region],
     queryFn: () => api.get('/rapports/stocks-mensuels', {
       params: { annee, mois, region: region || undefined },
-    }).then((r) => r.data.data as { lignes: Ligne[]; totaux: { sites: number; stockDebut: number; stockFin: number; livraisons: number; mouvements: number; conso: number; anomalies: number } }),
+    }).then((r) => r.data.data as { lignes: Ligne[]; totaux: { sites: number; stockDebut: number; stockFin: number; livraisons: number; mouvements: number; conso: number; anomalies: number; sitesSaisiesSignalees: number } }),
   });
 
   const cols: Column<Ligne>[] = [
@@ -63,6 +77,22 @@ export default function StocksMensuelsPage() {
       render: (l) => l.gasoilInexplique != null
         ? <span className="font-semibold text-red-600" title="Gasoil sorti de la cuve sans marche du GE correspondante : vol, fuite ou index bloqué - à vérifier sur site.">{fmtNumber(l.gasoilInexplique)} L</span>
         : '-',
+    },
+    {
+      // LE CHIFFRE REPOSE SUR CES SAISIES : une jauge signalée « au-dessus de la
+      // capacité » entre dans le stock publié exactement comme une jauge saine.
+      // On ne l'écarte pas - c'est une décision d'exploitation - mais on ne la
+      // publie plus en silence.
+      key: 'saisies', header: 'Saisies', align: 'center',
+      render: (l) => l.anomalies
+        ? (
+          <Link href={`/supervision/anomalies?site_id=${l.siteId}`}
+            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-200"
+            title={`À vérifier : ${l.anomalies.codes.map((c) => LIBELLE_CODE[c] ?? c).join(' · ')}`}>
+            <TriangleAlert size={11} /> {l.anomalies.nb}
+          </Link>
+        )
+        : <span className="text-gray-300">-</span>,
     },
     {
       key: 'obs', header: 'Observations',
@@ -103,7 +133,9 @@ export default function StocksMensuelsPage() {
           <StatCard title="Stock fin de mois" value={`${fmtNumber(t.stockFin)} L`} subtitle="interpolé au dernier jour" icon={Fuel} color="bg-[rgb(var(--accent))]" />
           <StatCard title="Livraisons" value={`${fmtNumber(t.livraisons)} L`} subtitle={t.mouvements ? `dépotages · ${fmtNumber(t.mouvements)} L transférés/purgés` : 'dépotages du mois'} icon={Fuel} color="bg-[rgb(var(--brand-light))]" />
           <StatCard title="Consommation" value={`${fmtNumber(t.conso)} L`} subtitle="bilan matière pro rata" icon={Fuel} color="bg-[#7D3C98]" />
-          <StatCard title="À vérifier" value={String(t.anomalies)} subtitle="gasoil non expliqué, index, jauges" icon={TriangleAlert} color={t.anomalies ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
+          <StatCard title="À vérifier" value={String(t.anomalies)}
+            subtitle={t.sitesSaisiesSignalees ? `dont ${t.sitesSaisiesSignalees} site(s) à saisies signalées` : 'gasoil non expliqué, index, jauges'}
+            icon={TriangleAlert} color={t.anomalies ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
         </div>
       )}
 
@@ -112,7 +144,7 @@ export default function StocksMensuelsPage() {
       ) : (
         <>
           <DataTable columns={cols} data={data.lignes} rowKey={(l) => l.siteId}
-            rowClassName={(l) => l.gasoilInexplique != null ? 'bg-red-50' : undefined} />
+            rowClassName={(l) => l.gasoilInexplique != null ? 'bg-red-50' : l.anomalies ? 'bg-amber-50/60' : undefined} />
           <p className="mt-2 text-xs text-gray-400">
             Méthode : consommation = niveau antérieur + livraisons + transferts/purges − niveau du mois, sur une fenêtre d&apos;au moins 10 jours (élargie sinon), rapportée aux jours calendaires ;
             stocks aux frontières interpolés par la conso/j. « Non expliqué » compare la conso mesurée aux heures de marche du GE × son débit habituel - un écart fort signale un vol, une fuite ou un index bloqué.
