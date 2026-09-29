@@ -784,14 +784,14 @@ model Prestataire {
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   rapportsMensuels RapportMensuel[]
-  assignments   LotAssignment[]
-  users         User[]
-  maintenances  Maintenance[]
-  bonsLivraison BonLivraison[]
-  contacts      Contact[]
-  sitesGardes   Site[]          @relation("GardiennageSites")
-  vehicules     Vehicule[]
-  chauffeurs    Chauffeur[]
+  assignments      LotAssignment[]
+  users            User[]
+  maintenances     Maintenance[]
+  bonsLivraison    BonLivraison[]
+  contacts         Contact[]
+  sitesGardes      Site[]           @relation("GardiennageSites")
+  vehicules        Vehicule[]
+  chauffeurs       Chauffeur[]
 
   @@map("prestataires")
 }
@@ -860,9 +860,9 @@ model Lot {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  sites         Site[]
-  sitesSolaires Site[]          @relation("SitesSolaires")
-  assignments   LotAssignment[]
+  sites            Site[]
+  sitesSolaires    Site[]           @relation("SitesSolaires")
+  assignments      LotAssignment[]
   rapportsMensuels RapportMensuel[]
 
   @@map("lots")
@@ -1225,8 +1225,11 @@ model RapportMensuel {
   lot         Lot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
   prestataire Prestataire @relation(fields: [prestataireId], references: [id], onDelete: Cascade)
 
-  @@unique([mois, lotId, prestataireId, contrat])
-  @@index([mois])
+  // Noms EXPLICITES : la migration 0063 les a écrits à la main, et sans `map`
+  // le schéma déclarait d'autres noms - `migrate diff` signalait une dérive
+  // permanente entre l'historique et le modèle, qui masquait les vraies.
+  @@unique([mois, lotId, prestataireId, contrat], map: "rapports_mensuels_unique")
+  @@index([mois(sort: Desc)], map: "rapports_mensuels_mois_idx")
   @@map("rapports_mensuels")
 }
 
@@ -1258,9 +1261,10 @@ model AnomalieSaisie {
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@index([createdAt])
-  @@index([siteId])
-  @@index([code])
-  @@index([statut])
+  // Même raison que rapports_mensuels : les noms viennent de la migration 0064.
+  @@index([createdAt(sort: Desc)], map: "anomalies_saisie_created_at_idx")
+  @@index([siteId], map: "anomalies_saisie_site_idx")
+  @@index([code], map: "anomalies_saisie_code_idx")
+  @@index([statut], map: "anomalies_saisie_statut_idx")
   @@map("anomalies_saisie")
 }

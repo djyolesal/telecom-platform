@@ -61,6 +61,7 @@ import { rapprocherPieces, PieceSaisie } from '../services/piecesRef.service';
 import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite, enregistrerAnomalies } from '../services/vraisemblance.service';
 import { TASK_BY_KEY } from '../utils/tachesPreventives';
 import { appAuMoins } from '../utils/versionApp';
+import { deciderCloture } from '../utils/verificationCloture';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -1087,41 +1088,23 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
     // alors une clôture non vérifiée plutôt que d'enfermer un technicien
     // dehors. Le réglage permet de lever l'exigence sans redéploiement.
     const verifLocale = verificationLocale === true;
-    const echecDeclare = verificationEchec === true;
-    const facteur = ['BIOMETRIE', 'CODE', 'AUCUN', 'ECHEC'].includes(String(verificationFacteur))
-      ? String(verificationFacteur)
-      : (verifLocale ? 'CODE' : 'AUCUN');   // APK qui ne déclare pas : on ne présume pas la biométrie
-    if (
-      getNum('maintenance.verificationLocaleCloture', 1) === 1
-      && appSaitVerifierLocalement(req)
-      && !verifLocale
-      && verificationIndisponible !== true
-      // ÉCHEC DÉCLARÉ : le technicien a tenté la vérification, elle n'a pas
-      // abouti (capteur qui ne répond pas, code d'écran inconnu sur un
-      // téléphone de service), et il l'assume explicitement. Refuser ici
-      // l'enfermait sur le site avec ses photos et sa signature déjà prises,
-      // sans AUCUN moyen de clôturer - l'app annulait même avant d'appeler le
-      // serveur, donc aucun réglage ne pouvait le dépanner. La clôture est
-      // acceptée et ENREGISTRÉE comme non vérifiée ; le mode strict ci-dessous
-      // reste, lui, un vrai refus.
-      && !echecDeclare
-    ) {
+    // Règle extraite et testée (utils/verificationCloture.ts) : c'est elle qui
+    // a enfermé un technicien sur un site, elle ne vit plus sans test.
+    const decision = deciderCloture(
+      { verificationLocale, verificationIndisponible, verificationEchec, verificationFacteur },
+      {
+        appSaitVerifier: appSaitVerifierLocalement(req),
+        exigeVerification: getNum('maintenance.verificationLocaleCloture', 1) === 1,
+        exigeBiometrie: getNum('maintenance.biometrieStricteCloture', 0) === 1,
+      },
+    );
+    const facteur = decision.facteur;
+    if (!decision.autorisee) {
       throw new AppError(
-        "Vérifiez votre identité (empreinte, visage ou code) avant de clôturer l'intervention.",
-        403,
-      );
-    }
-    // MODE STRICT : le code d'écran se prête aussi bien que le téléphone,
-    // l'empreinte non. Tant qu'il est à 0, le code reste accepté mais
-    // ENREGISTRÉ comme tel - de quoi mesurer sa fréquence avant de durcir.
-    if (
-      getNum('maintenance.biometrieStricteCloture', 0) === 1
-      && appSaitVerifierLocalement(req)
-      && facteur !== 'BIOMETRIE'
-    ) {
-      throw new AppError(
-        "Cette clôture exige une empreinte ou une reconnaissance faciale : le code de l'appareil ne suffit pas. "
-        + 'Enregistrez votre empreinte dans les réglages du téléphone.',
+        decision.motif === 'BIOMETRIE_REQUISE'
+          ? "Cette clôture exige une empreinte ou une reconnaissance faciale : le code de l'appareil ne suffit pas. "
+            + 'Enregistrez votre empreinte dans les réglages du téléphone.'
+          : "Vérifiez votre identité (empreinte, visage ou code) avant de clôturer l'intervention.",
         403,
       );
     }
