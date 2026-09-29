@@ -12,7 +12,6 @@ import { bilanEnergie } from '../services/bilanEnergie.service';
 import { sendTabular } from '../utils/exporter';
 import { setXlsxHeaders } from '../utils/excel';
 import { buildConformiteXlsx, buildConformitePdf } from '../services/conformiteExport.service';
-import { detectFuelAnomalies } from '../services/fuelAnomaly.service';
 import { geReliabilityByMarque } from '../services/geReliability.service';
 import { computeSla } from '../services/slaCompliance.service';
 import { computeEmpreinteCarbone, co2GasoilKg, co2ReseauKg } from '../services/carbon.service';
@@ -24,6 +23,7 @@ import { sourcesForConfig, libellePowerConfig, libelleStatutGE } from '../utils/
 import { stockCourantParSite } from '../services/stockCourant.service';
 import { bucketsHoraires, compterParHeure, niveauAgitation } from '../utils/pouls';
 import { anomaliesCarburantParSite } from '../services/anomaliesCarburantSite.service';
+import { verdictPertes } from '../services/verdictPertes.service';
 
 /**
  * Stock par site — délégué à la SOURCE UNIQUE (relevé + dépotages postérieurs).
@@ -784,12 +784,12 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
 export async function getAnomaliesCarburant(req: Request, res: Response, next: NextFunction) {
   try {
     const jours = req.query.jours ? parseInt(String(req.query.jours), 10) : 90;
-    const tous = await detectFuelAnomalies({ jours });
-    // Par défaut on ne renvoie que les sites réellement à risque (score > 0),
-    // sauf ?all=true (export/analyse complète).
-    const data = String(req.query.all) === 'true' ? tous : tous.filter((s) => s.score > 0);
+    // VERDICT UNIQUE : le bilan matière tranche quand il existe, les écarts aux
+    // dépotages prennent le relais, et des saisies non vérifiées suspendent la
+    // conclusion. Voir verdictPertes.service.ts pour la hiérarchie.
+    const data = await verdictPertes({ jours });
     const totalPerteFCFA = data.reduce((s, x) => s + x.perteFCFA, 0);
-    const totalPerteLitres = data.reduce((s, x) => s + x.perteTotaleLitres, 0);
+    const totalPerteLitres = data.reduce((s, x) => s + x.litresNonExpliques, 0);
     res.json({
       success: true,
       data,
@@ -798,6 +798,8 @@ export async function getAnomaliesCarburant(req: Request, res: Response, next: N
         nbSites: data.length,
         critiques: data.filter((s) => s.niveau === 'CRITIQUE').length,
         suspects: data.filter((s) => s.niveau === 'SUSPECT').length,
+        aFiabiliser: data.filter((s) => s.niveau === 'A_FIABILISER').length,
+        parBilanMatiere: data.filter((s) => s.origine === 'BILAN_MATIERE').length,
         totalPerteLitres,
         totalPerteFCFA,
       },
@@ -829,7 +831,10 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
         where: { dateOuverture: { gte: depuis } },
         select: { statut: true, dureeCoupureMinutes: true, delaiInterventionMinutes: true, site: { select: { region: true } } },
       }),
-      detectFuelAnomalies({ jours: mois * 30 }),
+      // MÊME VERDICT que l'écran « Pertes carburant » : le tableau de bord
+      // Direction affichait sa propre somme, issue des seuls écarts aux
+      // dépotages - deux montants de perte circulaient pour le même parc.
+      verdictPertes({ jours: mois * 30 }),
       prisma.site.count({ where: { isActive: true } }),
     ]);
 
@@ -881,7 +886,7 @@ export async function getDashboardDirection(req: Request, res: Response, next: N
     const mtta = avecDelai.length ? Math.round(avecDelai.reduce((s, i) => s + (i.delaiInterventionMinutes ?? 0), 0) / avecDelai.length) : null;
 
     const pertesFCFA = anomalies.reduce((s, a) => s + a.perteFCFA, 0);
-    const pertesLitres = anomalies.reduce((s, a) => s + a.perteTotaleLitres, 0);
+    const pertesLitres = anomalies.reduce((s, a) => s + a.litresNonExpliques, 0);
 
     res.json({
       success: true,
