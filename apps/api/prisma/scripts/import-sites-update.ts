@@ -9,8 +9,12 @@
  * `--appliquer`, rien n'est écrit et le rapport dit exactement ce qui le
  * serait - y compris les sites du fichier qu'on ne sait pas rattacher.
  *
- * Colonnes attendues (première ligne = en-têtes) :
- *   site | region | Date de mise en service
+ * Colonnes lues PAR EN-TÊTE (première ligne), dans n'importe quel ordre :
+ *   Code | site | region | Date de mise en service
+ *
+ * Par en-tête et non par position : un classeur dont on réordonne les colonnes
+ * importerait sinon la région dans la date sans que rien ne le signale.
+ * `Code` est la clé de rapprochement ; `site` sert de repli et d'affichage.
  */
 import path from 'path';
 import ExcelJS from 'exceljs';
@@ -77,24 +81,42 @@ async function main() {
   await wb.xlsx.readFile(path.resolve(fichier));
   const ws = wb.worksheets[0];
 
-  type Ligne = { ligne: number; nom: string; region: string | null; date: Date | null; brutDate: string };
+  // ── Colonnes repérées par leur en-tête ──
+  const entetes = new Map<string, number>();
+  ws.getRow(1).eachCell((c, i) => entetes.set(cle(String(c.value ?? '')), i));
+  const colonne = (...noms: string[]) => {
+    for (const n of noms) { const i = entetes.get(cle(n)); if (i) return i; }
+    return 0;
+  };
+  const colCode = colonne('Code');
+  const colNom = colonne('site', 'nom');
+  const colRegion = colonne('region', 'région');
+  const colDate = colonne('Date de mise en service', 'mise en service');
+  if (!colNom && !colCode) {
+    console.error('Aucune colonne « Code » ni « site » dans la première ligne : fichier inattendu.');
+    process.exit(1);
+  }
+  console.log(`Colonnes : code=${colCode || '-'} site=${colNom || '-'} region=${colRegion || '-'} date=${colDate || '-'}`);
+
+  type Ligne = { ligne: number; code: string; nom: string; region: string | null; date: Date | null; brutDate: string };
   const lignes: Ligne[] = [];
   const regionsInconnues = new Set<string>();
   const datesIllisibles: string[] = [];
 
   ws.eachRow((row, i) => {
     if (i === 1) return; // en-têtes
-    const nom = String(row.getCell(1).value ?? '').trim();
-    if (!nom) return;
-    const regionBrute = String(row.getCell(2).value ?? '').trim();
-    const brutDate = String(row.getCell(3).value ?? '').trim();
+    const code = colCode ? String(row.getCell(colCode).value ?? '').trim() : '';
+    const nom = colNom ? String(row.getCell(colNom).value ?? '').trim() : '';
+    if (!code && !nom) return;
+    const regionBrute = colRegion ? String(row.getCell(colRegion).value ?? '').trim() : '';
+    const brutDate = colDate ? String(row.getCell(colDate).value ?? '').trim() : '';
 
     const region = REGIONS[regionBrute.toUpperCase()] ?? null;
     if (regionBrute && !region) regionsInconnues.add(regionBrute);
     const date = brutDate ? dateFr(brutDate) : null;
-    if (brutDate && !date) datesIllisibles.push(`${nom} : « ${brutDate} »`);
+    if (brutDate && !date) datesIllisibles.push(`${nom || code} : « ${brutDate} »`);
 
-    lignes.push({ ligne: i, nom, region, date, brutDate });
+    lignes.push({ ligne: i, code, nom, region, date, brutDate });
   });
 
   console.log(`Fichier : ${lignes.length} ligne(s) de données.`);
@@ -106,33 +128,54 @@ async function main() {
     datesIllisibles.slice(0, 5).forEach((d) => console.log(`    ${d}`));
   }
 
-  // Rapprochement sur le NOM normalisé, puis sur le CODE : les deux existent
-  // dans les exports d'exploitation, et un fichier mélange souvent les deux.
+  // Rapprochement par CODE d'abord : c'est l'identifiant stable du site. Le nom
+  // est un repli - il change d'orthographe, prend ou perd un accent, et deux
+  // sites peuvent le partager.
   const sites = await prisma.site.findMany({
     select: { id: true, code: true, nom: true, region: true, dateMiseEnService: true },
   });
   const parNom = new Map<string, typeof sites>();
   const parCode = new Map<string, (typeof sites)[number]>();
+  // La normalisation retire les tirets : « LOME7-1 » et « LOME71 » tomberaient
+  // sur la même clé. Deux codes distincts qui se confondent ne doivent JAMAIS
+  // servir à rapprocher - on préfère un site signalé introuvable à un site
+  // silencieusement modifié à la place d'un autre.
+  const codesAmbigus = new Set<string>();
   for (const s of sites) {
-    const k = cle(s.nom);
-    parNom.set(k, [...(parNom.get(k) ?? []), s]);
-    parCode.set(cle(s.code), s);
+    const kn = cle(s.nom);
+    parNom.set(kn, [...(parNom.get(kn) ?? []), s]);
+    const kc = cle(s.code);
+    if (parCode.has(kc)) codesAmbigus.add(kc);
+    parCode.set(kc, s);
   }
+  if (codesAmbigus.size) {
+    console.log(`\n⚠ ${codesAmbigus.size} code(s) de site se confondent après normalisation : rapprochement par code désactivé pour eux.`);
+  }
+  const siteParCode = (code: string) => {
+    const k = cle(code);
+    return codesAmbigus.has(k) ? undefined : parCode.get(k);
+  };
 
   const majs: { id: string; nom: string; region?: string; date?: Date; avant: string }[] = [];
   const introuvables: string[] = [];
   const ambigus: string[] = [];
   let inchanges = 0;
+  let parCodeOk = 0;
+  let parNomOk = 0;
 
   for (const l of lignes) {
-    const k = cle(l.nom);
-    const candidats = parNom.get(k);
-    const site = candidats?.length === 1 ? candidats[0] : parCode.get(k);
+    const site = (l.code ? siteParCode(l.code) : undefined) ?? (() => {
+      const candidats = l.nom ? parNom.get(cle(l.nom)) : undefined;
+      return candidats?.length === 1 ? candidats[0] : undefined;
+    })();
+    const etiquette = [l.code, l.nom].filter(Boolean).join(' · ');
     if (!site) {
-      if (candidats && candidats.length > 1) ambigus.push(`${l.nom} (${candidats.length} sites portent ce nom)`);
-      else introuvables.push(l.nom);
+      const candidats = l.nom ? parNom.get(cle(l.nom)) : undefined;
+      if (candidats && candidats.length > 1) ambigus.push(`${etiquette} (${candidats.length} sites portent ce nom)`);
+      else introuvables.push(etiquette);
       continue;
     }
+    if (l.code && siteParCode(l.code)) parCodeOk++; else parNomOk++;
 
     const changeRegion = l.region != null && l.region !== site.region;
     const dateActuelle = site.dateMiseEnService ? fmt(site.dateMiseEnService) : null;
@@ -150,6 +193,7 @@ async function main() {
 
   const changementsRegion = majs.filter((m) => m.region);
   console.log(`\n── Rapprochement ──`);
+  console.log(`  par code : ${parCodeOk}   |   par nom (repli) : ${parNomOk}`);
   console.log(`  sites rapprochés et à mettre à jour : ${majs.length}`);
   console.log(`  déjà conformes                      : ${inchanges}`);
   console.log(`  introuvables dans la plateforme     : ${introuvables.length}`);
