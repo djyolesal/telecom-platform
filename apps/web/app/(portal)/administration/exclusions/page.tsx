@@ -240,13 +240,6 @@ export default function ExclusionsPage() {
         actions={peutDeclarer ? <Button icon={Plus} onClick={() => setModal(true)}>Déclarer</Button> : undefined}
       />
 
-      <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
-        Une exclusion dit que <b>l’entretien n’est pas au contrat</b>, pas que l’équipement est absent : le site garde son
-        groupe électrogène dans sa fiche, la tâche sort simplement du dû. Elle ressort <b>NA</b> au rapport de conformité,
-        jamais <b>NOK</b> - on ne reproche pas un manquement hors périmètre. Elle ne se supprime pas, elle se <b>lève</b> à
-        une date : les fiches de validation déjà signées doivent pouvoir se relire à l’identique.
-      </div>
-
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3">
         <StatCard title="En vigueur" value={String(data?.meta.actives ?? 0)} subtitle="couples site / tâche" icon={ShieldOff} color="bg-[#B8860B]" />
         <StatCard title="Enregistrées" value={String(data?.meta.total ?? 0)} subtitle="levées comprises" icon={TriangleAlert} color="bg-[rgb(var(--brand))]" />
