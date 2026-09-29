@@ -43,6 +43,7 @@ const IMPORT_COLUMNS = [
   { key: 'puissanceGEkva', header: 'puissanceGEkva' },
   { key: 'lot', header: 'lot' },
   { key: 'typePylone', header: 'typePylone' },
+  { key: 'dateMiseEnService', header: 'dateMiseEnService' },
   { key: 'hasClimatiseur', header: 'climatiseur' },
   { key: 'hasExtincteurs', header: 'extincteurs' },
   { key: 'cuveVolumeLitres', header: 'cuveVolumeLitres' },
@@ -515,7 +516,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
     // createdAt/relations arbitraires injectés à la création.
     const data = pick<Prisma.SiteUncheckedCreateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
-      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite', 'dateMiseEnService',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
@@ -552,7 +553,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
     // Liste blanche : jamais de isActive/createdAt/marqueGE arbitraires ici.
     const data = pick<Prisma.SiteUncheckedUpdateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
-      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite', 'dateMiseEnService',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',

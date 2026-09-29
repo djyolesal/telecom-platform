@@ -1,6 +1,10 @@
 // Listes d'options alignées sur les enums Prisma (apps/api/prisma/schema.prisma)
 
-export const REGIONS = ['Maritime', 'Plateaux', 'Centrale', 'Kara', 'Savanes'];
+// « Lomé & Golfe » est le découpage d'exploitation de l'opérateur : la commune
+// de Lomé et la préfecture du Golfe, détachées du Maritime administratif. Elle
+// porte à elle seule environ 40 % du parc, et les rapports groupés par région
+// la distinguent depuis la mise à jour du référentiel sites.
+export const REGIONS = ['Lomé & Golfe', 'Maritime', 'Plateaux', 'Centrale', 'Kara', 'Savanes'];
 
 export const POWER_CONFIGS = [
   { value: 'CEET_GE', label: 'CEET + GE' },

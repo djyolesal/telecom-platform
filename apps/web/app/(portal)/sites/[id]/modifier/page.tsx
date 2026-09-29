@@ -22,7 +22,7 @@ export default function ModifierSitePage() {
     code: '', nom: '', region: '', ville: '', adresse: '',
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
     latitude: '', longitude: '', lotId: '', lotSolaireId: '',
-    hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '', typeSite: '',
+    hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '', typeSite: '', dateMiseEnService: '',
     accesPickup: 'false',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '',
@@ -106,6 +106,7 @@ export default function ModifierSitePage() {
       hasExtincteurs: site.hasExtincteurs ? 'true' : 'false',
       typePylone: site.typePylone ?? '',
       typeSite: site.typeSite ?? '',
+      dateMiseEnService: site.dateMiseEnService ? String(site.dateMiseEnService).slice(0, 10) : '',
       cuveVolumeLitres: site.cuveVolumeLitres != null ? String(site.cuveVolumeLitres) : '',
       formeCuve: site.formeCuve ?? '',
       cuveDimensions: site.cuveDimensions ?? '',
@@ -193,6 +194,7 @@ export default function ModifierSitePage() {
         hasExtincteurs: form.hasExtincteurs === 'true',
         typePylone: form.typePylone || null,
         typeSite: form.typeSite || null,
+        dateMiseEnService: form.dateMiseEnService || null,
         cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null,
         formeCuve: form.formeCuve || null,
         cuveDimensions: form.cuveDimensions || null,
@@ -291,6 +293,9 @@ export default function ModifierSitePage() {
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Infrastructure</div>
           <Field label="Type de pylône">
             <Select value={form.typePylone} onChange={(e) => set('typePylone', e.target.value)} options={pyloneOptions} placeholder="Sélectionner…" />
+          </Field>
+          <Field label="Mise en service" hint="Jour de mise en service du site. Laisser vide si la date n'est pas connue - mieux vaut pas de date qu'une date inventée.">
+            <Input type="date" value={form.dateMiseEnService} onChange={(e) => set('dateMiseEnService', e.target.value)} />
           </Field>
           <Field label="Nature du site" hint="Descriptif. Il sert à cibler une population pour les exclusions contractuelles - il n'entre jamais dans le calcul du dû.">
             <Select value={form.typeSite} onChange={(e) => set('typeSite', e.target.value)}

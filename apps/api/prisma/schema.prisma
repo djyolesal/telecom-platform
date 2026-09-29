@@ -190,6 +190,9 @@ model Site {
   // `ExclusionContractuelle` qui dit ce qui est dû. Ce champ sert à reconnaître
   // une population et à poser les exclusions en masse.
   typeSite                 String?     @map("type_site") @db.VarChar(40)
+  /// Jour de mise en service du site. Nullable : le parc historique n'est pas
+  /// tout documenté, et une date inventée vaut moins qu'une date absente.
+  dateMiseEnService        DateTime?   @map("date_mise_en_service") @db.Date
   cuveVolumeLitres         Decimal?    @map("cuve_volume_litres") @db.Decimal(8, 2)
   formeCuve                FormeCuve?  @map("forme_cuve")
   cuveDimensions           String?     @map("cuve_dimensions") @db.VarChar(100) // texte libre hérité (lecture seule)

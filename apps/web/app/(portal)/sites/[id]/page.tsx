@@ -18,7 +18,7 @@ import { NiveauStockBadge, StatutMaintBadge, StatutIncidentBadge, SeveriteBadge 
 import { litresPourHauteur, hauteurMaxCm, type ConfigCuve } from '@/lib/cuve';
 import { PhotoGallery } from '@/components/shared/PhotoGallery';
 import { POWER_CONFIGS, STATUTS_GE, TYPES_PYLONE, FORMES_CUVE } from '@/lib/constants';
-import { fmtDateTime, fmtNumber } from '@/lib/utils';
+import { fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils';
 import { useTypesLiaison, couleurLiaison } from '@/lib/liaisons';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Select } from '@/components/shared/Form';
@@ -29,6 +29,15 @@ const SCOPE_LABELS: Record<string, string> = {
   LES_DEUX: 'Passive + Active',
   SOLAIRE: 'Solaire',
 };
+
+/** Âge du site en années révolues - null si la date est absente ou future. */
+function ansDepuis(iso?: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const ans = Math.floor((Date.now() - d.getTime()) / (365.25 * 86_400_000));
+  return ans >= 0 ? ans : null;
+}
 
 export default function SiteDetailPage() {
   const { labelDe } = useTypesIncident();
@@ -266,6 +275,11 @@ export default function SiteDetailPage() {
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Infrastructure</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
           <InfoRow label="Type de pylône" value={pyloneOptions.find((t) => t.value === site.typePylone)?.label ?? site.typePylone ?? '-'} />
+          {/* L'âge du site explique beaucoup : un pylône de 1999 ne s'entretient
+              pas comme un site de 2025. */}
+          <InfoRow label="Mise en service" value={site.dateMiseEnService
+            ? `${fmtDate(site.dateMiseEnService)}${ansDepuis(site.dateMiseEnService) != null ? ` · ${ansDepuis(site.dateMiseEnService)} ans` : ''}`
+            : '-'} />
           <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
           <InfoRow label="Accès camion citerne" value={site.accesPickup ? 'Livraison par pickup' : 'Accès direct'} />
