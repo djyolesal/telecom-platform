@@ -1,9 +1,11 @@
-import { bilanMensuelSite, ReleveStockLite, LivraisonLite } from './stocksMensuels.service';
+import { bilanMensuelSite, ReleveStockLite, LivraisonLite, MouvementLite } from './stocksMensuels.service';
 
 const d = (iso: string) => new Date(iso);
 const rel = (date: string, volume: number | null, index: number | null = null): ReleveStockLite =>
   ({ date: d(date), volume, index, groupeId: null });
 const liv = (date: string, litres: number): LivraisonLite => ({ date: d(date), litres });
+/** Mouvement DÉJÀ signé : négatif pour une purge ou un transfert sortant. */
+const mvt = (date: string, litres: number): MouvementLite => ({ date: d(date), litres });
 
 describe('bilanMensuelSite - méthode validée 07/09/2026', () => {
   it('bilan matière simple : conso = début + livraisons - fin, pro rata calendaire', () => {
@@ -75,6 +77,37 @@ describe('bilanMensuelSite - méthode validée 07/09/2026', () => {
     const b = bilanMensuelSite({ releves, livraisons: [], annee: 2026, mois: 7 })!;
     expect(b.gasoilInexplique).toBeGreaterThan(200);
     expect(b.drapeaux.join()).toContain('gasoil non expliqué');
+  });
+
+  it('une purge n\'est pas de la consommation', () => {
+    // Même cuve, même chute de 300 L, mais 200 L ont été PURGÉS : le moteur
+    // n'a brûlé que 100 L. Sans les mouvements, le rapport publiait 300 L de
+    // conso et accusait le site d'une surconsommation qu'il n'a pas eue.
+    const releves = [rel('2026-06-30T00:00:00Z', 1000), rel('2026-07-30T00:00:00Z', 700)];
+    const sans = bilanMensuelSite({ releves, livraisons: [], annee: 2026, mois: 7 })!;
+    const avec = bilanMensuelSite({
+      releves, livraisons: [], mouvements: [mvt('2026-07-10T00:00:00Z', -200)], annee: 2026, mois: 7,
+    })!;
+    expect(sans.consoJour).toBeCloseTo(300 / 30, 1);
+    expect(avec.consoJour).toBeCloseTo(100 / 30, 1);
+    expect(avec.mouvements).toBe(-200);
+    // Le bilan publié BOUCLE toujours : début + livraisons + mouvements − fin = conso.
+    expect(avec.stockDebut + avec.livraisons + avec.mouvements - avec.stockFin).toBeCloseTo(avec.conso!, -1);
+  });
+
+  it('un transfert entrant ne se lit pas comme une livraison manquante', () => {
+    // La cuve monte de 1000 à 1200 sans livraison : sans les mouvements, la
+    // conso ressort négative et le mois est déclaré incalculable.
+    const releves = [rel('2026-06-30T00:00:00Z', 1000), rel('2026-07-30T00:00:00Z', 1200)];
+    const sans = bilanMensuelSite({ releves, livraisons: [], annee: 2026, mois: 7 })!;
+    expect(sans.conso).toBeNull();
+    expect(sans.drapeaux.join()).toContain('conso négative');
+
+    const avec = bilanMensuelSite({
+      releves, livraisons: [], mouvements: [mvt('2026-07-05T00:00:00Z', 300)], annee: 2026, mois: 7,
+    })!;
+    expect(avec.consoJour).toBeCloseTo(100 / 30, 1);
+    expect(avec.drapeaux).toEqual([]);
   });
 
   it('site sans relevé dans le mois : pas de ligne', () => {

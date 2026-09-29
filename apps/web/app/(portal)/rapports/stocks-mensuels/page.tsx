@@ -17,7 +17,7 @@ const MOIS = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juille
 
 interface Ligne {
   siteId: string; site: string; region: string;
-  stockDebut: number; stockFin: number; livraisons: number;
+  stockDebut: number; stockFin: number; livraisons: number; mouvements: number;
   conso: number | null; consoJour: number | null; debitLh: number | null;
   gasoilInexplique: number | null; fenetreJours: number; drapeaux: string[];
 }
@@ -37,7 +37,7 @@ export default function StocksMensuelsPage() {
     queryKey: ['stocks-mensuels', annee, mois, region],
     queryFn: () => api.get('/rapports/stocks-mensuels', {
       params: { annee, mois, region: region || undefined },
-    }).then((r) => r.data.data as { lignes: Ligne[]; totaux: { sites: number; stockDebut: number; stockFin: number; livraisons: number; conso: number; anomalies: number } }),
+    }).then((r) => r.data.data as { lignes: Ligne[]; totaux: { sites: number; stockDebut: number; stockFin: number; livraisons: number; mouvements: number; conso: number; anomalies: number } }),
   });
 
   const cols: Column<Ligne>[] = [
@@ -46,6 +46,15 @@ export default function StocksMensuelsPage() {
     { key: 'stockDebut', header: 'Stock au 1er (L)', align: 'right', render: (l) => fmtNumber(l.stockDebut) },
     { key: 'stockFin', header: 'Stock fin (L)', align: 'right', render: (l) => fmtNumber(l.stockFin) },
     { key: 'livraisons', header: 'Livraisons (L)', align: 'right', render: (l) => fmtNumber(l.livraisons) },
+    {
+      // Colonne à part, et non fondue dans les livraisons : un transfert ou une
+      // purge sort de la cuve sans passer par le moteur. Les confondre revenait
+      // à facturer au site une consommation qu'il n'a pas eue.
+      key: 'mouvements', header: 'Transf./purges (L)', align: 'right',
+      render: (l) => l.mouvements
+        ? <span className={l.mouvements < 0 ? 'text-amber-700' : 'text-teal-700'} title="Transferts nets et purges validés du mois : retirés de la consommation.">{fmtNumber(l.mouvements)}</span>
+        : <span className="text-gray-300">-</span>,
+    },
     { key: 'conso', header: 'Conso (L)', align: 'right', render: (l) => l.conso != null ? fmtNumber(l.conso) : '-' },
     { key: 'consoJour', header: 'Conso/j', align: 'right', render: (l) => l.consoJour != null ? `${l.consoJour} L/j` : '-' },
     { key: 'debitLh', header: 'Débit', align: 'right', render: (l) => l.debitLh != null ? `${l.debitLh} L/h` : '-' },
@@ -92,7 +101,7 @@ export default function StocksMensuelsPage() {
         <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-5">
           <StatCard title="Stock au 1er" value={`${fmtNumber(t.stockDebut)} L`} subtitle={`${t.sites} sites`} icon={Fuel} color="bg-[rgb(var(--brand))]" />
           <StatCard title="Stock fin de mois" value={`${fmtNumber(t.stockFin)} L`} subtitle="interpolé au dernier jour" icon={Fuel} color="bg-[rgb(var(--accent))]" />
-          <StatCard title="Livraisons" value={`${fmtNumber(t.livraisons)} L`} subtitle="dépotages du mois" icon={Fuel} color="bg-[rgb(var(--brand-light))]" />
+          <StatCard title="Livraisons" value={`${fmtNumber(t.livraisons)} L`} subtitle={t.mouvements ? `dépotages · ${fmtNumber(t.mouvements)} L transférés/purgés` : 'dépotages du mois'} icon={Fuel} color="bg-[rgb(var(--brand-light))]" />
           <StatCard title="Consommation" value={`${fmtNumber(t.conso)} L`} subtitle="bilan matière pro rata" icon={Fuel} color="bg-[#7D3C98]" />
           <StatCard title="À vérifier" value={String(t.anomalies)} subtitle="gasoil non expliqué, index, jauges" icon={TriangleAlert} color={t.anomalies ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
         </div>
@@ -105,7 +114,7 @@ export default function StocksMensuelsPage() {
           <DataTable columns={cols} data={data.lignes} rowKey={(l) => l.siteId}
             rowClassName={(l) => l.gasoilInexplique != null ? 'bg-red-50' : undefined} />
           <p className="mt-2 text-xs text-gray-400">
-            Méthode : consommation = niveau antérieur + livraisons − niveau du mois, sur une fenêtre d&apos;au moins 10 jours (élargie sinon), rapportée aux jours calendaires ;
+            Méthode : consommation = niveau antérieur + livraisons + transferts/purges − niveau du mois, sur une fenêtre d&apos;au moins 10 jours (élargie sinon), rapportée aux jours calendaires ;
             stocks aux frontières interpolés par la conso/j. « Non expliqué » compare la conso mesurée aux heures de marche du GE × son débit habituel - un écart fort signale un vol, une fuite ou un index bloqué.
           </p>
         </>

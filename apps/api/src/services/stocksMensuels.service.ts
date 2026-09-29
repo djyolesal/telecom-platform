@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { signeMouvement } from './mouvementsCarburant.service';
 
 /**
  * BILAN MENSUEL DES STOCKS CARBURANT — méthode validée avec l'exploitant le
@@ -29,6 +30,14 @@ export interface ReleveStockLite {
   groupeId: string | null;
 }
 export interface LivraisonLite { date: Date; litres: number }
+/**
+ * Mouvement de cuve DÉJÀ SIGNÉ (transfert entrant +, sortant et purge −).
+ * Sans lui, un transfert ou une purge - du gasoil qui quitte la cuve sans
+ * jamais passer par le moteur - se lisait comme de la consommation. Le rapport
+ * mensuel gonflait donc la conso du site vidé, et sa contre-épreuve vol/fuite
+ * accusait un site dont le carburant avait simplement été déplacé.
+ */
+export interface MouvementLite { date: Date; litres: number }
 
 export interface LigneStockMensuel {
   siteId: string;
@@ -37,6 +46,8 @@ export interface LigneStockMensuel {
   stockDebut: number;
   stockFin: number;
   livraisons: number;
+  /** Transferts nets − purges du mois (signés). */
+  mouvements: number;
   conso: number | null;
   consoJour: number | null;
   debitLh: number | null;
@@ -49,8 +60,9 @@ const JOUR_MS = 86_400_000;
 const FENETRE_MIN_J = 10;
 const VOLUME_MAX_PLAUSIBLE = 5000;
 
-const sommeLivraisons = (livs: LivraisonLite[], a: Date, b: Date) =>
-  livs.reduce((s, l) => (l.date > a && l.date <= b ? s + l.litres : s), 0);
+const sommeEvts = (evts: Array<{ date: Date; litres: number }>, a: Date, b: Date) =>
+  evts.reduce((s, e) => (e.date > a && e.date <= b ? s + e.litres : s), 0);
+const sommeLivraisons = sommeEvts;
 
 /** Deltas d'heures GE valides d'une fenêtre : par groupe, rejetés si négatifs
  *  ou > 25 h/j — puis sommés (un site multi-GE cumule ses moteurs). */
@@ -81,7 +93,7 @@ function heuresFenetre(releves: ReleveStockLite[], a: Date, b: Date): number | n
 
 /** Débit lissé (L/h) du site : médiane des débits mesurés sur les intervalles
  *  valides de TOUTE la période fournie — constante de contrôle, pas de mesure. */
-export function debitLisse(releves: ReleveStockLite[], livraisons: LivraisonLite[]): number | null {
+export function debitLisse(releves: ReleveStockLite[], livraisons: LivraisonLite[], mouvements: MouvementLite[] = []): number | null {
   const niveaux = releves.filter((r) => r.volume != null).sort((a, b) => a.date.getTime() - b.date.getTime());
   const debits: number[] = [];
   for (let i = 1; i < niveaux.length; i++) {
@@ -89,7 +101,8 @@ export function debitLisse(releves: ReleveStockLite[], livraisons: LivraisonLite
     const r2 = niveaux[i];
     const jours = (r2.date.getTime() - r1.date.getTime()) / JOUR_MS;
     if (jours < 1) continue;
-    const conso = r1.volume! + sommeLivraisons(livraisons, r1.date, r2.date) - r2.volume!;
+    const conso = r1.volume! + sommeEvts(livraisons, r1.date, r2.date)
+      + sommeEvts(mouvements, r1.date, r2.date) - r2.volume!;
     if (conso <= 0) continue;
     const heures = heuresFenetre(releves, r1.date, r2.date);
     if (heures == null || heures <= 0) continue;
@@ -106,10 +119,12 @@ export function debitLisse(releves: ReleveStockLite[], livraisons: LivraisonLite
 export function bilanMensuelSite(opts: {
   releves: ReleveStockLite[];       // relevés GE du site (niveaux + index), toute la période disponible
   livraisons: LivraisonLite[];
+  mouvements?: MouvementLite[];     // transferts et purges validés, déjà signés
   annee: number;
   mois: number;                     // 1-12
 }): Omit<LigneStockMensuel, 'siteId' | 'site' | 'region'> | null {
   const { annee, mois } = opts;
+  const mvts = opts.mouvements ?? [];
   const premier = new Date(Date.UTC(annee, mois - 1, 1));
   const suivant = new Date(Date.UTC(annee, mois, 1));
   const nbJours = Math.round((suivant.getTime() - premier.getTime()) / JOUR_MS);
@@ -143,7 +158,10 @@ export function bilanMensuelSite(opts: {
   if (fenetreJours < FENETRE_MIN_J) drapeaux.push(`fenêtre courte (${Math.round(fenetreJours)} j)`);
 
   const livFenetre = sommeLivraisons(opts.livraisons, r1.date, r2.date);
-  const consoFenetre = r1.volume! + livFenetre - r2.volume!;
+  // Équation de conservation, mouvements compris : ce qui est sorti de la cuve
+  // autrement que par le moteur n'est pas de la consommation.
+  const mvtFenetre = sommeEvts(mvts, r1.date, r2.date);
+  const consoFenetre = r1.volume! + livFenetre + mvtFenetre - r2.volume!;
   let consoJour: number | null = null;
   if (consoFenetre >= 0) consoJour = consoFenetre / fenetreJours;
   else drapeaux.push('conso négative - jauge ou livraison à vérifier');
@@ -157,7 +175,7 @@ export function bilanMensuelSite(opts: {
     const brut = consoFenetre / heures;
     if (brut >= 0.5 && brut <= 60) debitLh = brut;
     else drapeaux.push('index incohérent avec la conso - à vérifier');
-    const lisse = debitLisse(opts.releves, opts.livraisons);
+    const lisse = debitLisse(opts.releves, opts.livraisons, mvts);
     if (lisse != null && conso != null) {
       const attendu = (lisse * heures / fenetreJours) * nbJours;
       const ecart = conso - attendu;
@@ -178,15 +196,18 @@ export function bilanMensuelSite(opts: {
   if (consoJour == null) drapeaux.push('frontières en report brut (conso incalculable)');
   const jAvant = Math.max(0, (premier.getTime() - r1.date.getTime()) / JOUR_MS);
   const stockDebut = r1.date < premier
-    ? Math.max(0, r1.volume! - interp * jAvant + sommeLivraisons(opts.livraisons, r1.date, premier))
+    ? Math.max(0, r1.volume! - interp * jAvant
+        + sommeLivraisons(opts.livraisons, r1.date, premier) + sommeEvts(mvts, r1.date, premier))
     : r1.volume!;
   const jApres = Math.max(0, (suivant.getTime() - r2.date.getTime()) / JOUR_MS);
-  const stockFin = Math.max(0, r2.volume! - interp * jApres + sommeLivraisons(opts.livraisons, r2.date, suivant));
+  const stockFin = Math.max(0, r2.volume! - interp * jApres
+    + sommeLivraisons(opts.livraisons, r2.date, suivant) + sommeEvts(mvts, r2.date, suivant));
 
   return {
     stockDebut: Math.round(stockDebut),
     stockFin: Math.round(stockFin),
     livraisons: Math.round(sommeLivraisons(opts.livraisons, premier, suivant)),
+    mouvements: Math.round(sommeEvts(mvts, premier, suivant)),
     conso: conso != null ? Math.round(conso) : null,
     consoJour: consoJour != null ? Math.round(consoJour * 10) / 10 : null,
     debitLh: debitLh != null ? Math.round(debitLh * 100) / 100 : null,
@@ -205,7 +226,7 @@ export async function stocksMensuels(opts: { annee: number; mois: number; region
   });
   const ids = sites.map((s) => s.id);
   // Toute l'antériorité disponible : le débit lissé et la fenêtre élargie en vivent.
-  const [releves, depots] = await Promise.all([
+  const [releves, depots, mvts] = await Promise.all([
     prisma.releveEnergie.findMany({
       where: { siteId: { in: ids }, source: 'GE', dateReleve: { lt: suivant } },
       select: { siteId: true, dateReleve: true, volumeGasoilLitres: true, indexHeuresGE: true, groupeId: true },
@@ -214,6 +235,16 @@ export async function stocksMensuels(opts: { annee: number; mois: number; region
     prisma.depotage.findMany({
       where: { siteId: { in: ids }, dateDepotage: { lt: suivant } },
       select: { siteId: true, dateDepotage: true, volumeLitres: true },
+    }),
+    // SEULS les mouvements VALIDÉS bougent le stock : une déclaration du
+    // terrain encore en attente ne doit pas effacer un écart (même règle que
+    // la réconciliation des dépotages).
+    prisma.mouvementCarburant.findMany({
+      where: {
+        siteId: { in: ids }, dateMouvement: { lt: suivant },
+        type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] }, statut: 'VALIDE',
+      },
+      select: { siteId: true, dateMouvement: true, type: true, volumeLitres: true },
     }),
   ]);
   const relParSite = new Map<string, ReleveStockLite[]>();
@@ -234,11 +265,20 @@ export async function stocksMensuels(opts: { annee: number; mois: number; region
     livParSite.set(d.siteId, arr);
   }
 
+  const mvtParSite = new Map<string, MouvementLite[]>();
+  for (const m of mvts) {
+    if (!m.siteId) continue;
+    const arr = mvtParSite.get(m.siteId) ?? [];
+    arr.push({ date: m.dateMouvement, litres: signeMouvement(m.type) * Number(m.volumeLitres) });
+    mvtParSite.set(m.siteId, arr);
+  }
+
   const out: LigneStockMensuel[] = [];
   for (const s of sites) {
     const bilan = bilanMensuelSite({
       releves: relParSite.get(s.id) ?? [],
       livraisons: livParSite.get(s.id) ?? [],
+      mouvements: mvtParSite.get(s.id) ?? [],
       annee: opts.annee,
       mois: opts.mois,
     });
