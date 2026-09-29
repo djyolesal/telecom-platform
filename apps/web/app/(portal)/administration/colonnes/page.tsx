@@ -23,6 +23,9 @@ export default function ColonnesTableauxPage() {
     sites: new Set(), maintenances: new Set(), depotages: new Set(),
   });
   const [savedOk, setSavedOk] = useState(false);
+  // Tables encore sur l'ANCIEN réglage (liste blanche) : elles se comportent
+  // mal et l'admin doit le savoir.
+  const [heritees, setHeritees] = useState<TableOptionnelle[]>([]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['app-config'],
@@ -38,17 +41,27 @@ export default function ColonnesTableauxPage() {
   useEffect(() => {
     if (data === undefined) return;
     const next = {} as Record<TableOptionnelle, Set<string>>;
+    const vieilles: TableOptionnelle[] = [];
     for (const t of TABLES) {
       const catalogue = COLONNES_OPTIONNELLES[t].colonnes.map((c) => c.key);
       const masquees = data.colonnesMasquees?.[t];
       if (Array.isArray(masquees)) {
         next[t] = new Set(catalogue.filter((k) => !masquees.includes(k)));
-      } else {
-        const autorisees = data.colonnesOptionnelles?.[t];
-        next[t] = new Set(autorisees ?? catalogue);
+        continue;
       }
+      // ANCIENNE LISTE BLANCHE. Une colonne absente de cette liste peut avoir
+      // été refusée… ou ne pas exister encore au moment de l'enregistrement -
+      // rien ne permet de les distinguer. Pré-cocher depuis cette liste
+      // renverrait donc les colonnes NOUVELLES dans la liste noire, et
+      // ré-enregistrer ne corrigerait rien : le sélecteur resterait amputé.
+      // On repart du catalogue complet et on le DIT ; l'admin décoche ce qu'il
+      // ne veut pas, et l'enregistrement convertit en liste noire.
+      const autorisees = data.colonnesOptionnelles?.[t];
+      if (Array.isArray(autorisees) && autorisees.length < catalogue.length) vieilles.push(t);
+      next[t] = new Set(catalogue);
     }
     setActives(next);
+    setHeritees(vieilles);
   }, [data]);
 
   const save = useMutation({
@@ -86,6 +99,25 @@ export default function ColonnesTableauxPage() {
         subtitle="Colonnes optionnelles proposées aux utilisateurs, tableau par tableau"
         backHref="/administration"
       />
+
+      {/* Une table restée sur l'ancien réglage ampute le sélecteur de toutes
+          les colonnes ajoutées depuis, sans rien dire. Tant que personne ne
+          ré-enregistre, le symptôme est invisible : la colonne existe, figure
+          dans l'export, et manque à l'affichage. */}
+      {heritees.length > 0 && (
+        <div className="mb-4 max-w-6xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            Réglage hérité sur {heritees.length} tableau{heritees.length > 1 ? 'x' : ''} :{' '}
+            {heritees.map((t) => COLONNES_OPTIONNELLES[t].titre).join(', ')}
+          </p>
+          <p className="mt-1 text-xs">
+            L&apos;ancien réglage listait les colonnes <b>autorisées</b>. Toute colonne ajoutée depuis en est donc absente -
+            et disparaît du sélecteur des utilisateurs, alors qu&apos;elle figure toujours dans les exports.
+            Les cases ci-dessous repartent du catalogue complet : décochez ce que vous ne voulez pas proposer,
+            puis <b>enregistrez</b> pour convertir définitivement le réglage.
+          </p>
+        </div>
+      )}
 
       <div className="grid max-w-6xl grid-cols-1 gap-5 lg:grid-cols-3">
         {TABLES.map((table) => {
