@@ -42,12 +42,12 @@ function DepotagesPageInner() {
   const searchParams = useSearchParams();
   const siteId = searchParams.get('site_id') || undefined;
   const [page, setPage] = useState(1);
-  const [fournisseur, setFournisseur] = useState('');
-  const debounced = useDebounce(fournisseur);
+  const [recherche, setRecherche] = useState('');
+  const debounced = useDebounce(recherche);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['depotages', { page, debounced, siteId }],
-    queryFn: () => api.get('/depotages', { params: { page, limit: 20, fournisseur: debounced || undefined, site_id: siteId } }).then((r) => r.data),
+    queryFn: () => api.get('/depotages', { params: { page, limit: 20, search: debounced || undefined, site_id: siteId } }).then((r) => r.data),
   });
 
   const rows: Depotage[] = data?.data ?? [];
@@ -93,11 +93,18 @@ function DepotagesPageInner() {
         subtitle="Historique des livraisons de gasoil"
         backHref="/carburant/stock"
         actions={roleExport !== 'TECHNICIEN'
-          ? <ExportButtons base="/depotages/export" name="depotages" />
+          // L'export suit la recherche et le filtre de site : un fichier qui
+          // ignore ce que l'écran montre n'est pas le même document.
+          ? <ExportButtons base="/depotages/export" name="depotages"
+              query={[debounced ? `search=${encodeURIComponent(debounced)}` : '', siteId ? `site_id=${siteId}` : '']
+                .filter(Boolean).join('&')} />
           : undefined}
       />
 
-      <FilterBar search={fournisseur} onSearch={(v) => { setFournisseur(v); setPage(1); }} searchPlaceholder="Rechercher un fournisseur…" />
+      {/* La recherche porte sur TOUT le registre, pas sur la page affichée :
+          elle part au serveur et la pagination se recalcule. */}
+      <FilterBar search={recherche} onSearch={(v) => { setRecherche(v); setPage(1); }}
+        searchPlaceholder="Rechercher (site, référence, n° BL, fournisseur)…" />
 
       {siteId && (
         <div className="mb-3 flex items-center gap-2 text-sm text-blue-700">

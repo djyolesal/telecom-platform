@@ -206,12 +206,29 @@ export async function syncStatutBonLivraison(
 
 export async function getDepotages(req: Request, res: Response, next: NextFunction) {
   try {
-    const { site_id, fournisseur, date_debut, date_fin, page = '1', limit = '20' } =
+    const { site_id, fournisseur, search, date_debut, date_fin, page = '1', limit = '20' } =
       req.query as Record<string, string>;
 
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
+    // `fournisseur` reste accepté (liens et signets existants) ; la recherche de
+    // l'écran passe désormais par `search`.
     if (fournisseur) where.fournisseur = { contains: fournisseur, mode: 'insensitive' };
+    // RECHERCHE LARGE : on ne cherchait que le fournisseur, alors que le champ
+    // s'ouvre au-dessus d'un tableau où le SITE est la première colonne lue.
+    // Taper un nom de site ne rendait rien, et la recherche passait pour
+    // inopérante. On cherche ce que l'écran montre.
+    if (search?.trim()) {
+      const q = search.trim();
+      const contient = { contains: q, mode: 'insensitive' as const };
+      where.OR = [
+        { reference: contient },
+        { fournisseur: contient },
+        { numeroBonLivraison: contient },
+        { site: { nom: contient } },
+        { site: { code: contient } },
+      ];
+    }
     const perimetre = await sitePerimetre(req.user!.id);
     if (isRestreint(perimetre)) where.site = perimetre;
     if (date_debut || date_fin) {
@@ -810,10 +827,23 @@ export async function exportDepotagePdf(req: Request, res: Response, next: NextF
 
 export async function exportDepotages(req: Request, res: Response, next: NextFunction) {
   try {
-    const { site_id, fournisseur } = req.query as Record<string, string>;
+    const { site_id, fournisseur, search } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (site_id) where.siteId = site_id;
     if (fournisseur) where.fournisseur = { contains: fournisseur, mode: 'insensitive' };
+    // MÊME RECHERCHE que la liste : un export qui ignore le filtre affiché rend
+    // un fichier que personne ne reconnaît.
+    if (search?.trim()) {
+      const q = search.trim();
+      const contient = { contains: q, mode: 'insensitive' as const };
+      where.OR = [
+        { reference: contient },
+        { fournisseur: contient },
+        { numeroBonLivraison: contient },
+        { site: { nom: contient } },
+        { site: { code: contient } },
+      ];
+    }
     // Même périmètre que la liste - l'export contournait le filtre prestataire.
     const perimetreExp = await sitePerimetre(req.user!.id);
     if (isRestreint(perimetreExp)) where.site = perimetreExp;
