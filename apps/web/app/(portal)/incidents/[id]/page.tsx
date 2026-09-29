@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, CheckCircle2, AlertCircle, Wrench, Clock, Smartphone } from 'lucide-react';
+import { UserPlus, CheckCircle2, AlertCircle, Wrench, Clock, Smartphone, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
+import { downloadFile } from '@/lib/download';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
@@ -75,7 +76,18 @@ export default function IncidentDetailPage() {
         title={`${inc.reference ?? "Incident"} - ${inc.site?.nom ?? ""}`}
         subtitle={labelDe(inc.type)}
         backHref="/incidents"
-        actions={<div className="flex gap-2"><SeveriteBadge value={inc.severite} /><StatutIncidentBadge value={inc.statut} /></div>}
+        actions={
+          <div className="flex items-center gap-2">
+            {/* Le rapport existe à tout moment de la vie de l'incident : c'est
+                souvent AVANT la résolution qu'on a besoin de le transmettre. */}
+            <button type="button"
+              onClick={() => downloadFile(`/incidents/${id}/pdf`, `incident-${inc.reference ?? id}.pdf`, true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <FileText size={15} /> PDF
+            </button>
+            <SeveriteBadge value={inc.severite} /><StatutIncidentBadge value={inc.statut} />
+          </div>
+        }
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

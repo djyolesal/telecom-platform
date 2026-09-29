@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { L_TYPE_MAINTENANCE, L_STATUT_MAINTENANCE, L_CATEGORIE_EQUIPEMENT, libelle } from '../utils/libelles';
+import { L_TYPE_MAINTENANCE, L_STATUT_MAINTENANCE, L_CATEGORIE_EQUIPEMENT, L_SEVERITE, L_STATUT_INCIDENT, libelle } from '../utils/libelles';
 import QRCode from 'qrcode';
 import { FicheValidationData, LigneFiche, lignesFiche } from './ficheValidation.service';
 
@@ -1548,4 +1548,242 @@ export async function generateEtiquettesQrPdf(d: EtiquettesQrData): Promise<Buff
   });
 }
 
-export const pdfService = { generateMaintenancePdf, generateMonthlyReportPdf, generatePlanLivraisonPdf, generateDepotagePdf, generateBonMouvementPdf, generateEtiquettesQrPdf };
+
+/** Durée lisible : « 2 h 35 » plutôt que « 155 min ». */
+export function duree(minutes?: number | null): string {
+  if (minutes == null) return '-';
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const reste = m % 60;
+  if (h < 24) return reste ? `${h} h ${String(reste).padStart(2, '0')}` : `${h} h`;
+  const j = Math.floor(h / 24);
+  return `${j} j ${h % 24} h`;
+}
+
+export interface IncidentPdfData {
+  id: string;
+  reference?: string | null;
+  type: string;
+  typeLibelle?: string | null;
+  severite: string;
+  statut: string;
+  description: string;
+  causeProbable?: string | null;
+  actionCorrective?: string | null;
+  dateOuverture: Date;
+  dateIntervention?: Date | null;
+  dateResolution?: Date | null;
+  delaiInterventionMinutes?: number | null;
+  dureeCoupureMinutes?: number | null;
+  site?: { code: string; nom: string; region: string } | null;
+  technicien?: { nom: string; prenom: string } | null;
+  declarant?: { nom: string; prenom: string } | null;
+  nomAgentSecurite?: string | null;
+  /** Délai de résolution contractuel (heures), pour situer le réalisé. */
+  delaiMaxHeures?: number | null;
+  coupures?: Array<{
+    technologie: string; dateDebut: Date; dateFin?: Date | null;
+    downtimeMinutes?: number | null; cause?: string | null; origine?: string | null;
+  }>;
+  curatives?: Array<{ reference?: string | null; equipement: string; statut: string; dateFin?: Date | null }>;
+  photos?: Buffer[];
+  totalPhotos?: number;
+  signatureTechnicien?: Buffer | null;
+  signatureAgent?: Buffer | null;
+}
+
+/**
+ * RAPPORT D'INCIDENT.
+ *
+ * Il ne reprend pas le rapport de maintenance : une intervention se raconte par
+ * ce qui a été FAIT, un incident par ce qui s'est PASSÉ - et quand. La
+ * chronologie est donc au centre du document, avec les deux délais qui
+ * comptent (prise en charge, remise en service) situés face à l'engagement
+ * contractuel. C'est ce qu'on regarde dans une revue d'exploitation, et ce
+ * qu'un auditeur demande.
+ */
+export async function generateIncidentPdf(d: IncidentPdfData): Promise<Buffer> {
+  return render((doc) => {
+    header(doc, 'Rapport d’incident', `Réf. ${d.reference ?? d.id.slice(0, 8).toUpperCase()}`);
+
+    sectionTitle(doc, 'Site');
+    row(doc, 'Nom', d.site?.nom ?? '-');
+    row(doc, 'Code', d.site?.code ?? '-');
+    row(doc, 'Région', d.site?.region ?? '-');
+
+    sectionTitle(doc, 'Incident');
+    row(doc, 'Type', d.typeLibelle ?? d.type);
+    row(doc, 'Sévérité', libelle(L_SEVERITE, d.severite));
+    row(doc, 'Statut', libelle(L_STATUT_INCIDENT, d.statut));
+    row(doc, 'Déclaré par', d.declarant ? `${d.declarant.prenom} ${d.declarant.nom}` : '-');
+    row(doc, 'Technicien', d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : '-');
+    if (d.nomAgentSecurite) row(doc, 'Agent de sécurité', d.nomAgentSecurite);
+
+    // ── CHRONOLOGIE : le cœur du document ──
+    dessinerChronologie(doc, d);
+
+    if (d.description) {
+      sectionTitle(doc, 'Description');
+      doc.font('Helvetica').fontSize(10).fillColor('#111').text(d.description, 50, doc.y, { width: doc.page.width - 100, align: 'justify' });
+    }
+    if (d.causeProbable) {
+      sectionTitle(doc, 'Cause probable');
+      doc.font('Helvetica').fontSize(10).fillColor('#111').text(d.causeProbable, 50, doc.y, { width: doc.page.width - 100, align: 'justify' });
+    }
+    if (d.actionCorrective) {
+      sectionTitle(doc, 'Action corrective');
+      doc.font('Helvetica').fontSize(10).fillColor('#111').text(d.actionCorrective, 50, doc.y, { width: doc.page.width - 100, align: 'justify' });
+    }
+
+    // Coupures rattachées : c'est ce qui fait la matière du rapport ARCEP.
+    if (d.coupures?.length) {
+      sectionTitle(doc, `Coupures réseau rattachées (${d.coupures.length})`);
+      const larg = [70, 110, 110, 70, 135];
+      ligneTableau(doc, ['Techno', 'Début', 'Fin', 'Durée', 'Cause'], larg, true);
+      for (const c of d.coupures) {
+        ligneTableau(doc, [
+          c.technologie + (c.origine === 'HERITEE' ? ' (héritée)' : ''),
+          fmtDate(c.dateDebut),
+          c.dateFin ? fmtDate(c.dateFin) : 'en cours',
+          duree(c.downtimeMinutes),
+          c.cause ?? '-',
+        ], larg, false, true);
+      }
+      // ADDITIONNER LES COUPURES SERAIT FAUX : 2G et 4G tombent ensemble sur
+      // le même site. Le site est indisponible sur la RÉUNION des intervalles,
+      // pas sur leur somme - et c'est ce chiffre-là qui se compare aux seuils
+      // réglementaires. Le cumul par technologie reste affiché à côté, nommé
+      // pour ce qu'il est.
+      const union = unionMinutes(d.coupures);
+      const cumul = d.coupures.reduce((s, c) => s + (c.downtimeMinutes ?? 0), 0);
+      doc.moveDown(0.3);
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(BRAND).text(
+        `Indisponibilité du site : ${union == null ? 'en cours' : duree(union)}`
+        + (d.coupures.length > 1 ? `   ·   cumul par technologie : ${duree(cumul)}` : ''),
+        50, doc.y, { width: doc.page.width - 100 },
+      );
+      doc.font('Helvetica').fillColor('black');
+    }
+
+    if (d.curatives?.length) {
+      sectionTitle(doc, `Interventions curatives déclenchées (${d.curatives.length})`);
+      for (const m of d.curatives) {
+        row(doc, m.reference ?? 'Maintenance', `${m.equipement} · ${libelle(L_STATUT_MAINTENANCE, m.statut)}${m.dateFin ? ` · ${fmtDate(m.dateFin)}` : ''}`);
+      }
+    }
+
+    grillePhotos(doc, 'Photos', d.photos ?? [], d.totalPhotos ?? (d.photos?.length ?? 0));
+
+    signatureSlots(doc, [
+      { label: 'Technicien', nom: d.technicien ? `${d.technicien.prenom} ${d.technicien.nom}` : null, image: d.signatureTechnicien ?? null },
+      ...(d.nomAgentSecurite || d.signatureAgent
+        ? [{ label: 'Agent de sécurité', nom: d.nomAgentSecurite ?? null, image: d.signatureAgent ?? null }]
+        : []),
+    ]);
+
+    piedDePage(doc, `Rapport d’incident ${d.reference ?? ''} · émis par E&M OpS`.replace('  ', ' '));
+  }, { bufferPages: true });
+}
+
+/**
+ * Frise des trois moments d'un incident, avec les deux délais entre eux.
+ *
+ * Une liste de dates oblige le lecteur à faire les soustractions de tête ;
+ * c'est précisément ce qu'on lui demande de juger. La frise les pose.
+ */
+function dessinerChronologie(doc: PDFKit.PDFDocument, d: IncidentPdfData): void {
+  sectionTitle(doc, 'Chronologie');
+  const X = 50;
+  const L = doc.page.width - 100;
+  const y0 = doc.y + 6;
+
+  const etapes = [
+    { titre: 'Ouverture', date: d.dateOuverture as Date | null },
+    { titre: 'Intervention', date: d.dateIntervention ?? null },
+    { titre: 'Résolution', date: d.dateResolution ?? null },
+  ];
+  const pas = L / (etapes.length - 1);
+
+  // Ligne de fond + jalons
+  doc.moveTo(X, y0 + 6).lineTo(X + L, y0 + 6).lineWidth(1).strokeColor('#D8DEE6').stroke();
+  etapes.forEach((e, i) => {
+    const x = X + i * pas;
+    const atteint = e.date != null;
+    doc.circle(x, y0 + 6, 4).fillColor(atteint ? BRAND : '#D8DEE6').fill();
+    const largeur = 120;
+    const xt = Math.min(Math.max(x - largeur / 2, X), X + L - largeur);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(atteint ? BRAND : '#9AA5B1')
+      .text(e.titre, xt, y0 + 16, { width: largeur, align: 'center' });
+    doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
+      .text(atteint ? fmtDate(e.date) : 'non atteinte', xt, y0 + 27, { width: largeur, align: 'center' });
+  });
+
+  // Délais entre jalons, posés au-dessus de la ligne.
+  const ecarts = [
+    { i: 0, libelle: 'Prise en charge', minutes: d.delaiInterventionMinutes ?? minutesEntre(d.dateOuverture, d.dateIntervention) },
+    { i: 1, libelle: 'Résolution', minutes: minutesEntre(d.dateIntervention, d.dateResolution) },
+  ];
+  for (const e of ecarts) {
+    if (e.minutes == null) continue;
+    const x = X + e.i * pas + pas / 2;
+    doc.font('Helvetica').fontSize(7.5).fillColor(GRIS_PDF)
+      .text(`${e.libelle} : ${duree(e.minutes)}`, x - 70, y0 - 6, { width: 140, align: 'center' });
+  }
+
+  doc.y = y0 + 44;
+
+  // Verdict contractuel : le délai total face à l'engagement.
+  const total = minutesEntre(d.dateOuverture, d.dateResolution);
+  if (total != null && d.delaiMaxHeures) {
+    const maxMin = d.delaiMaxHeures * 60;
+    const tenu = total <= maxMin;
+    const couleur = tenu ? '#1E8449' : '#B23124';
+    doc.roundedRect(X, doc.y, L, 20, 3).fillColor(tenu ? '#EAF7EF' : '#FDECEA').fill();
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(couleur).text(
+      `Résolu en ${duree(total)} · engagement ${d.delaiMaxHeures} h · ${tenu ? 'délai tenu' : 'délai dépassé'}`,
+      X + 8, doc.y + 6, { width: L - 16, lineBreak: false },
+    );
+    doc.y += 26;
+  } else if (total != null) {
+    row(doc, 'Durée totale', duree(total));
+  } else {
+    doc.font('Helvetica').fontSize(8.5).fillColor(GRIS_PDF)
+      .text('Incident non résolu : la durée totale n’est pas encore connue.', X, doc.y, { width: L });
+    doc.y += 16;
+  }
+  if (d.dureeCoupureMinutes != null) row(doc, 'Coupure de service', duree(d.dureeCoupureMinutes));
+  doc.font('Helvetica').fillColor('black');
+}
+
+/**
+ * Minutes d'indisponibilité RÉELLE du site : réunion des intervalles, jamais
+ * leur somme. Deux technologies tombées en même temps ne font pas deux fois la
+ * panne. `null` si une coupure est encore ouverte - on ne devine pas sa fin.
+ */
+export function unionMinutes(coupures: Array<{ dateDebut: Date; dateFin?: Date | null }>): number | null {
+  if (!coupures.length) return null;
+  if (coupures.some((c) => !c.dateFin)) return null;
+  const intervalles = coupures
+    .map((c) => [new Date(c.dateDebut).getTime(), new Date(c.dateFin!).getTime()] as [number, number])
+    .filter(([a, b]) => b >= a)
+    .sort((x, y) => x[0] - y[0]);
+  if (!intervalles.length) return null;
+  let total = 0;
+  let [debut, fin] = intervalles[0];
+  for (const [a, b] of intervalles.slice(1)) {
+    if (a <= fin) { fin = Math.max(fin, b); continue; }   // chevauchement : on étend
+    total += fin - debut;
+    [debut, fin] = [a, b];
+  }
+  total += fin - debut;
+  return Math.round(total / 60000);
+}
+
+const minutesEntre = (a?: Date | string | null, b?: Date | string | null): number | null => {
+  if (!a || !b) return null;
+  const ms = new Date(b).getTime() - new Date(a).getTime();
+  return ms >= 0 ? Math.round(ms / 60000) : null;
+};
+
+export const pdfService = { generateMaintenancePdf, generateIncidentPdf, generateMonthlyReportPdf, generatePlanLivraisonPdf, generateDepotagePdf, generateBonMouvementPdf, generateEtiquettesQrPdf };

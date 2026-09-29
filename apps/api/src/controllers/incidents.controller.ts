@@ -17,7 +17,8 @@ import { io } from '../server';
 import { differenceInMinutes } from 'date-fns';
 import { assertOnSite } from '../utils/geofence';
 import { getNum } from '../services/settings.service';
-import { publicFileUrl } from '../services/storage.service';
+import { publicFileUrl, getObjectBuffer } from '../services/storage.service';
+import { generateIncidentPdf } from '../services/pdf.service';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
 
@@ -708,5 +709,68 @@ export async function getIncidentKPIs(req: Request, res: Response, next: NextFun
         top10Sites: top10.map(([id, { count, code, nom }]) => ({ siteId: id, code, nom, count })),
       },
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * RAPPORT D'INCIDENT en PDF - le pendant du rapport de maintenance.
+ *
+ * Chargé ici plutôt que dans le service de rendu : le service dessine, il ne
+ * sait pas où vivent les photos ni ce que vaut l'engagement contractuel.
+ */
+export async function getIncidentPdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    const incident = await prisma.incident.findUnique({
+      where: { id: req.params.id },
+      include: {
+        site: { select: { code: true, nom: true, region: true } },
+        technicien: { select: { nom: true, prenom: true } },
+        declarant: { select: { nom: true, prenom: true } },
+        maintenances: { select: { reference: true, equipement: true, statut: true, dateFin: true } },
+        coupures: {
+          orderBy: { dateDebut: 'asc' },
+          select: { technologie: true, dateDebut: true, dateFin: true, downtimeMinutes: true, cause: true, origine: true },
+        },
+      },
+    });
+    if (!incident) throw new AppError('Incident introuvable', 404);
+    // Même cloisonnement que la fiche : un PDF accessible par id contournerait
+    // le périmètre du compte.
+    await assertSiteInPerimetre(req.user!.id, incident.siteId);
+
+    const photos = await prisma.photo.findMany({
+      where: { entityType: 'incident', entityId: incident.id },
+      orderBy: { createdAt: 'asc' },
+      select: { minioKey: true },
+    });
+    const charger = async (key?: string | null): Promise<Buffer | null> => {
+      if (!key) return null;
+      try { return await getObjectBuffer(key); } catch { return null; }
+    };
+    // Six photos au plus dans le document : la clôture en exige six, les
+    // suivantes restent consultables dans l'application (le rendu le dit).
+    const retenues = photos.slice(0, 6);
+    const [bufs, signatureTechnicien, signatureAgent] = await Promise.all([
+      Promise.all(retenues.map((p) => charger(p.minioKey))),
+      charger(incident.signaturePath),
+      charger(incident.signatureAgentSecuritePath),
+    ]);
+
+    const typeRef = await prisma.typeIncidentRef.findUnique({ where: { code: incident.type } }).catch(() => null);
+
+    const pdf = await generateIncidentPdf({
+      ...incident,
+      typeLibelle: typeRef?.libelle ?? null,
+      delaiMaxHeures: getNum('sla.delaiResolutionMaxH', 24),
+      photos: bufs.filter(Boolean) as Buffer[],
+      totalPhotos: photos.length,
+      signatureTechnicien,
+      signatureAgent,
+    });
+
+    await auditLog(req.user!.id, 'EXPORT', 'incidents', incident.id, { format: 'pdf' }, req);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="incident-${incident.reference ?? incident.id.slice(0, 8)}.pdf"`);
+    res.send(pdf);
   } catch (err) { next(err); }
 }

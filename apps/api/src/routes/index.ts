@@ -467,6 +467,9 @@ router.get('/releves/:id', relevesCtrl.getReleveById);
 // ── Incidents ─────────────────────────────────────────────────
 router.get('/incidents', incidentsCtrl.getIncidents);
 router.get('/incidents/kpis', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC']), incidentsCtrl.getIncidentKPIs);
+// Rapport d'incident : même cloisonnement que la fiche (contrôlé dans le
+// contrôleur), et même niveau de lecture que la consultation.
+router.get('/incidents/:id/pdf', incidentsCtrl.getIncidentPdf);
 router.get('/incidents/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
 router.post('/incidents', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC']), incidentsCtrl.createIncident);
 router.get('/incidents/:id', incidentsCtrl.getIncidentById);
