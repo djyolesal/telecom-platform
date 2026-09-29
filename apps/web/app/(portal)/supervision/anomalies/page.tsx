@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -68,7 +68,7 @@ function BadgeStatut({ value }: { value: string }) {
  * agrandie. L'écran ne sert donc pas à accuser mais à FERMER : chaque ligne
  * doit finir justifiée (avec son motif) ou à corriger.
  */
-export default function AnomaliesSaisiePage() {
+function AnomaliesSaisieEcran() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role ?? '';
   const peutTraiter = ['SUPERVISEUR', 'MANAGER', 'ADMIN'].includes(role);
@@ -210,5 +210,18 @@ export default function AnomaliesSaisiePage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * `useSearchParams` force le rendu côté client : sans cette frontière, la
+ * compilation de production échoue à la prégénération de la page (elle passe
+ * en développement et à la vérification de types - seul `next build` le voit).
+ */
+export default function AnomaliesSaisiePage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={7} />}>
+      <AnomaliesSaisieEcran />
+    </Suspense>
   );
 }
