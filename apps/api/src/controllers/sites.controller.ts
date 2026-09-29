@@ -150,6 +150,17 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
     // Mode « tous » (sélecteurs, liste mobile) : pas de pagination (le paginateur
     // plafonne à 200, ce qui tronquerait les sites au-delà).
     if ((req.query.all as string) === 'true') {
+      // Variante LÉGÈRE pour les listes déroulantes du portail : un sélecteur
+      // n'a besoin que du nom. Le barémage embarqué ci-dessous peut atteindre
+      // 1000 points par cuve - utile au cache hors-ligne du mobile, inutile et
+      // coûteux dans une liste de choix.
+      if ((req.query.light as string) === 'true') {
+        const legers = await prisma.site.findMany({
+          where, orderBy: { nom: 'asc' }, take: 2000,
+          select: { id: true, code: true, nom: true, region: true, typeSite: true },
+        });
+        return res.json({ success: true, data: legers });
+      }
       // Barème embarqué : la liste « tous » est le cache hors-ligne du mobile,
       // qui doit convertir hauteur → litres sans réseau (dépotages, relevés).
       const sites = await prisma.site.findMany({

@@ -54,9 +54,12 @@ function DeclarerModal({ taches, typesSite, onClose }: {
   const [debutLe, setDebutLe] = useState(moisProchain());
   const [erreur, setErreur] = useState('');
 
+  // `all` (et non `limit`) : le paginateur plafonne à 200, ce qui tronquait
+  // silencieusement la liste - les sites au-delà du 200e par ordre alphabétique
+  // n'apparaissaient jamais. `light` évite d'embarquer le barémage des cuves.
   const { data: sites } = useQuery({
     queryKey: ['sites-exclusion'],
-    queryFn: () => api.get('/sites', { params: { limit: 1000 } }).then(
+    queryFn: () => api.get('/sites', { params: { all: 'true', light: 'true' } }).then(
       (r) => r.data.data as Array<{ id: string; code: string; nom: string }>),
     enabled: portee === 'SITES',
   });
