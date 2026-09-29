@@ -46,3 +46,16 @@ CREATE INDEX IF NOT EXISTS "exclusions_contractuelles_tache_idx" ON "exclusions_
 -- la levée. Les exclusions CLOSES, elles, s'empilent - c'est l'historique.
 CREATE UNIQUE INDEX IF NOT EXISTS "exclusions_contractuelles_ouverte_unique"
   ON "exclusions_contractuelles" ("site_id", "tache_key") WHERE "fin_le" IS NULL;
+
+-- Référentiel éditable des natures de site, calqué sur types_pylone.
+CREATE TABLE IF NOT EXISTS "types_site" (
+  "code"       VARCHAR(40) PRIMARY KEY,
+  "libelle"    VARCHAR(80) NOT NULL,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Deux valeurs pour démarrer ; le reste se déclare depuis l'administration.
+INSERT INTO "types_site" ("code", "libelle") VALUES
+  ('BTS', 'Site BTS'),
+  ('CENTRE_TECHNIQUE', 'Centre technique')
+ON CONFLICT ("code") DO NOTHING;

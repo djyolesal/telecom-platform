@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList, RadioTower, MessageSquareText, Columns3, Database, AlertTriangle, Wrench, WifiOff, Cog } from 'lucide-react';
+import { ShieldOff, Users, ShieldCheck, Settings, SlidersHorizontal, ScrollText, ServerCog, Building2, Boxes, ClipboardList, RadioTower, MessageSquareText, Columns3, Database, AlertTriangle, Wrench, WifiOff, Cog } from 'lucide-react';
 
 const SECTIONS = [
   { href: '/administration/utilisateurs', icon: Users, title: 'Utilisateurs', desc: 'Créer, modifier et désactiver les comptes.' },
@@ -14,6 +14,7 @@ const SECTIONS = [
   { href: '/administration/colonnes', icon: Columns3, title: 'Colonnes des tableaux', desc: 'Colonnes optionnelles proposées aux utilisateurs (GPS, marque GE, gardiennage…).' },
   { href: '/administration/taches-preventives', icon: ClipboardList, title: 'Tâches préventives', desc: 'Libellé et fréquence du catalogue contractuel.' },
   { href: '/administration/types-pylone', icon: RadioTower, title: 'Types de pylône', desc: 'Référentiel éditable des types de pylône.' },
+  { href: '/administration/exclusions', icon: ShieldOff, title: 'Exclusions contractuelles', desc: "Tâches non dues sur certains sites (centre technique dont le GE n'est pas au contrat)." },
   { href: '/administration/types-incident', icon: AlertTriangle, title: "Types d'incident", desc: 'Référentiel des formulaires de déclaration (web et mobile).' },
   { href: '/administration/motifs-coupure', icon: WifiOff, title: 'Motifs de coupure', desc: 'Formulations suggérées au NOC (cause, actions) pour unifier les saisies.' },
   { href: '/administration/equipements', icon: Wrench, title: 'Équipements de dépannage', desc: 'ATS, TGBT, GE… - la catégorie route vers le bon contrat.' },

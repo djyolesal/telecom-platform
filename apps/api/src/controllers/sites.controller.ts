@@ -110,10 +110,13 @@ const HEADER_ALIASES: Record<string, string> = {
  */
 export async function getSites(req: Request, res: Response, next: NextFunction) {
   try {
-    const { region, statut_ge, power_config, power_configs, prestataire_id, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
+    const { region, statut_ge, power_config, power_configs, prestataire_id, type_site, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
 
     const where: Record<string, unknown> = { isActive: true };
     if (region) where.region = region;
+    // Nature du site : sert à cibler une population (les centres techniques,
+    // par exemple) pour y poser des exclusions contractuelles en une fois.
+    if (type_site) where.typeSite = type_site;
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
     // Multi-sélection (pastilles) : power_configs=A,B — OU entre configs,
@@ -501,7 +504,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
     // createdAt/relations arbitraires injectés à la création.
     const data = pick<Prisma.SiteUncheckedCreateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
-      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
@@ -538,7 +541,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
     // Liste blanche : jamais de isActive/createdAt/marqueGE arbitraires ici.
     const data = pick<Prisma.SiteUncheckedUpdateInput>(req.body, [
       'nom', 'code', 'region', 'ville', 'adresse', 'latitude', 'longitude',
-      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone',
+      'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',

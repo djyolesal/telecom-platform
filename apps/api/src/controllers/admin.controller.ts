@@ -482,6 +482,40 @@ export async function rapprocherPiecesHistorique(req: Request, res: Response, ne
   } catch (err) { next(err); }
 }
 
+export async function listTypesSite(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const types = await prisma.typeSiteRef.findMany({ orderBy: { libelle: 'asc' } });
+    res.json({ success: true, data: types });
+  } catch (err) { next(err); }
+}
+
+export async function upsertTypeSite(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { code, libelle } = req.body as { code?: string; libelle?: string };
+    if (!code?.trim() || !libelle?.trim()) throw new AppError('Code et libellé requis.', 422);
+    const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+    if (!cleanCode) throw new AppError('Code invalide.', 422);
+    const type = await prisma.typeSiteRef.upsert({
+      where: { code: cleanCode },
+      create: { code: cleanCode, libelle: libelle.trim() },
+      update: { libelle: libelle.trim() },
+    });
+    await auditLog(req.user!.id, 'UPDATE', 'types_site', type.code, { libelle: type.libelle }, req);
+    res.json({ success: true, data: type });
+  } catch (err) { next(err); }
+}
+
+export async function deleteTypeSite(req: Request, res: Response, next: NextFunction) {
+  try {
+    const code = req.params.code;
+    const used = await prisma.site.count({ where: { typeSite: code } });
+    if (used > 0) throw new AppError(`Nature utilisée par ${used} site(s) - réaffectez-les avant suppression.`, 409);
+    await prisma.typeSiteRef.delete({ where: { code } });
+    await auditLog(req.user!.id, 'DELETE', 'types_site', code, {}, req);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
 export async function listTypesPylone(_req: Request, res: Response, next: NextFunction) {
   try {
     const types = await prisma.typePyloneRef.findMany({ orderBy: { libelle: 'asc' } });

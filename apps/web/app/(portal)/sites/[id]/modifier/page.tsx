@@ -22,7 +22,7 @@ export default function ModifierSitePage() {
     code: '', nom: '', region: '', ville: '', adresse: '',
     powerConfig: 'CEET_GE', statutGE: 'GE_SECOURS', puissanceGEkva: '0',
     latitude: '', longitude: '', lotId: '', lotSolaireId: '',
-    hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '',
+    hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '', typeSite: '',
     accesPickup: 'false',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
     cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '',
@@ -54,6 +54,10 @@ export default function ModifierSitePage() {
     queryFn: () => api.get('/types-pylone').then((r) => r.data.data as { code: string; libelle: string }[]),
   });
   const pyloneOptions = typesPylone?.map((t) => ({ value: t.code, label: t.libelle })) ?? TYPES_PYLONE;
+  const { data: typesSite } = useQuery({
+    queryKey: ['types-site'],
+    queryFn: () => api.get('/types-site').then((r) => r.data.data as { code: string; libelle: string }[]),
+  });
   const { data: lots } = useQuery({
     queryKey: ['lots-select'],
     queryFn: () => api.get('/lots', { params: { limit: 500 } }).then((r) => r.data.data),
@@ -101,6 +105,7 @@ export default function ModifierSitePage() {
       accesPickup: site.accesPickup ? 'true' : 'false',
       hasExtincteurs: site.hasExtincteurs ? 'true' : 'false',
       typePylone: site.typePylone ?? '',
+      typeSite: site.typeSite ?? '',
       cuveVolumeLitres: site.cuveVolumeLitres != null ? String(site.cuveVolumeLitres) : '',
       formeCuve: site.formeCuve ?? '',
       cuveDimensions: site.cuveDimensions ?? '',
@@ -187,6 +192,7 @@ export default function ModifierSitePage() {
         accesPickup: form.accesPickup === 'true',
         hasExtincteurs: form.hasExtincteurs === 'true',
         typePylone: form.typePylone || null,
+        typeSite: form.typeSite || null,
         cuveVolumeLitres: form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null,
         formeCuve: form.formeCuve || null,
         cuveDimensions: form.cuveDimensions || null,
@@ -285,6 +291,10 @@ export default function ModifierSitePage() {
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Infrastructure</div>
           <Field label="Type de pylône">
             <Select value={form.typePylone} onChange={(e) => set('typePylone', e.target.value)} options={pyloneOptions} placeholder="Sélectionner…" />
+          </Field>
+          <Field label="Nature du site" hint="Descriptif. Il sert à cibler une population pour les exclusions contractuelles - il n'entre jamais dans le calcul du dû.">
+            <Select value={form.typeSite} onChange={(e) => set('typeSite', e.target.value)}
+              options={(typesSite ?? []).map((t) => ({ value: t.code, label: t.libelle }))} placeholder="Standard" />
           </Field>
           <Field label="Climatiseur sur le site">
             <Select value={form.hasClimatiseur} onChange={(e) => set('hasClimatiseur', e.target.value)} options={OUI_NON} />

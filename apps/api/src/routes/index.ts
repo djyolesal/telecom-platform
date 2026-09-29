@@ -39,6 +39,7 @@ import { uploadMiddleware, uploadSpreadsheet, verifierSignature } from '../middl
 import * as filesCtrl from '../controllers/files.controller';
 import * as syncOssCtrl from '../controllers/syncOss.controller';
 import * as dbAdminCtrl from '../controllers/dbAdmin.controller';
+import * as exclusionsCtrl from '../controllers/exclusions.controller';
 
 export const router = Router();
 
@@ -141,6 +142,7 @@ const NOC_ALLOW: RegExp[] = [
   /^\/rapports\/(dashboard|disponibilite-reseau|incidents|pouls-24h|conformite-arcep)$/,
   /^\/rapports\/(disponibilite-reseau|conformite-arcep)\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
+  /^\/types-site(\/|$)/,
   /^\/types-incident$/,               // libellés des types (déclaration/lecture)
   /^\/prestataires$/,                  // liste seule : options du filtre prestataire (page Sites)
 ];
@@ -518,6 +520,7 @@ router.post('/users/:id/delier-appareil', rbac(['ADMIN']), usersCtrl.delierAppar
 // ── Administration ────────────────────────────────────────────
 // Référentiel types de pylône : lecture pour tous (formulaires), édition admin.
 router.get('/types-pylone', adminCtrl.listTypesPylone);
+router.get('/types-site', adminCtrl.listTypesSite);
 router.get('/types-incident', adminCtrl.listTypesIncident);
 router.get('/motifs-coupure', adminCtrl.listMotifsCoupure);
 // Catalogue des pièces de rechange : lecture ouverte (sélecteurs mobile/web),
@@ -535,6 +538,17 @@ router.post('/admin/types-incident', rbac(['ADMIN']), adminCtrl.upsertTypeIncide
 router.delete('/admin/types-incident/:code', rbac(['ADMIN']), adminCtrl.deleteTypeIncident);
 router.post('/admin/types-pylone', rbac(['ADMIN']), adminCtrl.upsertTypePylone);
 router.delete('/admin/types-pylone/:code', rbac(['ADMIN']), adminCtrl.deleteTypePylone);
+router.post('/admin/types-site', rbac(['ADMIN']), adminCtrl.upsertTypeSite);
+router.delete('/admin/types-site/:code', rbac(['ADMIN']), adminCtrl.deleteTypeSite);
+
+// EXCLUSIONS CONTRACTUELLES : ce qui n'est pas dû, et depuis quand. La lecture
+// est ouverte aux profils qui lisent la conformité (ils doivent pouvoir
+// expliquer un « NA ») ; poser ou lever engage le contrat - MANAGER et ADMIN.
+router.get('/exclusions/catalogues', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), exclusionsCtrl.cataloguesTaches);
+router.get('/exclusions/coherence', rbac(['MANAGER', 'ADMIN']), exclusionsCtrl.coherenceExclusions);
+router.get('/exclusions', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), exclusionsCtrl.listerExclusions);
+router.post('/exclusions', rbac(['MANAGER', 'ADMIN']), exclusionsCtrl.creerExclusions);
+router.post('/exclusions/:id/lever', rbac(['MANAGER', 'ADMIN']), exclusionsCtrl.cloturerExclusion);
 router.get('/admin/settings', rbac(['ADMIN']), adminCtrl.getSettings);
 router.get('/admin/sms-templates', rbac(['ADMIN']), adminCtrl.getSmsTemplates);
 router.get('/admin/sms-canaux', rbac(['ADMIN']), adminCtrl.getSmsCanaux);

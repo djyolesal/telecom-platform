@@ -708,6 +708,17 @@ model TypePyloneRef {
   @@map("types_pylone")
 }
 
+/// Nature d'un site (centre technique, BTS...). Référentiel éditable, sur le
+/// modèle des types de pylône. DESCRIPTIF : il sert à reconnaître une
+/// population et à poser les exclusions en masse, jamais à calculer un dû.
+model TypeSiteRef {
+  code      String   @id @db.VarChar(40)
+  libelle   String   @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("types_site")
+}
+
 model SystemSettings {
   id          String   @id @default(uuid())
   key         String   @unique @db.VarChar(100)
