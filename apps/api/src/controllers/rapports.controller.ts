@@ -247,7 +247,11 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
     const anomalies = await anomaliesCarburantParSite({ siteIds: sites.map((x) => x.id) });
 
     const data = sites.map((site) => {
-      const stock = calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id) ?? 0 }, geParams());
+      // `null` et non `?? 0` : stockCourantParSite OMET volontairement les sites
+      // sans aucune mesure (« on ne suppose pas un stock nul »), et les
+      // réintroduire à 0 annulait précisément cette précaution.
+      const mesure = stockMap.has(site.id);
+      const stock = calculerStockSite(site, mesure ? { volumeGasoilLitres: stockMap.get(site.id)! } : null, geParams());
       return {
         siteId: site.id, code: site.code, nom: site.nom, region: site.region, statutGE: site.statutGE,
         ...stock,
@@ -257,7 +261,12 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
     });
 
     const resume = {
-      totalLitres: data.reduce((s, x) => s + x.stockLitres, 0),
+      // Sites MESURÉS seulement : additionner des zéros « inconnus » à des
+      // niveaux réels donnait un total de parc qui ne pouvait pas correspondre
+      // à celui du bilan conso & stock, lequel écarte les sites non mesurés.
+      totalLitres: data.reduce((s, x) => s + (x.mesure ? x.stockLitres : 0), 0),
+      nbSitesMesures: data.filter((x) => x.mesure).length,
+      nbSites: data.length,
       totalLitresMois: data.reduce((s, x) => s + x.litresMois, 0),
       totalCoutMoisFCFA: masquerCouts ? null : data.reduce((s, x) => s + (x.coutMoisFCFA ?? 0), 0),
       nbSitesVides: data.filter((x) => x.niveauAlerte === 'VIDE').length,

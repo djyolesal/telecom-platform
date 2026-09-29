@@ -21,6 +21,8 @@ interface SiteStock {
   nom: string;
   region: string;
   stockLitres: number;
+  /** Faux = aucun relevé connu : « - », jamais « 0 L ». */
+  mesure: boolean;
   litresMois: number;
   coutMoisFCFA: number;
   autonomieJours: number | null;
@@ -56,7 +58,12 @@ export default function StockCarburantPage() {
   const columns: Column<SiteStock>[] = [
     { key: 'code', header: 'Site', render: (s) => <span className="font-medium text-gray-800">{s.nom}</span> },
     { key: 'region', header: 'Région' },
-    { key: 'stockLitres', header: 'Stock (L)', align: 'right', render: (s) => fmtNumber(s.stockLitres) },
+    {
+      key: 'stockLitres', header: 'Stock (L)', align: 'right',
+      render: (s) => s.mesure
+        ? fmtNumber(s.stockLitres)
+        : <span className="text-gray-300" title="Aucun relevé de cuve sur ce site : le stock est inconnu, pas nul.">-</span>,
+    },
     { key: 'autonomieJours', header: 'Autonomie', align: 'right', render: (s) => (s.autonomieJours != null ? `${s.autonomieJours} j` : '-') },
     // Théorique assumé : cette page lit la formule kVA (budget), pas la mesure.
     // La conso MESURÉE par site est sur « Réapprovisionnement » avec sa source.
@@ -93,7 +100,9 @@ export default function StockCarburantPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Stock total" value={`${fmtNumber(Math.round((resume.totalLitres ?? 0) / 1000))}k L`} icon={Fuel} color="bg-[rgb(var(--accent))]" />
+        <StatCard title="Stock total" value={`${fmtNumber(Math.round((resume.totalLitres ?? 0) / 1000))}k L`}
+          subtitle={resume.nbSites ? `${resume.nbSitesMesures ?? 0} / ${resume.nbSites} sites mesurés` : undefined}
+          icon={Fuel} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Conso parc" value={`${fmtNumber(Math.round((resume.totalLitresMois ?? 0) / 1000))}k L/mois`} icon={Droplet} color="bg-[rgb(var(--brand-light))]" />
         {/* Coût masqué côté serveur pour les comptes prestataires : « - », pas « 0 M ». */}
         <StatCard title="Coût mensuel" value={resume.totalCoutMoisFCFA == null ? '-' : `${fmtNumber(Math.round(resume.totalCoutMoisFCFA / 1_000_000))} M`} subtitle="FCFA/mois" icon={Banknote} color="bg-[rgb(var(--brand))]" />

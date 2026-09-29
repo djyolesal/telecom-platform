@@ -52,8 +52,31 @@ describe('calculerStockSite', () => {
     expect(calculerStockSite(site('GE_PERMANENT', 100), { volumeGasoilLitres: 5000 }).niveauAlerte).toBe('OK');
   });
 
-  it('relevé absent → stock 0', () => {
+  it('relevé absent → stock 0, mais NON MESURÉ et surtout pas « cuve vide »', () => {
+    // Le piège corrigé : un site jamais relevé affichait 0 L et « Cuve vide ».
+    // L'outil affirmait une cuve vide là où il ne savait rien - ce qui gonflait
+    // les sites en alerte et faisait diverger le total du bilan conso & stock,
+    // lequel écarte justement les sites non mesurés.
     const r = calculerStockSite(site('GE_PERMANENT', 100), null);
     expect(r.stockLitres).toBe(0);
+    expect(r.mesure).toBe(false);
+    expect(r.niveauAlerte).toBe('NA');
+  });
+
+  it('cuve mesurée à 0 → VIDE : là, on sait', () => {
+    const r = calculerStockSite(site('GE_PERMANENT', 100), { volumeGasoilLitres: 0 });
+    expect(r.mesure).toBe(true);
+    expect(r.niveauAlerte).toBe('VIDE');
+  });
+
+  it('puissance GE à 0 : la MESURE de la cuve est rendue telle quelle', () => {
+    // Le niveau d'une cuve ne dépend pas de la puissance déclarée du groupe.
+    // Une kVA manquante ramenait le stock affiché à 0 sur cet écran, alors que
+    // le bilan montrait le vrai niveau - d'où deux chiffres pour un seul site.
+    const r = calculerStockSite(site('GE_PERMANENT', 0), { volumeGasoilLitres: 1000 });
+    expect(r.stockLitres).toBe(1000);
+    expect(r.mesure).toBe(true);
+    expect(r.niveauAlerte).toBe('NA');        // autonomie incalculable, elle
+    expect(r.litresMois).toBe(0);             // la CONSO, oui, reste nulle
   });
 });

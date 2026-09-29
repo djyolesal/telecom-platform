@@ -14,6 +14,14 @@ export interface ReleveGE {
 
 export interface StockSite {
   stockLitres: number;
+  /**
+   * Le stock est-il MESURÉ ? Un site jamais relevé affichait 0 L et « Cuve
+   * vide » : l'outil affirmait une cuve vide là où il ne savait rien, ce qui
+   * gonflait les sites en alerte et faisait diverger le total du bilan (qui,
+   * lui, écarte les sites non mesurés). 0 et « inconnu » ne sont pas la même
+   * chose.
+   */
+  mesure: boolean;
   facteurCharge: number;
   kwActif: number;
   heuresMois: number;
@@ -64,11 +72,17 @@ export function calculerStockSite(
   params = GE_PARAMS
 ): StockSite {
   const kva = toNum(site.puissanceGEkva);
+  const mesure = dernierReleve != null;
   const stockLitres = dernierReleve ? toNum(dernierReleve.volumeGasoilLitres) : 0;
 
   if (site.statutGE === 'PAS_DE_GE' || kva === 0) {
     return {
-      stockLitres: 0,
+      // Le NIVEAU de la cuve ne dépend pas de la puissance déclarée du groupe :
+      // une cuve pleine sur un site dont la kVA est à 0 (donnée manquante)
+      // s'affichait à 0 L ici, et à son vrai niveau sur le bilan. On rend la
+      // mesure telle quelle ; c'est la CONSOMMATION qui reste incalculable.
+      stockLitres,
+      mesure,
       facteurCharge: 0,
       kwActif: 0,
       heuresMois: 0,
@@ -95,17 +109,22 @@ export function calculerStockSite(
   const autonomieJours = litresJour > 0 ? Math.round((stockLitres / litresJour) * 10) / 10 : null;
 
   let niveauAlerte: StockSite['niveauAlerte'] = 'OK';
-  if (stockLitres === 0) niveauAlerte = 'VIDE';
+  // JAMAIS RELEVÉ ≠ VIDE : sans mesure, on ne déclare pas une cuve vide.
+  if (!mesure) niveauAlerte = 'NA';
+  else if (stockLitres === 0) niveauAlerte = 'VIDE';
   else if (stockLitres <= params.seuilCritiqueLitres) niveauAlerte = 'CRITIQUE';
   else if (stockLitres <= params.seuilFaibleLitres) niveauAlerte = 'FAIBLE';
 
-  return { stockLitres, facteurCharge, kwActif, heuresMois, litresMois, coutMoisFCFA, autonomieJours, niveauAlerte };
+  return { stockLitres, mesure, facteurCharge, kwActif, heuresMois, litresMois, coutMoisFCFA, autonomieJours, niveauAlerte };
 }
 
 /** Calcule le stock total du parc */
 export function calculerStockParc(sites: Array<{ stock: StockSite }>) {
   return {
-    totalLitres: sites.reduce((s, x) => s + x.stock.stockLitres, 0),
+    // Total sur les sites MESURÉS seulement - même règle que le bilan conso &
+    // stock, sans quoi les deux écrans ne peuvent pas s'accorder.
+    totalLitres: sites.reduce((s, x) => s + (x.stock.mesure ? x.stock.stockLitres : 0), 0),
+    nbSitesMesures: sites.filter((x) => x.stock.mesure).length,
     totalLitresMois: sites.reduce((s, x) => s + x.stock.litresMois, 0),
     totalCoutMoisFCFA: sites.reduce((s, x) => s + x.stock.coutMoisFCFA, 0),
     nbSitesVides: sites.filter(x => x.stock.niveauAlerte === 'VIDE').length,
