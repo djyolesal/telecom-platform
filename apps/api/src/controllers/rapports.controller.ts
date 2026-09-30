@@ -236,10 +236,26 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
     // Les COÛTS (FCFA) sont une lecture de pilotage interne : masqués côté
     // serveur pour tout compte prestataire — les litres suffisent à exploiter.
     const masquerCouts = await estPrestataire(req.user!.id);
-    const sites = await prisma.site.findMany({
-      where: { isActive: true, ...(region ? { region } : {}), ...perimetre },
-      orderBy: { code: 'asc' },
-    });
+    // SITES CONCERNÉS PAR LE CARBURANT : ceux qui ont un groupe électrogène OU
+    // une cuve. Un site qui n'a ni l'un ni l'autre n'a pas un stock inconnu, il
+    // n'a pas de stock du tout - l'afficher « 0 L · Cuve vide » gonflait le
+    // compteur d'alertes et faisait passer une couverture réelle de 97 % pour
+    // 66 %. Le couple décide : une cuve sans groupe reste du gasoil stocké, et
+    // ne doit donc pas disparaître.
+    const concerne = { OR: [{ statutGE: { not: 'PAS_DE_GE' as const } }, { cuveVolumeLitres: { gt: 0 } }] };
+    // Le complément est écrit EXPLICITEMENT, et non `NOT: concerne` : en logique
+    // à trois états, NOT (cuve > 0) vaut NULL quand la cuve est NULL - donc la
+    // ligne est exclue et le compteur renvoyait zéro. Même piège que le NOT sur
+    // appVersion ailleurs dans ce contrôleur ; le cas NULL doit être nommé.
+    const horsPerimetre = {
+      statutGE: 'PAS_DE_GE' as const,
+      OR: [{ cuveVolumeLitres: null }, { cuveVolumeLitres: 0 }],
+    };
+    const base = { isActive: true, ...(region ? { region } : {}), ...perimetre };
+    const [sites, nbHorsPerimetre] = await Promise.all([
+      prisma.site.findMany({ where: { ...base, ...concerne }, orderBy: { code: 'asc' } }),
+      prisma.site.count({ where: { ...base, ...horsPerimetre } }),
+    ]);
     const { stock: stockMap, dates: datesStock } = await stockEtDates();
     // Au-delà de ce délai, la mesure ne dit plus l'état d'aujourd'hui : le
     // chiffre reste juste (c'est la dernière mesure connue), mais l'écran ne
@@ -284,6 +300,9 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
       nbSitesSaisiesSignalees: data.filter((x) => x.saisiesSignalees).length,
       nbSitesPerimes: data.filter((x) => x.perimee).length,
       seuilFraicheurJours: seuilJours,
+      // Annoncé plutôt que passé sous silence : une liste qui rétrécit sans
+      // explication se lit comme une perte de données.
+      nbSitesHorsPerimetre: nbHorsPerimetre,
     };
 
     res.json({ success: true, data: { resume, sites: data } });

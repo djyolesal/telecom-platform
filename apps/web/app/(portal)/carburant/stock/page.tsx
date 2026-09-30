@@ -132,6 +132,14 @@ export default function StockCarburantPage() {
           icon={AlertTriangle} color="bg-red-500" />
       </div>
 
+      {/* Une liste qui rétrécit sans explication se lit comme une perte de
+          données : on dit ce qui n'y figure pas, et pourquoi. */}
+      {resume.nbSitesHorsPerimetre > 0 && (
+        <p className="mb-3 text-xs text-gray-500">
+          {resume.nbSitesHorsPerimetre} site(s) sans groupe électrogène ni cuve ne figurent pas ici : ils n&apos;ont pas de stock à suivre.
+        </p>
+      )}
+
       <FilterBar
         filters={[
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: setRegion },
