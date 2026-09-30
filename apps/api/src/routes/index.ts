@@ -167,6 +167,7 @@ const INTERNE_ONLY: RegExp[] = [
   // rbac s'élargit un jour.
   /^\/anomalies-saisie(\/|$)/,
   /^\/maintenances\/export\/rapports\.pdf$/,
+  /^\/incidents\/export\/rapports\.zip$/,
   /^\/maintenances\/export\/rapports\/envoyer$/,
   /^\/rapports\/reapprovisionnement$/,
   /^\/rapports\/anomalies-conso$/,
@@ -467,10 +468,18 @@ router.get('/releves/:id', relevesCtrl.getReleveById);
 // ── Incidents ─────────────────────────────────────────────────
 router.get('/incidents', incidentsCtrl.getIncidents);
 router.get('/incidents/kpis', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION','NOC']), incidentsCtrl.getIncidentKPIs);
+// LES ROUTES D'EXPORT AVANT `/:id/...` : sinon `/incidents/export/pdf` est
+// capturé par `/incidents/:id/pdf` avec id = « export », et l'export tabulaire
+// répond « Incident introuvable ». Même piège que /users/appareils-partages.
+//
+// Lot : UN PDF PAR INCIDENT dans une archive, sur les filtres de la liste.
+// Génération lourde (n rapports, photos comprises) : même plafond par IP que
+// les autres productions de documents.
+router.get('/incidents/export/rapports.zip', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN']), heavyLimit, incidentsCtrl.getIncidentsPdfLot);
+router.get('/incidents/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
 // Rapport d'incident : même cloisonnement que la fiche (contrôlé dans le
 // contrôleur), et même niveau de lecture que la consultation.
 router.get('/incidents/:id/pdf', incidentsCtrl.getIncidentPdf);
-router.get('/incidents/export/:format(xlsx|pdf)', rbac(['NOC','SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.exportIncidents);
 router.post('/incidents', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC']), incidentsCtrl.createIncident);
 router.get('/incidents/:id', incidentsCtrl.getIncidentById);
 router.put('/incidents/:id', rbac(['SUPERVISEUR','MANAGER','ADMIN']), incidentsCtrl.updateIncident);

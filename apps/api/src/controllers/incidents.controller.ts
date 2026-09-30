@@ -19,6 +19,7 @@ import { assertOnSite } from '../utils/geofence';
 import { getNum } from '../services/settings.service';
 import { publicFileUrl, getObjectBuffer } from '../services/storage.service';
 import { generateIncidentPdf } from '../services/pdf.service';
+import JSZip from 'jszip';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
 
@@ -583,13 +584,7 @@ export async function deleteIncident(req: Request, res: Response, next: NextFunc
 
 export async function exportIncidents(req: Request, res: Response, next: NextFunction) {
   try {
-    const { type, severite, statut, site_id, region } = req.query as Record<string, string>;
-    const where: Record<string, unknown> = {};
-    if (type) where.type = type;
-    if (severite) where.severite = severite;
-    if (statut) where.statut = statut;
-    if (site_id) where.siteId = site_id;
-    if (region) where.site = { ...(where.site as object ?? {}), region };
+    const where = filtresListeIncidents(req.query as Record<string, string>);
     // Même périmètre que la liste : un prestataire n'exporte que les incidents
     // de ses lots - l'export contournait le filtre appliqué à l'écran.
     const perimetreExp = await sitePerimetre(req.user!.id);
@@ -718,59 +713,140 @@ export async function getIncidentKPIs(req: Request, res: Response, next: NextFun
  * Chargé ici plutôt que dans le service de rendu : le service dessine, il ne
  * sait pas où vivent les photos ni ce que vaut l'engagement contractuel.
  */
+/** Filtres de la liste, réutilisés par l'export tabulaire ET le lot de PDF. */
+function filtresListeIncidents(q: Record<string, string>): Record<string, unknown> {
+  const where: Record<string, unknown> = {};
+  if (q.type) where.type = q.type;
+  if (q.severite) where.severite = q.severite;
+  if (q.statut) where.statut = q.statut;
+  if (q.site_id) where.siteId = q.site_id;
+  if (q.region) where.site = { region: q.region };
+  return where;
+}
+
+/**
+ * Charge et rend LE rapport d'un incident.
+ *
+ * Extrait pour que l'export unitaire et le lot produisent exactement le même
+ * document : un seul chargement, donc aucune divergence possible entre le PDF
+ * qu'on ouvre depuis la fiche et celui qu'on retrouve dans l'archive.
+ */
+async function construireRapportIncident(id: string): Promise<{ pdf: Buffer; nom: string } | null> {
+  const incident = await prisma.incident.findUnique({
+    where: { id },
+    include: {
+      site: { select: { code: true, nom: true, region: true } },
+      technicien: { select: { nom: true, prenom: true } },
+      declarant: { select: { nom: true, prenom: true } },
+      maintenances: { select: { reference: true, equipement: true, statut: true, dateFin: true } },
+      coupures: {
+        orderBy: { dateDebut: 'asc' },
+        select: { technologie: true, dateDebut: true, dateFin: true, downtimeMinutes: true, cause: true, origine: true },
+      },
+    },
+  });
+  if (!incident) return null;
+
+  const photos = await prisma.photo.findMany({
+    where: { entityType: 'incident', entityId: incident.id },
+    orderBy: { createdAt: 'asc' },
+    select: { minioKey: true },
+  });
+  const charger = async (key?: string | null): Promise<Buffer | null> => {
+    if (!key) return null;
+    try { return await getObjectBuffer(key); } catch { return null; }
+  };
+  // Six photos au plus dans le document : la clôture en exige six, les
+  // suivantes restent consultables dans l'application (le rendu le dit).
+  const retenues = photos.slice(0, 6);
+  const [bufs, signatureTechnicien, signatureAgent] = await Promise.all([
+    Promise.all(retenues.map((p) => charger(p.minioKey))),
+    charger(incident.signaturePath),
+    charger(incident.signatureAgentSecuritePath),
+  ]);
+
+  const typeRef = await prisma.typeIncidentRef.findUnique({ where: { code: incident.type } }).catch(() => null);
+
+  const pdf = await generateIncidentPdf({
+    ...incident,
+    typeLibelle: typeRef?.libelle ?? null,
+    delaiMaxHeures: getNum('sla.delaiResolutionMaxH', 24),
+    photos: bufs.filter(Boolean) as Buffer[],
+    totalPhotos: photos.length,
+    signatureTechnicien,
+    signatureAgent,
+  });
+  const sain = (v: string) => v.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '');
+  return {
+    pdf,
+    nom: `incident-${sain(incident.reference ?? incident.id.slice(0, 8))}-${sain(incident.site?.code ?? '')}.pdf`,
+  };
+}
+
+/**
+ * RAPPORT D'INCIDENT en PDF - le pendant du rapport de maintenance.
+ */
 export async function getIncidentPdf(req: Request, res: Response, next: NextFunction) {
   try {
-    const incident = await prisma.incident.findUnique({
-      where: { id: req.params.id },
-      include: {
-        site: { select: { code: true, nom: true, region: true } },
-        technicien: { select: { nom: true, prenom: true } },
-        declarant: { select: { nom: true, prenom: true } },
-        maintenances: { select: { reference: true, equipement: true, statut: true, dateFin: true } },
-        coupures: {
-          orderBy: { dateDebut: 'asc' },
-          select: { technologie: true, dateDebut: true, dateFin: true, downtimeMinutes: true, cause: true, origine: true },
-        },
-      },
-    });
-    if (!incident) throw new AppError('Incident introuvable', 404);
+    const cible = await prisma.incident.findUnique({ where: { id: req.params.id }, select: { siteId: true } });
+    if (!cible) throw new AppError('Incident introuvable', 404);
     // Même cloisonnement que la fiche : un PDF accessible par id contournerait
     // le périmètre du compte.
-    await assertSiteInPerimetre(req.user!.id, incident.siteId);
+    await assertSiteInPerimetre(req.user!.id, cible.siteId);
 
-    const photos = await prisma.photo.findMany({
-      where: { entityType: 'incident', entityId: incident.id },
-      orderBy: { createdAt: 'asc' },
-      select: { minioKey: true },
-    });
-    const charger = async (key?: string | null): Promise<Buffer | null> => {
-      if (!key) return null;
-      try { return await getObjectBuffer(key); } catch { return null; }
-    };
-    // Six photos au plus dans le document : la clôture en exige six, les
-    // suivantes restent consultables dans l'application (le rendu le dit).
-    const retenues = photos.slice(0, 6);
-    const [bufs, signatureTechnicien, signatureAgent] = await Promise.all([
-      Promise.all(retenues.map((p) => charger(p.minioKey))),
-      charger(incident.signaturePath),
-      charger(incident.signatureAgentSecuritePath),
-    ]);
+    const rapport = await construireRapportIncident(req.params.id);
+    if (!rapport) throw new AppError('Incident introuvable', 404);
 
-    const typeRef = await prisma.typeIncidentRef.findUnique({ where: { code: incident.type } }).catch(() => null);
-
-    const pdf = await generateIncidentPdf({
-      ...incident,
-      typeLibelle: typeRef?.libelle ?? null,
-      delaiMaxHeures: getNum('sla.delaiResolutionMaxH', 24),
-      photos: bufs.filter(Boolean) as Buffer[],
-      totalPhotos: photos.length,
-      signatureTechnicien,
-      signatureAgent,
-    });
-
-    await auditLog(req.user!.id, 'EXPORT', 'incidents', incident.id, { format: 'pdf' }, req);
+    await auditLog(req.user!.id, 'EXPORT', 'incidents', req.params.id, { format: 'pdf' }, req);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="incident-${incident.reference ?? incident.id.slice(0, 8)}.pdf"`);
-    res.send(pdf);
+    res.setHeader('Content-Disposition', `inline; filename="${rapport.nom}"`);
+    res.send(rapport.pdf);
+  } catch (err) { next(err); }
+}
+
+/**
+ * LOT DE RAPPORTS : un PDF PAR INCIDENT, dans une archive.
+ *
+ * Et non un seul document qui les enchaîne : un rapport d'incident se classe,
+ * se transmet et se signe séparément - c'est une pièce par événement. Les
+ * filtres sont ceux de la liste affichée, pour que l'archive contienne
+ * exactement ce que l'écran montre.
+ */
+export async function getIncidentsPdfLot(req: Request, res: Response, next: NextFunction) {
+  try {
+    const q = req.query as Record<string, string>;
+    const where = filtresListeIncidents(q);
+    const perimetre = await sitePerimetre(req.user!.id);
+    if (isRestreint(perimetre)) where.site = { ...(where.site as object ?? {}), ...perimetre };
+
+    // PLAFOND. Chaque rapport embarque jusqu'à six photos : un lot sans borne
+    // fabriquerait une archive que personne ne pourra ni produire ni ouvrir.
+    // On REFUSE en disant quoi resserrer, plutôt que de faire attendre puis
+    // échouer.
+    const plafond = getNum('incidents.lotPdfMax', 100);
+    const total = await prisma.incident.count({ where });
+    if (total === 0) throw new AppError('Aucun incident à exporter avec ces filtres.', 404);
+    if (total > plafond) {
+      throw new AppError(
+        `${total} incidents correspondent à ces filtres, au-delà du plafond de ${plafond}. `
+        + 'Resserrez la période, la région ou le statut.',
+        422,
+      );
+    }
+
+    const incidents = await prisma.incident.findMany({
+      where, orderBy: { dateOuverture: 'desc' }, select: { id: true },
+    });
+    const zip = new JSZip();
+    for (const inc of incidents) {
+      const rapport = await construireRapportIncident(inc.id);
+      if (rapport) zip.file(rapport.nom, rapport.pdf);
+    }
+
+    const buf = await zip.generateAsync({ type: 'nodebuffer' });
+    await auditLog(req.user!.id, 'EXPORT', 'incidents', undefined, { format: 'zip-pdf', count: incidents.length }, req);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="rapports-incidents-${new Date().toISOString().slice(0, 10)}.zip"`);
+    res.send(buf);
   } catch (err) { next(err); }
 }

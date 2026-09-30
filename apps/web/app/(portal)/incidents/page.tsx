@@ -6,9 +6,9 @@ import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Download, BarChart3 } from 'lucide-react';
+import { Plus, Download, BarChart3, FileArchive } from 'lucide-react';
 import { api } from '@/lib/api';
-import { downloadFile } from '@/lib/download';
+import { downloadFile, downloadFileNommeParServeur } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -57,6 +57,10 @@ function IncidentsPageInner() {
   // Tri d'en-tête délégué au serveur (pagination serveur : un tri local ne
   // réordonnerait que la page affichée). Vide = tri métier par défaut.
   const tri = valeurs.tri ? { key: valeurs.tri, dir: (valeurs.sens === 'desc' ? -1 : 1) as 1 | -1 } : null;
+  // Les exports suivent CE QUE L'ÉCRAN MONTRE : un fichier qui ignore les
+  // filtres appliqués n'est pas le même document.
+  const filtresQuery = Object.entries({ type, severite, statut, region })
+    .filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['incidents', { page, search: debouncedSearch, type, severite, statut, region, tri }],
@@ -87,7 +91,21 @@ function IncidentsPageInner() {
         actions={
           <>
             <ButtonLink href="/incidents/kpis" variant="secondary" icon={BarChart3}>KPIs</ButtonLink>
-            {roleExport !== 'TECHNICIEN' && <ExportButtons base="/incidents/export" name="incidents"/>}
+            {roleExport !== 'TECHNICIEN' && (
+              <>
+                <ExportButtons base="/incidents/export" name="incidents" query={filtresQuery} />
+                {/* UN PDF PAR INCIDENT, pas un document qui les enchaîne : un
+                    rapport d'incident se classe, se transmet et se signe
+                    séparément. L'archive suit les filtres affichés. */}
+                <button type="button" onClick={() => downloadFileNommeParServeur(
+                  `/incidents/export/rapports.zip${filtresQuery ? `?${filtresQuery}` : ''}`,
+                  'rapports-incidents.zip', 180_000)}
+                  title="Un PDF par incident, sur les filtres en cours"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <FileArchive size={15} /> Rapports (ZIP)
+                </button>
+              </>
+            )}
             <ButtonLink href="/incidents/nouveau" icon={Plus}>Déclarer</ButtonLink>
           </>
         }
