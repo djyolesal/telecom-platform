@@ -1201,11 +1201,19 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
     // l'ignore (aucun alias d'en-tête), car elle se déduit de la date de mise
     // en service - la saisir serait ouvrir deux vérités pour un seul fait.
     const rangs = await rangsAnciennete();
-    await sendTabular(res, req.params.format, 'sites', 'Parc de sites (modèle de mise à jour - ré-importable)', [{
+    // LE CODE N'EST EXPORTÉ QUE POUR L'ADMIN. C'est la clé de rapprochement de
+    // l'import, et l'import est réservé à l'ADMIN : pour tous les autres, ce
+    // fichier n'est pas un modèle de mise à jour mais une lecture du parc, où
+    // le site se désigne par son nom. Le titre le dit aussi, plutôt que de
+    // promettre un aller-retour qu'ils ne peuvent pas faire.
+    const estAdmin = req.user!.role === 'ADMIN';
+    const colonnes = estAdmin ? IMPORT_COLUMNS : IMPORT_COLUMNS.filter((c) => c.key !== 'code');
+    await sendTabular(res, req.params.format, 'sites',
+      estAdmin ? 'Parc de sites (modèle de mise à jour - ré-importable)' : 'Parc de sites', [{
       name: 'Sites',
       columns: [
         { header: 'n° ancienneté', key: 'rangAnciennete', width: 13 },
-        ...IMPORT_COLUMNS.map((c) => ({ header: c.header, key: c.key, width: 16 })),
+        ...colonnes.map((c) => ({ header: c.header, key: c.key, width: 16 })),
       ],
       rows: sites.map((s) => {
         const ge1 = s.groupes[0];
