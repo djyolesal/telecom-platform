@@ -20,7 +20,7 @@ import { sendEmail } from '../services/email.service';
 import { AppError } from '../utils/AppError';
 import { sitePerimetre, isRestreint, estPrestataire } from '../utils/perimetre';
 import { sourcesForConfig, libellePowerConfig, libelleStatutGE } from '../utils/energy';
-import { stockCourantParSite } from '../services/stockCourant.service';
+import { stockCourantParSite, stockEtDates } from '../services/stockCourant.service';
 import { bucketsHoraires, compterParHeure, niveauAgitation } from '../utils/pouls';
 import { anomaliesCarburantParSite } from '../services/anomaliesCarburantSite.service';
 import { verdictPertes } from '../services/verdictPertes.service';
@@ -240,7 +240,11 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
       where: { isActive: true, ...(region ? { region } : {}), ...perimetre },
       orderBy: { code: 'asc' },
     });
-    const stockMap = await dernierStockParSite();
+    const { stock: stockMap, dates: datesStock } = await stockEtDates();
+    // Au-delà de ce délai, la mesure ne dit plus l'état d'aujourd'hui : le
+    // chiffre reste juste (c'est la dernière mesure connue), mais l'écran ne
+    // doit pas laisser croire qu'il est frais.
+    const seuilJours = getNum('carburant.fraicheurStockJours', 30);
     // Le stock affiché découle de la dernière jauge : si cette jauge est
     // justement celle qu'un contrôle a signalée, le lecteur doit le voir avant
     // d'envoyer un camion - ou de n'en envoyer aucun.
@@ -252,9 +256,14 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
       // réintroduire à 0 annulait précisément cette précaution.
       const mesure = stockMap.has(site.id);
       const stock = calculerStockSite(site, mesure ? { volumeGasoilLitres: stockMap.get(site.id)! } : null, geParams());
+      const dateStock = datesStock.get(site.id) ?? null;
+      const ageJours = dateStock ? Math.floor((Date.now() - dateStock.getTime()) / 86_400_000) : null;
       return {
         siteId: site.id, code: site.code, nom: site.nom, region: site.region, statutGE: site.statutGE,
         ...stock,
+        dateStock,
+        ageJours,
+        perimee: ageJours != null && ageJours > seuilJours,
         saisiesSignalees: anomalies.get(site.id) ?? null,
         ...(masquerCouts ? { coutMoisFCFA: null } : {}),
       };
@@ -273,6 +282,8 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
       nbSitesCritiques: data.filter((x) => x.niveauAlerte === 'CRITIQUE').length,
       nbSitesFaibles: data.filter((x) => x.niveauAlerte === 'FAIBLE').length,
       nbSitesSaisiesSignalees: data.filter((x) => x.saisiesSignalees).length,
+      nbSitesPerimes: data.filter((x) => x.perimee).length,
+      seuilFraicheurJours: seuilJours,
     };
 
     res.json({ success: true, data: { resume, sites: data } });

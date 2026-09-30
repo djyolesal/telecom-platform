@@ -113,6 +113,7 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'maintenance.maxRapportsPdf', label: 'Interventions maximum dans un recueil PDF', groupe: 'Maintenance', unite: 'interventions', defaut: 200 },
     { key: 'maintenance.verificationLocaleCloture', label: 'Exiger la vérification d\'identité (empreinte/visage/code) avant de clôturer une intervention (1 = oui)', groupe: 'Maintenance', unite: '0/1', defaut: 1 },
     { key: 'maintenance.biometrieStricteCloture', label: 'Exiger une EMPREINTE ou un visage à la clôture, le code de l\'appareil ne suffisant pas (1 = oui)', groupe: 'Maintenance', unite: '0/1', defaut: 0 },
+    { key: 'carburant.fraicheurStockJours', label: 'Au-delà de ce délai sans relevé ni livraison, le stock affiché est signalé comme périmé', groupe: 'Carburant', unite: 'jours', defaut: 30 },
     { key: 'incidents.lotPdfMax', label: 'Nombre maximum de rapports d\'incident dans une archive ZIP', groupe: 'Maintenance', unite: 'rapports', defaut: 100 },
     { key: 'rapport.tailleMaxPieceJointeMo', label: 'Au-delà de ce poids, le rapport mensuel part en LIEN au lieu d\'une pièce jointe', groupe: 'Maintenance', unite: 'Mo', defaut: 5 },
     { key: 'vignettes.maxParNuit', label: 'Vignettes préparées par nuit pour le rapport mensuel (0 = désactivé)', groupe: 'Maintenance', unite: 'photos', defaut: 400 },

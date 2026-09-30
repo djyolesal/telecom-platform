@@ -13,7 +13,7 @@ import { ButtonLink } from '@/components/shared/Button';
 import { Loading, EmptyState } from '@/components/shared/states';
 import { NiveauStockBadge } from '@/components/shared/Badge';
 import { regionOptions } from '@/lib/constants';
-import { fmtNumber, fmtFCFA } from '@/lib/utils';
+import { fmtNumber, fmtFCFA, fmtDate } from '@/lib/utils';
 
 interface SiteStock {
   siteId: string;
@@ -23,6 +23,11 @@ interface SiteStock {
   stockLitres: number;
   /** Faux = aucun relevé connu : « - », jamais « 0 L ». */
   mesure: boolean;
+  /** Date du dernier événement qui a bougé ce stock (relevé ou livraison). */
+  dateStock: string | null;
+  ageJours: number | null;
+  /** Mesure trop ancienne pour décrire l'état d'aujourd'hui. */
+  perimee: boolean;
   litresMois: number;
   coutMoisFCFA: number;
   autonomieJours: number | null;
@@ -64,6 +69,20 @@ export default function StockCarburantPage() {
         ? fmtNumber(s.stockLitres)
         : <span className="text-gray-300" title="Aucun relevé de cuve sur ce site : le stock est inconnu, pas nul.">-</span>,
     },
+    {
+      // LA FRAÎCHEUR FAIT PARTIE DU CHIFFRE. Un niveau relevé il y a six mois
+      // reste la dernière mesure connue, mais ce n'est pas l'état du jour -
+      // et c'est pourtant sur lui que reposent l'autonomie et l'alerte.
+      key: 'dateStock', header: 'Mesuré le', align: 'right',
+      render: (s) => !s.dateStock
+        ? <span className="text-gray-300">-</span>
+        : (
+          <span className={`whitespace-nowrap text-xs ${s.perimee ? 'font-semibold text-amber-700' : 'text-gray-500'}`}
+            title={s.perimee ? 'Mesure trop ancienne : le stock affiché ne décrit plus l’état du jour.' : undefined}>
+            {fmtDate(s.dateStock)}{s.ageJours != null && <span className="ml-1 text-gray-400">({s.ageJours} j)</span>}
+          </span>
+        ),
+    },
     { key: 'autonomieJours', header: 'Autonomie', align: 'right', render: (s) => (s.autonomieJours != null ? `${s.autonomieJours} j` : '-') },
     // Théorique assumé : cette page lit la formule kVA (budget), pas la mesure.
     // La conso MESURÉE par site est sur « Réapprovisionnement » avec sa source.
@@ -101,7 +120,9 @@ export default function StockCarburantPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard title="Stock total" value={`${fmtNumber(Math.round((resume.totalLitres ?? 0) / 1000))}k L`}
-          subtitle={resume.nbSites ? `${resume.nbSitesMesures ?? 0} / ${resume.nbSites} sites mesurés` : undefined}
+          subtitle={resume.nbSites
+            ? `${resume.nbSitesMesures ?? 0} / ${resume.nbSites} mesurés${resume.nbSitesPerimes ? ` · ${resume.nbSitesPerimes} périmés` : ''}`
+            : undefined}
           icon={Fuel} color="bg-[rgb(var(--accent))]" />
         <StatCard title="Conso parc" value={`${fmtNumber(Math.round((resume.totalLitresMois ?? 0) / 1000))}k L/mois`} icon={Droplet} color="bg-[rgb(var(--brand-light))]" />
         {/* Coût masqué côté serveur pour les comptes prestataires : « - », pas « 0 M ». */}

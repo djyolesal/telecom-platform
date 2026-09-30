@@ -19,7 +19,7 @@ export interface SiteFeature {
     powerConfig: string;
     puissanceGEkva: number;
     hasStock: boolean;
-    stockLitres?: number;
+    stockLitres?: number | null;
     niveauStock?: string; // OK / FAIBLE / CRITIQUE / VIDE / NA
     derniereMesure?: string | null;
     stockEstime?: number | null;
@@ -288,9 +288,18 @@ export function SitesMap({ features, couleurParCamion, etatReseauParSite, liaiso
                   const hasEstime = f.properties.stockEstime != null;
                   return (
                     <div className="mt-1 rounded bg-gray-50 p-1.5 leading-snug">
+                      {/* JAMAIS RELEVÉ ≠ CUVE VIDE : sans mesure, on le dit,
+                          plutôt que d'afficher « 0 L » qui se lit comme une
+                          cuve vide et déclenche une tournée pour rien. */}
                       <p>
-                        Dernier relevé : <b>{Math.round(f.properties.stockLitres ?? 0)} L</b>
-                        {fmtDateCourt(f.properties.derniereMesure) && <span className="text-gray-400"> · {fmtDateCourt(f.properties.derniereMesure)}</span>}
+                        {f.properties.hasStock ? (
+                          <>
+                            Dernier relevé : <b>{Math.round(f.properties.stockLitres ?? 0)} L</b>
+                            {fmtDateCourt(f.properties.derniereMesure) && <span className="text-gray-400"> · {fmtDateCourt(f.properties.derniereMesure)}</span>}
+                          </>
+                        ) : (
+                          <span className="text-gray-500">Jamais relevé</span>
+                        )}
                         {!hasEstime && <> · {badge}</>}
                       </p>
                       {hasEstime && (

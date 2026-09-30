@@ -1018,10 +1018,19 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
     const releves = await prisma.releveEnergie.findMany({
       where: { source: 'GE', volumeGasoilLitres: { not: null } },
       orderBy: { dateReleve: 'desc' },
-      select: { siteId: true, volumeGasoilLitres: true },
+      select: { siteId: true, volumeGasoilLitres: true, dateReleve: true },
     });
     const stockMap = new Map<string, number>();
-    for (const r of releves) if (!stockMap.has(r.siteId)) stockMap.set(r.siteId, Number(r.volumeGasoilLitres));
+    // DATE DE LA MESURE, indispensable dans l'info-bulle : sans elle, un niveau
+    // relevé il y a six mois se lit comme s'il datait d'aujourd'hui. La
+    // prévision n'en fournit pas pour les sites qu'elle ne sait pas projeter -
+    // c'est-à-dire précisément les plus anciens.
+    const dateMap = new Map<string, Date>();
+    for (const r of releves) {
+      if (stockMap.has(r.siteId)) continue;
+      stockMap.set(r.siteId, Number(r.volumeGasoilLitres));
+      dateMap.set(r.siteId, r.dateReleve);
+    }
     const gp = geParams();
 
     // Dernier dépotage par site (volume + date).
@@ -1057,10 +1066,12 @@ export async function getSitesGeoJSON(req: Request, res: Response, next: NextFun
             statutGE: site.statutGE, powerConfig: site.powerConfig,
             puissanceGEkva: Number(site.puissanceGEkva),
             hasStock: rawStock != null,
-            stockLitres: rawStock != null ? Math.round(rawStock) : 0, // dernier relevé mesuré
+            // `null` et non 0 : un site jamais relevé n'a pas une cuve vide,
+            // il n'a pas de mesure. L'info-bulle doit pouvoir les distinguer.
+            stockLitres: rawStock != null ? Math.round(rawStock) : null,
             niveauStock: niveau.niveauAlerte, // OK / FAIBLE / CRITIQUE / VIDE / NA (sur l'estimation)
             // Estimation à date (prévision) — null si site sans GE / sans données exploitables.
-            derniereMesure: fc?.derniereMesure ?? null,
+            derniereMesure: fc?.derniereMesure ?? dateMap.get(site.id)?.toISOString() ?? null,
             stockEstime: fc ? fc.stockActuel : null,
             autonomieJours: fc?.autonomieJours ?? null,
             dateRupture: fc?.dateRupture ?? null,
