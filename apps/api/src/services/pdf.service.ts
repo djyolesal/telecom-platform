@@ -1181,7 +1181,7 @@ export interface PlanLivraisonPdfData {
   numeroClient: string | null;
   volumeChargeLitres: number;
   dateChargement?: Date | null;
-  lignes: Array<{ siteCode: string; siteNom: string; region: string; volumePrevuLitres: number; pickup?: boolean }>;
+  lignes: Array<{ siteNom: string; region: string; volumePrevuLitres: number; pickup?: boolean }>;
 }
 
 export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise<Buffer> {
@@ -1234,7 +1234,9 @@ export async function generatePlanLivraisonPdf(p: PlanLivraisonPdfData): Promise
     let total = 0;
     p.lignes.forEach((l) => {
       total += l.volumePrevuLitres;
-      const libelle = `${l.siteCode} - ${l.siteNom}`;
+      // Le NOM seul : c'est ce que le chauffeur et le technicien du site
+      // reconnaissent. Le code, lui, n'est lisible que depuis la plateforme.
+      const libelle = l.siteNom;
       doc.fontSize(9);
       // Hauteur pilotée par le libellé du site (seule cellule qui replie),
       // avec un plancher : la case de signature doit rester écrivable.

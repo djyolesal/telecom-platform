@@ -1179,7 +1179,7 @@ export async function exportPlanLivraisonPdf(req: Request, res: Response, next: 
       numeroClient: bl.numeroClient,
       volumeChargeLitres: n(bl.volumeChargeLitres),
       dateChargement: bl.dateChargement,
-      lignes: bl.lignes.map((l) => ({ siteCode: l.site.code, siteNom: l.site.nom, region: l.site.region, volumePrevuLitres: n(l.volumePrevuLitres), pickup: l.pickup ?? l.site.accesPickup })),
+      lignes: bl.lignes.map((l) => ({ siteNom: l.site.nom, region: l.site.region, volumePrevuLitres: n(l.volumePrevuLitres), pickup: l.pickup ?? l.site.accesPickup })),
     });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="plan-${bl.numeroBL}.pdf"`);
