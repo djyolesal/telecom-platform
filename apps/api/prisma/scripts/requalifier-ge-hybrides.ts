@@ -2,11 +2,11 @@
  * REQUALIFICATION des entretiens GE des sites HYBRIDES : « GE de production »
  * → « GE de secours ».
  *
- *   npx tsx prisma/scripts/requalifier-ge-hybrides.ts                           # simulation, septembre + octobre 2026
- *   npx tsx prisma/scripts/requalifier-ge-hybrides.ts --mois 2026-09            # un seul mois
- *   npx tsx prisma/scripts/requalifier-ge-hybrides.ts --mois 2026-09,2026-10    # plusieurs, en une passe
- *   npx tsx prisma/scripts/requalifier-ge-hybrides.ts --ouverts                 # + tous les tickets encore ouverts, toutes dates
- *   npx tsx prisma/scripts/requalifier-ge-hybrides.ts --mois 2026-09,2026-10 --appliquer
+ *   npx -y tsx prisma/scripts/requalifier-ge-hybrides.ts                           # simulation, septembre + octobre 2026
+ *   npx -y tsx prisma/scripts/requalifier-ge-hybrides.ts --mois 2026-09            # un seul mois
+ *   npx -y tsx prisma/scripts/requalifier-ge-hybrides.ts --mois 2026-09,2026-10    # plusieurs, en une passe
+ *   npx -y tsx prisma/scripts/requalifier-ge-hybrides.ts --ouverts                 # + tous les tickets encore ouverts, toutes dates
+ *   npx -y tsx prisma/scripts/requalifier-ge-hybrides.ts --mois 2026-09,2026-10 --appliquer
  *
  * Une intervention CLOSE se rattache au mois par sa date de fin, un ticket
  * encore OUVERT par sa date planifiée - exactement comme la fiche les compte
@@ -31,7 +31,6 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { TASK_BY_KEY } from '../../src/utils/tachesPreventives';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -39,6 +38,16 @@ const prisma = new PrismaClient({
 
 const ANCIENNE = 'ge_production';
 const NOUVELLE = 'ge_secours';
+
+/**
+ * Libellé contractuel de la tâche d'arrivée, recopié depuis le catalogue
+ * (`src/utils/tachesPreventives.ts`) plutôt qu'importé : l'image de production
+ * ne contient que `dist/`, pas `src/` - un import relatif y échoue au
+ * lancement. Une surcharge admin, si elle existe, prime sur cette valeur (elle
+ * est lue en base plus bas). Un test de garde vérifie que les deux chaînes ne
+ * divergent pas.
+ */
+const LIBELLE_CONTRACTUEL = 'Entretien et vidange GE (secours, connecté CEET)';
 
 interface Periode { debut: Date; fin: Date; label: string }
 
@@ -198,7 +207,15 @@ async function main() {
     return;
   }
 
-  const libelle = (TASK_BY_KEY[NOUVELLE]?.libelle ?? 'Entretien et vidange GE (secours, connecté CEET)').slice(0, 100);
+  // Le libellé EFFECTIF : celui que l'admin a éventuellement redéfini dans
+  // Administration → Tâches contractuelles, sinon celui du contrat. Sans cela,
+  // les interventions requalifiées porteraient un intitulé que plus aucun
+  // écran n'affiche.
+  const override = await prisma.tachePreventiveOverride.findUnique({
+    where: { key: NOUVELLE },
+    select: { libelle: true },
+  });
+  const libelle = (override?.libelle ?? LIBELLE_CONTRACTUEL).slice(0, 100);
   const { count } = await prisma.maintenance.updateMany({
     where: { id: { in: aRequalifier.map((m) => m.id) } },
     data: { tachePreventiveKey: NOUVELLE, equipement: libelle },
