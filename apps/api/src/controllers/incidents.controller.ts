@@ -599,14 +599,18 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
       where,
       take: EXPORT_MAX,
       orderBy: { dateOuverture: 'desc' },
-      include: { site: { select: { code: true, region: true } }, technicien: { select: { nom: true, prenom: true } } },
+      include: { site: { select: { code: true, nom: true, region: true } }, technicien: { select: { nom: true, prenom: true } } },
     });
 
     await auditLog(req.user!.id, 'EXPORT', 'incidents', undefined, { count: rows.length }, req);
     await sendTabular(res, req.params.format, 'incidents', 'Incidents', [{
       name: 'Incidents',
       columns: [
-        { header: 'Site', key: 'site', width: 14 },
+        // Le site était identifié par son seul CODE : illisible pour qui
+        // reçoit le fichier, et réservé à l'ADMIN depuis. Le NOM porte
+        // l'information, le code n'est plus qu'une colonne d'administration.
+        { header: 'Site', key: 'site', width: 20 },
+        { header: 'Code', key: 'code', width: 14 },
         { header: 'Région', key: 'region', width: 14 },
         { header: 'Type', key: 'type', width: 16 },
         { header: 'Sévérité', key: 'severite', width: 12 },
@@ -618,7 +622,8 @@ export async function exportIncidents(req: Request, res: Response, next: NextFun
         { header: 'Technicien', key: 'technicien', width: 20 },
       ],
       rows: rows.map((i) => ({
-        site: i.site?.code ?? '',
+        site: i.site?.nom ?? '',
+        code: i.site?.code ?? '',
         region: i.site?.region ?? '',
         type: typesRef.get(i.type) ?? i.type,
         severite: libelle(L_SEVERITE, i.severite),

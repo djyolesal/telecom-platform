@@ -33,6 +33,41 @@ export function filtrerColonnes(sheets: TabularSheet[], colonnes: string | undef
 }
 
 /**
+ * Le CODE du site est une clé de référentiel : il désigne le site dans la base,
+ * dans les imports et dans les rapprochements. Il n'a d'usage que pour qui
+ * administre la plateforme ; sur un document qui circule (plan de tournée,
+ * bilan transmis, rapport de conformité), il n'apprend rien au lecteur et
+ * expose la nomenclature interne. Les exports le réservent donc à l'ADMIN.
+ *
+ * Le filtre est posé ICI, au point de passage de tous les exports tabulaires,
+ * et non dans chaque contrôleur : un export ajouté demain hérite de la règle
+ * sans que personne ait à y penser.
+ *
+ * Conséquence pour qui ajoute une colonne : une colonne « Code » ou de clé
+ * `code`/`siteCode` est comprise comme le code d'un SITE et disparaît hors
+ * administration. Un code d'autre nature (anomalie, référentiel…) doit porter
+ * une clé explicite - `codeAnomalie`, `codeTache` - pour rester visible.
+ */
+export function estColonneCodeSite(c: ExcelColumn): boolean {
+  return c.header.trim().toLowerCase() === 'code' || c.key === 'code' || c.key === 'siteCode';
+}
+
+/** Colonnes visibles pour ce rôle : tout sauf le code du site hors ADMIN. */
+export function colonnesSelonRole(columns: ExcelColumn[], role?: string): ExcelColumn[] {
+  if (role === 'ADMIN') return columns;
+  return columns.filter((c) => !estColonneCodeSite(c));
+}
+
+/** Idem, appliqué à chaque feuille d'un export multi-feuilles. */
+export function feuillesSelonRole(sheets: TabularSheet[], role?: string): TabularSheet[] {
+  if (role === 'ADMIN') return sheets;
+  return sheets.map((s) => {
+    const columns = colonnesSelonRole(s.columns, role);
+    return columns.length === s.columns.length ? s : { ...s, columns };
+  });
+}
+
+/**
  * Envoie un export tabulaire au format demandé : les MÊMES colonnes/lignes
  * produisent l'xlsx (une feuille par section) ou le pdf (une table par section).
  *
@@ -51,14 +86,18 @@ export async function sendTabular(
   subtitle?: string
 ): Promise<void> {
   const colonnes = typeof res.req?.query?.colonnes === 'string' ? (res.req.query.colonnes as string) : undefined;
+  // Avant tout le reste : le code du site sort des colonnes hors ADMIN. Avant,
+  // car le catalogue « ?colonnes=? » ne doit pas proposer une colonne que
+  // l'export refusera ensuite d'écrire.
+  const permises = feuillesSelonRole(sheets, res.req?.user?.role);
   if (colonnes === '?') {
     res.json({
       success: true,
-      data: sheets.map((s) => ({ feuille: s.name, colonnes: s.columns.map((c) => ({ key: c.key, header: c.header })) })),
+      data: permises.map((s) => ({ feuille: s.name, colonnes: s.columns.map((c) => ({ key: c.key, header: c.header })) })),
     });
     return;
   }
-  const finalSheets = filtrerColonnes(sheets, colonnes);
+  const finalSheets = filtrerColonnes(permises, colonnes);
 
   if (format === 'pdf') {
     const buffer = await buildTablePdf(title, finalSheets, subtitle);

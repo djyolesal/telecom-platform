@@ -11,7 +11,7 @@ import { AppError } from '../utils/AppError';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
-import { sendTabular } from '../utils/exporter';
+import { sendTabular, colonnesSelonRole } from '../utils/exporter';
 import { stocksMensuels } from '../services/stocksMensuels.service';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
@@ -1149,14 +1149,16 @@ export async function exportPlanLivraisonXlsx(req: Request, res: Response, next:
     const bl = await loadPlan(req.params.id);
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
     await assertTransporteurAccess(req, bl.transporteurId);
+    // Cet export ne passe pas par sendTabular : la règle « code réservé à
+    // l'ADMIN » doit donc être appliquée explicitement ici.
     const buffer = await buildXlsx(
       `Plan ${bl.numeroBL}`.slice(0, 28),
-      [
+      colonnesSelonRole([
         { header: 'Site', key: 'nom', width: 26 },
         { header: 'Code', key: 'site', width: 14 },
         { header: 'Région', key: 'region', width: 16 },
         { header: 'Volume prévu (L)', key: 'prevu', width: 16 },
-      ],
+      ], req.user?.role),
       bl.lignes.map((l) => ({ site: l.site.code, nom: l.site.nom, region: l.site.region, prevu: n(l.volumePrevuLitres) }))
     );
     setXlsxHeaders(res, `plan-${bl.numeroBL}.xlsx`);
