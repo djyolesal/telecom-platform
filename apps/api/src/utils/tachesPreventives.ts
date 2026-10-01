@@ -147,16 +147,27 @@ export const CONTRACTUAL_TASKS: TachePreventive[] = [
   },
   {
     numero: 9, key: 'ge_production', libelle: 'Entretien et vidange GE (production, non connecté CEET)', categorie: 'GE',
-    frequence: 'MENSUELLE', cible: 'Énergie GE uniquement ou Hybride+GE',
-    eligible: (s) => s.powerConfig === 'GE_UNIQUEMENT' || s.powerConfig === 'HYBRIDE_GE',
+    // « En production » = le GE EST la source d'énergie du site, il tourne en
+    // continu. Seul GE_UNIQUEMENT est dans ce cas : sur un hybride, c'est le
+    // solaire qui produit et le GE qui prend le relais (décision exploitant
+    // 01/10/2026 - les hybrides sont passés en ligne « GE de secours »).
+    frequence: 'MENSUELLE', cible: 'Énergie GE uniquement',
+    eligible: (s) => s.powerConfig === 'GE_UNIQUEMENT',
   },
   {
     numero: 10, key: 'ge_secours', libelle: 'Entretien et vidange GE (secours, connecté CEET)', categorie: 'GE',
     // Assise sur la CONFIGURATION d'énergie (structurelle), pas sur le champ
-    // statutGE (déclaratif, corrigeable) : la tâche ne vaut que là où un GE
-    // de secours est branché derrière la CEET - CEET_GE et HYBRIDE_CEET_GE.
-    frequence: 'MENSUELLE', cible: 'Sites CEET + GE (GE de secours)',
-    eligible: (s) => s.powerConfig === 'CEET_GE' || s.powerConfig === 'HYBRIDE_CEET_GE',
+    // statutGE (déclaratif, corrigeable).
+    //
+    // HYBRIDE_GE (solaire + GE, sans CEET) compte ICI depuis le 01/10/2026 :
+    // ce qui sépare les deux lignes est le RÉGIME du groupe, pas la présence
+    // du réseau public. Sur un hybride, le solaire produit et le GE ne démarre
+    // qu'en relève - c'est un GE de secours, avec l'usure, la périodicité et
+    // le coût d'entretien d'un GE de secours. Le classer « en production »
+    // facturait et usait ces sites sur le mauvais régime.
+    frequence: 'MENSUELLE', cible: 'Sites CEET + GE et hybrides avec GE (GE de secours)',
+    eligible: (s) =>
+      s.powerConfig === 'CEET_GE' || s.powerConfig === 'HYBRIDE_CEET_GE' || s.powerConfig === 'HYBRIDE_GE',
   },
   {
     numero: 11, key: 'depotage', libelle: 'Suivi des livraisons et relevé carburant (dépotage)', categorie: 'GE',
