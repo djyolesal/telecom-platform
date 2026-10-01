@@ -26,7 +26,10 @@ jest.mock('../config/database', () => {
   return { prisma };
 });
 jest.mock('../services/storage.service', () => ({ getObjectBuffer: jest.fn().mockRejectedValue(new Error('pas de MinIO en test')) }));
-jest.mock('../services/ficheValidation.service', () => ({ buildFicheValidationXlsx: jest.fn().mockResolvedValue(Buffer.from('xlsx')) }));
+jest.mock('../services/ficheValidation.service', () => ({
+  ...jest.requireActual('../services/ficheValidation.service'),
+  buildFicheValidationXlsx: jest.fn().mockResolvedValue(Buffer.from('xlsx')),
+}));
 
 const p = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 

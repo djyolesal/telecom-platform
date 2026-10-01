@@ -9,7 +9,7 @@ import { auditLog } from '../services/audit.service';
 import { genererPlanningPreventif } from '../services/planning.service';
 import { dateReferenceTaches } from '../services/settings.service';
 import JSZip from 'jszip';
-import { buildFicheValidationXlsx, FicheLogo, FicheValidationData } from '../services/ficheValidation.service';
+import { buildFicheValidationXlsx, realisesDansPerimetre, FicheLogo, FicheValidationData } from '../services/ficheValidation.service';
 import { chargerLogo, logoClient } from '../services/logoClient.service';
 import { buildFicheValidationPdf } from '../services/pdf.service';
 import { setXlsxHeaders } from '../utils/excel';
@@ -298,14 +298,11 @@ async function donneesFicheValidation(
     },
     select: { siteId: true, tachePreventiveKey: true },
   });
-  const byKey = new Map<string, Set<string>>();
-  for (const m of done) {
-    if (!m.tachePreventiveKey) continue;
-    if (!byKey.has(m.tachePreventiveKey)) byKey.set(m.tachePreventiveKey, new Set());
-    byKey.get(m.tachePreventiveKey)!.add(m.siteId);
-  }
-  const realisesParKey: Record<string, number> = {};
-  for (const [k, set] of byKey) realisesParKey[k] = set.size;
+  // Fin du mois de la fiche : les exclusions s'apprécient à cette date, pour
+  // les RÉALISÉS comme pour les CONCERNÉS - les deux colonnes se lisent l'une
+  // par rapport à l'autre, elles ne peuvent pas répondre à deux périmètres.
+  const finDuMois = new Date(Date.UTC(an, mo, 0));
+  const realisesParKey = realisesDansPerimetre(done, sitesAvecPerimetre, finDuMois);
 
   // Tâche « dépotage » : validée par les DONNÉES du mois de la fiche (une
   // livraison OU un relevé complet), pas par un ticket - sinon la ligne
@@ -329,7 +326,6 @@ async function donneesFicheValidation(
       if (x.source === 'GE') { if (x.volumeGasoilLitres != null) poserF(x.siteId, 'GE'); }
       else poserF(x.siteId, 'CEET');
     }
-    const finDuMois = new Date(Date.UTC(an, mo, 0));
     realisesParKey['depotage'] = sitesAvecPerimetre.filter((x) =>
       estDue(TASK_BY_KEY['depotage'], x, finDuMois)
       && suiviMoisValide(vusFiche.get(x.id), x.powerConfig)

@@ -66,6 +66,44 @@ export function lignesFiche(d: {
   });
 }
 
+/**
+ * « RÉALISÉS DANS LE MOIS », ramenés au périmètre de la fiche.
+ *
+ * Les deux colonnes de la fiche se lisent l'une par rapport à l'autre : des
+ * réalisations comptées hors du périmètre des « concernés » donnaient des
+ * lignes où le réalisé dépassait le dû - 13 sur 11 - que personne ne pouvait
+ * expliquer au moment de signer. Deux cas le produisaient :
+ *   - une intervention sur un site qui n'est plus dans le parc de la fiche
+ *     (site désactivé depuis, ou rattaché à un lot d'un autre contrat) ;
+ *   - une intervention sur un site dont la tâche a été SORTIE du contrat,
+ *     l'exclusion étant appréciée à la fin du mois comme pour les concernés.
+ *
+ * Le travail fait reste dans l'historique du site et dans les rapports de
+ * conformité : c'est la fiche - document contractuel, et seulement elle - qui
+ * s'en tient à son périmètre.
+ */
+export function realisesDansPerimetre(
+  interventions: Array<{ siteId: string; tachePreventiveKey: string | null }>,
+  sites: Array<SiteEligibilite & { id: string }>,
+  le: Date,
+): Record<string, number> {
+  const parId = new Map(sites.map((s) => [s.id, s]));
+  const parKey = new Map<string, Set<string>>();
+  for (const m of interventions) {
+    const key = m.tachePreventiveKey;
+    if (!key) continue;
+    const site = parId.get(m.siteId);
+    if (!site) continue;
+    // Clé inconnue du catalogue : aucune règle de dû à opposer, on garde le
+    // comptage - la ligne correspondante n'existe de toute façon pas.
+    const t = TASK_BY_KEY[key];
+    if (t && !estDue(t, site, le)) continue;
+    const vus = parKey.get(key) ?? parKey.set(key, new Set()).get(key)!;
+    vus.add(m.siteId);
+  }
+  return Object.fromEntries([...parKey].map(([k, v]) => [k, v.size]));
+}
+
 const MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 export interface FichePrestataire {
