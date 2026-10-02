@@ -22,7 +22,7 @@ jest.mock('../utils/perimetre', () => ({
 const p = prisma as unknown as { pieceRechange: { findMany: jest.Mock; count: jest.Mock } };
 
 const LIGNE = {
-  id: 'p1', nom: 'Courroie', reference: null, quantite: 2, coutUnitaire: null, pieceRefId: null, pieceRef: null,
+  id: 'p1', nom: 'Courroie', reference: null, quantite: 2, pieceRefId: null, pieceRef: null,
   maintenance: {
     id: 'm1', reference: 'MNT-1', type: 'CURATIVE', statut: 'TERMINEE', siteId: 's1',
     dateFin: new Date('2026-09-10T10:00:00Z'), datePlanifiee: new Date('2026-09-10T08:00:00Z'), invalideeLe: null,
@@ -82,6 +82,24 @@ describe('pièces changées : le code du site est réservé à l’ADMIN', () =>
     p.pieceRechange.findMany.mockClear();
     await appeler('ADMIN', { search: 'PLT' });
     expect(cherchaitLeCodeSite(whereUtilise())).toBe(true);
+  });
+});
+
+describe('pièces changées : aucun coût', () => {
+  // Décision de l'exploitant (02/10/2026) : ni l'écran ni les exports ne portent
+  // de coût. La donnée reste en base ; elle ne doit simplement pas ressortir.
+  it('ne sert aucun champ de coût, ni sur les lignes ni dans la synthèse', async () => {
+    p.pieceRechange.findMany.mockResolvedValue([{ ...LIGNE, coutUnitaire: 50000 }]);
+    const { json } = await appeler('ADMIN');
+    const reponse = json.mock.calls[0][0];
+    expect(JSON.stringify(reponse)).not.toMatch(/cout/i);
+  });
+
+  it('ne demande même pas le coût à la base', async () => {
+    await appeler('ADMIN');
+    for (const [args] of p.pieceRechange.findMany.mock.calls) {
+      expect(JSON.stringify(args.select ?? {})).not.toMatch(/cout/i);
+    }
   });
 });
 

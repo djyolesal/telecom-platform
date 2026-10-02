@@ -23,7 +23,9 @@ import { normaliserPiece } from '../services/piecesRef.service';
  *    travail refusé) : exclue par défaut, visible sur demande et signalée ;
  *  - mêmes périmètres que la liste des maintenances : un prestataire ne voit
  *    que ses sites et son contrat ;
- *  - le CODE du site n'apparaît que pour l'ADMIN, comme dans tous les exports.
+ *  - le CODE du site n'apparaît que pour l'ADMIN, comme dans tous les exports ;
+ *  - AUCUN COÛT n'est servi ni exporté (décision de l'exploitant, 02/10/2026).
+ *    La colonne `cout_unitaire` reste en base ; l'écran dit QUOI, OÙ, COMBIEN.
  */
 
 /** Plafond des lignes agrégées pour la synthèse : au-delà, elle est signalée comme partielle. */
@@ -103,7 +105,7 @@ async function filtre(req: Request): Promise<Prisma.PieceRechangeWhereInput> {
 }
 
 const SELECT_LIGNE = {
-  id: true, nom: true, reference: true, quantite: true, coutUnitaire: true, pieceRefId: true,
+  id: true, nom: true, reference: true, quantite: true, pieceRefId: true,
   pieceRef: { select: { code: true, libelle: true } },
   maintenance: {
     select: {
@@ -133,7 +135,6 @@ function versJson(l: Ligne, estAdmin: boolean) {
     nom: l.nom,
     reference: l.reference,
     quantite: l.quantite,
-    coutUnitaire: l.coutUnitaire != null ? Number(l.coutUnitaire) : null,
     catalogue: l.pieceRef ? { id: l.pieceRefId, code: l.pieceRef.code, libelle: l.pieceRef.libelle } : null,
     date: dateDe(l),
     invalidee: m.invalideeLe != null,
@@ -155,7 +156,7 @@ async function synthese(where: Prisma.PieceRechangeWhereInput) {
     where,
     take: SYNTHESE_MAX + 1,
     select: {
-      nom: true, quantite: true, coutUnitaire: true, pieceRefId: true,
+      nom: true, quantite: true, pieceRefId: true,
       pieceRef: { select: { libelle: true } },
       maintenance: { select: { id: true, siteId: true } },
     },
@@ -163,7 +164,7 @@ async function synthese(where: Prisma.PieceRechangeWhereInput) {
   const partielle = lignes.length > SYNTHESE_MAX;
   if (partielle) lignes.length = SYNTHESE_MAX;
 
-  type Agg = { cle: string; libelle: string; catalogue: boolean; quantite: number; cout: number; sansCout: number;
+  type Agg = { cle: string; libelle: string; catalogue: boolean; quantite: number;
     interventions: Set<string>; sites: Set<string> };
   const parPiece = new Map<string, Agg>();
   const interventions = new Set<string>();
@@ -175,10 +176,9 @@ async function synthese(where: Prisma.PieceRechangeWhereInput) {
     const cle = l.pieceRefId ?? `libre:${normaliserPiece(l.nom)}`;
     const a = parPiece.get(cle) ?? {
       cle, libelle: l.pieceRef?.libelle ?? l.nom, catalogue: l.pieceRefId != null,
-      quantite: 0, cout: 0, sansCout: 0, interventions: new Set<string>(), sites: new Set<string>(),
+      quantite: 0, interventions: new Set<string>(), sites: new Set<string>(),
     };
     a.quantite += l.quantite;
-    if (l.coutUnitaire != null) a.cout += Number(l.coutUnitaire) * l.quantite; else a.sansCout += 1;
     a.interventions.add(l.maintenance.id);
     a.sites.add(l.maintenance.siteId);
     parPiece.set(cle, a);
@@ -202,7 +202,6 @@ async function synthese(where: Prisma.PieceRechangeWhereInput) {
       .map((a) => ({
         cle: a.cle, libelle: a.libelle, catalogue: a.catalogue, quantite: a.quantite,
         interventions: a.interventions.size, sites: a.sites.size,
-        cout: a.cout, lignesSansCout: a.sansCout,
       }))
       .sort((a, b) => b.quantite - a.quantite || a.libelle.localeCompare(b.libelle, 'fr')),
   };
@@ -262,7 +261,6 @@ export async function exportPiecesChangees(req: Request, res: Response, next: Ne
           { header: 'Référence', key: 'reference', width: 16 },
           { header: 'Catalogue', key: 'catalogue', width: 24 },
           { header: 'Quantité', key: 'quantite', width: 12 },
-          { header: 'Coût unit.', key: 'cout', width: 14 },
           { header: 'Technicien', key: 'technicien', width: 18 },
           ...(avecInvalidees ? [{ header: 'Validité', key: 'validite', width: 12 }] : []),
         ],
@@ -279,7 +277,6 @@ export async function exportPiecesChangees(req: Request, res: Response, next: Ne
           reference: l.reference ?? '',
           catalogue: l.pieceRef ? l.pieceRef.libelle : 'Hors catalogue',
           quantite: l.quantite,
-          cout: l.coutUnitaire != null ? Number(l.coutUnitaire) : '',
           technicien: l.maintenance.technicien ? `${l.maintenance.technicien.prenom} ${l.maintenance.technicien.nom}` : '',
           validite: l.maintenance.invalideeLe ? 'Invalidée' : 'Valide',
         })),
@@ -292,8 +289,6 @@ export async function exportPiecesChangees(req: Request, res: Response, next: Ne
           { header: 'Quantité', key: 'quantite', width: 12 },
           { header: 'Interventions', key: 'interventions', width: 14 },
           { header: 'Sites', key: 'sites', width: 8 },
-          { header: 'Coût connu', key: 'cout', width: 13 },
-          { header: 'Lignes sans coût', key: 'sansCout', width: 16 },
         ],
         rows: resume.parPiece.map((p) => ({
           libelle: p.libelle,
@@ -301,8 +296,6 @@ export async function exportPiecesChangees(req: Request, res: Response, next: Ne
           quantite: p.quantite,
           interventions: p.interventions,
           sites: p.sites,
-          cout: p.cout || '',
-          sansCout: p.lignesSansCout || '',
         })),
       },
     ], `${periode}${resume.totaux.quantite} pièce(s) sur ${resume.totaux.interventions} intervention(s) et ${resume.totaux.sites} site(s)${reserve}${partielle}`);

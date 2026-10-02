@@ -22,7 +22,6 @@ interface LignePiece {
   nom: string;
   reference: string | null;
   quantite: number;
-  coutUnitaire: number | null;
   catalogue: { id: string; code: string; libelle: string } | null;
   date: string;
   invalidee: boolean;
@@ -40,8 +39,6 @@ interface PieceSynthese {
   quantite: number;
   interventions: number;
   sites: number;
-  cout: number;
-  lignesSansCout: number;
 }
 
 interface Synthese {
@@ -147,17 +144,6 @@ function PiecesChangeesInner() {
     { key: 'quantite', header: 'Quantité', align: 'right', render: (p) => <span className="font-semibold">{fmtNumber(p.quantite)}</span> },
     { key: 'interventions', header: 'Interventions', align: 'right', render: (p) => fmtNumber(p.interventions) },
     { key: 'sites', header: 'Sites', align: 'right', render: (p) => fmtNumber(p.sites) },
-    {
-      key: 'cout', header: 'Coût connu (FCFA)', align: 'right',
-      render: (p) => p.cout > 0
-        ? (
-          <span>
-            {fmtNumber(p.cout)}
-            {p.lignesSansCout > 0 && <span className="ml-1 text-[11px] text-amber-600" title="Des lignes de cette pièce n'ont pas de coût renseigné : le total est partiel.">+ {p.lignesSansCout} sans coût</span>}
-          </span>
-        )
-        : <span className="text-gray-400">-</span>,
-    },
   ];
 
   const colsDetail: Column<LignePiece>[] = [
@@ -197,10 +183,6 @@ function PiecesChangeesInner() {
       ),
     },
     { key: 'quantite', header: 'Qté', align: 'right', render: (l) => <span className="font-semibold">{l.quantite}</span> },
-    {
-      key: 'coutUnitaire', header: 'Coût unit. (FCFA)', align: 'right', sortValue: (l) => l.coutUnitaire,
-      render: (l) => l.coutUnitaire != null ? fmtNumber(l.coutUnitaire) : <span className="text-gray-400">-</span>,
-    },
     { key: 'technicien', header: 'Technicien', sortValue: (l) => l.technicien ?? '', render: (l) => l.technicien ?? <span className="text-gray-400">-</span> },
   ];
 
