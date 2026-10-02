@@ -575,6 +575,7 @@ router.put('/admin/settings', rbac(['ADMIN']), adminCtrl.updateSettings);
 router.get('/admin/logo-client', rbac(['ADMIN']), adminCtrl.getLogoClient);
 router.get('/admin/taches-preventives', rbac(['ADMIN']), adminCtrl.getTachePreventiveOverrides);
 router.put('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.updateTachePreventiveOverride);
+router.put('/admin/taches-preventives/:key/cout', rbac(['ADMIN']), adminCtrl.updateTachePreventiveCout);
 router.delete('/admin/taches-preventives/:key', rbac(['ADMIN']), adminCtrl.deleteTachePreventiveOverride);
 router.get('/admin/audit', rbac(['ADMIN']), adminCtrl.getAuditLogs);
 router.post('/admin/test-email', rbac(['ADMIN']), adminCtrl.testEmail);

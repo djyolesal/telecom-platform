@@ -20,6 +20,8 @@ interface TacheRow {
   libelle: string;
   frequence: string;
   isOverridden: boolean;
+  /** Prix d'UNE exécution sur UN site (FCFA) ; null = non tarifée. */
+  cout: number | null;
 }
 
 const FREQUENCE_OPTIONS = [
@@ -33,6 +35,11 @@ export default function TachesPreventivesPage() {
   const queryClient = useQueryClient();
   const [edited, setEdited] = useState<Record<string, { libelle: string; frequence: string }>>({});
   const [savedKey, setSavedKey] = useState<string | null>(null);
+  // Prix en cours de saisie, en TEXTE : « 1 500,50 » se tape à la française et le
+  // champ vide veut dire « pas de prix », ce qui n'est pas « 0 ».
+  const [couts, setCouts] = useState<Record<string, string>>({});
+  const [coutEnregistre, setCoutEnregistre] = useState<string | null>(null);
+  const [coutErreur, setCoutErreur] = useState<{ key: string; message: string } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-taches-preventives'],
@@ -40,12 +47,29 @@ export default function TachesPreventivesPage() {
   });
 
   useEffect(() => {
-    if (data) setEdited(Object.fromEntries(data.map((t) => [t.key, { libelle: t.libelle, frequence: t.frequence }])));
+    if (data) {
+      setEdited(Object.fromEntries(data.map((t) => [t.key, { libelle: t.libelle, frequence: t.frequence }])));
+      setCouts(Object.fromEntries(data.map((t) => [t.key, t.cout != null ? String(t.cout) : ''])));
+    }
   }, [data]);
 
   const save = useMutation({
     mutationFn: (key: string) => api.put(`/admin/taches-preventives/${key}`, edited[key]),
     onSuccess: (_r, key) => { setSavedKey(key); queryClient.invalidateQueries({ queryKey: ['admin-taches-preventives'] }); },
+  });
+
+  // Endpoint à part : le prix ne dépend pas du libellé ni de la fréquence, et
+  // « Restaurer le défaut » ne l'efface pas.
+  const saveCout = useMutation({
+    mutationFn: ({ key, valeur }: { key: string; valeur: string }) =>
+      api.put(`/admin/taches-preventives/${key}/cout`, { cout: valeur.trim() === '' ? null : valeur }),
+    onSuccess: (_r, { key }) => {
+      setCoutErreur(null);
+      setCoutEnregistre(key);
+      queryClient.invalidateQueries({ queryKey: ['admin-taches-preventives'] });
+    },
+    onError: (e: { response?: { data?: { error?: string } } }, { key }) =>
+      setCoutErreur({ key, message: e.response?.data?.error ?? 'Enregistrement impossible' }),
   });
 
   const reset = useMutation({
@@ -59,7 +83,7 @@ export default function TachesPreventivesPage() {
     <div>
       <PageHeader
         title="Tâches préventives contractuelles"
-        subtitle="Libellé et fréquence modifiables sans redéploiement - la clé et l'éligibilité restent fixes"
+        subtitle="Libellé, fréquence et prix modifiables sans redéploiement - la clé et l'éligibilité restent fixes"
         backHref="/administration"
       />
 
@@ -98,6 +122,47 @@ export default function TachesPreventivesPage() {
               {t.isOverridden && (t.libelleDefaut !== e.libelle || t.frequenceDefaut !== e.frequence) && (
                 <p className="mt-1 text-xs text-gray-400">Contractuel : {t.libelleDefaut} · {FREQUENCE_OPTIONS.find((f) => f.value === t.frequenceDefaut)?.label}</p>
               )}
+
+              {/* PRIX. Bloc séparé, avec son propre bouton : il s'enregistre sur son
+                  propre endpoint et survit à « Restaurer le défaut ». */}
+              {(() => {
+                const saisi = couts[t.key] ?? '';
+                const enBase = t.cout != null ? String(t.cout) : '';
+                const sale = saisi.trim() !== enBase;
+                return (
+                  <div className="mt-4 rounded-lg bg-gray-50 px-4 py-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="w-56">
+                        <Field label="Prix d'une exécution (FCFA, par site)">
+                          <Input
+                            inputMode="decimal"
+                            placeholder="Non renseigné"
+                            value={saisi}
+                            onChange={(ev) => { setCouts((p) => ({ ...p, [t.key]: ev.target.value })); setCoutEnregistre(null); }}
+                          />
+                        </Field>
+                      </div>
+                      <Button
+                        variant="secondary" icon={Save}
+                        loading={saveCout.isPending && saveCout.variables?.key === t.key}
+                        disabled={!sale}
+                        onClick={() => saveCout.mutate({ key: t.key, valeur: saisi })}
+                      >
+                        {saisi.trim() === '' && t.cout != null ? 'Retirer le prix' : 'Enregistrer le prix'}
+                      </Button>
+                      {coutEnregistre === t.key && !sale && (
+                        <span className="flex items-center gap-1 pb-2 text-xs text-green-600"><CheckCircle2 size={13} /> Prix enregistré</span>
+                      )}
+                    </div>
+                    {coutErreur?.key === t.key && <p className="mt-1 text-xs text-red-600">{coutErreur.message}</p>}
+                    <p className="mt-1.5 text-xs text-gray-400">
+                      {t.cout == null
+                        ? 'Tâche non tarifée : la facture mensuelle signalera un prix manquant. Laisser vide n\'est pas la même chose que 0 (prestation incluse).'
+                        : 'Montant facturé pour une exécution de cette tâche sur un site. Il survit à « Restaurer le défaut ».'}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div className="mt-3 flex justify-end gap-2">
                 {t.isOverridden && (

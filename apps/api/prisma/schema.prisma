@@ -753,6 +753,18 @@ model TachePreventiveOverride {
   @@map("taches_preventives_overrides")
 }
 
+// Prix d'UNE exécution d'une tâche préventive sur UN site (FCFA). Table séparée
+// des surcharges : « Restaurer le défaut » supprime la surcharge d'un libellé,
+// il ne doit pas emporter un prix. Pas de ligne = tâche non tarifée (≠ 0).
+model TachePreventiveCout {
+  tacheKey     String   @id @map("tache_key") @db.VarChar(40)
+  coutUnitaire Decimal  @map("cout_unitaire") @db.Decimal(12, 2)
+  updatedBy    String?  @map("updated_by")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("taches_preventives_couts")
+}
+
 model Notification {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")

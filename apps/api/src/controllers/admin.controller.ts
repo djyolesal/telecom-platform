@@ -12,7 +12,7 @@ import { rapprocherHistorique } from '../services/piecesRef.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
 import { SMS_TEMPLATES, CANAUX_SMS } from '../services/sms.service';
-import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride } from '../services/tachesPreventives.service';
+import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride, definirCoutTache } from '../services/tachesPreventives.service';
 import { cleLogoValide, logoClient } from '../services/logoClient.service';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
@@ -136,6 +136,21 @@ export async function updateTachePreventiveOverride(req: Request, res: Response,
     const { libelle, frequence } = req.body as { libelle: string; frequence: string };
     await upsertTacheOverride(key, { libelle, frequence: frequence as never }, req.user!.id);
     await auditLog(req.user!.id, 'UPDATE', 'taches_preventives_overrides', key, { libelle, frequence }, req);
+    res.json({ success: true, data: await tacheOverridesCatalog() });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Prix d'une exécution de la tâche sur un site (FCFA). Endpoint à part : le
+ * libellé et la fréquence se surchargent, le prix n'en dépend pas - et
+ * « Restaurer le défaut » ne doit pas l'emporter.
+ */
+export async function updateTachePreventiveCout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { key } = req.params;
+    const { avant, apres } = await definirCoutTache(key, (req.body as { cout?: unknown }).cout, req.user!.id);
+    // Avant ET après : ce montant pilote des factures, qui a changé quoi se retrouve.
+    await auditLog(req.user!.id, 'UPDATE', 'taches_preventives_couts', key, { avant, apres }, req);
     res.json({ success: true, data: await tacheOverridesCatalog() });
   } catch (err) { next(err); }
 }
