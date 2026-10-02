@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
   LayoutDashboard, MapPin, Wrench, Fuel, Zap, AlertTriangle,
-  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2, WifiOff, Network, ArrowLeftRight
+  BarChart3, Settings, Users, Bell, Menu, X, LogOut, Activity, Truck, Boxes, ShieldAlert, LineChart, Gauge, Building2, WifiOff, Network, ArrowLeftRight, Package
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -32,6 +32,9 @@ const NAV_ITEMS = [
   // ── Terrain : le quotidien des équipes d'exploitation ──
   { groupe: 'terrain', href: '/sites',       label: 'Sites',         icon: MapPin,        roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { groupe: 'terrain', href: '/maintenance', label: 'Maintenance',   icon: Wrench,        roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN'] },
+  // Liste des pièces de rechange posées : lecture seule, bornée côté API au
+  // périmètre de l'utilisateur (un superviseur prestataire ne voit que ses sites).
+  { groupe: 'terrain', href: '/pieces-changees', label: 'Pièces changées', icon: Package,    roles: ['SUPERVISEUR','MANAGER','ADMIN','DIRECTION'] },
   { groupe: 'terrain', href: '/incidents',   label: 'Incidents',     icon: AlertTriangle, roles: ['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN','NOC'] },
   { groupe: 'terrain', href: '/actifs',      label: "Parc d'actifs", icon: Boxes,         roles: ['SUPERVISEUR','MANAGER','ADMIN'] },
   { groupe: 'terrain', href: '/energie',     label: 'Énergie',       icon: Zap,           roles: ['SUPERVISEUR','MANAGER','ADMIN'] },

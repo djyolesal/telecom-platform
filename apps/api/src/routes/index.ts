@@ -14,6 +14,7 @@ import * as authCtrl from '../controllers/auth.controller';
 import * as sitesCtrl from '../controllers/sites.controller';
 import * as contactsCtrl from '../controllers/contacts.controller';
 import * as maintenanceCtrl from '../controllers/maintenances.controller';
+import * as piecesChangeesCtrl from '../controllers/piecesChangees.controller';
 import * as rapportsMensuelsCtrl from '../controllers/rapportsMensuels.controller';
 import * as anomaliesCtrl from '../controllers/anomalies.controller';
 import * as actifsCtrl from '../controllers/actifs.controller';
@@ -541,6 +542,11 @@ router.get('/pieces-ref', rbac(['MANAGER','ADMIN']), adminCtrl.listPiecesRef);
 router.post('/admin/pieces-ref', rbac(['ADMIN']), adminCtrl.upsertPieceRef);
 router.delete('/admin/pieces-ref/:id', rbac(['ADMIN']), adminCtrl.deletePieceRef);
 router.post('/admin/pieces-ref/rapprocher', rbac(['ADMIN']), adminCtrl.rapprocherPiecesHistorique);
+// Liste des pièces CHANGÉES (une ligne par pièce posée) : lecture seule, internes
+// et superviseurs prestataires - bornée au périmètre de l'utilisateur côté contrôleur.
+// L'export AVANT toute route paramétrée : même piège que /incidents/export/pdf.
+router.get('/pieces-changees/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), piecesChangeesCtrl.exportPiecesChangees);
+router.get('/pieces-changees', rbac(['SUPERVISEUR','MANAGER','ADMIN','DIRECTION']), piecesChangeesCtrl.listPiecesChangees);
 router.post('/admin/motifs-coupure', rbac(['ADMIN']), adminCtrl.upsertMotifCoupure);
 router.delete('/admin/motifs-coupure/:id', rbac(['ADMIN']), adminCtrl.deleteMotifCoupure);
 router.get('/equipements', adminCtrl.listEquipements);
