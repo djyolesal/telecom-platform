@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Droplets, Fuel, Gauge, HelpCircle, TrendingDown } from 'lucide-react';
-import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard } from '@/components/shared/StatCard';
@@ -146,24 +145,16 @@ export default function BilanCarburantPage() {
       </div>
 
       {isLoading || !data ? <Loading /> : (<>
-        {/* MÉTHODE ANNONCÉE : sur des mois entiers, ces chiffres sont ceux du
-            rapport « Stocks carburant mensuels » - même moteur, mêmes valeurs.
-            Sur une période libre, les stocks sont en report de jauge, ce qui
-            les surestime : le lecteur doit le savoir avant de comparer. */}
-        <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${data.methode === 'BILAN_MATIERE' ? 'border-teal-200 bg-teal-50 text-teal-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-          {data.methode === 'BILAN_MATIERE' ? (
-            <>
-              <b>Méthode bilan matière</b> (validée le 07/09/2026) sur {data.moisCouverts} mois entier{data.moisCouverts > 1 ? 's' : ''} :
-              stocks interpolés aux frontières, transferts et purges déduits. Chiffres identiques au rapport{' '}
-              <Link href="/rapports/stocks-mensuels" className="underline">Stocks carburant mensuels</Link>.
-            </>
-          ) : (
-            <>
-              <b>Période libre</b> : les stocks aux bornes sont reportés depuis la dernière jauge connue, ce qui les
-              surestime légèrement. Pour des chiffres de référence, choisissez un mois entier.
-            </>
-          )}
-        </div>
+        {/* Sur une période libre, les stocks sont en report de jauge, ce qui les
+            surestime : le lecteur doit le savoir avant de comparer. Sur des mois
+            entiers (bilan matière), aucun bandeau : la méthode est celle du
+            rapport « Stocks carburant mensuels », il n'y a rien à signaler. */}
+        {data.methode !== 'BILAN_MATIERE' && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <b>Période libre</b> : les stocks aux bornes sont reportés depuis la dernière jauge connue, ce qui les
+            surestime légèrement. Pour des chiffres de référence, choisissez un mois entier.
+          </div>
+        )}
 
         {/* ── KPIs ── */}
         <div className="mb-3 grid grid-cols-2 gap-4 md:grid-cols-5">
