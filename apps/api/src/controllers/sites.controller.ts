@@ -4,6 +4,7 @@ import { PowerConfig, StatutGE, FormeCuve, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { pick } from '../utils/pick';
+import { dateMiseEnService, texteOuNull } from '../utils/dateSite';
 import { paginate } from '../utils/paginator';
 import { triListe } from '../utils/triListe';
 import { auditLog } from '../services/audit.service';
@@ -518,6 +519,18 @@ export async function getSiteTransmission(req: Request, res: Response, next: Nex
   } catch (err) { next(err); }
 }
 
+/**
+ * Champs que le formulaire envoie sous une forme que la base refuse. Appliqué à
+ * la création ET à la modification : le défaut n'apparaissait qu'à
+ * l'enregistrement d'un site portant déjà une date de mise en service, sans que
+ * le message (« Données invalides ») dise quel champ était en cause.
+ */
+function normaliserChampsFormulaire(data: Record<string, unknown>): void {
+  if ('dateMiseEnService' in data) data.dateMiseEnService = dateMiseEnService(data.dateMiseEnService);
+  // Chaîne vide = pas de nature : stocker '' fausserait les filtres par type.
+  if ('typeSite' in data) data.typeSite = texteOuNull(data.typeSite);
+}
+
 export async function createSite(req: Request, res: Response, next: NextFunction) {
   try {
     // marqueGE ne vit pas sur le site : extraite du corps, posée sur le GE n°1.
@@ -531,6 +544,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
       'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
+    normaliserChampsFormulaire(data);
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
       throw new AppError('Nom, code, région, configuration énergie et statut GE sont requis.', 400);
     }
@@ -569,6 +583,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'parentTransmissionId', 'typeLiaison', 'nodeId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
+    normaliserChampsFormulaire(data);
     // Éligibilité solaire (voir createSite) : on juge sur l'état APRÈS mise à
     // jour — le lot solaire et la config peuvent changer dans la même requête.
     // Vaut aussi quand on retire le photovoltaïque d'un site déjà solaire :
