@@ -24,6 +24,17 @@ const PROVENANCE_TACHE: Record<string, string> = {
   tgbt_avr_onduleur: 'TGBT/AVR',
 };
 
+/**
+ * Le CODE du site est réservé à l'administrateur (même règle que les exports) :
+ * ni la liste des relevés, ni sa fiche ne le servent aux autres rôles. Les écrans
+ * qui les affichent - web comme mobile - ne montrent que le NOM du site.
+ */
+function sansCodeSite<T extends { site?: unknown }>(releve: T, role: string | undefined): T {
+  if (role === 'ADMIN' || !releve.site || typeof releve.site !== 'object') return releve;
+  const { code: _code, ...site } = releve.site as Record<string, unknown>;
+  return { ...releve, site } as T;
+}
+
 /** Provenance d'un relevé : d'où vient-il (dépotage, curative, préventive…) ? */
 function provenanceReleve(m?: { type: string; tachePreventiveKey: string | null } | null, origine?: string | null): string {
   // Pris hors application et saisi après coup : l'origine de la SAISIE prime sur
@@ -88,7 +99,7 @@ export async function getReleves(req: Request, res: Response, next: NextFunction
         where,
         orderBy: triExplicite ?? { dateReleve: 'desc' },
         include: {
-          site: { select: { nom: true, code: true, region: true } },
+          site: { select: { nom: true, region: true, ...(req.user!.role === 'ADMIN' ? { code: true } : {}) } },
           technicien: { select: { nom: true, prenom: true } },
           maintenance: { select: { id: true, type: true, tachePreventiveKey: true } },
           groupe: { select: { numero: true } },
@@ -120,7 +131,7 @@ export async function getReleveById(req: Request, res: Response, next: NextFunct
     });
     if (!releve) throw new AppError('Relevé introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, releve.siteId);
-    res.json({ success: true, data: { ...releve, provenance: provenanceReleve(releve.maintenance, releve.origine) } });
+    res.json({ success: true, data: sansCodeSite({ ...releve, provenance: provenanceReleve(releve.maintenance, releve.origine) }, req.user!.role) });
   } catch (err) { next(err); }
 }
 
