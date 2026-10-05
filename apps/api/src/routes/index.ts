@@ -463,6 +463,8 @@ router.get('/rapports/rapprochement/:id/export/:format(xlsx|pdf)', rbac(['MANAGE
 router.get('/releves', relevesCtrl.getReleves);
 router.get('/releves/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR','MANAGER','ADMIN']), relevesCtrl.exportReleves);
 router.post('/releves', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), relevesCtrl.createReleve);
+// Relevé pris HORS application, saisi après coup : réservé à l'administrateur.
+router.post('/releves/hors-app', rbac(['ADMIN']), relevesCtrl.createReleveHorsApp);
 router.post('/releves/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), relevesImportCtrl.importReleves);
 router.get('/releves/:id', relevesCtrl.getReleveById);
 

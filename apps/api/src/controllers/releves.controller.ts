@@ -12,6 +12,8 @@ import { auditLog } from '../services/audit.service';
 import { verifierClotureEnergie, enregistrerAnomalies, AvertissementSaisie } from '../services/vraisemblance.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
+import { validerSaisieHorsApp } from '../utils/saisieHorsApp';
+import { enregistrerReleveHorsApp } from '../services/releveHorsApp.service';
 
 // Libellé court de la tâche préventive d'origine (pour la « provenance » du relevé).
 const PROVENANCE_TACHE: Record<string, string> = {
@@ -23,7 +25,10 @@ const PROVENANCE_TACHE: Record<string, string> = {
 };
 
 /** Provenance d'un relevé : d'où vient-il (dépotage, curative, préventive…) ? */
-function provenanceReleve(m?: { type: string; tachePreventiveKey: string | null } | null): string {
+function provenanceReleve(m?: { type: string; tachePreventiveKey: string | null } | null, origine?: string | null): string {
+  // Pris hors application et saisi après coup : l'origine de la SAISIE prime sur
+  // celle de l'intervention - ce relevé n'est lié à aucune.
+  if (origine === 'HORS_APP') return 'Hors application';
   if (!m) return 'Autonome';
   if (m.type === 'CURATIVE') return 'Curative';
   if (m.tachePreventiveKey && PROVENANCE_TACHE[m.tachePreventiveKey]) return PROVENANCE_TACHE[m.tachePreventiveKey];
@@ -87,14 +92,15 @@ export async function getReleves(req: Request, res: Response, next: NextFunction
           technicien: { select: { nom: true, prenom: true } },
           maintenance: { select: { id: true, type: true, tachePreventiveKey: true } },
           groupe: { select: { numero: true } },
+          saisiPar: { select: { nom: true, prenom: true } },
         },
       },
       { page: parseInt(page), limit: parseInt(limit) }
     );
 
     // Provenance (dépotage / curative / préventive…) déduite de la maintenance liée.
-    const enriched = (data as { maintenance?: { type: string; tachePreventiveKey: string | null } | null }[])
-      .map((r) => ({ ...r, provenance: provenanceReleve(r.maintenance) }));
+    const enriched = (data as { origine: string | null; maintenance?: { type: string; tachePreventiveKey: string | null } | null }[])
+      .map((r) => ({ ...r, provenance: provenanceReleve(r.maintenance, r.origine) }));
 
     res.json({ success: true, data: enriched, meta });
   } catch (err) { next(err); }
@@ -107,13 +113,14 @@ export async function getReleveById(req: Request, res: Response, next: NextFunct
       include: {
         site: true,
         technicien: { select: { nom: true, prenom: true } },
+        saisiPar: { select: { nom: true, prenom: true } },
         groupe: { select: { numero: true, puissanceKva: true } },
         maintenance: { select: { id: true, type: true, categorie: true, equipement: true, dateFin: true, tachePreventiveKey: true } },
       },
     });
     if (!releve) throw new AppError('Relevé introuvable', 404);
     await assertSiteInPerimetre(req.user!.id, releve.siteId);
-    res.json({ success: true, data: { ...releve, provenance: provenanceReleve(releve.maintenance) } });
+    res.json({ success: true, data: { ...releve, provenance: provenanceReleve(releve.maintenance, releve.origine) } });
   } catch (err) { next(err); }
 }
 
@@ -211,6 +218,48 @@ export async function createReleve(req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 }
 
+/**
+ * Relevé pris sur le terrain HORS application, enregistré par un administrateur
+ * (fiche papier, message, rattrapage). Voir `releveHorsApp.service` pour ce qui
+ * distingue cette entrée de la saisie courante : date de la mesure, insertion
+ * dans la chaîne des relevés, provenance tracée.
+ *
+ * Sans `confirmerVraisemblance: true`, une valeur inhabituelle (index qui
+ * recule, jauge au-dessus de la cuve, bond impossible) est renvoyée en 422 et
+ * RIEN n'est écrit : un chiffre recopié à la main se trompe plus souvent qu'un
+ * chiffre lu à l'écran.
+ */
+export async function createReleveHorsApp(req: Request, res: Response, next: NextFunction) {
+  try {
+    const saisie = validerSaisieHorsApp(req.body);
+    const confirme = (req.body as { confirmerVraisemblance?: unknown }).confirmerVraisemblance === true;
+    const r = await enregistrerReleveHorsApp(saisie, req.user!.id, confirme);
+
+    if (r.statut === 'CONFIRMATION_REQUISE') {
+      return res.status(422).json({
+        success: false,
+        error: 'Certaines valeurs saisies semblent inhabituelles - vérifiez puis confirmez.',
+        confirmationRequise: true,
+        avertissements: r.avertissements,
+      });
+    }
+
+    await auditLog(req.user!.id, 'CREATE', 'releves', r.releves[0]?.id, {
+      horsApp: true,
+      siteId: saisie.siteId,
+      dateReleve: saisie.dateReleve.toISOString(),
+      sources: [...new Set(r.releves.map((x) => x.source))],
+      ...(r.avertissements.length ? { anomaliesConfirmees: r.avertissements.map((a) => a.code) } : {}),
+    }, req);
+
+    res.status(201).json({
+      success: true,
+      data: r.releves,
+      ...(r.avertissements.length ? { avertissements: r.avertissements } : {}),
+    });
+  } catch (err) { next(err); }
+}
+
 export async function exportReleves(req: Request, res: Response, next: NextFunction) {
   try {
     const { site_id, source, search, date_debut, date_fin } = req.query as Record<string, string>;
@@ -258,7 +307,7 @@ export async function exportReleves(req: Request, res: Response, next: NextFunct
       rows: rows.map((r) => ({
         site: r.site?.nom ?? '',
         date: r.dateReleve.toLocaleString('fr-FR'),
-        provenance: provenanceReleve(r.maintenance),
+        provenance: provenanceReleve(r.maintenance, r.origine),
         source: r.source,
         index: r.indexCompteur != null ? Number(r.indexCompteur) : '',
         kwh: r.consommationKwh != null ? Number(r.consommationKwh) : '',

@@ -142,6 +142,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   // lieu d'un « accès refusé » propre. L'API refuse déjà (rbac + INTERNE_ONLY).
   const REGLES_PROFONDES: Array<{ test: RegExp; roles: string[] }> = [
     { test: /^\/carburant\/commandes\/[^/]+\/rapprochement/, roles: ['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION'] },
+    // Saisie d'un relevé pris hors application : l'API la refuse hors ADMIN, la page
+    // héritait sinon des rôles de /energie (dont TECHNICIEN) et affichait un formulaire inutilisable.
+    { test: /^\/energie\/releves\/nouveau/, roles: ['ADMIN'] },
   ];
   const correspond = (href: string) => pathname === href || pathname.startsWith(href + '/');
   const section = [...NAV_ITEMS].sort((a, b) => b.href.length - a.href.length).find((item) => correspond(item.href));

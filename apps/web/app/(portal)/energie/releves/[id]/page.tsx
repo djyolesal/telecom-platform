@@ -61,7 +61,10 @@ export default function ReleveDetailPage() {
         {r.groupe?.numero != null && <Row label="Groupe électrogène" value={`GE n°${r.groupe.numero}${r.groupe.puissanceKva != null ? ` · ${fmtNumber(Number(r.groupe.puissanceKva))} kVA` : ''}`} />}
         {r.puissanceKva != null && <Row label="Puissance solaire" value={`${fmtNumber(Number(r.puissanceKva))} kVA`} />}
         {r.coutEstime != null && <Row label="Coût estimé" value={fmtFCFA(Number(r.coutEstime))} />}
-        <Row label="Technicien" value={r.technicien ? `${r.technicien.prenom} ${r.technicien.nom}` : '-'} />
+        <Row label="Relevé pris par" value={r.technicien ? `${r.technicien.prenom} ${r.technicien.nom}` : '-'} />
+        {/* Relevé pris hors application : on dit aussi QUI l'a saisi - un chiffre
+            recopié à la main doit pouvoir être retrouvé auprès de son auteur. */}
+        {r.origine === 'HORS_APP' && <Row label="Saisi par" value={r.saisiPar ? `${r.saisiPar.prenom} ${r.saisiPar.nom} (administrateur)` : '-'} />}
         {r.observations && <Row label="Observations" value={r.observations} />}
       </div>
 

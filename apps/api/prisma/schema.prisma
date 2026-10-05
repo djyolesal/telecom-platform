@@ -158,6 +158,7 @@ model User {
   bonsLivraisonClotures BonLivraison[]           @relation("ClotureBonsLivraison")
   mouvementsCarburant   MouvementCarburant[]
   releves               ReleveEnergie[]
+  relevesSaisis         ReleveEnergie[]          @relation("RelevesSaisisParAdmin")
   incidents             Incident[]               @relation("TechnicienIncidents")
   incidentsDeclares     Incident[]               @relation("DeclarantIncidents")
   auditLogs             AuditLog[]
@@ -579,10 +580,17 @@ model ReleveEnergie {
   latitude             Decimal?      @db.Decimal(10, 8)
   longitude            Decimal?      @db.Decimal(11, 8)
   isSynced             Boolean       @default(true) @map("is_synced")
+  // Provenance de la SAISIE. null = saisie normale (mobile ou portail, au fil de
+  // l'eau) ; 'HORS_APP' = relevé pris sur le terrain hors application et
+  // enregistré après coup par un administrateur. `technicienId` reste la
+  // personne qui a PRIS le relevé, `saisiParId` celle qui l'a ÉCRIT.
+  origine              String?       @db.VarChar(12)
+  saisiParId           String?       @map("saisi_par_id")
   createdAt            DateTime      @default(now()) @map("created_at")
 
   site        Site               @relation(fields: [siteId], references: [id])
   technicien  User?              @relation(fields: [technicienId], references: [id])
+  saisiPar    User?              @relation("RelevesSaisisParAdmin", fields: [saisiParId], references: [id], onDelete: SetNull)
   maintenance Maintenance?       @relation(fields: [maintenanceId], references: [id])
   groupe      GroupeElectrogene? @relation(fields: [groupeId], references: [id])
 

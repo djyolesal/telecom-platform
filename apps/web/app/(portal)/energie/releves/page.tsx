@@ -2,6 +2,8 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { Plus } from 'lucide-react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -11,6 +13,7 @@ import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Badge } from '@/components/shared/Badge';
+import { ButtonLink } from '@/components/shared/Button';
 import { SOURCES_ENERGIE } from '@/lib/constants';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
@@ -58,6 +61,8 @@ const PROVENANCE_COLOR: Record<string, string> = {
   'Vidange GE': 'bg-amber-100 text-amber-700',
   'TGBT/AVR': 'bg-indigo-100 text-indigo-700',
   'Curage cuve': 'bg-cyan-100 text-cyan-700',
+  // Pris sur le terrain sans l'application, saisi après coup par l'administrateur.
+  'Hors application': 'bg-violet-100 text-violet-700',
 };
 
 const n = (v: unknown): number | null => (v == null ? null : Number(v));
@@ -104,6 +109,8 @@ const FILTRES_DEFAUT = { page: '1', search: '', source: '', du: '', au: '', tri:
 
 function RelevesPageInner() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const estAdmin = (session?.user as { role?: string })?.role === 'ADMIN';
   // Filtres dans l'URL : ouvrir un passage puis revenir ne doit pas effacer la
   // période et la source — et un lien filtré se partage tel quel.
   const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
@@ -167,7 +174,12 @@ function RelevesPageInner() {
         title="Relevés énergie"
         subtitle="Un passage par ligne - jauges et index saisis, consommations calculées entre deux passages"
         backHref="/energie"
-        actions={<ExportButtons base="/releves/export" name="releves" query={exportQuery || undefined} />}
+        actions={
+          <>
+            {estAdmin && <ButtonLink href="/energie/releves/nouveau" icon={Plus}>Saisir un relevé hors application</ButtonLink>}
+            <ExportButtons base="/releves/export" name="releves" query={exportQuery || undefined} />
+          </>
+        }
       />
 
       <FilterBar

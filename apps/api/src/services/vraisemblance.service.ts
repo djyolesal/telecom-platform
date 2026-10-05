@@ -62,6 +62,14 @@ export async function verifierClotureEnergie(
    * ou le relevé qu'on vient d'écrire. On ne se compare pas à soi-même.
    */
   exclure: { maintenanceId?: string; releveId?: string } | string,
+  /**
+   * Date À LAQUELLE la mesure a été prise, quand elle diffère de maintenant :
+   * un relevé de septembre enregistré en octobre. Sans elle, la comparaison se
+   * fait au DERNIER relevé connu - donc à un relevé d'octobre - et déclenche de
+   * fausses alertes « l'index recule » sur une saisie parfaitement correcte.
+   * Avec elle, on compare à ce qui précède ET à ce qui suit la date.
+   */
+  aLaDate?: Date,
 ): Promise<AvertissementSaisie[]> {
   // Ancienne signature (un id de maintenance) toujours acceptée.
   const aExclure = typeof exclure === 'string' ? { maintenanceId: exclure } : exclure;
@@ -79,7 +87,8 @@ export async function verifierClotureEnergie(
   };
   const avertissements: AvertissementSaisie[] = [];
   const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
-  const maintenant = new Date();
+  const maintenant = aLaDate ?? new Date();
+  const avantLaDate = aLaDate ? { dateReleve: { lt: aLaDate } } : {};
   const margeCuvePct = getNum('vraisemblance.margeCuvePct', 2);
   const maxHeuresJour = getNum('vraisemblance.maxHeuresGEParJour', 24);
   const maxKwhJour = getNum('vraisemblance.maxKwhParJour', 1000);
@@ -110,11 +119,34 @@ export async function verifierClotureEnergie(
         where: {
           siteId: site.id, source: 'GE', indexHeuresGE: { not: null },
           ...saufLaSaisieEnCours,
+          ...avantLaDate,
           ...(c.groupeId ? { groupeId: c.groupeId } : {}),
         },
         orderBy: { dateReleve: 'desc' },
         select: { indexHeuresGE: true, dateReleve: true },
       });
+      // Relevé daté APRÈS la mesure : l'index saisi ne peut pas le dépasser.
+      if (aLaDate) {
+        const suivant = await prisma.releveEnergie.findFirst({
+          where: {
+            siteId: site.id, source: 'GE', indexHeuresGE: { not: null },
+            dateReleve: { gt: aLaDate },
+            ...(c.groupeId ? { groupeId: c.groupeId } : {}),
+          },
+          orderBy: { dateReleve: 'asc' },
+          select: { indexHeuresGE: true, dateReleve: true },
+        });
+        if (suivant?.indexHeuresGE != null && c.saisi > Number(suivant.indexHeuresGE)) {
+          const lib = site.groupes.length > 1 ? `GE n°${c.numero}` : 'GE';
+          avertissements.push({
+            code: 'INDEX_GE_RECULE',
+            champ: 'indexHeuresGE',
+            message: `Index horaire ${lib} saisi (${fmtNum(c.saisi)} h) supérieur à l'index déjà relevé ensuite (${fmtNum(Number(suivant.indexHeuresGE))} h le ${fmtDate(suivant.dateReleve)}) - un compteur horaire ne recule pas.`,
+            valeurSaisie: c.saisi,
+            valeurAttendue: `≤ ${fmtNum(Number(suivant.indexHeuresGE))} h (relevé du ${fmtDate(suivant.dateReleve)})`,
+          });
+        }
+      }
       if (prev?.indexHeuresGE == null) continue;
       const dernier = Number(prev.indexHeuresGE);
       const libGE = site.groupes.length > 1 ? `GE n°${c.numero}` : 'GE';
@@ -146,10 +178,26 @@ export async function verifierClotureEnergie(
     const saisi = num(e.indexCompteur);
     if (saisi != null) {
       const prev = await prisma.releveEnergie.findFirst({
-        where: { siteId: site.id, source: 'CEET', indexCompteur: { not: null }, ...saufLaSaisieEnCours },
+        where: { siteId: site.id, source: 'CEET', indexCompteur: { not: null }, ...saufLaSaisieEnCours, ...avantLaDate },
         orderBy: { dateReleve: 'desc' },
         select: { indexCompteur: true, dateReleve: true },
       });
+      if (aLaDate) {
+        const suivant = await prisma.releveEnergie.findFirst({
+          where: { siteId: site.id, source: 'CEET', indexCompteur: { not: null }, dateReleve: { gt: aLaDate } },
+          orderBy: { dateReleve: 'asc' },
+          select: { indexCompteur: true, dateReleve: true },
+        });
+        if (suivant?.indexCompteur != null && saisi > Number(suivant.indexCompteur)) {
+          avertissements.push({
+            code: 'INDEX_CEET_RECULE',
+            champ: 'indexCompteur',
+            message: `Index compteur CEET saisi (${fmtNum(saisi)} kWh) supérieur à l'index déjà relevé ensuite (${fmtNum(Number(suivant.indexCompteur))} kWh le ${fmtDate(suivant.dateReleve)}) - un index cumulé ne recule pas.`,
+            valeurSaisie: saisi,
+            valeurAttendue: `≤ ${fmtNum(Number(suivant.indexCompteur))} (relevé du ${fmtDate(suivant.dateReleve)})`,
+          });
+        }
+      }
       if (prev?.indexCompteur != null) {
         const dernier = Number(prev.indexCompteur);
         if (saisi < dernier) {
