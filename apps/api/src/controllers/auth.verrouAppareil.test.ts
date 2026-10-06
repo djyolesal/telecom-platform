@@ -1,5 +1,9 @@
 import { Request, Response } from 'express';
-import { login } from './auth.controller';
+import { login, refreshToken } from './auth.controller';
+import jwt from 'jsonwebtoken';
+import { redisClient } from '../config/redis';
+import { sessionValide } from '../services/session.service';
+import { auditLog } from '../services/audit.service';
 import { prisma } from '../config/database';
 
 /**
@@ -20,6 +24,12 @@ jest.mock('../services/email.service', () => ({ sendEmail: jest.fn() }));
 jest.mock('../services/session.service', () => ({
   enregistrerSession: jest.fn(), effacerSession: jest.fn(), sessionValide: jest.fn(), revoquerToutesSessions: jest.fn(),
 }));
+jest.mock('jsonwebtoken', () => ({
+  __esModule: true,
+  default: { sign: jest.fn().mockReturnValue('jeton'), verify: jest.fn() },
+}));
+const reglages: Record<string, number> = {};
+jest.mock('../services/settings.service', () => ({ getNum: (k: string, d: number) => reglages[k] ?? d }));
 jest.mock('bcrypt', () => ({ __esModule: true, default: { compare: jest.fn().mockResolvedValue(true), hash: jest.fn(), hashSync: jest.fn().mockReturnValue('leurre') } }));
 
 const p = prisma as unknown as {
@@ -155,5 +165,75 @@ describe('version enregistrée', () => {
     expect(p.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ appVersion: '1.8.0+49' }),
     }));
+  });
+});
+
+
+describe('renouvellement de jeton : téléphone non lié', () => {
+  // La liaison ne se fait qu'au login ; une session de 30 jours laisse passer un
+  // technicien qui a mis l'APK à jour sans se reconnecter. Un réglage, éteint par
+  // défaut, lui demande de se reconnecter une fois.
+  const R = redisClient as unknown as { get: jest.Mock; setEx: jest.Mock };
+
+  async function renouveler(o: { version?: string; role?: string; appareilId?: string | null; plt?: 'MOBILE' | 'WEB' }) {
+    (jwt.verify as jest.Mock).mockReturnValue({ sub: 'u1', sid: 's1', plt: o.plt ?? 'MOBILE' });
+    R.get.mockResolvedValue('jeton-refresh');
+    (sessionValide as jest.Mock).mockResolvedValue(true);
+    p.user.findUnique.mockResolvedValue({ id: 'u1', role: o.role ?? 'TECHNICIEN', isActive: true, appareilId: o.appareilId ?? null });
+    const req = { body: { refreshToken: 'jeton-refresh' }, headers: o.version ? { 'x-app-version': o.version } : {}, ip: '1' } as unknown as Request;
+    const json = jest.fn();
+    const next = jest.fn();
+    await refreshToken(req, { json } as unknown as Response, next);
+    return { json, next };
+  }
+
+  beforeEach(() => { for (const k of Object.keys(reglages)) delete reglages[k]; });
+
+  it('réglage éteint (défaut) : rien ne change, même pour un téléphone non lié', async () => {
+    const { json, next } = await renouveler({ version: '1.8.0+49' });
+    expect(next).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalled();
+  });
+
+  describe('réglage allumé', () => {
+    beforeEach(() => { reglages['auth.reconnexionSiAppareilNonLie'] = 1; });
+
+    it('demande une reconnexion à un technicien b49 dont le téléphone n’est pas lié', async () => {
+      const { json, next } = await renouveler({ version: '1.8.0+49' });
+      expect(json).not.toHaveBeenCalled();
+      expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 401, message: expect.stringContaining('reconnectez-vous') });
+      expect(auditLog).toHaveBeenCalledWith('u1', 'LOGIN', 'auth', undefined, expect.objectContaining({ reconnexionRequise: 'appareil non lié' }), expect.anything());
+      // Aucun nouveau jeton n'a été émis.
+      expect(R.setEx).not.toHaveBeenCalled();
+    });
+
+    it('laisse passer un téléphone déjà lié', async () => {
+      const { json, next } = await renouveler({ version: '1.8.0+49', appareilId: '11111111-1111-4111-8111-111111111111' });
+      expect(next).not.toHaveBeenCalled();
+      expect(json).toHaveBeenCalled();
+    });
+
+    // Ces APK n'identifient pas leur téléphone : leur demander de se reconnecter
+    // ne les lierait pas, et les déconnecterait en boucle.
+    it('ne touche pas un APK antérieur à b48, ni un APK muet', async () => {
+      for (const version of ['1.8.0+46', '1.8.0+47', undefined]) {
+        const { next, json } = await renouveler({ version });
+        expect(next).not.toHaveBeenCalled();
+        expect(json).toHaveBeenCalled();
+      }
+    });
+
+    it('ne touche ni le web, ni les rôles que le verrou ne vise pas', async () => {
+      for (const o of [{ plt: 'WEB' as const }, { role: 'SUPERVISEUR' }, { role: 'MANAGER' }, { role: 'ADMIN' }]) {
+        const { next, json } = await renouveler({ version: '1.8.0+49', ...o });
+        expect(next).not.toHaveBeenCalled();
+        expect(json).toHaveBeenCalled();
+      }
+    });
+
+    it('vise aussi le transporteur', async () => {
+      const { next } = await renouveler({ version: '1.8.0+49', role: 'TRANSPORTEUR' });
+      expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 401 });
+    });
   });
 });

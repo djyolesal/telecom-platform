@@ -112,6 +112,12 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'oss.stabiliteRetablissementMin', label: 'Attente avant clôture lors d\'un rebond régional (0 = clôture immédiate)', groupe: 'Supervision', unite: 'min', defaut: 20 },
     { key: 'maintenance.maxRapportsPdf', label: 'Interventions maximum dans un recueil PDF', groupe: 'Maintenance', unite: 'interventions', defaut: 200 },
     { key: 'maintenance.verificationLocaleCloture', label: 'Exiger la vérification d\'identité (empreinte/visage/code) avant de clôturer une intervention (1 = oui)', groupe: 'Maintenance', unite: '0/1', defaut: 1 },
+    // La liaison téléphone-compte ne se fait qu'au LOGIN, or la session mobile
+    // dure 30 jours et le terrain se reconnecte rarement : un technicien qui met
+    // l'application à jour sans se reconnecter n'est jamais lié. À 1, son
+    // prochain renouvellement de jeton lui demande de se reconnecter - une fois -
+    // et la liaison se fait. À n'activer qu'après avoir prévenu le terrain.
+    { key: 'auth.reconnexionSiAppareilNonLie', label: 'Demander une reconnexion au technicien dont le téléphone n\'est pas encore lié (1 = oui) - prévenir le terrain avant', groupe: 'Maintenance', unite: '0/1', defaut: 0 },
     { key: 'maintenance.biometrieStricteCloture', label: 'Exiger une EMPREINTE ou un visage à la clôture, le code de l\'appareil ne suffisant pas (1 = oui)', groupe: 'Maintenance', unite: '0/1', defaut: 0 },
     { key: 'carburant.fraicheurStockJours', label: 'Au-delà de ce délai sans relevé ni livraison, le stock affiché est signalé comme périmé', groupe: 'Carburant', unite: 'jours', defaut: 30 },
     { key: 'incidents.lotPdfMax', label: 'Nombre maximum de rapports d\'incident dans une archive ZIP', groupe: 'Maintenance', unite: 'rapports', defaut: 100 },

@@ -10,6 +10,7 @@ import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
 import { enregistrerSession, effacerSession, sessionValide, revoquerToutesSessions, Plateforme } from '../services/session.service';
 import { logger } from '../utils/logger';
+import { getNum } from '../services/settings.service';
 import { appAuMoins, BUILD_APPAREIL_UNIQUE, estIdentifiantTelephone, versionAffichable } from '../utils/versionApp';
 
 const SALT_ROUNDS = 12;
@@ -289,9 +290,29 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
     // de colonnes qu'il n'utilise pas.
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, isActive: true },
+      select: { id: true, role: true, isActive: true, appareilId: true },
     });
     if (!user || !user.isActive) throw new AppError('Utilisateur introuvable', 401);
+
+    // LIAISON MANQUANTE. Le verrou ne se pose qu'au login, mais la session
+    // mobile dure 30 jours : un technicien qui met l'APK à jour sans se
+    // reconnecter déclare bien sa version à chaque renouvellement, et n'est
+    // pourtant jamais lié à son téléphone - le principe « un téléphone, un
+    // compte » ne le protège pas. Même cas après une déliaison par
+    // l'administrateur, qui ne coupe pas la session en cours.
+    //
+    // Réglage éteint par défaut : on déconnecte des gens en pleine tournée, le
+    // terrain doit être prévenu. Le même refus que celui d'une session révoquée
+    // - l'application, elle, ne déconnecte QUE sur ce refus explicite, jamais sur
+    // une coupure réseau, et conserve sa file hors-ligne et l'identifiant du
+    // téléphone : le travail en attente repart à la reconnexion.
+    if (payload.plt === 'MOBILE' && !user.appareilId
+        && (user.role === 'TECHNICIEN' || user.role === 'TRANSPORTEUR')
+        && appAuMoins(req, BUILD_APPAREIL_UNIQUE)
+        && getNum('auth.reconnexionSiAppareilNonLie', 0) === 1) {
+      await auditLog(user.id, 'LOGIN', 'auth', undefined, { success: false, reconnexionRequise: 'appareil non lié' }, req);
+      throw new AppError('Session expirée, reconnectez-vous', 401);
+    }
 
     // Rotation des jetons au sein de la MÊME session (le sid ne change pas).
     const newAccess = signAccess(user.id, user.role, payload.sid, payload.plt);
