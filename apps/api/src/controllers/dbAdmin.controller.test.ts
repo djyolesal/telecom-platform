@@ -64,12 +64,21 @@ describe('lecture d’une table', () => {
     expect(dernierFindMany('site').orderBy).toEqual({ createdAt: 'desc' });
   });
 
-  it('applique un filtre d’enum et rejette une valeur hors liste', async () => {
-    const { req, res, next } = contexte({ modele: 'Maintenance' }, { f_statut: 'TERMINEE', f_type: 'INVENTÉ' });
+  it('applique un filtre d’enum', async () => {
+    const { req, res, next } = contexte({ modele: 'Maintenance' }, { f_statut: 'TERMINEE' });
     await ctrl.listerLignes(req, res, next);
     const clauses = dernierFindMany('maintenance').where.AND as Array<Record<string, unknown>>;
     expect(clauses).toContainEqual({ statut: 'TERMINEE' });
-    expect(clauses.some((c) => 'type' in c)).toBe(false);
+  });
+
+  // Une valeur hors liste était IGNORÉE : la table s'affichait entière en
+  // laissant croire qu'elle était filtrée. Elle est désormais refusée.
+  it('refuse une valeur d’enum hors liste au lieu de l’ignorer', async () => {
+    prisma.maintenance.findMany.mockClear();
+    const { req, res, next } = contexte({ modele: 'Maintenance' }, { f_statut: 'TERMINEE', f_type: 'INVENTÉ' });
+    await ctrl.listerLignes(req, res, next);
+    expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 422, message: expect.stringContaining('type') });
+    expect(prisma.maintenance.findMany).not.toHaveBeenCalled();
   });
 
   it('remplace les uuid des clés étrangères par un libellé lisible', async () => {

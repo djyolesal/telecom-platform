@@ -15,6 +15,7 @@ import { ExportButtons } from '@/components/shared/ExportButtons';
 import { Loading, TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { EnregistrementModal } from '../EnregistrementModal';
 import { PanneauLigne } from '../PanneauLigne';
+import { FiltresAvances, FiltreActif, parametresFiltres } from '../FiltresAvances';
 import { Ligne, Relations, TableMeta, afficher, champsAffichables } from '../types';
 
 /** Colonnes visibles d'emblée ; au-delà, le sélecteur « Colonnes » les réactive. */
@@ -37,6 +38,7 @@ export default function TablePage() {
   const [tri, setTri] = useState('');
   const [sens, setSens] = useState<'asc' | 'desc'>('desc');
   const [filtres, setFiltres] = useState<Record<string, string>>({});
+  const [avances, setAvances] = useState<FiltreActif[]>([]);
   const [selection, setSelection] = useState<Ligne | null>(null);
   const [formulaire, setFormulaire] = useState<{ ligne: Ligne | null } | null>(null);
 
@@ -45,17 +47,25 @@ export default function TablePage() {
     queryFn: () => api.get(`/admin/db/tables/${modele}`).then((r) => r.data.data as TableMeta),
   });
 
+  // URLSearchParams et non un objet : une même colonne peut porter plusieurs
+  // filtres (une période, c'est deux bornes sur la même date).
   const params = useMemo(() => {
-    const p: Record<string, string | number> = { page, limit, sens };
-    if (q.trim()) p.q = q.trim();
-    if (tri) p.tri = tri;
-    for (const [champ, valeur] of Object.entries(filtres)) if (valeur) p[`f_${champ}`] = valeur;
+    const p = new URLSearchParams({ sens });
+    if (q.trim()) p.set('q', q.trim());
+    if (tri) p.set('tri', tri);
+    for (const [champ, valeur] of Object.entries(filtres)) if (valeur) p.append(`f_${champ}`, valeur);
+    parametresFiltres(avances, p);
     return p;
-  }, [page, limit, q, tri, sens, filtres]);
+  }, [q, tri, sens, filtres, avances]);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['db-lignes', modele, params],
-    queryFn: () => api.get(`/admin/db/tables/${modele}/lignes`, { params }).then((r) => r.data),
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['db-lignes', modele, params.toString(), page, limit],
+    queryFn: () => {
+      const p = new URLSearchParams(params);
+      p.set('page', String(page));
+      p.set('limit', String(limit));
+      return api.get(`/admin/db/tables/${modele}/lignes`, { params: p }).then((r) => r.data);
+    },
     enabled: !!meta,
     placeholderData: (prec) => prec,
   });
@@ -97,9 +107,8 @@ export default function TablePage() {
 
   const champsFiltrables = meta.champs.filter((c) => (c.kind === 'enum' || c.type === 'Boolean') && !c.secret);
   const champsTriables = meta.champs.filter((c) => c.kind !== 'relation' && !c.secret);
-  const requete = new URLSearchParams(
-    Object.entries(params).filter(([k]) => k !== 'page' && k !== 'limit').map(([k, v]) => [k, String(v)])
-  ).toString();
+  const requete = params.toString();
+  const filtreActif = !!q || Object.values(filtres).some(Boolean) || avances.length > 0;
 
   return (
     <div>
@@ -166,12 +175,16 @@ export default function TablePage() {
         </select>
       </FilterBar>
 
+      <FiltresAvances meta={meta} filtres={avances} onChange={(f) => { setAvances(f); setPage(1); }} />
+
       {isLoading && !data ? (
         <TableSkeleton cols={6} />
       ) : isError ? (
-        <ErrorState message="Lecture de la table impossible" />
+        // Un filtre refusé par l'API (valeur illisible) dit POURQUOI, au lieu
+        // d'un « lecture impossible » qui laisse chercher.
+        <ErrorState message={errorMessage(error, 'Lecture de la table impossible')} />
       ) : lignes.length === 0 ? (
-        <EmptyState title="Aucune ligne" hint={q || Object.values(filtres).some(Boolean) ? 'Aucun résultat pour ces critères.' : 'Cette table est vide.'} />
+        <EmptyState title="Aucune ligne" hint={filtreActif ? 'Aucun résultat pour ces critères.' : 'Cette table est vide.'} />
       ) : (
         <>
           <DataTable

@@ -23,7 +23,14 @@ export interface ChampMeta {
   modifiable: boolean;
   creable: boolean;
   secret: boolean;
+  /** Opérateurs de filtre que l'API accepte sur cette colonne (vide = non filtrable). */
+  operateurs?: Operateur[];
 }
+
+export type Operateur =
+  | 'eq' | 'ne' | 'contient' | 'commence'
+  | 'gt' | 'gte' | 'lt' | 'lte'
+  | 'in' | 'vide' | 'nonvide';
 
 export interface TableMeta {
   modele: string;

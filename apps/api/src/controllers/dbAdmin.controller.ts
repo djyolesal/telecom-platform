@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { clausesDepuisRequete, operateursPour } from '../utils/filtresConsole';
+import { executerSql, schemaVisible } from '../services/consoleSql.service';
 import { auditLog } from '../services/audit.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import {
@@ -134,6 +136,8 @@ export function decrireTable(req: Request, res: Response, next: NextFunction) {
             modifiable: c.modifiable,
             creable: c.creable,
             secret: c.secret,
+            // Ce qu'on peut demander sur cette colonne : l'écran ne propose rien d'autre.
+            operateurs: c.kind === 'relation' || c.secret ? [] : operateursPour(c),
           })),
         // Tables pointant vers celle-ci, avec le sort réservé à leurs lignes
         // quand on supprime ici (Cascade / SetNull / Restrict).
@@ -164,33 +168,17 @@ function clauseRecherche(modele: ModeleDb, q: string): Record<string, unknown> |
   return ou.length ? { OR: ou } : null;
 }
 
-/** Filtres exacts passés en `f_<champ>=valeur`. */
+/**
+ * Filtres passés en `f_<colonne>=valeur` ou `f_<colonne>__<opérateur>=valeur`
+ * (voir utils/filtresConsole). Les colonnes secrètes, les relations et les
+ * listes ne se filtrent pas ; un filtre mal formé est refusé, jamais ignoré.
+ */
 async function clausesFiltres(modele: ModeleDb, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>> {
-  const clauses: Array<Record<string, unknown>> = [];
-  for (const [cle, valeur] of Object.entries(query)) {
-    if (!cle.startsWith('f_') || typeof valeur !== 'string' || valeur === '') continue;
-    const champ = modele.champs.find((c) => c.nom === cle.slice(2) && c.kind !== 'relation' && !c.liste && !c.secret);
-    if (!champ) continue;
-    if (valeur === '@null') { clauses.push({ [champ.nom]: null }); continue; }
-    if (champ.type === 'String') { clauses.push({ [champ.nom]: { contains: valeur, mode: 'insensitive' } }); continue; }
-    if (champ.type === 'DateTime') {
-      // `f_dateX=2026-08-01` → toute la journée.
-      const debut = new Date(valeur);
-      if (Number.isNaN(debut.getTime())) continue;
-      const fin = new Date(debut);
-      fin.setDate(fin.getDate() + 1);
-      clauses.push({ [champ.nom]: { gte: debut, lt: fin } });
-      continue;
-    }
-    if (champ.kind === 'enum') {
-      if (valeursEnum(champ.type).includes(valeur)) clauses.push({ [champ.nom]: valeur });
-      continue;
-    }
-    if (champ.type === 'Boolean') { clauses.push({ [champ.nom]: valeur === 'true' }); continue; }
-    const n = Number(valeur);
-    if (Number.isFinite(n)) clauses.push({ [champ.nom]: n });
-  }
-  return clauses;
+  return clausesDepuisRequete(
+    query,
+    (nom) => modele.champs.find((c) => c.nom === nom && c.kind !== 'relation' && !c.liste && !c.secret),
+    (champ) => (champ.kind === 'enum' ? valeursEnum(champ.type) : []),
+  );
 }
 
 function ordreDeTri(modele: ModeleDb, tri?: string, sens?: string): Record<string, 'asc' | 'desc'> {
@@ -458,5 +446,35 @@ export async function exporterTable(req: Request, res: Response, next: NextFunct
       }],
       `Table ${modele.table} - ${lignes.length} ligne(s)${lignes.length === EXPORT_MAX ? ' (export plafonné)' : ''}`
     );
+  } catch (err) { next(err); }
+}
+
+// ── Console SQL (lecture seule) ──────────────────────────────
+
+/**
+ * Exécute une requête SQL de l'administrateur, sous le rôle de lecture
+ * (voir services/consoleSql.service). Chaque exécution, réussie ou non, part au
+ * journal d'audit avec son texte : une console qui lit toute la base doit
+ * laisser la trace de ce qui a été lu.
+ */
+export async function executerRequeteSql(req: Request, res: Response, next: NextFunction) {
+  const requete = (req.body as { requete?: unknown }).requete;
+  const trace = typeof requete === 'string' ? requete.slice(0, 2000) : null;
+  try {
+    const r = await executerSql(requete);
+    await auditLog(req.user!.id, 'EXPORT', 'console_sql', undefined,
+      { requete: trace, nbLignes: r.nbLignes, tronque: r.tronque, dureeMs: r.dureeMs }, req);
+    res.json({ success: true, data: r });
+  } catch (err) {
+    await auditLog(req.user!.id, 'EXPORT', 'console_sql', undefined,
+      { requete: trace, erreur: (err as Error).message?.slice(0, 300) }, req).catch(() => undefined);
+    next(err);
+  }
+}
+
+/** Tables et colonnes lisibles depuis la console (aide à la saisie). */
+export async function schemaConsoleSql(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ success: true, data: await schemaVisible() });
   } catch (err) { next(err); }
 }

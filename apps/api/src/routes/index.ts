@@ -599,6 +599,9 @@ router.get('/admin/db/tables/:modele/lignes/:id/impact', dbAdmin, dbAdminCtrl.im
 router.post('/admin/db/tables/:modele/lignes', dbAdmin, dbAdminCtrl.creerLigne);
 router.patch('/admin/db/tables/:modele/lignes/:id', dbAdmin, dbAdminCtrl.modifierLigne);
 router.delete('/admin/db/tables/:modele/lignes/:id', dbAdmin, dbAdminCtrl.supprimerLigne);
+// Console SQL : lecture seule, garantie par un rôle PostgreSQL dédié (migration 0072).
+router.post('/admin/db/sql', dbAdmin, heavyLimit, dbAdminCtrl.executerRequeteSql);
+router.get('/admin/db/sql/schema', dbAdmin, dbAdminCtrl.schemaConsoleSql);
 
 // ── Notifications ─────────────────────────────────────────────
 router.get('/notifications', notifCtrl.getNotifications);

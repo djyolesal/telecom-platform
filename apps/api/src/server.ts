@@ -18,6 +18,7 @@ import { setupSocketIO } from './sockets';
 import { setupCronJobs } from './jobs/scheduler';
 import { loadSettings } from './services/settings.service';
 import { loadTacheOverrides } from './services/tachesPreventives.service';
+import { fermerConsole } from './services/consoleSql.service';
 import { router } from './routes';
 import { errorHandler } from './middlewares/errorHandler';
 import { logger } from './utils/logger';
@@ -142,6 +143,7 @@ async function bootstrap() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM reçu - arrêt gracieux...');
+  await fermerConsole().catch(() => undefined);
   await prisma.$disconnect();
   await redisClient.quit();
   httpServer.close(() => process.exit(0));

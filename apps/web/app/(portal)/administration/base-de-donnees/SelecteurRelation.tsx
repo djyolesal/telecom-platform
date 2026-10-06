@@ -24,7 +24,8 @@ export function SelecteurRelation({
   modeleCible: string;
   valeur: string;
   libelleActuel?: string;
-  onChange: (valeur: string) => void;
+  /** Le libellé est fourni en second : de quoi afficher « Site Sokodé 1 » plutôt qu'un uuid. */
+  onChange: (valeur: string, libelle?: string) => void;
   obligatoire?: boolean;
 }) {
   const [ouvert, setOuvert] = useState(false);
@@ -100,7 +101,7 @@ export function SelecteurRelation({
               <button
                 key={o.valeur}
                 type="button"
-                onClick={() => { onChange(o.valeur); setOuvert(false); setQ(''); }}
+                onClick={() => { onChange(o.valeur, o.libelle); setOuvert(false); setQ(''); }}
                 className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${o.valeur === valeur ? 'bg-[rgb(var(--brand-light)/0.1)] font-medium' : ''}`}
               >
                 {o.libelle}

@@ -3,9 +3,10 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Database, Lock, Search, Table2 } from 'lucide-react';
+import { Database, Lock, Search, Table2, TerminalSquare } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { ButtonLink } from '@/components/shared/Button';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { fmtNumber } from '@/lib/utils';
 import { TableResume, octetsLisibles } from './types';
@@ -49,6 +50,7 @@ export default function BaseDeDonneesPage() {
         title="Base de données"
         subtitle={`${data?.tables.length ?? 0} tables · ${fmtNumber(totalLignes)} lignes · ${octetsLisibles(totalOctets)}`}
         backHref="/administration"
+        actions={<ButtonLink href="/administration/base-de-donnees/sql" icon={TerminalSquare} variant="secondary">Requête SQL</ButtonLink>}
       />
 
       <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
