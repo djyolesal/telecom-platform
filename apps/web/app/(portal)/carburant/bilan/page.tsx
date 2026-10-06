@@ -31,6 +31,8 @@ interface Bilan {
   moisCouverts: number;
   totaux: {
     nbSites: number; nbSitesMesures: number;
+    /** Sites sans groupe ni cuve ni carburant enregistré : volontairement hors du bilan. */
+    nbSitesHorsPerimetre?: number;
     stockDebutLitres: number; stockFinLitres: number;
     livreLitres: number; mouvementsLitres: number;
     consoLitres: number; consoTheoriqueLitres: number; consoJourMoyenne: number;
@@ -173,6 +175,9 @@ export default function BilanCarburantPage() {
           {data.methode === 'BILAN_MATIERE' ? ' (au moins un relevé de cuve dans chaque mois)' : ' (jauge relevée avant chaque borne)'}.
           Le « livré » couvre tous les sites - la logistique est toujours connue. Théorique total : {fmtNumber(t!.consoTheoriqueLitres)} L,
           budget de référence et non mesure : il ne sert jamais à conclure qu&apos;il manque du gasoil.
+          {!!t!.nbSitesHorsPerimetre && (
+            <> {fmtNumber(t!.nbSitesHorsPerimetre)} site{t!.nbSitesHorsPerimetre > 1 ? 's' : ''} sans groupe électrogène ni cuve ne figure{t!.nbSitesHorsPerimetre > 1 ? 'nt' : ''} pas dans ce bilan.</>
+          )}
         </p>
 
         {/* La courbe passe TOUJOURS par la méthode validée : ses points sont des

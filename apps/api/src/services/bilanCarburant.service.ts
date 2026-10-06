@@ -4,6 +4,7 @@ import { geParams } from './settings.service';
 import { signeMouvement } from './mouvementsCarburant.service';
 import { memo } from '../utils/memo';
 import { chargerSeries, bilanMensuelSerie, SerieCarburant } from './stocksMensuels.service';
+import { sansCarburant } from '../utils/perimetreCarburant';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 const r0 = (v: number) => Math.round(v);
@@ -179,13 +180,13 @@ export function bilanCarburant(debut: Date, fin: Date, region?: string, portee?:
 }
 
 async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, portee?: PorteeBilan) {
-  const sites = await prisma.site.findMany({
+  const tousLesSites = await prisma.site.findMany({
     where: { isActive: true, ...(region ? { region } : {}), ...(portee?.where ?? {}) },
     orderBy: { code: 'asc' },
-    select: { id: true, code: true, nom: true, region: true, statutGE: true, puissanceGEkva: true,
+    select: { id: true, code: true, nom: true, region: true, statutGE: true, puissanceGEkva: true, cuveVolumeLitres: true,
       groupes: { where: { isActive: true }, select: { puissanceKva: true, statut: true } } },
   });
-  const siteIds = sites.map((s) => s.id);
+  const siteIds = tousLesSites.map((s) => s.id);
 
   // Fenêtre unique pour la période ET la courbe : 12 mois avant le mois de fin.
   const finMois = new Date(Date.UTC(fin.getUTCFullYear(), fin.getUTCMonth() + 1, 1));
@@ -202,6 +203,19 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
   // y passe toujours (ses points SONT des mois).
   const mois = moisEntiers(debut, fin);
   const series = await chargerSeries(siteIds, new Date(Math.max(fin.getTime(), finMois.getTime())));
+
+  // PÉRIMÈTRE : un site sans groupe électrogène ni cuve n'a pas de stock - il
+  // gonflait « sites mesurés : N / 558 » et noyait la liste de lignes « aucun
+  // relevé ». MAIS la logistique est toujours connue, et un site que son statut
+  // dit « sans GE » peut avoir reçu du gasoil : on ne l'écarte que s'il n'a
+  // AUCUNE donnée de carburant (relevé, livraison, mouvement). Écarter un site
+  // qui a reçu du carburant retirerait du « livré » des totaux.
+  const aDesDonnees = (id: string) => {
+    const s = series.get(id);
+    return !!s && (s.releves.length > 0 || s.livraisons.length > 0 || s.mouvements.length > 0);
+  };
+  const sites = tousLesSites.filter((s) => !sansCarburant(s) || aDesDonnees(s.id));
+  const nbSitesHorsPerimetre = tousLesSites.length - sites.length;
   const MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
   /** Agrège les bilans mensuels validés d'un site sur la période. */
@@ -309,6 +323,7 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
     moisCouverts: mois?.length ?? 0,
     totaux: {
       nbSites: lignes.length,
+      nbSitesHorsPerimetre,
       nbSitesMesures: mesures.length,
       // Les stocks totaux ne sont sommés QUE sur les sites mesurés : additionner
       // un début connu à une fin inconnue donnerait un delta parc mensonger.

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { startOfMonth, endOfMonth, subMonths, addMonths, format } from 'date-fns';
 import { prisma } from '../config/database';
+import { SITES_AVEC_CARBURANT, SITES_SANS_CARBURANT } from '../utils/perimetreCarburant';
 import { auditLog } from '../services/audit.service';
 import { calculerStockSite } from '../utils/calculator';
 import { geParams, getNum, dateReferenceTaches } from '../services/settings.service';
@@ -242,15 +243,10 @@ export async function getStockCarburant(req: Request, res: Response, next: NextF
     // compteur d'alertes et faisait passer une couverture réelle de 97 % pour
     // 66 %. Le couple décide : une cuve sans groupe reste du gasoil stocké, et
     // ne doit donc pas disparaître.
-    const concerne = { OR: [{ statutGE: { not: 'PAS_DE_GE' as const } }, { cuveVolumeLitres: { gt: 0 } }] };
-    // Le complément est écrit EXPLICITEMENT, et non `NOT: concerne` : en logique
-    // à trois états, NOT (cuve > 0) vaut NULL quand la cuve est NULL - donc la
-    // ligne est exclue et le compteur renvoyait zéro. Même piège que le NOT sur
-    // appVersion ailleurs dans ce contrôleur ; le cas NULL doit être nommé.
-    const horsPerimetre = {
-      statutGE: 'PAS_DE_GE' as const,
-      OR: [{ cuveVolumeLitres: null }, { cuveVolumeLitres: 0 }],
-    };
+    // Définition partagée avec le bilan (utils/perimetreCarburant) : le complément
+    // y est écrit explicitement, `NOT (cuve > 0)` valant NULL quand la cuve l'est.
+    const concerne = SITES_AVEC_CARBURANT;
+    const horsPerimetre = SITES_SANS_CARBURANT;
     const base = { isActive: true, ...(region ? { region } : {}), ...perimetre };
     const [sites, nbHorsPerimetre] = await Promise.all([
       prisma.site.findMany({ where: { ...base, ...concerne }, orderBy: { code: 'asc' } }),
