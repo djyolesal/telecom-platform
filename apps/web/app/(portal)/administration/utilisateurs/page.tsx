@@ -264,7 +264,7 @@ export default function UtilisateursPage() {
           <button onClick={() => { if (confirm(`Réinitialiser le mot de passe de ${u.prenom} ${u.nom} ?`)) reset.mutate(u.id); }} title="Réinitialiser le mot de passe" className="p-1.5 rounded hover:bg-gray-100"><KeyRound size={15} className="text-gray-500" /></button>
           {u.appareilEmpreinte && (
             <button
-              onClick={() => { if (confirm(`Délier l'appareil « ${u.appareilLabel ?? 'Appareil'} #${u.appareilEmpreinte} » de ${u.prenom} ${u.nom} ?\nLe prochain téléphone qui se connectera deviendra le nouvel appareil lié.`)) delier.mutate(u.id); }}
+              onClick={() => { if (confirm(`Délier l'appareil « ${u.appareilLabel ?? 'Appareil'} #${u.appareilEmpreinte} » de ${u.prenom} ${u.nom} ?\nSa session sur le téléphone sera fermée (le portail web reste ouvert) : il devra se reconnecter, et le prochain téléphone qui se connectera deviendra le nouvel appareil lié.`)) delier.mutate(u.id); }}
               title={`Délier l'appareil (${u.appareilLabel ?? 'Appareil'} #${u.appareilEmpreinte})`}
               className="p-1.5 rounded hover:bg-gray-100"
             >

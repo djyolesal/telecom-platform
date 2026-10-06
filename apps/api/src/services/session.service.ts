@@ -44,6 +44,21 @@ export async function revoquerToutesSessions(userId: string): Promise<void> {
   await redisClient.del(`refresh:MOBILE:${userId}`);
 }
 
+/**
+ * Révoque la session d'UNE plateforme : le sid, son cache et le jeton de
+ * renouvellement. `effacerSession` ne supprime pas ce dernier ; sans lui, une
+ * session « effacée » se rouvrirait au renouvellement suivant.
+ *
+ * Les jetons d'accès en cours sont rejetés dès la requête suivante (leur sid ne
+ * correspond plus à rien), et l'application, ne pouvant plus renouveler, se
+ * déconnecte. L'autre plateforme n'est pas touchée : couper le téléphone d'un
+ * technicien ne doit pas le déconnecter du portail.
+ */
+export async function revoquerSession(userId: string, plt: Plateforme): Promise<void> {
+  await effacerSession(userId, plt);
+  await redisClient.del(`refresh:${plt}:${userId}`);
+}
+
 export async function effacerSession(userId: string, plt: Plateforme): Promise<void> {
   await prisma.user.update({
     where: { id: userId },

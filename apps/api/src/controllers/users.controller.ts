@@ -10,7 +10,7 @@ import { pick } from '../utils/pick';
 import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
-import { revoquerToutesSessions } from '../services/session.service';
+import { revoquerToutesSessions, revoquerSession } from '../services/session.service';
 import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 
 const SALT_ROUNDS = 12;
@@ -342,7 +342,13 @@ export async function delierAppareil(req: Request, res: Response, next: NextFunc
       // croire que le prochain appareil porte déjà cette version.
       data: { appareilId: null, appareilLabel: null, appareilLieLe: null, appVersion: null, appVersionLe: null },
     });
-    await auditLog(req.user!.id, 'UPDATE', 'users', user.id, { action: 'delier_appareil', ancien: user.appareilLabel }, req);
+    // La session MOBILE est fermée avec la liaison. Délier un téléphone, c'est dire
+    // « ce téléphone n'est plus celui de ce compte » : le laisser connecté jusqu'à
+    // 30 jours gardait l'accès à un téléphone perdu ou volé, et privait le compte
+    // de sa prochaine liaison (elle ne se fait qu'au login). Le portail web, lui,
+    // reste ouvert.
+    await revoquerSession(user.id, 'MOBILE');
+    await auditLog(req.user!.id, 'UPDATE', 'users', user.id, { action: 'delier_appareil', ancien: user.appareilLabel, sessionMobileFermee: true }, req);
     res.json({ success: true });
   } catch (err) { next(err); }
 }
