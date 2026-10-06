@@ -35,6 +35,8 @@ interface Bilan {
     nbSitesHorsPerimetre?: number;
     stockDebutLitres: number; stockFinLitres: number;
     livreLitres: number; mouvementsLitres: number;
+    /** Part du livré allant aux sites relevés dans le mois : celle du rapport « Stocks carburant mensuels ». */
+    livreSitesRelevesLitres?: number;
     consoLitres: number; consoTheoriqueLitres: number; consoJourMoyenne: number;
   };
   lignes: LigneSite[];
@@ -161,7 +163,10 @@ export default function BilanCarburantPage() {
         {/* ── KPIs ── */}
         <div className="mb-3 grid grid-cols-2 gap-4 md:grid-cols-5">
           <StatCard title="Stock début" value={`${fmtNumber(t!.stockDebutLitres)} L`} icon={Fuel} color="bg-[#5D6D7E]" />
-          <StatCard title="Livré sur la période" value={`${fmtNumber(t!.livreLitres)} L`} icon={Droplets} color="bg-[rgb(var(--brand-light))]" />
+          <StatCard title="Livré sur la période" value={`${fmtNumber(t!.livreLitres)} L`}
+            subtitle={t!.livreSitesRelevesLitres != null && t!.livreSitesRelevesLitres !== t!.livreLitres
+              ? `dont ${fmtNumber(t!.livreSitesRelevesLitres)} L aux sites relevés` : 'bons de livraison'}
+            icon={Droplets} color="bg-[rgb(var(--brand-light))]" />
           <StatCard title="Consommation" value={`${fmtNumber(t!.consoLitres)} L`}
             subtitle={`≈ ${fmtNumber(t!.consoJourMoyenne)} L/jour`} icon={TrendingDown} color="bg-[#C0392B]" />
           <StatCard title="Stock fin" value={`${fmtNumber(t!.stockFinLitres)} L`}
@@ -173,7 +178,8 @@ export default function BilanCarburantPage() {
         <p className="mb-4 text-xs text-gray-500">
           Stocks et consommation totalisés sur les <b>{t!.nbSitesMesures} sites mesurés</b>
           {data.methode === 'BILAN_MATIERE' ? ' (au moins un relevé de cuve dans chaque mois)' : ' (jauge relevée avant chaque borne)'}.
-          Le « livré » couvre tous les sites - la logistique est toujours connue. Théorique total : {fmtNumber(t!.consoTheoriqueLitres)} L,
+          Le « livré » est le livré réel : toutes les livraisons de la période, sites relevés ou non - la logistique est toujours connue.
+          La part des sites relevés dans le mois est celle que reprend le rapport « Stocks carburant mensuels », qui ne liste que ces sites. Théorique total : {fmtNumber(t!.consoTheoriqueLitres)} L,
           budget de référence et non mesure : il ne sert jamais à conclure qu&apos;il manque du gasoil.
           {!!t!.nbSitesHorsPerimetre && (
             <> {fmtNumber(t!.nbSitesHorsPerimetre)} site{t!.nbSitesHorsPerimetre > 1 ? 's' : ''} sans groupe électrogène ni cuve ne figure{t!.nbSitesHorsPerimetre > 1 ? 'nt' : ''} pas dans ce bilan.</>

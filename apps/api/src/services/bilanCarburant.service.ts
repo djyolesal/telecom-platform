@@ -3,7 +3,7 @@ import { litresMoisGE } from '../utils/calculator';
 import { geParams } from './settings.service';
 import { signeMouvement } from './mouvementsCarburant.service';
 import { memo } from '../utils/memo';
-import { chargerSeries, bilanMensuelSerie, SerieCarburant } from './stocksMensuels.service';
+import { chargerSeries, bilanMensuelSerie, fluxDuMois, SerieCarburant } from './stocksMensuels.service';
 import { sansCarburant } from '../utils/perimetreCarburant';
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
@@ -47,6 +47,13 @@ export interface LigneBilanSite {
   stockDebut: number | null;
   stockFin: number | null;
   livre: number;
+  /**
+   * Part du livré qui tombe dans un mois où le site a un bilan (au moins un
+   * relevé de cuve) : c'est ce que totalise le rapport « Stocks carburant
+   * mensuels », qui ne liste que ces sites-là. Sur une période libre : le livré
+   * des sites mesurés.
+   */
+  livreReleve: number;
   mouvements: number;              // transferts nets − purges sur la période
   conso: number | null;            // équation de conservation
   consoTheorique: number;          // formule kVA prorata des jours
@@ -220,14 +227,20 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
 
   /** Agrège les bilans mensuels validés d'un site sur la période. */
   function parMois(serie: SerieCarburant | undefined): Pick<LigneBilanSite,
-    'stockDebut' | 'stockFin' | 'livre' | 'mouvements' | 'conso' | 'mesure' | 'motifNonMesure'> {
+    'stockDebut' | 'stockFin' | 'livre' | 'livreReleve' | 'mouvements' | 'conso' | 'mesure' | 'motifNonMesure'> {
     const bilans = mois!.map((m) => ({ m, b: bilanMensuelSerie(serie, m.annee, m.mois) }));
     const manquant = bilans.find((x) => x.b == null);
     if (manquant) {
+      // Stock et conso inconnus, mais le LIVRÉ ne l'est pas : il vient des bons
+      // de livraison. Il était compté pour zéro faute de bilan, et le total de
+      // la page perdait le gasoil livré aux sites non relevés dans le mois.
+      const flux = mois!.map((m) => fluxDuMois(serie, m.annee, m.mois));
       return {
         stockDebut: null, stockFin: null,
-        livre: r0(bilans.reduce((s, x) => s + (x.b?.livraisons ?? 0), 0)),
-        mouvements: r0(bilans.reduce((s, x) => s + (x.b?.mouvements ?? 0), 0)),
+        livre: r0(flux.reduce((s, f) => s + f.livraisons, 0)),
+        // Seulement les mois où le site a un bilan : ce que reprend le rapport mensuel.
+        livreReleve: r0(bilans.reduce((s, x) => s + (x.b?.livraisons ?? 0), 0)),
+        mouvements: r0(flux.reduce((s, f) => s + f.mouvements, 0)),
         conso: null, mesure: false,
         motifNonMesure: `Aucun relevé de cuve en ${MOIS_FR[manquant.m.mois - 1]} ${manquant.m.annee}`,
       };
@@ -238,6 +251,7 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
       stockDebut: b[0].stockDebut,
       stockFin: b[b.length - 1].stockFin,
       livre: r0(b.reduce((s, x) => s + x.livraisons, 0)),
+      livreReleve: r0(b.reduce((s, x) => s + x.livraisons, 0)),
       mouvements: r0(b.reduce((s, x) => s + x.mouvements, 0)),
       conso: incalculable ? null : r0(b.reduce((s, x) => s + (x.conso ?? 0), 0)),
       mesure: !incalculable,
@@ -251,12 +265,13 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
     let stockDebut: number | null;
     let stockFin: number | null;
     let livre: number;
+    let livreReleve: number;
     let mouvements: number;
     let conso: number | null;
     let mesure: boolean;
     let motifNonMesure: string | null;
     if (mois) {
-      ({ stockDebut, stockFin, livre, mouvements, conso, mesure, motifNonMesure } = parMois(series.get(site.id)));
+      ({ stockDebut, stockFin, livre, livreReleve, mouvements, conso, mesure, motifNonMesure } = parMois(series.get(site.id)));
     } else {
       stockDebut = stockA(idx, t0);
       stockFin = stockA(idx, t1);
@@ -264,6 +279,7 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
       mouvements = r0(sommeEntre(idx.mvts, t0, t1));
       mesure = stockDebut != null && stockFin != null;
       conso = mesure ? r0(stockDebut! + livre + mouvements - stockFin!) : null;
+      livreReleve = mesure ? livre : 0;
       motifNonMesure = mesure ? null
         : stockDebut == null && stockFin == null ? 'Aucune jauge relevée avant la période'
         : stockDebut == null ? 'Pas de jauge avant le début de période'
@@ -281,7 +297,7 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
       siteId: site.id, code: site.code, nom: site.nom, region: site.region,
       stockDebut: stockDebut != null ? r0(stockDebut) : null,
       stockFin: stockFin != null ? r0(stockFin) : null,
-      livre, mouvements,
+      livre, livreReleve, mouvements,
       conso, consoTheorique,
       ecart: conso != null ? r0(conso - consoTheorique) : null,
       mesure,
@@ -299,10 +315,11 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
     // celle du rapport « Stocks carburant mensuels » pour les mêmes mois.
     let livre = 0, conso = 0, nbMesures = 0;
     for (const site of sites) {
-      const b = bilanMensuelSerie(series.get(site.id), b0.getUTCFullYear(), b0.getUTCMonth() + 1);
-      if (!b) continue;
-      livre += b.livraisons;
-      if (b.conso != null) { conso += b.conso; nbMesures++; }
+      const serie = series.get(site.id);
+      // Le livré de TOUS les sites, mesurés ou non : même règle que le total.
+      livre += fluxDuMois(serie, b0.getUTCFullYear(), b0.getUTCMonth() + 1).livraisons;
+      const b = bilanMensuelSerie(serie, b0.getUTCFullYear(), b0.getUTCMonth() + 1);
+      if (b?.conso != null) { conso += b.conso; nbMesures++; }
     }
     courbe.push({
       annee: b0.getUTCFullYear(), mois: b0.getUTCMonth() + 1,
@@ -329,7 +346,12 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
       // un début connu à une fin inconnue donnerait un delta parc mensonger.
       stockDebutLitres: r0(mesures.reduce((s, l) => s + (l.stockDebut ?? 0), 0)),
       stockFinLitres: r0(mesures.reduce((s, l) => s + (l.stockFin ?? 0), 0)),
+      // LIVRÉ RÉEL : toutes les livraisons de la période, sites relevés ou non -
+      // c'est le chiffre des bons de livraison. La part des sites relevés est
+      // donnée à côté : c'est le livré du rapport « Stocks carburant mensuels »,
+      // qui ne liste que les sites ayant un bilan dans le mois.
       livreLitres: r0(lignes.reduce((s, l) => s + l.livre, 0)),
+      livreSitesRelevesLitres: r0(lignes.reduce((s, l) => s + l.livreReleve, 0)),
       mouvementsLitres: r0(lignes.reduce((s, l) => s + l.mouvements, 0)),
       consoLitres: r0(mesures.reduce((s, l) => s + (l.conso ?? 0), 0)),
       consoTheoriqueLitres: r0(mesures.reduce((s, l) => s + l.consoTheorique, 0)),

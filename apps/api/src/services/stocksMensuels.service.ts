@@ -280,6 +280,25 @@ export async function chargerSeries(siteIds: string[], avant: Date): Promise<Map
 
 const SERIE_VIDE: SerieCarburant = { releves: [], livraisons: [], mouvements: [] };
 
+/**
+ * Ce qui est ENTRÉ et SORTI de la cuve d'un site pendant un mois calendaire :
+ * livraisons et mouvements (transferts, purges), sur la même fenêtre que le
+ * bilan mensuel - [1er du mois, 1er du mois suivant[ - et avec le même arrondi.
+ *
+ * Ces flux viennent de la LOGISTIQUE, ils sont connus même quand le stock ne
+ * l'est pas : un site sans relevé de cuve dans le mois n'a pas de bilan
+ * (`bilanMensuelSerie` rend null), mais le gasoil qu'il a reçu a bien été livré.
+ */
+export function fluxDuMois(serie: SerieCarburant | undefined, annee: number, mois: number): { livraisons: number; mouvements: number } {
+  const s = serie ?? SERIE_VIDE;
+  const premier = new Date(Date.UTC(annee, mois - 1, 1));
+  const suivant = new Date(Date.UTC(annee, mois, 1));
+  return {
+    livraisons: Math.round(sommeLivraisons(s.livraisons, premier, suivant)),
+    mouvements: Math.round(sommeEvts(s.mouvements, premier, suivant)),
+  };
+}
+
 /** Déroule la méthode sur les séries déjà chargées. */
 export function bilanMensuelSerie(serie: SerieCarburant | undefined, annee: number, mois: number) {
   const s = serie ?? SERIE_VIDE;

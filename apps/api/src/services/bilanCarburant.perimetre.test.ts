@@ -89,3 +89,52 @@ describe('bilan carburant : périmètre des sites', () => {
     expect(series.mock.calls[0][0].sort()).toEqual(['A', 'B', 'C', 'D', 'E']);
   });
 });
+
+describe('bilan carburant : le livré est le livré réel', () => {
+  // Sur un mois entier (méthode bilan matière), un site sans relevé de cuve
+  // n'a pas de bilan mensuel. Son livré était compté pour ZÉRO : le total de la
+  // page perdait le gasoil livré aux sites non relevés.
+  const septembre = () => bilanCarburant(new Date('2026-09-01T00:00:00Z'), new Date('2026-09-30T00:00:00Z'));
+
+  it('compte la livraison d’un site non mesuré dans sa ligne et dans le total', async () => {
+    const b = await septembre();
+    expect(b.methode).toBe('BILAN_MATIERE');
+    const d = b.lignes.find((l) => l.code === 'D')!;
+    expect(d.mesure).toBe(false);
+    expect(d.livre).toBe(500);
+    expect(b.totaux.livreLitres).toBe(500);
+  });
+
+  it('donne à part le livré des sites relevés (celui du rapport mensuel)', async () => {
+    const b = await septembre();
+    // D n'a aucun relevé en septembre : absent du rapport mensuel, donc de cette part.
+    expect(b.totaux.livreSitesRelevesLitres).toBe(0);
+    expect(b.lignes.find((l) => l.code === 'D')!.livreReleve).toBe(0);
+  });
+
+  it('la courbe compte la même livraison dans son mois', async () => {
+    const b = await septembre();
+    const sept = b.courbe.find((c) => c.annee === 2026 && c.mois === 9)!;
+    expect(sept.livre).toBe(500);
+    expect(sept.nbSitesMesures).toBe(0);
+    const aout = b.courbe.find((c) => c.annee === 2026 && c.mois === 8)!;
+    expect(aout.livre).toBe(0);
+  });
+
+  it('une livraison au 1er du mois à minuit appartient au mois précédent (même fenêtre que le moteur)', async () => {
+    series.mockResolvedValue(new Map([
+      ['D', { releves: [], livraisons: [{ date: new Date('2026-09-01T00:00:00Z'), litres: 300 }], mouvements: [] }],
+    ]));
+    const b = await septembre();
+    expect(b.totaux.livreLitres).toBe(0);
+    expect(b.courbe.find((c) => c.mois === 8)!.livre).toBe(300);
+  });
+
+  it('les transferts et purges d’un site non mesuré comptent aussi', async () => {
+    series.mockResolvedValue(new Map([
+      ['D', { releves: [], livraisons: [], mouvements: [{ date: new Date('2026-09-15T00:00:00Z'), litres: -120 }] }],
+    ]));
+    const b = await septembre();
+    expect(b.lignes.find((l) => l.code === 'D')!.mouvements).toBe(-120);
+  });
+});
