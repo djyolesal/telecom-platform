@@ -10,7 +10,7 @@ import { auditLog } from '../services/audit.service';
 import { sendEmail } from '../services/email.service';
 import { enregistrerSession, effacerSession, sessionValide, revoquerToutesSessions, Plateforme } from '../services/session.service';
 import { logger } from '../utils/logger';
-import { appAuMoins, BUILD_APPAREIL_UNIQUE } from '../utils/versionApp';
+import { appAuMoins, BUILD_APPAREIL_UNIQUE, estIdentifiantTelephone, versionAffichable } from '../utils/versionApp';
 
 const SALT_ROUNDS = 12;
 // Hash bcrypt LEURRE (mot de passe aléatoire jamais divulgué) : comparé quand le
@@ -57,8 +57,8 @@ function plateformeDe(body: unknown): Plateforme {
 async function enregistrerVersionApp(userId: string, plt: Plateforme, req: Request): Promise<void> {
   try {
     if (plt !== 'MOBILE') return;
-    const brute = req.headers['x-app-version'];
-    const version = String(Array.isArray(brute) ? brute[0] : brute ?? '').trim().slice(0, 40);
+    // Normalisée : « 1.8.0+2049 » (décalage par architecture) s'enregistre « 1.8.0+49 ».
+    const version = versionAffichable(req);
     if (!version) return;
     // `NOT { appVersion: version }` seul n'attrape PAS une ligne NULL : en
     // logique trois états, NOT (NULL = 'x') vaut NULL, donc la ligne est
@@ -159,7 +159,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
           403
         );
       }
-      {
+      if (estIdentifiantTelephone(deviceId)) {
         // UN APPAREIL, UN COMPTE. Le verrou liait le compte au téléphone, mais
         // pas l'inverse : le même identifiant pouvait être écrit sur plusieurs
         // comptes, et deux techniciens se relayer sur le même appareil - ce que
@@ -207,6 +207,13 @@ export async function login(req: Request, res: Response, next: NextFunction) {
             403
           );
         }
+      } else {
+        // SECONDE PROTECTION. Le numéro de build dit « cette app sait identifier
+        // un téléphone » ; l'identifiant, lui, n'a pas la forme d'un UUID : c'est
+        // un `Build.ID` (firmware) ou une valeur étrangère. Il ne désigne aucun
+        // téléphone en particulier, donc on ne lie rien et on ne refuse personne
+        // - exactement la règle des APK antérieurs à b48.
+        logger.warn(`[auth] identifiant d'appareil sans forme d'UUID ignoré (build ${req.headers['x-app-version'] ?? '?'})`);
       }
     }
     const sid = crypto.randomUUID();
