@@ -283,6 +283,7 @@ export default function SiteDetailPage() {
           <InfoRow label="Climatiseur" value={site.hasClimatiseur ? 'Oui' : 'Non'} />
           <InfoRow label="Extincteurs" value={site.hasExtincteurs ? 'Oui' : 'Non'} />
           <InfoRow label="Accès camion citerne" value={site.accesPickup ? 'Livraison par pickup' : 'Accès direct'} />
+          <InfoRow label="Modèle de cuve" value={site.modeleCuve?.nom ?? '-'} />
           <InfoRow label="Volume cuve gasoil" value={site.cuveVolumeLitres != null ? `${fmtNumber(site.cuveVolumeLitres)} L` : '-'} />
           <InfoRow label="Forme de la cuve" value={FORMES_CUVE.find((f) => f.value === site.formeCuve)?.label ?? '-'} />
           <InfoRow label="Dimensions cuve" value={
@@ -295,7 +296,9 @@ export default function SiteDetailPage() {
           <InfoRow label="Conversion hauteur → litres" value={
             site.cuve?.calculable ? (
               <span className={site.cuve.ecartNominalPct != null && site.cuve.ecartNominalPct > 15 ? 'text-amber-700' : 'text-green-700'}>
-                Active{site.baremage?.length >= 2 ? ` (barème, ${site.baremage.length} pts)` : ' (dimensions)'} · max {fmtNumber(site.cuve.volumeTheoriqueLitres)} L
+                Active ({site.cuve.source === 'MODELE'
+                  ? (site.baremage?.length >= 2 ? `barème du modèle, ${site.baremage.length} pts` : 'dimensions du modèle')
+                  : site.cuve.source === 'BAREME_SITE' ? `barème propre au site, ${site.baremage.length} pts` : 'dimensions du site'}) · max {fmtNumber(site.cuve.volumeTheoriqueLitres)} L
                 {site.cuve.ecartNominalPct != null && site.cuve.ecartNominalPct > 15 ? ` · écart nominal ${site.cuve.ecartNominalPct} % !` : ''}
               </span>
             ) : <span className="text-gray-400">Non configurée - le technicien saisit les litres à la main</span>

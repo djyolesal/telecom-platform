@@ -41,6 +41,7 @@ import * as filesCtrl from '../controllers/files.controller';
 import * as syncOssCtrl from '../controllers/syncOss.controller';
 import * as dbAdminCtrl from '../controllers/dbAdmin.controller';
 import * as exclusionsCtrl from '../controllers/exclusions.controller';
+import * as modelesCuveCtrl from '../controllers/modelesCuve.controller';
 
 export const router = Router();
 
@@ -561,6 +562,17 @@ router.delete('/admin/types-incident/:code', rbac(['ADMIN']), adminCtrl.deleteTy
 router.post('/admin/types-pylone', rbac(['ADMIN']), adminCtrl.upsertTypePylone);
 router.delete('/admin/types-pylone/:code', rbac(['ADMIN']), adminCtrl.deleteTypePylone);
 router.post('/admin/types-site', rbac(['ADMIN']), adminCtrl.upsertTypeSite);
+// MODÈLES DE CUVE : barème partagé par une catégorie de cuves (5000 L, 3000 L…).
+// Lecture pour qui modifie les sites ; référentiel et affectation en masse : ADMIN.
+// /sites AVANT /:id, sinon « sites » serait lu comme un identifiant.
+router.get('/modeles-cuve', rbac(['MANAGER','ADMIN']), modelesCuveCtrl.listModelesCuve);
+router.get('/modeles-cuve/sites', rbac(['ADMIN']), modelesCuveCtrl.listSitesPourModeles);
+router.get('/modeles-cuve/:id', rbac(['MANAGER','ADMIN']), modelesCuveCtrl.getModeleCuve);
+router.post('/admin/modeles-cuve', rbac(['ADMIN']), modelesCuveCtrl.createModeleCuve);
+router.post('/admin/modeles-cuve/affectation', rbac(['ADMIN']), modelesCuveCtrl.affecterModeleCuve);
+router.put('/admin/modeles-cuve/:id', rbac(['ADMIN']), modelesCuveCtrl.updateModeleCuve);
+router.put('/admin/modeles-cuve/:id/baremage', rbac(['ADMIN']), modelesCuveCtrl.replaceBaremeModele);
+router.delete('/admin/modeles-cuve/:id', rbac(['ADMIN']), modelesCuveCtrl.deleteModeleCuve);
 router.delete('/admin/types-site/:code', rbac(['ADMIN']), adminCtrl.deleteTypeSite);
 
 // EXCLUSIONS CONTRACTUELLES : ce qui n'est pas dû, et depuis quand. La lecture

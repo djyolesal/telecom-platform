@@ -111,3 +111,27 @@ export function cuveCalculable(cfg: ConfigCuve): boolean {
 }
 
 const arrondi = (l: number) => Math.round(l * 10) / 10;
+
+/** D'où vient la conversion hauteur → litres d'un site. */
+export type SourceCuve = 'BAREME_SITE' | 'MODELE' | 'DIMENSIONS_SITE';
+
+/**
+ * Conversion qui FAIT FOI pour un site, entre sa configuration propre et celle
+ * de son modèle de cuve :
+ * 1. barème PROPRE au site : le certificat de CETTE cuve, le cas particulier ;
+ * 2. modèle de cuve, s'il est calculable ;
+ * 3. dimensions mesurées sur le site.
+ *
+ * Rattacher un site à un modèle, c'est affirmer « cette cuve est une 5 000 L » :
+ * le barème du modèle passe donc devant des dimensions prises au mètre ruban.
+ * Un modèle non calculable (2 000 L simple sans dimensions) ne masque rien.
+ */
+export function resoudreConfigCuve(
+  propre: ConfigCuve,
+  modele: ConfigCuve | null | undefined,
+): { config: ConfigCuve; source: SourceCuve | null } {
+  if (baremeUtilisable(propre)) return { config: propre, source: 'BAREME_SITE' };
+  if (modele && cuveCalculable(modele)) return { config: modele, source: 'MODELE' };
+  if (cuveCalculable(propre)) return { config: propre, source: 'DIMENSIONS_SITE' };
+  return { config: propre, source: null };
+}

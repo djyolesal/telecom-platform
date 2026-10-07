@@ -203,6 +203,10 @@ model Site {
   cuveLargeurCm            Decimal?    @map("cuve_largeur_cm") @db.Decimal(6, 1)
   cuveHauteurCm            Decimal?    @map("cuve_hauteur_cm") @db.Decimal(6, 1)
   cuveDiametreCm           Decimal?    @map("cuve_diametre_cm") @db.Decimal(6, 1)
+  /// Modèle de cuve du parc (5 000 L, 3 000 L…) : sa conversion hauteur → litres
+  /// sert au site, sauf barème propre au site (cas particulier, prioritaire).
+  /// La capacité du site est alors celle du modèle.
+  modeleCuveId             String?     @map("modele_cuve_id")
   // Gardiennage et contact local (préparation d'intervention, litiges manquants)
   hasGardien               Boolean     @default(false) @map("has_gardien")
   // Poste tenu UNIQUEMENT la nuit (plage paramétrable, défaut 18h→6h GMT) :
@@ -234,6 +238,7 @@ model Site {
   incidents              Incident[]
   groupes                GroupeElectrogene[]
   baremage               BaremageCuve[]
+  modeleCuve             ModeleCuve?              @relation(fields: [modeleCuveId], references: [id], onDelete: Restrict)
   coupuresReseau         CoupureReseau[]
   exclusions             ExclusionContractuelle[]
   // Topologie de transmission : site AMONT dont dépend le lien de ce site.
@@ -256,6 +261,7 @@ model Site {
   @@index([lotSolaireId])
   @@index([gardiennagePrestataireId])
   @@index([parentTransmissionId])
+  @@index([modeleCuveId])
   @@map("sites")
 }
 
@@ -291,6 +297,45 @@ model BaremageCuve {
 
   @@unique([siteId, hauteurCm])
   @@map("baremage_cuve")
+}
+
+// Modèle de cuve du parc : la conversion hauteur → litres d'une CATÉGORIE de
+// cuves identiques (même barème de jaugeage), saisie une fois et partagée par
+// tous les sites qui en sont équipés. Un barème corrigé l'est partout.
+model ModeleCuve {
+  id             String     @id @default(uuid())
+  nom            String     @unique @db.VarChar(60)
+  /// Capacité nominale (plaque) : recopiée sur les sites du modèle.
+  capaciteLitres Decimal    @map("capacite_litres") @db.Decimal(8, 2)
+  formeCuve      FormeCuve? @map("forme_cuve")
+  // Dimensions INTERNES (cm) : repli géométrique quand le modèle n'a pas de barème.
+  longueurCm     Decimal?   @map("longueur_cm") @db.Decimal(6, 1)
+  largeurCm      Decimal?   @map("largeur_cm") @db.Decimal(6, 1)
+  hauteurCm      Decimal?   @map("hauteur_cm") @db.Decimal(6, 1)
+  diametreCm     Decimal?   @map("diametre_cm") @db.Decimal(6, 1)
+  /// Comment le reconnaître sur le terrain (plaque, forme…).
+  description    String?    @db.VarChar(300)
+  isActive       Boolean    @default(true) @map("is_active")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  baremage BaremageModeleCuve[]
+  sites    Site[]
+
+  @@map("modeles_cuve")
+}
+
+// Barème de jaugeage d'un modèle de cuve (hauteur cm → litres).
+model BaremageModeleCuve {
+  id        String  @id @default(uuid())
+  modeleId  String  @map("modele_id")
+  hauteurCm Decimal @map("hauteur_cm") @db.Decimal(6, 1)
+  litres    Decimal @db.Decimal(8, 1)
+
+  modele ModeleCuve @relation(fields: [modeleId], references: [id], onDelete: Cascade)
+
+  @@unique([modeleId, hauteurCm])
+  @@map("baremage_modele_cuve")
 }
 
 // Chaque GE a son propre compteur horaire ; la cuve à gasoil est partagée au niveau du site.

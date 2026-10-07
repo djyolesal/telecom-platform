@@ -90,3 +90,27 @@ export function volumeMaxLitres(cfg: ConfigCuve): number | null {
 export function cuveCalculable(cfg: ConfigCuve): boolean {
   return volumeMaxLitres(cfg) != null;
 }
+
+/** D'où vient la conversion hauteur → litres d'un site. */
+export type SourceCuve = 'BAREME_SITE' | 'MODELE' | 'DIMENSIONS_SITE';
+
+/**
+ * Conversion qui fait foi pour un site (miroir de l'API) : barème propre au
+ * site, sinon modèle de cuve s'il est calculable, sinon dimensions du site.
+ * Le mobile n'en a pas besoin : l'API lui sert la conversion déjà résolue.
+ */
+export function resoudreConfigCuve(
+  propre: ConfigCuve,
+  modele: ConfigCuve | null | undefined,
+): { config: ConfigCuve; source: SourceCuve | null } {
+  if (baremeUtilisable(propre)) return { config: propre, source: 'BAREME_SITE' };
+  if (modele && cuveCalculable(modele)) return { config: modele, source: 'MODELE' };
+  if (cuveCalculable(propre)) return { config: propre, source: 'DIMENSIONS_SITE' };
+  return { config: propre, source: null };
+}
+
+export const LIBELLES_SOURCE_CUVE: Record<SourceCuve, string> = {
+  BAREME_SITE: 'barème propre au site',
+  MODELE: 'modèle de cuve',
+  DIMENSIONS_SITE: 'dimensions du site',
+};

@@ -12,7 +12,7 @@ import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON, ACCES_OPTIONS } from '@/lib/constants';
 import { useTypesLiaison } from '@/lib/liaisons';
-import { litresPourHauteur, volumeMaxLitres, type ConfigCuve } from '@/lib/cuve';
+import { volumeMaxLitres, resoudreConfigCuve, LIBELLES_SOURCE_CUVE, type ConfigCuve, type PointBaremage } from '@/lib/cuve';
 
 export default function ModifierSitePage() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +25,7 @@ export default function ModifierSitePage() {
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '', typeSite: '', dateMiseEnService: '',
     accesPickup: 'false',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
-    cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '',
+    cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '', modeleCuveId: '',
     hasGardien: 'false', gardiennageNuitSeulement: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
     parentTransmissionId: '', typeLiaison: '', nodeId: '',
     marqueGE: '',
@@ -54,6 +54,22 @@ export default function ModifierSitePage() {
     queryFn: () => api.get('/types-pylone').then((r) => r.data.data as { code: string; libelle: string }[]),
   });
   const pyloneOptions = typesPylone?.map((t) => ({ value: t.code, label: t.libelle })) ?? TYPES_PYLONE;
+  // Modèles de cuve (5000 L, 3000 L…) : un barème partagé par catégorie.
+  const { data: modelesCuve } = useQuery({
+    queryKey: ['modeles-cuve'],
+    queryFn: () => api.get('/modeles-cuve').then((r) => r.data.data as {
+      id: string; nom: string; capaciteLitres: number; isActive: boolean; calculable: boolean;
+    }[]),
+  });
+  const { data: modeleChoisi } = useQuery({
+    queryKey: ['modele-cuve', form.modeleCuveId],
+    queryFn: () => api.get(`/modeles-cuve/${form.modeleCuveId}`).then((r) => r.data.data as {
+      id: string; nom: string; capaciteLitres: number; formeCuve: ConfigCuve['formeCuve'];
+      longueurCm: number | null; largeurCm: number | null; hauteurCm: number | null; diametreCm: number | null;
+      baremage: PointBaremage[];
+    }),
+    enabled: !!form.modeleCuveId,
+  });
   const { data: typesSite } = useQuery({
     queryKey: ['types-site'],
     queryFn: () => api.get('/types-site').then((r) => r.data.data as { code: string; libelle: string }[]),
@@ -88,6 +104,7 @@ export default function ModifierSitePage() {
 
   useEffect(() => {
     if (!site) return;
+    const propre = site.cuvePropre ?? site;
     setForm({
       code: site.code ?? '',
       nom: site.nom ?? '',
@@ -108,12 +125,15 @@ export default function ModifierSitePage() {
       typeSite: site.typeSite ?? '',
       dateMiseEnService: site.dateMiseEnService ? String(site.dateMiseEnService).slice(0, 10) : '',
       cuveVolumeLitres: site.cuveVolumeLitres != null ? String(site.cuveVolumeLitres) : '',
-      formeCuve: site.formeCuve ?? '',
+      // La configuration STOCKÉE sur la fiche (les champs de premier niveau de
+      // l'API sont la conversion qui fait foi, éventuellement celle du modèle).
+      formeCuve: propre.formeCuve ?? '',
       cuveDimensions: site.cuveDimensions ?? '',
-      cuveLongueurCm: site.cuveLongueurCm != null ? String(site.cuveLongueurCm) : '',
-      cuveLargeurCm: site.cuveLargeurCm != null ? String(site.cuveLargeurCm) : '',
-      cuveHauteurCm: site.cuveHauteurCm != null ? String(site.cuveHauteurCm) : '',
-      cuveDiametreCm: site.cuveDiametreCm != null ? String(site.cuveDiametreCm) : '',
+      cuveLongueurCm: propre.cuveLongueurCm != null ? String(propre.cuveLongueurCm) : '',
+      cuveLargeurCm: propre.cuveLargeurCm != null ? String(propre.cuveLargeurCm) : '',
+      cuveHauteurCm: propre.cuveHauteurCm != null ? String(propre.cuveHauteurCm) : '',
+      cuveDiametreCm: propre.cuveDiametreCm != null ? String(propre.cuveDiametreCm) : '',
+      modeleCuveId: site.modeleCuve?.id ?? '',
       hasGardien: site.hasGardien ? 'true' : 'false',
       gardiennageNuitSeulement: site.gardiennageNuitSeulement ? 'true' : 'false',
       societeGardiennage: site.societeGardiennage ?? '',
@@ -129,7 +149,7 @@ export default function ModifierSitePage() {
       .sort((a: { numero: number }, b: { numero: number }) => a.numero - b.numero)
       .map((g: { puissanceKva: number; statut: string; marque?: string | null }) => ({ puissanceKva: String(g.puissanceKva ?? 0), statut: g.statut ?? 'GE_SECOURS', marque: g.marque ?? '' }));
     setExtraGEs(extras);
-    setBareme(((site.baremage ?? []) as { hauteurCm: number; litres: number }[])
+    setBareme(((propre.baremage ?? []) as { hauteurCm: number; litres: number }[])
       .map((b) => ({ hauteurCm: String(Number(b.hauteurCm)), litres: String(Number(b.litres)) })));
   }, [site]);
 
@@ -165,8 +185,19 @@ export default function ModifierSitePage() {
     cuveDiametreCm: form.cuveDiametreCm ? Number(form.cuveDiametreCm) : null,
     baremage: pointsBareme(),
   };
-  const volumeTheorique = volumeMaxLitres(configCuve);
-  const nominal = form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null;
+  // Avec un modèle : la conversion qui fera foi (barème propre, sinon modèle,
+  // sinon dimensions) et la capacité du modèle, que le serveur imposera.
+  const modeleActif = form.modeleCuveId && modeleChoisi?.id === form.modeleCuveId ? modeleChoisi : null;
+  const resolu = resoudreConfigCuve(configCuve, modeleActif ? {
+    formeCuve: modeleActif.formeCuve, cuveLongueurCm: modeleActif.longueurCm, cuveLargeurCm: modeleActif.largeurCm,
+    cuveHauteurCm: modeleActif.hauteurCm, cuveDiametreCm: modeleActif.diametreCm, baremage: modeleActif.baremage,
+  } : null);
+  const volumeTheorique = volumeMaxLitres(resolu.config);
+  const capaciteModele = form.modeleCuveId ? modelesCuve?.find((m) => m.id === form.modeleCuveId)?.capaciteLitres ?? null : null;
+  const nominal = capaciteModele ?? (form.cuveVolumeLitres ? Number(form.cuveVolumeLitres) : null);
+  const optionsModeles = (modelesCuve ?? [])
+    .filter((m) => m.isActive || m.id === form.modeleCuveId)
+    .map((m) => ({ value: m.id, label: `${m.nom}${m.calculable ? '' : ' (non calculable)'}${m.isActive ? '' : ' - désactivé'}` }));
   const ecartPct = volumeTheorique != null && nominal
     ? Math.round(Math.abs(volumeTheorique - nominal) / nominal * 1000) / 10 : null;
 
@@ -202,6 +233,7 @@ export default function ModifierSitePage() {
         cuveLargeurCm: form.cuveLargeurCm ? Number(form.cuveLargeurCm) : null,
         cuveHauteurCm: form.cuveHauteurCm ? Number(form.cuveHauteurCm) : null,
         cuveDiametreCm: form.cuveDiametreCm ? Number(form.cuveDiametreCm) : null,
+        modeleCuveId: form.modeleCuveId || null,
         hasGardien: form.hasGardien === 'true',
         gardiennageNuitSeulement: form.gardiennageNuitSeulement === 'true',
         societeGardiennage: form.societeGardiennage || null,
@@ -311,9 +343,27 @@ export default function ModifierSitePage() {
             <Select value={form.accesPickup} onChange={(e) => set('accesPickup', e.target.value)} options={ACCES_OPTIONS} />
           </Field>
           <div className="md:col-span-2 mt-2 border-t border-gray-100 pt-3 text-sm font-semibold text-gray-700">Cuve gasoil - conversion hauteur → litres</div>
-          <Field label="Volume nominal (L)">
-            <Input type="number" step="0.01" value={form.cuveVolumeLitres} onChange={(e) => set('cuveVolumeLitres', e.target.value)} placeholder="2000" />
+          <Field label="Modèle de cuve" hint="Le barème du modèle sert à ce site et sa capacité devient celle du site. Laissez vide pour un site à deux cuves.">
+            <Select value={form.modeleCuveId} onChange={(e) => set('modeleCuveId', e.target.value)} options={optionsModeles} placeholder="Aucun (configuration propre au site)" />
           </Field>
+          <Field label="Volume nominal (L)" hint={capaciteModele != null ? 'Celui du modèle de cuve.' : undefined}>
+            <Input type="number" step="0.01" value={capaciteModele != null ? String(capaciteModele) : form.cuveVolumeLitres}
+              onChange={(e) => set('cuveVolumeLitres', e.target.value)} placeholder="2000" disabled={capaciteModele != null} />
+          </Field>
+          {form.modeleCuveId && (
+            <p className="md:col-span-2 -mt-1 text-xs text-gray-500">
+              Les champs ci-dessous sont la configuration PROPRE au site. Avec un modèle, ils ne servent que dans deux cas : un barème
+              saisi ici (certificat de cette cuve précise) passe devant celui du modèle ; des dimensions ne servent que si le modèle
+              n&apos;est pas calculable.
+            </p>
+          )}
+          {form.modeleCuveId && pointsBareme().length >= 2 && (
+            <p className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Ce site a son propre barème ({pointsBareme().length} points) : c&apos;est lui qui sert, pas celui du modèle. Si la cuve est
+              bien une « {modelesCuve?.find((m) => m.id === form.modeleCuveId)?.nom} », videz la table de barémage ci-dessous.
+              <button type="button" onClick={() => setBareme([])} className="ml-2 font-medium underline">Vider la table</button>
+            </p>
+          )}
           <Field label="Forme de la cuve">
             <Select value={form.formeCuve} onChange={(e) => set('formeCuve', e.target.value)} options={FORMES_CUVE} placeholder="Sélectionner…" />
           </Field>
@@ -357,7 +407,11 @@ export default function ModifierSitePage() {
               </div>
             )}
             {bareme.length === 0 ? (
-              <p className="text-xs text-gray-400">Aucun barème - la conversion utilisera les dimensions ci-dessus. Si la cuve a une table de jaugeage (plaque ou certificat), saisissez-la : elle est plus précise.</p>
+              <p className="text-xs text-gray-400">
+                {form.modeleCuveId
+                  ? 'Aucun barème propre au site : celui du modèle de cuve s’applique. N’en saisissez un que si CETTE cuve a son propre certificat.'
+                  : 'Aucun barème - la conversion utilisera les dimensions ci-dessus. Si la cuve a une table de jaugeage (plaque ou certificat), saisissez-la : elle est plus précise.'}
+              </p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {bareme.map((b, i) => (
@@ -376,7 +430,7 @@ export default function ModifierSitePage() {
             {pointsBareme().length === 1 && <p className="mt-1 text-xs text-red-600">Un barème utilisable compte au moins 2 points.</p>}
             {volumeTheorique != null ? (
               <p className={`mt-2 text-xs ${ecartPct != null && ecartPct > 15 ? 'text-amber-700' : 'text-green-700'}`}>
-                Conversion active : volume calculé à hauteur max = <b>{volumeTheorique.toLocaleString('fr-FR')} L</b>
+                Conversion active ({resolu.source === 'MODELE' && modeleActif ? `modèle « ${modeleActif.nom} »` : resolu.source ? LIBELLES_SOURCE_CUVE[resolu.source] : ''}) : volume calculé à hauteur max = <b>{volumeTheorique.toLocaleString('fr-FR')} L</b>
                 {ecartPct != null && <> - écart au volume nominal : <b>{ecartPct} %</b>{ecartPct > 15 ? ' (vérifiez dimensions ou barème)' : ''}</>}
               </p>
             ) : (

@@ -17,7 +17,9 @@ import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { generateEtiquettesQrPdf } from '../services/pdf.service';
 import { sitePerimetre, assertSiteInPerimetre } from '../utils/perimetre';
 import { descendantsTransmission, assertSansCycle } from '../utils/transmission';
-import { ConfigCuve, cuveCalculable, hauteurMaxCm, volumeMaxLitres } from '../utils/cuve';
+import { hauteurMaxCm, resoudreConfigCuve, volumeMaxLitres } from '../utils/cuve';
+import { validerPointsBareme } from '../utils/baremeSaisi';
+import { SELECT_MODELE_CUVE, configPropre, configsModeles, cuveEffective } from '../services/cuve.service';
 import { publicFileUrl } from '../services/storage.service';
 import { memo } from '../utils/memo';
 
@@ -56,6 +58,8 @@ const IMPORT_COLUMNS = [
   { key: 'cuveLargeurCm', header: 'cuveLargeurCm' },
   { key: 'cuveHauteurCm', header: 'cuveHauteurCm' },
   { key: 'cuveDiametreCm', header: 'cuveDiametreCm' },
+  // Par NOM (référentiel Administration → Modèles de cuve) : la capacité suit.
+  { key: 'modeleCuve', header: 'modeleCuve' },
   { key: 'puissanceGE2', header: 'puissanceGE2' },
   { key: 'statutGE2', header: 'statutGE2' },
   { key: 'hasGardien', header: 'gardien' },
@@ -99,6 +103,7 @@ const HEADER_ALIASES: Record<string, string> = {
   gardien: 'hasGardien', hasgardien: 'hasGardien', agentsecurite: 'hasGardien', agentdesecurite: 'hasGardien',
   gardiennuit: 'gardiennageNuitSeulement', postedenuit: 'gardiennageNuitSeulement', nuitseulement: 'gardiennageNuitSeulement',
   nodeid: 'nodeId', enodeb: 'nodeId', enodebid: 'nodeId',
+  modelecuve: 'modeleCuve', typecuve: 'modeleCuve',
   societegardiennage: 'societeGardiennage', gardiennage: 'societeGardiennage', societedegardiennage: 'societeGardiennage',
   telephonesite: 'telephoneSite', telephone: 'telephoneSite', tel: 'telephoneSite', contact: 'telephoneSite',
   datemiseenservice: 'dateMiseEnService', miseenservice: 'dateMiseEnService', datemiseservice: 'dateMiseEnService',
@@ -242,6 +247,7 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         gardiennagePrestataire: { select: { id: true, nom: true, contactTechnique: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
         baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } },
+        modeleCuve: { select: SELECT_MODELE_CUVE },
         parentTransmission: { select: { id: true, nom: true } },
         enfantsTransmission: { where: { isActive: true }, select: { id: true, nom: true }, orderBy: { nom: 'asc' } },
       },
@@ -250,14 +256,10 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
 
     // État de la conversion hauteur → litres : calculable ?, volume théorique à
     // hauteur max, écart au volume nominal déclaré (contrôle de cohérence).
-    const configCuve: ConfigCuve = {
-      formeCuve: site.formeCuve,
-      cuveLongueurCm: site.cuveLongueurCm != null ? Number(site.cuveLongueurCm) : null,
-      cuveLargeurCm: site.cuveLargeurCm != null ? Number(site.cuveLargeurCm) : null,
-      cuveHauteurCm: site.cuveHauteurCm != null ? Number(site.cuveHauteurCm) : null,
-      cuveDiametreCm: site.cuveDiametreCm != null ? Number(site.cuveDiametreCm) : null,
-      baremage: site.baremage.map((b) => ({ hauteurCm: Number(b.hauteurCm), litres: Number(b.litres) })),
-    };
+    // La conversion est celle qui FAIT FOI : barème propre, sinon modèle de
+    // cuve, sinon dimensions du site.
+    const effective = cuveEffective(site);
+    const configCuve = effective.config;
     const volumeTheorique = volumeMaxLitres(configCuve);
     const nominal = site.cuveVolumeLitres != null ? Number(site.cuveVolumeLitres) : null;
     // Photos des mesures terrain (plaque, cuve, barème) — les plus récentes.
@@ -268,6 +270,8 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
       select: { id: true, url: true, minioKey: true, createdAt: true },
     });
     const cuve = {
+      source: effective.source,
+      modele: effective.modele,
       photos: photosCuve.map((p) => ({ id: p.id, createdAt: p.createdAt, url: p.minioKey ? publicFileUrl(p.minioKey) : p.url })),
       calculable: volumeTheorique != null,
       hauteurMaxCm: hauteurMaxCm(configCuve),
@@ -298,9 +302,25 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
           ? Math.max(0, idxMap.get(g.id)! - Number(g.indexHeuresDerniereVidange))
           : null,
     }));
+    // Champs cuve de premier niveau = la conversion QUI FAIT FOI : c'est ce que
+    // lit le mobile pour convertir les hauteurs d'un dépotage. Rattacher un
+    // site à un modèle ne demande donc pas de nouvelle version de l'app. La
+    // configuration stockée sur la fiche (à éditer) est dans `cuvePropre`.
+    const { modeleCuve, ...reste } = site;
     res.json({
       success: true,
-      data: { ...site, groupes, cuve, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250) },
+      data: {
+        ...reste,
+        formeCuve: configCuve.formeCuve ?? null,
+        cuveLongueurCm: configCuve.cuveLongueurCm ?? null,
+        cuveLargeurCm: configCuve.cuveLargeurCm ?? null,
+        cuveHauteurCm: configCuve.cuveHauteurCm ?? null,
+        cuveDiametreCm: configCuve.cuveDiametreCm ?? null,
+        baremage: configCuve.baremage ?? [],
+        cuvePropre: configPropre(site),
+        modeleCuve: modeleCuve ? { id: modeleCuve.id, nom: modeleCuve.nom, capaciteLitres: Number(modeleCuve.capaciteLitres) } : null,
+        groupes, cuve, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
+      },
     });
   } catch (err) { next(err); }
 }
@@ -316,8 +336,17 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
 export async function updateCuveSite(req: Request, res: Response, next: NextFunction) {
   try {
     await assertSiteInPerimetre(req.user!.id, req.params.id);
-    const site = await prisma.site.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    const site = await prisma.site.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, modeleCuve: { select: { nom: true } } },
+    });
     if (!site) throw new AppError('Site introuvable', 404);
+    // Cuve rattachée à un modèle : sa conversion et sa capacité viennent du
+    // modèle. Une mesure au mètre ruban n'y changerait rien - et la capacité
+    // saisie écraserait celle du modèle.
+    if (site.modeleCuve) {
+      throw new AppError(`La cuve de ce site est une « ${site.modeleCuve.nom} » : elle est déjà calculable, aucune mesure n'est nécessaire.`, 409);
+    }
 
     const b = req.body as Record<string, unknown>;
     const numOuNull = (v: unknown) => {
@@ -370,27 +399,7 @@ export async function replaceBaremage(req: Request, res: Response, next: NextFun
     const site = await prisma.site.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!site) throw new AppError('Site introuvable', 404);
 
-    const brut = (req.body as { points?: unknown }).points;
-    if (!Array.isArray(brut) || brut.length > 1000) throw new AppError('Barème invalide : 1000 points maximum.', 400);
-    const points = brut.map((p, i) => {
-      const hauteurCm = Number((p as { hauteurCm?: unknown }).hauteurCm);
-      const litres = Number((p as { litres?: unknown }).litres);
-      if (!Number.isFinite(hauteurCm) || hauteurCm < 0 || !Number.isFinite(litres) || litres < 0) {
-        throw new AppError(`Point n°${i + 1} invalide : la hauteur (cm) et le volume (litres) doivent être des nombres positifs.`, 400);
-      }
-      return { hauteurCm: Math.round(hauteurCm * 10) / 10, litres: Math.round(litres * 10) / 10 };
-    }).sort((a, b) => a.hauteurCm - b.hauteurCm);
-    // Un barème est MONOTONE : hauteurs strictement croissantes (doublon =
-    // erreur de saisie), litres jamais décroissants.
-    for (let i = 1; i < points.length; i++) {
-      if (points[i].hauteurCm === points[i - 1].hauteurCm) {
-        throw new AppError(`Deux points à la même hauteur (${points[i].hauteurCm} cm)`, 400);
-      }
-      if (points[i].litres < points[i - 1].litres) {
-        throw new AppError(`Litres décroissants à ${points[i].hauteurCm} cm : un barème est monotone`, 400);
-      }
-    }
-    if (points.length === 1) throw new AppError('Un barème utilisable compte au moins 2 points (ou 0 pour l’effacer)', 400);
+    const points = validerPointsBareme((req.body as { points?: unknown }).points);
 
     await prisma.$transaction([
       prisma.baremageCuve.deleteMany({ where: { siteId: site.id } }),
@@ -416,21 +425,17 @@ export async function getCouvertureCuves(req: Request, res: Response, next: Next
       select: {
         id: true, nom: true, region: true, formeCuve: true, cuveVolumeLitres: true,
         cuveLongueurCm: true, cuveLargeurCm: true, cuveHauteurCm: true, cuveDiametreCm: true,
-        _count: { select: { baremage: true } },
+        modeleCuveId: true,
         baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } },
       },
     });
+    // Barèmes des modèles lus une fois, pas une fois par site.
+    const modeles = await configsModeles();
     const restants: { id: string; nom: string; region: string }[] = [];
     let configures = 0;
     for (const s of sites) {
-      const ok = cuveCalculable({
-        formeCuve: s.formeCuve,
-        cuveLongueurCm: s.cuveLongueurCm != null ? Number(s.cuveLongueurCm) : null,
-        cuveLargeurCm: s.cuveLargeurCm != null ? Number(s.cuveLargeurCm) : null,
-        cuveHauteurCm: s.cuveHauteurCm != null ? Number(s.cuveHauteurCm) : null,
-        cuveDiametreCm: s.cuveDiametreCm != null ? Number(s.cuveDiametreCm) : null,
-        baremage: s.baremage.map((b) => ({ hauteurCm: Number(b.hauteurCm), litres: Number(b.litres) })),
-      });
+      const modele = s.modeleCuveId ? modeles.get(s.modeleCuveId) : null;
+      const ok = resoudreConfigCuve(configPropre(s), modele).source != null;
       if (ok) configures++;
       else restants.push({ id: s.id, nom: s.nom, region: s.region });
     }
@@ -531,6 +536,25 @@ function normaliserChampsFormulaire(data: Record<string, unknown>): void {
   if ('typeSite' in data) data.typeSite = texteOuNull(data.typeSite);
 }
 
+/**
+ * Modèle de cuve d'un site, tel qu'il sera APRÈS l'enregistrement : vérifie
+ * qu'on n'attribue pas un modèle inconnu ou désactivé, et aligne la capacité
+ * du site sur celle du modèle - c'est elle que lisent le plan de livraison et
+ * le contrôle « stock supérieur à la capacité ». Une capacité envoyée par le
+ * formulaire ne l'emporte jamais sur celle du modèle.
+ */
+async function appliquerModeleCuve(data: Record<string, unknown>, actuel: string | null): Promise<void> {
+  if ('modeleCuveId' in data) data.modeleCuveId = texteOuNull(data.modeleCuveId);
+  const apres = ('modeleCuveId' in data ? data.modeleCuveId : actuel) as string | null;
+  if (!apres) return;
+  const m = await prisma.modeleCuve.findUnique({ where: { id: apres }, select: { nom: true, isActive: true, capaciteLitres: true } });
+  if (!m) throw new AppError('Modèle de cuve introuvable.', 422);
+  if (!m.isActive && apres !== actuel) {
+    throw new AppError(`Le modèle de cuve « ${m.nom} » est désactivé : il ne peut plus être attribué.`, 422);
+  }
+  data.cuveVolumeLitres = m.capaciteLitres;
+}
+
 export async function createSite(req: Request, res: Response, next: NextFunction) {
   try {
     // marqueGE ne vit pas sur le site : extraite du corps, posée sur le GE n°1.
@@ -542,9 +566,10 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite', 'dateMiseEnService',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId', 'typeLiaison', 'nodeId',
+      'parentTransmissionId', 'typeLiaison', 'nodeId', 'modeleCuveId',
     ]);
     normaliserChampsFormulaire(data);
+    await appliquerModeleCuve(data, null);
     if (!data.nom || !data.code || !data.region || !data.powerConfig || !data.statutGE) {
       throw new AppError('Nom, code, région, configuration énergie et statut GE sont requis.', 400);
     }
@@ -580,10 +605,11 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite', 'dateMiseEnService',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId', 'typeLiaison', 'nodeId',
+      'parentTransmissionId', 'typeLiaison', 'nodeId', 'modeleCuveId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
     normaliserChampsFormulaire(data);
+    await appliquerModeleCuve(data, site.modeleCuveId);
     // Éligibilité solaire (voir createSite) : on juge sur l'état APRÈS mise à
     // jour — le lot solaire et la config peuvent changer dans la même requête.
     // Vaut aussi quand on retire le photovoltaïque d'un site déjà solaire :
@@ -729,7 +755,7 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
     // Tous les sites existants en UNE requête (clé : code) — l'import faisait
     // 5 à 6 allers-retours SQL par ligne, soit ~90 s et un état à moitié
     // importé en cas d'échec à 5 000 sites.
-    const tousSites = await prisma.site.findMany({ select: { id: true, code: true } });
+    const tousSites = await prisma.site.findMany({ select: { id: true, code: true, modeleCuveId: true } });
     const codesExistants = new Map(tousSites.map((x) => [x.code, x]));
 
     const POWER = Object.values(PowerConfig) as string[];
@@ -743,6 +769,10 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
       pyloneByNorm.set(norm(t.libelle), t.code);
     }
     const formeByNorm = new Map((Object.values(FormeCuve) as string[]).map((v) => [norm(v), v]));
+    // Modèles de cuve, reconnus par leur nom (« Cuve 5000 L »).
+    const modelesCuve = await prisma.modeleCuve.findMany({ select: { id: true, nom: true, isActive: true, capaciteLitres: true } });
+    const modeleByNorm = new Map(modelesCuve.map((m) => [norm(m.nom), m]));
+    const modeleById = new Map(modelesCuve.map((m) => [m.id, m]));
     const TRUE_SET = new Set(['1', 'oui', 'true', 'vrai', 'x', 'yes', 'y']);
     const toBool = (s: string) => TRUE_SET.has(norm(s));
     /** « 2022-10-03 » ou « 3-oct.-22 » → Date ; tout le reste → null. */
@@ -825,6 +855,19 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
         }
         const cuveVol = numOrNull(cellText(row, 'cuveVolumeLitres'));
         const cuveDim = cellText(row, 'cuveDimensions');
+        // Modèle de cuve : cellule vide = rattachement inchangé (on ne détache
+        // pas un site par un oubli de colonne). Un site rattaché garde la
+        // capacité de son modèle, quelle que soit celle du fichier.
+        const existant = codesExistants.get(code) ?? null;
+        let modeleCuveId: string | undefined;
+        const mc = cellText(row, 'modeleCuve');
+        if (mc) {
+          const m = modeleByNorm.get(norm(mc));
+          if (!m) throw new Error(`modèle de cuve inconnu « ${mc} » (gérez la liste dans Administration → Modèles de cuve)`);
+          if (!m.isActive && m.id !== existant?.modeleCuveId) throw new Error(`modèle de cuve « ${m.nom} » désactivé`);
+          modeleCuveId = m.id;
+        }
+        const modeleApres = modeleById.get(modeleCuveId ?? existant?.modeleCuveId ?? '');
 
         const data = {
           nom,
@@ -839,8 +882,9 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           lotId,
           typePylone,
           formeCuve,
-          cuveVolumeLitres: cuveVol,
+          cuveVolumeLitres: modeleApres ? modeleApres.capaciteLitres : cuveVol,
           cuveDimensions: cuveDim || null,
+          ...(modeleCuveId ? { modeleCuveId } : {}),
           // Booléens : seulement si la colonne existe (sinon on préserve l'existant).
           ...(colByField.hasClimatiseur != null ? { hasClimatiseur: toBool(cellText(row, 'hasClimatiseur')) } : {}),
           ...(colByField.hasExtincteurs != null ? { hasExtincteurs: toBool(cellText(row, 'hasExtincteurs')) } : {}),
@@ -877,7 +921,7 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           siteId = cre.id;
           // Ajouté à l'index : un même code répété plus bas dans le fichier doit
           // être traité comme une mise à jour, pas comme une seconde création.
-          codesExistants.set(code, { id: cre.id, code });
+          codesExistants.set(code, { id: cre.id, code, modeleCuveId: cre.modeleCuveId });
           results.created++;
         }
         // Synchronise le GE n°1 depuis statut/puissance (table dédiée).
@@ -1217,6 +1261,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
       orderBy: { code: 'asc' },
       include: {
         lot: { select: { code: true } },
+        modeleCuve: { select: { nom: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, puissanceKva: true, statut: true, marque: true } },
       },
     });
@@ -1265,6 +1310,11 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
           cuveVolumeLitres: s.cuveVolumeLitres != null ? Number(s.cuveVolumeLitres) : '',
           formeCuve: s.formeCuve ?? '',
           cuveDimensions: s.cuveDimensions ?? '',
+          cuveLongueurCm: s.cuveLongueurCm != null ? Number(s.cuveLongueurCm) : '',
+          cuveLargeurCm: s.cuveLargeurCm != null ? Number(s.cuveLargeurCm) : '',
+          cuveHauteurCm: s.cuveHauteurCm != null ? Number(s.cuveHauteurCm) : '',
+          cuveDiametreCm: s.cuveDiametreCm != null ? Number(s.cuveDiametreCm) : '',
+          modeleCuve: s.modeleCuve?.nom ?? '',
           puissanceGE2: ge2 ? Number(ge2.puissanceKva) : '',
           statutGE2: ge2?.statut ?? '',
           hasGardien: oui(s.hasGardien),
