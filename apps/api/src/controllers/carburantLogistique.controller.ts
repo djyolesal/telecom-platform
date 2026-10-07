@@ -12,6 +12,7 @@ import { paginate } from '../utils/paginator';
 import { auditLog } from '../services/audit.service';
 import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular, colonnesSelonRole } from '../utils/exporter';
+import { suiviCommandes, lirePeriode } from '../services/suiviCommandes.service';
 import { stocksMensuels } from '../services/stocksMensuels.service';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
@@ -1743,6 +1744,140 @@ export async function exportBonsCommande(req: Request, res: Response, next: Next
         statut: b.statut === 'OUVERT' ? 'Ouvert' : b.statut === 'CLOTURE' ? 'Clôturé' : 'Annulé',
       })),
     }]);
+  } catch (err) { next(err); }
+}
+
+/**
+ * SUIVI DÉTAILLÉ des commandes sur une période en mois : synthèse par BC, bons
+ * de livraison, livraisons par site, dépotages - la chaîne entière, reliée.
+ * Voir services/suiviCommandes.service pour les règles (identiques au
+ * rapprochement trimestriel, dont il retrouve les totaux sur un trimestre).
+ */
+export async function exportSuiviCommandes(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { du, au, bon_commande_id } = req.query as Record<string, string | undefined>;
+    const periode = lirePeriode(du, au);
+    const s = await suiviCommandes(periode, bon_commande_id || undefined);
+    const libellePeriode = (m: { annee: number; mois: number }) => `${MOIS[m.mois].toLowerCase()} ${m.annee}`;
+    const fmt = (v: number) => v.toLocaleString('fr-FR');
+    // Le PDF est une page A4 paysage : vingt colonnes y deviennent illisibles. Il
+    // garde l'essentiel de chaque feuille ; le classeur Excel garde tout.
+    const pdf = req.params.format === 'pdf';
+    const garder = <C extends { key: string }>(cols: C[], pourPdf: string[]) => (pdf ? cols.filter((c) => pourPdf.includes(c.key)) : cols);
+
+    await auditLog(req.user!.id, 'EXPORT', 'bons_commande', bon_commande_id || undefined,
+      { suiviDetaille: true, du, au, bc: s.totaux.nbBc, bl: s.totaux.nbBl, depotages: s.depotages.length }, req);
+
+    const total = {
+      numero: 'TOTAL', trimestre: '', statut: '', couverture: '',
+      ...Object.fromEntries((['commande', 'charge', 'planifie', 'livrePlan', 'livreHorsPlan', 'retourDepot', 'perte', 'report', 'avoirs', 'ecartNonExplique', 'nbBl', 'nbBlNonClos'] as const)
+        .map((k) => [k, s.syntheses.reduce((t, x) => t + x[k], 0)])),
+    };
+
+    await sendTabular(res, req.params.format, `suivi-commandes-${du}-${au}`, 'Suivi des commandes carburant', [
+      {
+        name: 'Synthèse par BC',
+        columns: [
+          { header: 'N° BC', key: 'numero', width: 18 },
+          { header: 'Trimestre', key: 'trimestre', width: 11 },
+          { header: 'Statut', key: 'statut', width: 10 },
+          { header: 'Couverture', key: 'couverture', width: 20 },
+          { header: 'Commandé (L)', key: 'commande', width: 13 },
+          { header: 'Chargé (L)', key: 'charge', width: 12 },
+          { header: 'Planifié (L)', key: 'planifie', width: 12 },
+          { header: 'Livré au plan (L)', key: 'livrePlan', width: 15 },
+          { header: 'Livré hors plan (L)', key: 'livreHorsPlan', width: 16 },
+          { header: 'Retour dépôt (L)', key: 'retourDepot', width: 14 },
+          { header: 'Perte (L)', key: 'perte', width: 10 },
+          { header: 'Report (L)', key: 'report', width: 10 },
+          { header: 'Avoir déduit (L)', key: 'avoirs', width: 14 },
+          { header: 'Écart non expliqué (L)', key: 'ecartNonExplique', width: 19 },
+          { header: 'BL', key: 'nbBl', width: 6 },
+          { header: 'BL non clôturés', key: 'nbBlNonClos', width: 14 },
+        ].filter((c) => !pdf || !['planifie', 'report', 'trimestre'].includes(c.key)),
+        rows: [...s.syntheses, ...(s.syntheses.length > 1 ? [total] : [])] as unknown as Record<string, unknown>[],
+      },
+      {
+        name: 'Bons de livraison',
+        columns: garder([
+          { header: 'N° BL', key: 'numeroBL', width: 16 },
+          { header: 'N° BC', key: 'bc', width: 16 },
+          { header: 'Mois logistique', key: 'moisLogistique', width: 15 },
+          { header: 'Chargé le', key: 'dateChargement', width: 16 },
+          { header: 'Traité le', key: 'dateTraitement', width: 16 },
+          { header: 'Transporteur', key: 'transporteur', width: 18 },
+          { header: 'Camion', key: 'camion', width: 12 },
+          { header: 'Chauffeur', key: 'chauffeur', width: 18 },
+          { header: 'Chargé (L)', key: 'charge', width: 11 },
+          { header: 'Report reçu (L)', key: 'reportRecu', width: 13 },
+          { header: 'Planifié (L)', key: 'planifie', width: 11 },
+          { header: 'Livré (L)', key: 'livre', width: 10 },
+          { header: 'Reste (L)', key: 'reste', width: 10 },
+          { header: 'Sites', key: 'nbSites', width: 7 },
+          { header: 'Sites livrés', key: 'sitesLivres', width: 11 },
+          { header: 'Statut', key: 'statut', width: 10 },
+          { header: 'Clôturé le', key: 'dateCloture', width: 16 },
+          { header: 'Retour dépôt (L)', key: 'retourDepot', width: 14 },
+          { header: 'Perte (L)', key: 'perte', width: 9 },
+          { header: 'Report (L)', key: 'report', width: 10 },
+          { header: 'Écart non expliqué (L)', key: 'ecartNonExplique', width: 18 },
+        ], ['numeroBL', 'moisLogistique', 'dateChargement', 'camion', 'chauffeur', 'charge', 'livre', 'reste', 'nbSites', 'sitesLivres', 'statut', 'dateCloture', 'ecartNonExplique']),
+        rows: s.bls.map((b) => ({ ...b, dateTraitement: b.dateTraitement ?? '', dateCloture: b.dateCloture ?? 'Non clôturé', ecartNonExplique: b.ecartNonExplique ?? '' })),
+      },
+      {
+        name: 'Livraisons par site',
+        columns: garder([
+          { header: 'N° BL', key: 'numeroBL', width: 16 },
+          { header: 'N° BC', key: 'bc', width: 16 },
+          { header: 'Chargé le', key: 'dateChargement', width: 16 },
+          { header: 'Site', key: 'site', width: 24 },
+          { header: 'Code', key: 'code', width: 12 },   // retiré hors ADMIN par sendTabular
+          { header: 'Région', key: 'region', width: 14 },
+          { header: 'Pickup', key: 'pickup', width: 8 },
+          { header: 'Prévu (L)', key: 'prevu', width: 10 },
+          { header: 'Livré (L)', key: 'livre', width: 10 },
+          { header: 'Écart (L)', key: 'ecart', width: 10 },
+          { header: 'Statut', key: 'statut', width: 9 },
+          { header: 'Dépotages', key: 'nbDepotages', width: 10 },
+          { header: 'Premier dépotage', key: 'premierDepotage', width: 16 },
+          { header: 'Dernier dépotage', key: 'dernierDepotage', width: 16 },
+        ], ['numeroBL', 'dateChargement', 'site', 'code', 'region', 'prevu', 'livre', 'ecart', 'statut', 'nbDepotages', 'dernierDepotage']),
+        rows: s.lignes.map((l) => ({ ...l, premierDepotage: l.premierDepotage ?? '', dernierDepotage: l.dernierDepotage ?? '' })),
+      },
+      {
+        name: 'Dépotages',
+        columns: garder([
+          { header: 'Date', key: 'date', width: 16 },
+          { header: 'Réf.', key: 'reference', width: 15 },
+          { header: 'Site', key: 'site', width: 24 },
+          { header: 'Code', key: 'code', width: 12 },   // retiré hors ADMIN par sendTabular
+          { header: 'Région', key: 'region', width: 14 },
+          { header: 'Rattachement', key: 'rattachement', width: 20 },
+          { header: 'N° BL', key: 'numeroBL', width: 16 },
+          { header: 'N° BC', key: 'bc', width: 16 },
+          { header: 'Volume (L)', key: 'volume', width: 11 },
+          { header: 'Annoncé BL (L)', key: 'annonce', width: 13 },
+          { header: 'Écart jauge (L)', key: 'ecartAnnonce', width: 13 },
+          { header: 'Stock avant (L)', key: 'stockAvant', width: 13 },
+          { header: 'Stock après (L)', key: 'stockApres', width: 13 },
+          { header: 'Chauffeur', key: 'chauffeur', width: 18 },
+          { header: 'Technicien', key: 'technicien', width: 18 },
+          { header: 'Délai depuis chargement (j)', key: 'delaiJours', width: 15 },
+        ], ['date', 'reference', 'site', 'code', 'region', 'rattachement', 'numeroBL', 'volume', 'annonce', 'ecartAnnonce', 'delaiJours']),
+        rows: s.depotages.map((d) => ({
+          ...d, annonce: d.annonce ?? '', ecartAnnonce: d.ecartAnnonce ?? '',
+          stockAvant: d.stockAvant ?? '', stockApres: d.stockApres ?? '', delaiJours: d.delaiJours ?? '',
+        })),
+      },
+    ],
+    // « de … à … » et non une flèche : la police standard du PDF n'a pas « → ».
+    `De ${libellePeriode(periode.debut)} à ${libellePeriode(periode.fin)} · ${s.totaux.nbBc} BC, ${s.totaux.nbBl} BL · `
+    + `chargé ${fmt(s.totaux.charge)} L · livré ${fmt(s.totaux.livrePlan + s.totaux.livreHorsPlan)} L (${fmt(s.totaux.livreHorsPlan)} hors plan) · `
+    + `écart non expliqué ${fmt(s.totaux.ecartNonExplique)} L`
+    + (s.totaux.horsPlanNonRattache ? ` · ${fmt(s.totaux.horsPlanNonRattache)} L hors plan sans BC` : '')
+    // La règle du périmètre se lit dans le classeur (feuille « À propos ») ; le
+    // bandeau du PDF n'a pas la place.
+    + (pdf ? '' : ' · brouillons et chargements annulés exclus'));
   } catch (err) { next(err); }
 }
 

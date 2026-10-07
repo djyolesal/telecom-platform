@@ -9,6 +9,7 @@ import { Plus, X, Download, GitCompare, AlertTriangle, Sparkles } from 'lucide-r
 import { api } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
+import { SuiviDetaille } from './SuiviDetaille';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable, Column } from '@/components/shared/DataTable';
 import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
@@ -207,11 +208,15 @@ export default function BonsCommandePage() {
           : 'Commandes en cours - ouvrez-en une pour y déclarer un chargement'}
         backHref={peutGerer ? '/carburant/stock' : '/dashboard'}
         actions={peutGerer ? (
-          <div className="flex gap-2">
+          // Sept actions : l'en-tête ne rétrécit pas son bloc d'actions, qui
+          // débordait donc à gauche sur un écran moyen. Largeur bornée : elles
+          // passent à la ligne, sauf sur un grand écran où tout tient.
+          <div className="flex max-w-xl flex-wrap justify-end gap-2 2xl:max-w-none">
             <ButtonLink href="/carburant/reapprovisionnement" variant="secondary" icon={Sparkles}>Réappro prédictif</ButtonLink>
             <ButtonLink href="/carburant/manquants" variant="secondary" icon={AlertTriangle}>Manquants</ButtonLink>
             <ButtonLink href="/carburant/correlation" variant="secondary" icon={GitCompare}>Corrélation conso</ButtonLink>
             <ExportButtons base="/bons-commande/export" name="bons-commande" />
+            <SuiviDetaille />
             <Button icon={Plus} onClick={() => setShowModal(true)}>Nouveau bon de commande</Button>
           </div>
         ) : undefined}

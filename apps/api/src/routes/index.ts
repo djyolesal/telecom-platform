@@ -390,6 +390,8 @@ router.delete('/depotages/:id', rbac(['ADMIN']), depotagesCtrl.deleteDepotage);
 // ── Logistique carburant : bons de commande ───────────────────
 router.get('/bons-commande', carburantCtrl.getBonsCommande);
 router.get('/bons-commande/export/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN']), carburantCtrl.exportBonsCommande);
+// Suivi détaillé sur une période (BC → BL → sites → dépotages), multi-feuilles.
+router.get('/bons-commande/suivi/:format(xlsx|pdf)', rbac(['MANAGER', 'ADMIN']), heavyLimit, carburantCtrl.exportSuiviCommandes);
 router.post('/bons-commande/analyser-pdf', rbac(['MANAGER', 'ADMIN']), heavyLimit, uploadMiddleware.single('file'), verifierSignature, carburantCtrl.analyserBonCommandePdf);
 router.post('/bons-commande', rbac(['MANAGER', 'ADMIN']), carburantCtrl.createBonCommande);
 router.get('/bons-commande/:id', carburantCtrl.getBonCommandeById);
