@@ -21,13 +21,18 @@ export function PhotoGallery({ photos, title = 'Photos', grandesVignettes = fals
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  // Résolution RÉELLE de la photo affichée : une photo de 200 px agrandie à
+  // l'écran reste floue, et il faut que ça se voie (c'est le téléphone, pas la
+  // visionneuse).
+  const [pixels, setPixels] = useState<{ l: number; h: number } | null>(null);
 
   const reset = useCallback(() => { setScale(1); setRot(0); setOffset({ x: 0, y: 0 }); }, []);
   const go = useCallback((d: number) => {
     setIndex((i) => (i === null ? i : (i + d + photos.length) % photos.length));
     reset();
+    setPixels(null);
   }, [photos.length, reset]);
-  const close = useCallback(() => { setIndex(null); reset(); }, [reset]);
+  const close = useCallback(() => { setIndex(null); reset(); setPixels(null); }, [reset]);
 
   useEffect(() => {
     if (index === null) return;
@@ -95,7 +100,7 @@ export function PhotoGallery({ photos, title = 'Photos', grandesVignettes = fals
       <h3 className="font-semibold text-gray-700 text-sm mb-2">{title} ({photos.length})</h3>
       <div className={grandesVignettes ? 'grid grid-cols-3 gap-3 sm:grid-cols-4' : 'flex flex-wrap gap-2'}>
         {photos.map((p, i) => (
-          <button key={p.id} type="button" onClick={() => { setIndex(i); reset(); }} className={`group relative ${grandesVignettes ? 'block aspect-square' : ''}`}>
+          <button key={p.id} type="button" onClick={() => { setIndex(i); reset(); setPixels(null); }} className={`group relative ${grandesVignettes ? 'block aspect-square' : ''}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={p.url} alt={`Photo ${i + 1}`} className={`${grandesVignettes ? 'h-full w-full rounded-lg' : 'h-20 w-20 rounded'} object-cover border border-gray-100 transition group-hover:opacity-90`} />
             <span className="absolute inset-0 flex items-center justify-center rounded bg-black/0 transition group-hover:bg-black/20">
@@ -110,7 +115,15 @@ export function PhotoGallery({ photos, title = 'Photos', grandesVignettes = fals
         <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={close}>
           {/* Barre d'outils */}
           <div className="flex items-center justify-between px-4 py-3" onClick={(e) => e.stopPropagation()}>
-            <span className="text-sm text-white/70 tabular-nums">{(index ?? 0) + 1} / {photos.length}</span>
+            <span className="text-sm text-white/70 tabular-nums">
+              {(index ?? 0) + 1} / {photos.length}
+              {pixels && (
+                <span className={Math.max(pixels.l, pixels.h) < 800 ? 'ml-3 rounded bg-amber-500/90 px-2 py-0.5 text-xs font-medium text-white' : 'ml-3 text-xs text-white/50'}
+                  title={Math.max(pixels.l, pixels.h) < 800 ? 'Photo en basse résolution : le téléphone n’a transmis qu’une miniature.' : undefined}>
+                  {pixels.l} × {pixels.h} px{Math.max(pixels.l, pixels.h) < 800 ? ' - basse résolution' : ''}
+                </span>
+              )}
+            </span>
             <div className="flex items-center gap-1.5">
               <CtrlBtn onClick={() => setScale((s) => Math.max(1, s - 0.5))} title="Dézoomer (−)"><ZoomOut size={18} /></CtrlBtn>
               <span className="w-12 text-center text-xs text-white/70 tabular-nums">{Math.round(scale * 100)}%</span>
@@ -151,7 +164,10 @@ export function PhotoGallery({ photos, title = 'Photos', grandesVignettes = fals
                 cursor: scale > 1 ? (dragging ? 'grabbing' : 'grab') : 'zoom-in',
                 transition: dragging ? 'none' : 'transform 0.12s ease-out',
               }}
-              className="max-h-[82vh] max-w-[92vw] select-none object-contain"
+              onLoad={(e) => setPixels({ l: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              // Taille FIXE (et non max-*) : une petite photo remplit l'écran au
+              // lieu de rester affichée à ses 200 px d'origine.
+              className="h-[82vh] w-[92vw] select-none object-contain"
             />
 
             {photos.length > 1 && (
