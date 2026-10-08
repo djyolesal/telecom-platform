@@ -9,7 +9,12 @@ import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Download, Maxi
  * boutons, double-clic), déplacement (glisser quand zoomé), rotation et
  * téléchargement de la photo courante.
  */
-export function PhotoGallery({ photos, title = 'Photos' }: { photos: { id: string; url: string }[]; title?: string }) {
+export function PhotoGallery({ photos, title = 'Photos', grandesVignettes = false }: {
+  photos: { id: string; url: string }[];
+  title?: string;
+  /** Vignettes en grille carrée (≈ 150 px) plutôt qu'en pastilles de 80 px. */
+  grandesVignettes?: boolean;
+}) {
   const [index, setIndex] = useState<number | null>(null);
   const [scale, setScale] = useState(1);
   const [rot, setRot] = useState(0);
@@ -88,11 +93,11 @@ export function PhotoGallery({ photos, title = 'Photos' }: { photos: { id: strin
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-5">
       <h3 className="font-semibold text-gray-700 text-sm mb-2">{title} ({photos.length})</h3>
-      <div className="flex flex-wrap gap-2">
+      <div className={grandesVignettes ? 'grid grid-cols-3 gap-3 sm:grid-cols-4' : 'flex flex-wrap gap-2'}>
         {photos.map((p, i) => (
-          <button key={p.id} type="button" onClick={() => { setIndex(i); reset(); }} className="group relative">
+          <button key={p.id} type="button" onClick={() => { setIndex(i); reset(); }} className={`group relative ${grandesVignettes ? 'block aspect-square' : ''}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.url} alt={`Photo ${i + 1}`} className="h-20 w-20 rounded object-cover border border-gray-100 transition group-hover:opacity-90" />
+            <img src={p.url} alt={`Photo ${i + 1}`} className={`${grandesVignettes ? 'h-full w-full rounded-lg' : 'h-20 w-20 rounded'} object-cover border border-gray-100 transition group-hover:opacity-90`} />
             <span className="absolute inset-0 flex items-center justify-center rounded bg-black/0 transition group-hover:bg-black/20">
               <ZoomIn size={18} className="text-white opacity-0 transition group-hover:opacity-100" />
             </span>
