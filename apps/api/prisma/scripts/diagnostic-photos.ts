@@ -19,9 +19,9 @@
  *   docker compose exec api npx -y tsx prisma/scripts/diagnostic-photos.ts --jours 60
  *
  * Options : --jours N (défaut 60), --max N photos lues par type (défaut 400),
- * --entite <id> : seulement les photos d'UNE intervention (l'identifiant est
- * dans l'adresse de sa fiche, ex. /carburant/<id>), toutes dates confondues,
- * avec la taille de chacune.
+ * --entite <réf> : seulement les photos d'UNE intervention, désignée par sa
+ * référence (DEP-2026-00135, MNT-…, INC-…) ou son identifiant, toutes dates
+ * confondues, avec la taille de chacune.
  */
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -86,13 +86,30 @@ function texteOption(nom: string): string | null {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
 }
 
+/**
+ * Identifiant interne d'une intervention, à partir de son identifiant OU de sa
+ * référence lisible (DEP-2026-00135, MNT-…, INC-…) : c'est la référence que
+ * l'on a sous les yeux dans le portail.
+ */
+async function resoudreEntite(saisie: string): Promise<string | null> {
+  const [r] = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT id FROM depotages WHERE id = $1 OR reference = $1
+     UNION ALL SELECT id FROM maintenances WHERE id = $1 OR reference = $1
+     UNION ALL SELECT id FROM incidents WHERE id = $1 OR reference = $1
+     LIMIT 1`, saisie.trim(),
+  );
+  return r?.id ?? null;
+}
+
 /** Une intervention précise : chaque photo, sa taille, son poids. */
-async function uneEntite(id: string) {
+async function uneEntite(saisie: string) {
+  const id = await resoudreEntite(saisie);
+  if (!id) { console.log(`\nAucun dépotage, maintenance ou incident ne correspond à « ${saisie} ».\n`); return; }
   const rows = await prisma.$queryRawUnsafe<Array<{ type: string; cle: string; url: string; le: Date }>>(
     `SELECT entity_type AS type, minio_key AS cle, url, created_at AS le
        FROM photos WHERE entity_id = $1 ORDER BY created_at`, id,
   );
-  console.log(`\n${rows.length} photo(s) rattachée(s) à ${id}\n`);
+  console.log(`\n${rows.length} photo(s) rattachée(s) à ${saisie}${saisie === id ? '' : ` (${id})`}\n`);
   for (const [n, r] of rows.entries()) {
     if (!r.cle) { console.log(`  ${n + 1}. (pas de clé de stockage, url : ${r.url})`); continue; }
     try {
