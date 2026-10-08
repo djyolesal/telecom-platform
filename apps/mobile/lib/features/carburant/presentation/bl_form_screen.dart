@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../data/depotage_model.dart';
 import '../data/bon_livraison_repository.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/appareil_photo.dart';
 
 const _moisLabels = [
   '',
@@ -38,7 +38,6 @@ class _BlFormScreenState extends State<BlFormScreen> {
   final _chauffeur = TextEditingController();
   final _volume = TextEditingController();
   final _obs = TextEditingController();
-  final _picker = ImagePicker();
 
   late Future<List<BonCommandeLite>> _bcsFuture;
   BonCommandeLite? _bc;
@@ -87,8 +86,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
   /// Scan du bordereau de chargement (la photo du BL vient du bouton scan du BL).
   /// Qualité « document » comme le scan du BL : un justificatif doit rester lisible.
   Future<void> _scannerBordereau() async {
-    final img = await _picker.pickImage(
-        source: ImageSource.camera, imageQuality: 85, maxWidth: 2400);
+    final img = await prendrePhoto(context, coteMax: 2400, qualite: 85);
     if (img == null) return;
     final bytes = await img.readAsBytes();
     final ts = DateTime.now().microsecondsSinceEpoch;
@@ -104,8 +102,7 @@ class _BlFormScreenState extends State<BlFormScreen> {
   Future<void> _scannerBl() async {
     final messenger = ScaffoldMessenger.of(context);
     // Qualité soignée : l'OCR a besoin de netteté (85 %, 2400 px max).
-    final img = await _picker.pickImage(
-        source: ImageSource.camera, imageQuality: 85, maxWidth: 2400);
+    final img = await prendrePhoto(context, coteMax: 2400, qualite: 85);
     if (img == null) return;
     final bytes = await img.readAsBytes();
     final ts = DateTime.now().microsecondsSinceEpoch;

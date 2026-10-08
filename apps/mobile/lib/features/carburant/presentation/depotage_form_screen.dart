@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/services/gps_gate.dart';
 import '../../sites/data/site_model.dart';
@@ -19,6 +18,7 @@ import '../data/depotage_model.dart';
 import '../data/depotage_repository.dart';
 import '../data/depotage_draft.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/appareil_photo.dart';
 
 /// Seuil d'écart de livraison (%) au-delà duquel une photo de preuve est exigée.
 /// Aligné sur le réglage serveur `carburant.seuilEcartLivraisonPct` (défaut 5).
@@ -49,7 +49,6 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   final _obs = TextEditingController();
   final _nomChauffeur = TextEditingController();
   final _nomAgent = TextEditingController();
-  final _picker = ImagePicker();
 
   String? _siteId;
   bool _saving = false;
@@ -352,8 +351,7 @@ class _DepotageFormScreenState extends State<DepotageFormScreen> {
   }
 
   Future<void> _capturePhoto() async {
-    final img = await _picker.pickImage(
-        source: ImageSource.camera, imageQuality: 70, maxWidth: 2000);
+    final img = await prendrePhoto(context, coteMax: 2000);
     if (img == null) return;
     final bytes = await img.readAsBytes();
     final ts = DateTime.now().microsecondsSinceEpoch;

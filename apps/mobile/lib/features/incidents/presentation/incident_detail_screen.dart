@@ -16,6 +16,7 @@ import '../../../core/widgets/photo_gallery.dart';
 import '../../../core/widgets/signature_pad.dart';
 import '../data/incident_model.dart';
 import '../data/incident_repository.dart';
+import '../../../core/widgets/appareil_photo.dart';
 
 /// Photos minimum (caméra, sur place) pour clôturer un incident.
 const int kMinPhotosIncident = 6;
@@ -80,7 +81,6 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     // panne se photographie à l'arrivée — après réparation il est trop tard.
     // Caméra uniquement, minimum configurable (serveur : incident.minPhotosAvant).
     final minAvant = AppConfig.minPhotosIncidentAvant;
-    final picker = ImagePicker();
     final photoPaths = <String>[];
     while (photoPaths.length < minAvant) {
       if (!mounted) return;
@@ -102,7 +102,8 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         ),
       );
       if (ok != true) return; // démarrage abandonné
-      final shot = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+      if (!mounted) return;
+      final shot = await prendrePhoto(context, qualite: 80);
       if (shot == null) continue; // capture annulée : on redemande
       photoPaths.add(await AttachmentStore.persistFile(shot.path));
     }
@@ -335,7 +336,6 @@ class _CloseIncidentSheet extends StatefulWidget {
 class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
   final _cause = TextEditingController();
   final _action = TextEditingController();
-  final _picker = ImagePicker();
   final List<XFile> _photos = [];
   bool _creerMaint = false;
   // Déclaration obligatoire : agent de gardiennage présent sur site ?
@@ -370,15 +370,9 @@ class _CloseIncidentSheetState extends State<_CloseIncidentSheet> {
   /// Prise de photo SUR SITE uniquement (caméra) - pas d'import galerie.
   Future<void> _takePhoto() async {
     try {
-      // maxWidth/maxHeight bornent le redimensionnement natif : sans bornes,
-      // image_picker recompresse la pleine résolution sur le thread principal
-      // → ANR au bout de quelques photos.
-      final img = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 70,
-      );
+      // Appareil photo INTÉGRÉ (voir prendrePhoto) : la réduction à 1600 px se
+      // fait en natif, hors du thread principal.
+      final img = await prendrePhoto(context, coteMax: 1600);
       if (img != null) setState(() => _photos.add(img));
     } catch (_) {/* annulé / permission refusée */}
   }

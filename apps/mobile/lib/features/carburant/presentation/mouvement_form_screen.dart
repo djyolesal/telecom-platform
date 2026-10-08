@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/services/gps_gate.dart';
@@ -14,6 +13,7 @@ import '../../../core/widgets/site_picker.dart';
 import '../../sites/data/site_model.dart';
 import '../../sites/data/site_repository.dart';
 import '../data/mouvement_repository.dart';
+import '../../../core/widgets/appareil_photo.dart';
 
 /// DÉCLARATION D'UN MOUVEMENT DE CARBURANT DEPUIS LE TERRAIN.
 ///
@@ -38,7 +38,6 @@ class _MouvementFormScreenState extends State<MouvementFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _volume = TextEditingController();
   final _motif = TextEditingController();
-  final _picker = ImagePicker();
 
   String _type = 'PURGE'; // PURGE | TRANSFERT
   String? _siteId;
@@ -67,8 +66,7 @@ class _MouvementFormScreenState extends State<MouvementFormScreen> {
 
   Future<void> _prendrePhoto() async {
     try {
-      final shot = await _picker.pickImage(
-          source: ImageSource.camera, maxWidth: 1600, maxHeight: 1600, imageQuality: 70);
+      final shot = await prendrePhoto(context, coteMax: 1600);
       if (shot == null) return;
       final chemin = await AttachmentStore.persistFile(shot.path);
       if (!mounted) return;

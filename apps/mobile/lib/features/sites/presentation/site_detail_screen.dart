@@ -12,6 +12,7 @@ import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/site_model.dart';
 import '../data/site_repository.dart';
+import '../../../core/widgets/appareil_photo.dart';
 
 class SiteDetailScreen extends StatefulWidget {
   final String siteId;
@@ -50,7 +51,6 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     // qui permet de verifier la mesure sans repasser sur site. Camera
     // uniquement, memes bornes que les photos de maintenance (anti-ANR).
     final photos = <XFile>[];
-    final picker = ImagePicker();
     String? erreurPhotos;
 
     final ok = await showModalBottomSheet<bool>(
@@ -132,12 +132,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                         ? null
                         : () async {
                             try {
-                              final img = await picker.pickImage(
-                                source: ImageSource.camera,
-                                maxWidth: 1600,
-                                maxHeight: 1600,
-                                imageQuality: 70,
-                              );
+                              final img = await prendrePhoto(ctx, coteMax: 1600);
                               if (img != null) {
                                 setSheet(() {
                                   photos.add(img);

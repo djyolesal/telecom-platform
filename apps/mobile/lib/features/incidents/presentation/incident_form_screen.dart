@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/sync/attachment_store.dart';
 import '../../../core/errors/exceptions.dart';
@@ -10,6 +9,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/widgets/site_picker.dart';
 import '../data/incident_repository.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/appareil_photo.dart';
 
 class IncidentFormScreen extends StatefulWidget {
   final String? initialSiteId;
@@ -44,7 +44,7 @@ class _IncidentFormScreenState extends State<IncidentFormScreen> {
   final List<String> _photos = [];
 
   Future<void> _prendrePhoto() async {
-    final shot = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80);
+    final shot = await prendrePhoto(context, qualite: 80);
     if (shot == null) return;
     final chemin = await AttachmentStore.persistFile(shot.path);
     if (!mounted) return;

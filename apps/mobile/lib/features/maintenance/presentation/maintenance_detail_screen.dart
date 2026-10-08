@@ -19,6 +19,7 @@ import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/appareil_photo.dart';
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
@@ -33,7 +34,6 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   late Future<Maintenance> _future;
   bool _busy = false;
   // Photos AVANT travaux (état des lieux), prises pendant l'intervention.
-  final _pickerAvant = ImagePicker();
   final List<XFile> _photosAvant = [];
 
   @override
@@ -134,12 +134,7 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
   /// Photo d'état des lieux AVANT travaux (caméra uniquement, comme la clôture).
   Future<void> _prendrePhotoAvant() async {
     try {
-      final img = await _pickerAvant.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 70,
-      );
+      final img = await prendrePhoto(context, coteMax: 1600);
       if (img != null) setState(() => _photosAvant.add(img));
     } catch (_) {/* annulé / permission refusée */}
   }
@@ -1075,15 +1070,9 @@ class _CloseSheetState extends State<_CloseSheet> {
   /// désactivée : chaque photo doit être prise au moment de l'intervention.
   Future<void> _takePhoto() async {
     try {
-      // maxWidth/maxHeight LIMITENT le redimensionnement natif : sans bornes,
-      // image_picker décode+recompresse la photo pleine résolution (12 Mpx) sur
-      // le thread principal → ANR (l'app se fige) au bout de quelques photos.
-      final img = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 70,
-      );
+      // Appareil photo INTÉGRÉ (voir prendrePhoto) : capture en ~1080p et
+      // réduction à 1600 px en natif, hors du thread principal (pas d'ANR).
+      final img = await prendrePhoto(context, coteMax: 1600);
       if (img != null) await _conserver(img);
     } catch (_) {/* annulé / permission refusée */}
   }
