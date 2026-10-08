@@ -1,6 +1,9 @@
 -- Catalogue des pièces de rechange : liste fournie par l'exploitant le
 -- 08/10/2026 (bordereau GE, électricité, éclairage et balisage, climatisation,
--- shelter, cuves, solaire et hybride), 114 lignes.
+-- shelter, cuves, solaire et hybride), 114 lignes, plus les consommables
+-- d'entretien GE (filtres à air, à gasoil, à huile ; huile moteur au litre).
+-- La batterie 12V 70/80/100 Ah est découpée en trois lignes : une saisie
+-- « Batterie 12V 100Ah » se rattache ainsi à SA capacité.
 --
 -- Libellés repris tels quels, aux fautes de frappe près (accents, « soufflant »,
 -- « silicone », « µF »). Les PRESTATIONS de la liste (SWAP de GE, entretien et
@@ -15,9 +18,15 @@
 INSERT INTO "pieces_ref" ("id", "code", "libelle", "categorie", "unite")
 SELECT gen_random_uuid()::text, v.code, v.libelle, v.categorie, v.unite
 FROM (VALUES
-  ('BATTERIE_12V_70_100AH', 'Batterie 12V 70 Ah / 80 Ah / 100 Ah', 'BATTERIE', 'unité'),
+  ('BATTERIE_12V_70AH', 'Batterie 12V 70 Ah', 'BATTERIE', 'unité'),
+  ('BATTERIE_12V_80AH', 'Batterie 12V 80 Ah', 'BATTERIE', 'unité'),
+  ('BATTERIE_12V_100AH', 'Batterie 12V 100 Ah', 'BATTERIE', 'unité'),
   ('GE_SD_NEZ_INJECTEUR', 'SD Nez d''injecteur', 'GE', 'unité'),
   ('GE_INJECTEUR', 'Injecteur (une unité par GE)', 'GE', 'unité'),
+  ('GE_FILTRE_AIR', 'Filtre à air', 'GE', 'unité'),
+  ('GE_FILTRE_GASOIL', 'Filtre à gasoil', 'GE', 'unité'),
+  ('GE_FILTRE_HUILE', 'Filtre à huile', 'GE', 'unité'),
+  ('GE_HUILE_MOTEUR_15W40', 'Huile moteur 15W40', 'GE', 'litre'),
   ('GE_TUYAU_ALIMENTATION', 'Tuyau d''alimentation', 'GE', 'mètre'),
   ('GE_TUYAU_GRAISSAGE', 'Tuyau de graissage', 'GE', 'unité'),
   ('GE_TUYAU_FLEXIBLE', 'Tuyau flexible', 'GE', 'mètre'),
