@@ -8,7 +8,7 @@ import { paginate } from '../utils/paginator';
 import { AppError } from '../utils/AppError';
 import { sendEmail } from '../services/email.service';
 import { auditLog } from '../services/audit.service';
-import { rapprocherHistorique } from '../services/piecesRef.service';
+import { rapprocherHistorique, validerSynonymes } from '../services/piecesRef.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
 import { SMS_TEMPLATES, CANAUX_SMS } from '../services/sms.service';
@@ -434,7 +434,7 @@ export async function listPiecesRef(req: Request, res: Response, next: NextFunct
 export async function upsertPieceRef(req: Request, res: Response, next: NextFunction) {
   try {
     const b = req.body as
-      { id?: string; code?: string; libelle?: string; categorie?: string; unite?: string; coutStandard?: number | null; actif?: boolean };
+      { id?: string; code?: string; libelle?: string; categorie?: string; unite?: string; coutStandard?: number | null; actif?: boolean; synonymes?: unknown };
     const { id } = b;
     const cleanCode = (v: string) => v.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
     let piece;
@@ -456,6 +456,13 @@ export async function upsertPieceRef(req: Request, res: Response, next: NextFunc
       if ('unite' in b) data.unite = (b.unite?.trim() || 'unité').slice(0, 20);
       if ('coutStandard' in b) data.coutStandard = b.coutStandard != null && Number.isFinite(Number(b.coutStandard)) ? Number(b.coutStandard) : null;
       if ('actif' in b) data.actif = b.actif !== false;
+      if ('synonymes' in b) {
+        const actuelle = await prisma.pieceRef.findUnique({ where: { id }, select: { code: true, libelle: true } });
+        if (!actuelle) throw new AppError('Pièce introuvable.', 404);
+        data.synonymes = await validerSynonymes(b.synonymes, {
+          id, code: (data.code as string) ?? actuelle.code, libelle: (data.libelle as string) ?? actuelle.libelle,
+        });
+      }
       piece = await prisma.pieceRef.update({ where: { id }, data });
     } else {
       if (!b.libelle?.trim()) throw new AppError('Libellé requis.', 422);
@@ -468,6 +475,7 @@ export async function upsertPieceRef(req: Request, res: Response, next: NextFunc
         unite: (b.unite?.trim() || 'unité').slice(0, 20),
         coutStandard: b.coutStandard != null && Number.isFinite(Number(b.coutStandard)) ? Number(b.coutStandard) : null,
         actif: b.actif !== false,
+        ...('synonymes' in b ? { synonymes: await validerSynonymes(b.synonymes, { code, libelle: b.libelle.trim() }) } : {}),
       };
       piece = await prisma.pieceRef.upsert({ where: { code }, create: data, update: data });
     }

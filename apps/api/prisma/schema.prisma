@@ -502,6 +502,9 @@ model PieceRef {
   categorie    String?  @db.VarChar(20) // CategorieEquipement (statistique, pas contrainte)
   unite        String   @default("unité") @db.VarChar(20)
   coutStandard Decimal? @map("cout_standard") @db.Decimal(12, 2)
+  /// Autres façons dont le terrain écrit cette pièce (« Batterie 100 Ah ») :
+  /// rapprochées comme le libellé, pour l'historique comme pour les saisies à venir.
+  synonymes    String[] @default([])
   actif        Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
 

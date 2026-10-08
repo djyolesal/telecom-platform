@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { AppError } from '../utils/AppError';
 
 /**
  * Rapprochement des pièces de rechange saisies librement sur le terrain vers
@@ -32,7 +33,7 @@ export const normaliserPiece = (s: string): string =>
     .toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 async function indexCatalogue(): Promise<{ idx: Map<string, string>; idsActifs: Set<string> }> {
-  const refs = await prisma.pieceRef.findMany({ where: { actif: true }, select: { id: true, code: true, libelle: true } });
+  const refs = await prisma.pieceRef.findMany({ where: { actif: true }, select: { id: true, code: true, libelle: true, synonymes: true } });
   const idx = new Map<string, string>();
   // Une clé normalisée revendiquée par DEUX références est ambiguë : on la
   // retire (un rapprochement douteux ne s'invente pas - même règle que l'OSS).
@@ -45,6 +46,7 @@ async function indexCatalogue(): Promise<{ idx: Map<string, string>; idsActifs: 
   for (const r of refs) {
     poser(normaliserPiece(r.code), r.id);
     poser(normaliserPiece(r.libelle), r.id);
+    for (const syn of r.synonymes ?? []) poser(normaliserPiece(syn), r.id);
   }
   for (const cle of doublons) idx.delete(cle);
   return { idx, idsActifs: new Set(refs.map((r) => r.id)) };
@@ -102,4 +104,41 @@ export async function rapprocherHistorique(): Promise<{ examinees: number; rappr
     rapprochees += ids.length;
   }
   return { examinees: libres.length, rapprochees };
+}
+
+/**
+ * Synonymes saisis pour une pièce (liste, ou texte séparé par virgules ou
+ * retours à la ligne), nettoyés. Refuse un synonyme qui désigne déjà une AUTRE
+ * pièce active (code, libellé ou synonyme) : il rendrait les deux ambiguës, et
+ * l'index les retirerait en silence - mieux vaut le dire à la saisie.
+ */
+export async function validerSynonymes(
+  brut: unknown,
+  piece: { id?: string; code: string; libelle: string },
+): Promise<string[]> {
+  const liste = Array.isArray(brut) ? brut.map(String) : String(brut ?? '').split(/[,\n;]/);
+  const propres = new Set([normaliserPiece(piece.code), normaliserPiece(piece.libelle)]);
+  const vus = new Set<string>();
+  const out: string[] = [];
+  for (const s of liste.map((x) => x.trim().replace(/\s+/g, ' ')).filter(Boolean)) {
+    const cle = normaliserPiece(s);
+    if (!cle || propres.has(cle) || vus.has(cle)) continue;
+    if (s.length > 120) throw new AppError(`Synonyme trop long (120 caractères au plus) : « ${s.slice(0, 40)}… »`, 422);
+    vus.add(cle);
+    out.push(s);
+  }
+  if (out.length > 20) throw new AppError('20 synonymes au plus par pièce.', 422);
+  if (!out.length) return [];
+
+  const autres = await prisma.pieceRef.findMany({
+    // La pièce elle-même est exclue par id ET par code (création = upsert sur le code).
+    where: { actif: true, NOT: [{ code: piece.code }, ...(piece.id ? [{ id: piece.id }] : [])] },
+    select: { libelle: true, code: true, synonymes: true },
+  });
+  for (const a of autres) {
+    const cles = new Set([normaliserPiece(a.code), normaliserPiece(a.libelle), ...(a.synonymes ?? []).map(normaliserPiece)]);
+    const conflit = out.find((s) => cles.has(normaliserPiece(s)));
+    if (conflit) throw new AppError(`« ${conflit} » désigne déjà la pièce « ${a.libelle} ».`, 409);
+  }
+  return out;
 }

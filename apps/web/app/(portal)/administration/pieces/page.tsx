@@ -14,7 +14,7 @@ import { fmtNumber } from '@/lib/utils';
 interface PieceRef {
   id: string; code: string; libelle: string; categorie: string | null;
   unite: string; coutStandard: string | number | null; actif: boolean;
-  utilisations: number;
+  synonymes: string[]; utilisations: number;
 }
 
 /**
@@ -29,7 +29,7 @@ export default function PiecesRefPage() {
   const queryClient = useQueryClient();
   const [nouveau, setNouveau] = useState({ libelle: '', code: '', unite: '', coutStandard: '' });
   const [editId, setEditId] = useState<string | null>(null);
-  const [edit, setEdit] = useState({ libelle: '', unite: '', coutStandard: '' });
+  const [edit, setEdit] = useState({ libelle: '', unite: '', coutStandard: '', synonymes: '' });
   const [error, setError] = useState('');
 
   const { data, isLoading, isError } = useQuery({
@@ -44,7 +44,7 @@ export default function PiecesRefPage() {
   const onErr = (e: { response?: { data?: { error?: string } } }) => setError(e.response?.data?.error || 'Erreur');
 
   const save = useMutation({
-    mutationFn: (p: { id?: string; code?: string; libelle: string; unite?: string; coutStandard?: number; actif?: boolean }) =>
+    mutationFn: (p: { id?: string; code?: string; libelle: string; unite?: string; coutStandard?: number; actif?: boolean; synonymes?: string }) =>
       api.post('/admin/pieces-ref', p),
     onSuccess: () => { refresh(); setNouveau({ libelle: '', code: '', unite: '', coutStandard: '' }); setEditId(null); setError(''); },
     onError: onErr,
@@ -85,6 +85,7 @@ export default function PiecesRefPage() {
         <p className="mb-3 text-xs text-gray-500">
           Nouvelle pièce - le code se déduit du libellé si absent. Les saisies terrain dont le texte
           correspond (casse, accents et espaces ignorés) se rattachent automatiquement, y compris l&apos;historique.
+          Une pièce que le terrain écrit autrement (« Batterie 100 Ah ») reçoit des synonymes : crayon, puis second champ.
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-72"><Input placeholder="Libellé (ex. Batterie 12 V 100 Ah)" value={nouveau.libelle} onChange={(e) => setNouveau({ ...nouveau, libelle: e.target.value })} /></div>
@@ -120,9 +121,22 @@ export default function PiecesRefPage() {
               <tr key={p.id} className="border-b border-gray-50 last:border-0">
                 <td className="py-2.5 pl-5 pr-3 font-mono text-xs text-gray-500">{p.code}</td>
                 <td className="px-3 py-2.5">
-                  {editId === p.id
-                    ? <Input value={edit.libelle} onChange={(e) => setEdit({ ...edit, libelle: e.target.value })} />
-                    : <span className="font-medium text-gray-800">{p.libelle}</span>}
+                  {editId === p.id ? (
+                    <div className="space-y-1.5">
+                      <Input value={edit.libelle} onChange={(e) => setEdit({ ...edit, libelle: e.target.value })} />
+                      <Input value={edit.synonymes} onChange={(e) => setEdit({ ...edit, synonymes: e.target.value })}
+                        placeholder="Synonymes, séparés par des virgules (ex. Batterie 100 Ah)" className="text-xs" />
+                    </div>
+                  ) : (
+                    <>
+                      <span className="font-medium text-gray-800">{p.libelle}</span>
+                      {p.synonymes?.length > 0 && (
+                        <span className="block text-xs text-gray-400" title="Saisies terrain rattachées à cette pièce">
+                          aussi : {p.synonymes.join(', ')}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-gray-600">
                   {editId === p.id
@@ -146,7 +160,7 @@ export default function PiecesRefPage() {
                   {editId === p.id ? (
                     <span className="inline-flex gap-1">
                       <button type="button" className="text-green-600 hover:text-green-800"
-                        onClick={() => save.mutate({ id: p.id, libelle: edit.libelle, unite: edit.unite || undefined, coutStandard: edit.coutStandard ? Number(edit.coutStandard) : undefined })}>
+                        onClick={() => save.mutate({ id: p.id, libelle: edit.libelle, unite: edit.unite || undefined, coutStandard: edit.coutStandard ? Number(edit.coutStandard) : undefined, synonymes: edit.synonymes })}>
                         <Check size={16} />
                       </button>
                       <button type="button" className="text-gray-400 hover:text-gray-600" onClick={() => setEditId(null)}><X size={16} /></button>
@@ -154,7 +168,7 @@ export default function PiecesRefPage() {
                   ) : (
                     <span className="inline-flex gap-2">
                       <button type="button" className="text-gray-400 hover:text-gray-700"
-                        onClick={() => { setEditId(p.id); setEdit({ libelle: p.libelle, unite: p.unite, coutStandard: p.coutStandard != null ? String(p.coutStandard) : '' }); }}>
+                        onClick={() => { setEditId(p.id); setEdit({ libelle: p.libelle, unite: p.unite, coutStandard: p.coutStandard != null ? String(p.coutStandard) : '', synonymes: (p.synonymes ?? []).join(', ') }); }}>
                         <Pencil size={15} />
                       </button>
                       <button type="button" className="text-red-400 hover:text-red-600"
