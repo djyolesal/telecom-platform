@@ -1,7 +1,8 @@
 -- Catalogue des pièces de rechange : liste fournie par l'exploitant le
 -- 08/10/2026 (bordereau GE, électricité, éclairage et balisage, climatisation,
 -- shelter, cuves, solaire et hybride), 114 lignes, plus les consommables
--- d'entretien GE (filtres à air, à gasoil, à huile ; huile moteur au litre).
+-- d'entretien GE (filtres à air, à gasoil, à huile ; huile moteur au litre ;
+-- courroie alternateur) et le cadenas inox.
 -- La batterie 12V 70/80/100 Ah est découpée en trois lignes : une saisie
 -- « Batterie 12V 100Ah » se rattache ainsi à SA capacité.
 --
@@ -50,6 +51,7 @@ FROM (VALUES
   ('DISJ_10_25A_TETRA', 'Disjoncteur de 10 à 25 A tétrapolaire', 'AUTRE', 'unité'),
   ('DISJ_40_63A_TETRA', 'Disjoncteur de 40 à 63 A tétrapolaire', 'AUTRE', 'unité'),
   ('DISJ_TETRA_DIFFERENTIEL', 'Disjoncteur tétrapolaire différentiel', 'AUTRE', 'unité'),
+  ('GE_COURROIE_ALTERNATEUR', 'Courroie alternateur', 'GE', 'unité'),
   ('GE_COURROIE_DISTRIBUTION', 'Courroie de distribution', 'GE', 'unité'),
   ('GE_BOUGIE', 'Bougie', 'GE', 'unité'),
   ('GE_ELECTROVANNE_ARRET', 'Électrovanne d''arrêt', 'GE', 'unité'),
@@ -98,6 +100,7 @@ FROM (VALUES
   ('CLIM_SPLIT_3CV_R410', 'Climatiseur split 3 CV au gaz R410', 'CLIMATISEUR', 'unité'),
   ('CLIM_RACCORDS_SOUDURE', 'Raccords et matériel de soudure', 'CLIMATISEUR', 'unité'),
   ('CLIM_PLAQUETTE_COMMANDE', 'Plaquette (carte électronique de commande)', 'CLIMATISEUR', 'unité'),
+  ('CADENAS_INOX', 'Cadenas inox', 'AUTRE', 'unité'),
   ('SHELTER_PORTE_SERRURE', 'Réparation de la porte et de la serrure du shelter', 'AUTRE', 'forfait'),
   ('DISJ_BRANCHEMENT_CEET_10_30A', 'Disjoncteur de branchement général CEET 10/30A 500mA tétrapolaire', 'AUTRE', 'unité'),
   ('CLIM_ENTRETIEN_COMPLET', 'Entretien complet d''un climatiseur', 'CLIMATISEUR', 'forfait'),
