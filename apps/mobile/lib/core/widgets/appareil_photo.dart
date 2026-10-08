@@ -77,6 +77,11 @@ Future<XFile> normaliserPhoto(XFile brute, {required int coteMax, required int q
     final dir = await getTemporaryDirectory();
     final f = File('${dir.path}/photo-${DateTime.now().microsecondsSinceEpoch}.jpg');
     await f.writeAsBytes(sortie, flush: true);
+    // La capture brute (~0,5 à 3 Mo) ne sert plus : sans cela, chaque photo
+    // laissait sa copie pleine résolution dans le cache du téléphone.
+    try {
+      await File(brute.path).delete();
+    } catch (_) {/* déjà supprimée : sans conséquence */}
     return XFile(f.path, mimeType: 'image/jpeg');
   } catch (_) {
     return brute;
@@ -157,12 +162,13 @@ class _AppareilPhotoScreenState extends State<AppareilPhotoScreen> with WidgetsB
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
-      // ~1080p suffit aux photos (plafonnées à 2000 px), ~2160p pour un document
-      // (bon de livraison, plafonné à 2400 px) : capturer plus grand ne ferait
-      // que ralentir les téléphones modestes.
+      // Capture en ~2160p puis réduction au plafond (1600 / 2000 / 2400 px) :
+      // en ~1080p, une photo plafonnée à 2000 px n'en faisait que 1920 (mesuré
+      // sur Galaxy S25, 08/10/2026), et une réduction depuis plus grand est
+      // plus nette qu'une capture directe - c'est ce qui rend une jauge lisible.
       final c = CameraController(
         arriere,
-        widget.coteMax > 2000 ? ResolutionPreset.ultraHigh : ResolutionPreset.veryHigh,
+        ResolutionPreset.ultraHigh,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
@@ -182,8 +188,11 @@ class _AppareilPhotoScreenState extends State<AppareilPhotoScreen> with WidgetsB
         _erreur = null;
         _zoomMin = zoomMin;
         _zoomMax = zoomMax.clamp(1, 8).toDouble();
-        _zoom = zoomMin;
+        _zoom = 1.0.clamp(zoomMin, _zoomMax).toDouble();
       });
+      // Zoom ×1 = objectif principal. Le minimum (×0,6 sur un S25) est
+      // l'ultra grand-angle : il déforme et détaille moins une jauge.
+      await c.setZoomLevel(_zoom).catchError((_) {});
     } on CameraException catch (e) {
       if (!mounted) return;
       final refus = e.code.startsWith('CameraAccess');
