@@ -18,7 +18,10 @@
  *
  *   docker compose exec api npx -y tsx prisma/scripts/diagnostic-photos.ts --jours 60
  *
- * Options : --jours N (défaut 60), --max N photos lues par type (défaut 400).
+ * Options : --jours N (défaut 60), --max N photos lues par type (défaut 400),
+ * --entite <id> : seulement les photos d'UNE intervention (l'identifiant est
+ * dans l'adresse de sa fiche, ex. /carburant/<id>), toutes dates confondues,
+ * avec la taille de chacune.
  */
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -78,7 +81,34 @@ interface Ligne {
   type: string; cle: string; le: Date; technicien: string | null; telephone: string | null; version: string | null;
 }
 
+function texteOption(nom: string): string | null {
+  const i = process.argv.indexOf(`--${nom}`);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
+}
+
+/** Une intervention précise : chaque photo, sa taille, son poids. */
+async function uneEntite(id: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ type: string; cle: string; url: string; le: Date }>>(
+    `SELECT entity_type AS type, minio_key AS cle, url, created_at AS le
+       FROM photos WHERE entity_id = $1 ORDER BY created_at`, id,
+  );
+  console.log(`\n${rows.length} photo(s) rattachée(s) à ${id}\n`);
+  for (const [n, r] of rows.entries()) {
+    if (!r.cle) { console.log(`  ${n + 1}. (pas de clé de stockage, url : ${r.url})`); continue; }
+    try {
+      const stat = await minio.statObject(BUCKET, r.cle);
+      const d = dimensionsJpeg(await entete(r.cle));
+      console.log(`  ${n + 1}. ${d ? `${d.largeur}×${d.hauteur} px` : 'dimensions illisibles'} · ${Math.round(stat.size / 1024)} Ko · ${r.le.toISOString().slice(0, 16).replace('T', ' ')} · ${r.cle}`);
+    } catch (e) {
+      console.log(`  ${n + 1}. introuvable dans le stockage (${(e as Error).message}) · ${r.cle}`);
+    }
+  }
+  console.log('');
+}
+
 async function main() {
+  const entite = texteOption('entite');
+  if (entite) return uneEntite(entite);
   const jours = option('jours', 60);
   const max = option('max', 400);
   const lignes: Ligne[] = [];
