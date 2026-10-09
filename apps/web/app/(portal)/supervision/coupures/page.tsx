@@ -17,6 +17,7 @@ import { SearchSelect } from '@/components/shared/SearchSelect';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useSupervisionSocket } from '@/lib/hooks/useSupervisionSocket';
 import { fmtDateTime } from '@/lib/utils';
+import { useOptionsZones } from '@/lib/zones';
 
 interface Coupure {
   id: string;
@@ -104,6 +105,9 @@ export default function CoupuresReseauPage() {
   // et « 2G » sort aussi les lignes combinées « 2G/4G ».
   const [technosFiltre, setTechnosFiltre] = useState<Set<string>>(new Set());
   const [typeAlarme, setTypeAlarme] = useState('');
+  // Zone de maintenance (terrain) : la vue d'un FME sur SES sites.
+  const [zone, setZone] = useState('');
+  const optionsZones = useOptionsZones();
   const [source, setSource] = useState('');
   const [du, setDu] = useState('');
   const [au, setAu] = useState('');
@@ -134,7 +138,7 @@ export default function CoupuresReseauPage() {
   });
 
   const { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ['coupures', { page, debounced, statut, technosFiltre: [...technosFiltre].sort().join(','), typeAlarme, source, du, au, avecHeritees, aQualifier, tri }],
+    queryKey: ['coupures', { page, debounced, statut, technosFiltre: [...technosFiltre].sort().join(','), typeAlarme, zone, source, du, au, avecHeritees, aQualifier, tri }],
     // Filet de sécurité 5 min : le push temps réel (socket) est la voie
     // principale de rafraîchissement.
     refetchInterval: 300_000,
@@ -147,6 +151,7 @@ export default function CoupuresReseauPage() {
         search: debounced || undefined, statut: statut || undefined,
         technologies: technosFiltre.size ? [...technosFiltre].join(',') : undefined,
         type_alarme: typeAlarme || undefined,
+        zone_id: zone || undefined,
         source: source || undefined,
         // Racines seulement : l'aval hérité arrive EMBARQUÉ sous chaque racine
         // (sous-lignes dépliables). En recherche, on repasse à plat pour
@@ -165,6 +170,7 @@ export default function CoupuresReseauPage() {
     statut && `statut=${statut}`,
     technosFiltre.size > 0 && `technologies=${[...technosFiltre].join(',')}`,
     typeAlarme && `type_alarme=${typeAlarme}`,
+    zone && `zone_id=${zone}`,
     source && `source=${source}`,
     // Fidélité affichage/export : en recherche la liste passe à plat (héritées
     // incluses), l'export doit suivre.
@@ -598,6 +604,10 @@ export default function CoupuresReseauPage() {
         </span>
         <Select value={typeAlarme} onChange={(e) => { setTypeAlarme(e.target.value); setPage(1); }}
           options={TYPES_ALARME} placeholder="Toutes alarmes" className="w-40" />
+        {optionsZones.length > 0 && (
+          <Select value={zone} onChange={(e) => { setZone(e.target.value); setPage(1); }}
+            options={optionsZones} placeholder="Toutes zones" className="w-40" />
+        )}
         <span className="flex items-center gap-1.5">
           <input type="date" value={du} onChange={(e) => { setDu(e.target.value); setPage(1); }}
             className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />

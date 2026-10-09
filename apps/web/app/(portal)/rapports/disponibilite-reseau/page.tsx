@@ -12,6 +12,7 @@ import { FilterBar } from '@/components/shared/FilterBar';
 import { StatCard } from '@/components/shared/StatCard';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { fmtNumber } from '@/lib/utils';
+import { useOptionsZones } from '@/lib/zones';
 
 interface SiteRow { nom: string; region: string; coupures: number; enCours: number; indisponibilitéHeures: number; dispoPct: number }
 
@@ -38,12 +39,16 @@ export default function DisponibiliteReseauPage() {
   const pret = !libre || (!!du && !!au);
   const [technos, setTechnos] = useState<Set<string>>(new Set());
   const [alarmes, setAlarmes] = useState<Set<string>>(new Set());
+  // Zone de maintenance : la disponibilité vue par le FME de la zone.
+  const [zone, setZone] = useState('');
+  const optionsZones = useOptionsZones();
 
   // Mêmes filtres pour la page ET les exports (fidélité affichage/export).
   const filtres: Record<string, string> = {
     ...(libre ? { date_debut: du, date_fin: au } : { mois }),
     ...(technos.size ? { technologies: [...technos].join(',') } : {}),
     ...(alarmes.size ? { alarmes: [...alarmes].join(',') } : {}),
+    ...(zone ? { zone_id: zone } : {}),
   };
   const exportQuery = Object.entries(filtres)
     .map(([cle, v]) => `${cle}=${encodeURIComponent(v)}`).join('&');
@@ -63,7 +68,9 @@ export default function DisponibiliteReseauPage() {
     <div>
       <PageHeader
         title="Disponibilité réseau"
-        subtitle={data?.perimetreRestreint
+        subtitle={data?.zone
+          ? `Zone ${data.zone} : indisponibilité, sites touchés et répartition actif/passif`
+          : data?.perimetreRestreint
           ? 'Votre périmètre : indisponibilité, sites touchés et répartition actif/passif de vos lots'
           : "Coupures radio (supervision NOC) : indisponibilité, sites touchés, répartition actif/passif et évaluation par prestataire"}
         backHref="/rapports"
@@ -81,7 +88,10 @@ export default function DisponibiliteReseauPage() {
             { value: '6', label: '6 mois' }, { value: '12', label: '12 mois' },
             { value: 'libre', label: 'Période libre (du → au)' },
           ], onChange: setMois,
-        }]}
+        },
+        ...(optionsZones.length
+          ? [{ key: 'zone', label: 'Toutes zones', value: zone, options: optionsZones, onChange: setZone }]
+          : [])]}
       />
 
       {libre && (

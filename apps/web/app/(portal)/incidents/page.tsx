@@ -20,6 +20,7 @@ import { SeveriteBadge, StatutIncidentBadge } from '@/components/shared/Badge';
 import { SEVERITES, STATUTS_INCIDENT, regionOptions } from '@/lib/constants';
 import { useTypesIncident } from '@/lib/typesIncident';
 import { fmtDateTime } from '@/lib/utils';
+import { useOptionsZones } from '@/lib/zones';
 
 interface Incident {
   id: string;
@@ -32,7 +33,7 @@ interface Incident {
   technicien?: { nom: string; prenom: string };
 }
 
-const FILTRES_DEFAUT = { page: '1', search: '', type: '', severite: '', statut: '', region: '', tri: '', sens: '' };
+const FILTRES_DEFAUT = { page: '1', search: '', type: '', severite: '', statut: '', region: '', zone: '', tri: '', sens: '' };
 
 function IncidentsPageInner() {
   const { options: typesOptions, labelDe } = useTypesIncident();
@@ -45,7 +46,8 @@ function IncidentsPageInner() {
   const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
   const page = Number(valeurs.page) || 1;
   const setPage = (p: number) => appliquer({ page: String(p) });
-  const { type, severite, statut, region } = valeurs;
+  const { type, severite, statut, region, zone } = valeurs;
+  const optionsZones = useOptionsZones();
   // La saisie reste locale (réactive à la frappe) ; seule sa version
   // debouncée rejoint l'URL, sinon chaque caractère réécrirait l'adresse.
   const [search, setSearch] = useState(valeurs.search);
@@ -59,14 +61,14 @@ function IncidentsPageInner() {
   const tri = valeurs.tri ? { key: valeurs.tri, dir: (valeurs.sens === 'desc' ? -1 : 1) as 1 | -1 } : null;
   // Les exports suivent CE QUE L'ÉCRAN MONTRE : un fichier qui ignore les
   // filtres appliqués n'est pas le même document.
-  const filtresQuery = Object.entries({ type, severite, statut, region })
+  const filtresQuery = Object.entries({ type, severite, statut, region, zone_id: zone })
     .filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['incidents', { page, search: debouncedSearch, type, severite, statut, region, tri }],
+    queryKey: ['incidents', { page, search: debouncedSearch, type, severite, statut, region, zone, tri }],
     queryFn: () =>
       api.get('/incidents', { params: {
-        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, severite: severite || undefined, statut: statut || undefined, region: region || undefined,
+        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, severite: severite || undefined, statut: statut || undefined, region: region || undefined, zone_id: zone || undefined,
         tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
       } }).then((r) => r.data),
   });
@@ -120,6 +122,7 @@ function IncidentsPageInner() {
           { key: 'severite', label: 'Toutes sévérités', value: severite, options: SEVERITES, onChange: (v) => appliquer({ severite: v, page: '1' }) },
           { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_INCIDENT, onChange: (v) => appliquer({ statut: v, page: '1' }) },
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => appliquer({ region: v, page: '1' }) },
+          ...(optionsZones.length ? [{ key: 'zone', label: 'Toutes zones', value: zone, options: optionsZones, onChange: (v: string) => appliquer({ zone: v, page: '1' }) }] : []),
         ]}
       />
 

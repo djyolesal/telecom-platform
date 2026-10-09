@@ -10,6 +10,7 @@ import { DataTable, Column } from '@/components/shared/DataTable';
 import { Loading, ErrorState, EmptyState } from '@/components/shared/states';
 import { Select } from '@/components/shared/Form';
 import { StatCard } from '@/components/shared/StatCard';
+import { useOptionsZones } from '@/lib/zones';
 
 interface MesureArcep {
   dr1: number; dr1Conforme: boolean;
@@ -25,7 +26,7 @@ interface LigneArcep extends MesureArcep {
   ecartVerdict: boolean;
 }
 interface DataArcep {
-  mois: string; moisEnCours: boolean; du: string; au: string;
+  mois: string; moisEnCours: boolean; du: string; au: string; zone: string | null;
   seuils: { dr1Max: number; dr2MaxMinutesParJour: number };
   sitesAnalyses: number; nonConformesDr1: number; nonConformesDr2: number; nonConformes: number;
   detectionsNonAdoptees: number; nonConformesReel: number; sitesEcartVerdict: number;
@@ -59,10 +60,13 @@ export default function ConformiteArcepPage() {
   // Détections automatiques non adoptées : exclues du chiffre officiel, mais
   // bien subies par l'usager — l'ARCEP ne connaît pas le sas d'adoption.
   const [inclureNonAdoptees, setInclureNonAdoptees] = useState(false);
+  // Zone de maintenance : la conformité vue par le FME de la zone.
+  const [zone, setZone] = useState('');
+  const optionsZones = useOptionsZones();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['conformite-arcep', mois],
-    queryFn: () => api.get('/rapports/conformite-arcep', { params: { mois } }).then((r) => r.data.data as DataArcep),
+    queryKey: ['conformite-arcep', mois, zone],
+    queryFn: () => api.get('/rapports/conformite-arcep', { params: { mois, zone_id: zone || undefined } }).then((r) => r.data.data as DataArcep),
   });
 
   if (isLoading) return <Loading />;
@@ -131,9 +135,9 @@ export default function ConformiteArcepPage() {
     <div>
       <PageHeader
         title="Conformité ARCEP (DR1 / DR2)"
-        subtitle={`${MOIS_OPTIONS.find((o) => o.value === data.mois)?.label ?? data.mois} · détections automatiques comptées une fois prises en charge`}
+        subtitle={`${MOIS_OPTIONS.find((o) => o.value === data.mois)?.label ?? data.mois}${data.zone ? ` · zone ${data.zone}` : ''} · détections automatiques comptées une fois prises en charge`}
         backHref="/rapports"
-        actions={<ExportButtons base="/rapports/conformite-arcep/export" name="conformite-arcep" query={`mois=${mois}`} />}
+        actions={<ExportButtons base="/rapports/conformite-arcep/export" name="conformite-arcep" query={`mois=${mois}${zone ? `&zone_id=${zone}` : ''}`} />}
       />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -153,6 +157,11 @@ export default function ConformiteArcepPage() {
         <div className="w-56">
           <Select value={mois} onChange={(e) => setMois(e.target.value)} options={MOIS_OPTIONS} />
         </div>
+        {optionsZones.length > 0 && (
+          <div className="w-44">
+            <Select value={zone} onChange={(e) => setZone(e.target.value)} options={optionsZones} placeholder="Toutes zones" />
+          </div>
+        )}
         <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={seulNonConformes} onChange={(e) => setSeulNonConformes(e.target.checked)} />
           Non conformes uniquement

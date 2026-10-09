@@ -269,6 +269,28 @@ export default function SiteDetailPage() {
             )}
           </div>
         )}
+        {/* Zone de maintenance (découpage terrain) et son responsable : qui
+            appeler pour ce site. Ses coordonnées ne sont visibles que des
+            équipes internes et de son propre prestataire. */}
+        {site.zoneMaintenance && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+            <div><span className="text-gray-500">Zone de maintenance : </span><b className="text-gray-800">{site.zoneMaintenance.nom}</b></div>
+            {site.zoneMaintenance.responsable ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">FME</span>
+                <span className="text-gray-800">{site.zoneMaintenance.responsable.prenom} {site.zoneMaintenance.responsable.nom}</span>
+                <span className="text-gray-500">{site.zoneMaintenance.responsable.societe}</span>
+                {site.zoneMaintenance.responsable.telephone && (
+                  <a href={`tel:${site.zoneMaintenance.responsable.telephone}`} className="font-medium text-[rgb(var(--brand-light))] hover:underline">
+                    {site.zoneMaintenance.responsable.telephone}
+                  </a>
+                )}
+              </div>
+            ) : (
+              <span className="text-gray-400">Aucun responsable désigné pour cette zone.</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">

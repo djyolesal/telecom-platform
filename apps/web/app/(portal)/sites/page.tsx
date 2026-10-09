@@ -19,6 +19,7 @@ import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS } from '@/lib/constants';
 import { SiteOptionnel } from '@/lib/optionalColumns';
 import { useColonnesOptionnelles } from '@/lib/hooks/useColonnesOptionnelles';
+import { useOptionsZones } from '@/lib/zones';
 
 interface Site extends SiteOptionnel {
   /** Rang d'ancienneté dans le parc (1 = le plus ancien), null sans date. */
@@ -33,7 +34,7 @@ interface Site extends SiteOptionnel {
   puissanceGEkva: number;
 }
 
-const FILTRES_DEFAUT = { page: '1', search: '', region: '', statutGe: '', configs: '', prestataireId: '', tri: '', sens: '' };
+const FILTRES_DEFAUT = { page: '1', search: '', region: '', zone: '', statutGe: '', configs: '', prestataireId: '', tri: '', sens: '' };
 
 function SitesPageInner() {
   const router = useRouter();
@@ -47,7 +48,9 @@ function SitesPageInner() {
   const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
   const page = Number(valeurs.page) || 1;
   const setPage = (p: number) => appliquer({ page: String(p) });
-  const { region, statutGe, prestataireId } = valeurs;
+  const { region, zone, statutGe, prestataireId } = valeurs;
+  // Zone de maintenance (terrain) : masquée tant qu'aucune zone n'est importée.
+  const optionsZones = useOptionsZones();
   // Config énergie MULTI (pastilles) : vide = toutes ; OU entre cochées —
   // « tout ce qui a du solaire » = Solaire + Hybride GE + Hybride CEET+GE.
   const configsFiltre = new Set(valeurs.configs ? valeurs.configs.split(',').filter(Boolean) : []);
@@ -82,12 +85,12 @@ function SitesPageInner() {
   });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sites', { page, debouncedSearch, region, statutGe, configs: [...configsFiltre].sort().join(','), prestataireId, tri }],
+    queryKey: ['sites', { page, debouncedSearch, region, zone, statutGe, configs: [...configsFiltre].sort().join(','), prestataireId, tri }],
     queryFn: () =>
       api
         .get('/sites', {
           params: {
-            page, limit: 20, search: debouncedSearch || undefined, region: region || undefined, statut_ge: statutGe || undefined,
+            page, limit: 20, search: debouncedSearch || undefined, region: region || undefined, zone_id: zone || undefined, statut_ge: statutGe || undefined,
             power_configs: configsFiltre.size ? [...configsFiltre].join(',') : undefined,
             prestataire_id: prestataireId || undefined,
             tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
@@ -139,6 +142,7 @@ function SitesPageInner() {
             )}
             {((session?.user as { role?: string })?.role ?? '') !== 'TECHNICIEN' && <ExportButtons base="/sites/export" name="sites" query={[
               region && `region=${region}`,
+              zone && `zone_id=${zone}`,
               statutGe && `statut_ge=${statutGe}`,
               configsFiltre.size > 0 && `power_configs=${[...configsFiltre].join(',')}`,
               prestataireId && `prestataire_id=${prestataireId}`,
@@ -158,6 +162,7 @@ function SitesPageInner() {
         searchPlaceholder="Rechercher par nom ou région…"
         filters={[
           { key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => appliquer({ region: v, page: '1' }) },
+          ...(optionsZones.length ? [{ key: 'zone', label: 'Toutes zones', value: zone, options: optionsZones, onChange: (v: string) => appliquer({ zone: v, page: '1' }) }] : []),
           { key: 'statut', label: 'Tous statuts GE', value: statutGe, options: STATUTS_GE, onChange: (v) => appliquer({ statutGe: v, page: '1' }) },
           ...(filtrePrestataire ? [{
             key: 'prestataire', label: 'Tous prestataires', value: prestataireId,

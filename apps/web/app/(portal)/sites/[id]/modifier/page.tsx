@@ -13,6 +13,7 @@ import { Loading, ErrorState } from '@/components/shared/states';
 import { regionOptions, STATUTS_GE, POWER_CONFIGS, TYPES_PYLONE, FORMES_CUVE, OUI_NON, ACCES_OPTIONS } from '@/lib/constants';
 import { useTypesLiaison } from '@/lib/liaisons';
 import { volumeMaxLitres, resoudreConfigCuve, LIBELLES_SOURCE_CUVE, type ConfigCuve, type PointBaremage } from '@/lib/cuve';
+import { useZonesMaintenance } from '@/lib/zones';
 
 export default function ModifierSitePage() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +26,7 @@ export default function ModifierSitePage() {
     hasClimatiseur: 'false', hasExtincteurs: 'false', typePylone: '', typeSite: '', dateMiseEnService: '',
     accesPickup: 'false',
     cuveVolumeLitres: '', formeCuve: '', cuveDimensions: '',
-    cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '', modeleCuveId: '',
+    cuveLongueurCm: '', cuveLargeurCm: '', cuveHauteurCm: '', cuveDiametreCm: '', modeleCuveId: '', zoneMaintenanceId: '',
     hasGardien: 'false', gardiennageNuitSeulement: 'false', societeGardiennage: '', gardiennagePrestataireId: '', telephoneSite: '',
     parentTransmissionId: '', typeLiaison: '', nodeId: '',
     marqueGE: '',
@@ -54,6 +55,7 @@ export default function ModifierSitePage() {
     queryFn: () => api.get('/types-pylone').then((r) => r.data.data as { code: string; libelle: string }[]),
   });
   const pyloneOptions = typesPylone?.map((t) => ({ value: t.code, label: t.libelle })) ?? TYPES_PYLONE;
+  const { data: zonesMaintenance } = useZonesMaintenance();
   // Modèles de cuve (5000 L, 3000 L…) : un barème partagé par catégorie.
   const { data: modelesCuve } = useQuery({
     queryKey: ['modeles-cuve'],
@@ -134,6 +136,7 @@ export default function ModifierSitePage() {
       cuveHauteurCm: propre.cuveHauteurCm != null ? String(propre.cuveHauteurCm) : '',
       cuveDiametreCm: propre.cuveDiametreCm != null ? String(propre.cuveDiametreCm) : '',
       modeleCuveId: site.modeleCuve?.id ?? '',
+      zoneMaintenanceId: site.zoneMaintenance?.id ?? '',
       hasGardien: site.hasGardien ? 'true' : 'false',
       gardiennageNuitSeulement: site.gardiennageNuitSeulement ? 'true' : 'false',
       societeGardiennage: site.societeGardiennage ?? '',
@@ -234,6 +237,7 @@ export default function ModifierSitePage() {
         cuveHauteurCm: form.cuveHauteurCm ? Number(form.cuveHauteurCm) : null,
         cuveDiametreCm: form.cuveDiametreCm ? Number(form.cuveDiametreCm) : null,
         modeleCuveId: form.modeleCuveId || null,
+        zoneMaintenanceId: form.zoneMaintenanceId || null,
         hasGardien: form.hasGardien === 'true',
         gardiennageNuitSeulement: form.gardiennageNuitSeulement === 'true',
         societeGardiennage: form.societeGardiennage || null,
@@ -311,6 +315,11 @@ export default function ModifierSitePage() {
           <Field label="Lot solaire (contrat solaire, découpage distinct)">
             <Select value={form.lotSolaireId} onChange={(e) => set('lotSolaireId', e.target.value)} options={lotSolaireOptions} placeholder="Aucun (site sans contrat solaire)" disabled={!solaireEligible} />
             {!solaireEligible && <p className="mt-1 text-xs text-gray-500">Réservé aux sites hybrides ou solaires.</p>}
+          </Field>
+          <Field label="Zone de maintenance (terrain)" hint="Donne le responsable (FME) du site ; ses alertes SMS en dépendent.">
+            <Select value={form.zoneMaintenanceId} onChange={(e) => set('zoneMaintenanceId', e.target.value)}
+              options={(zonesMaintenance ?? []).map((z) => ({ value: z.id, label: z.responsable ? `${z.nom} · ${z.responsable.prenom} ${z.responsable.nom}` : z.nom }))}
+              placeholder="Aucune zone" />
           </Field>
           <Field label="Adresse">
             <Input value={form.adresse} onChange={(e) => set('adresse', e.target.value)} />

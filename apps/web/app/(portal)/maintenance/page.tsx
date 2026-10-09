@@ -22,6 +22,7 @@ import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { fmtDateTime } from '@/lib/utils';
 
 import { useColonnesOptionnelles } from '@/lib/hooks/useColonnesOptionnelles';
+import { useOptionsZones } from '@/lib/zones';
 
 interface Maintenance {
   id: string;
@@ -40,7 +41,7 @@ interface Maintenance {
   _count?: { photos: number };
 }
 
-const FILTRES_DEFAUT = { page: '1', search: '', type: '', statut: '', prestataireId: '', tri: '', sens: '' };
+const FILTRES_DEFAUT = { page: '1', search: '', type: '', statut: '', prestataireId: '', zone: '', tri: '', sens: '' };
 
 function MaintenancePageInner() {
   // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
@@ -52,7 +53,8 @@ function MaintenancePageInner() {
   const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
   const page = Number(valeurs.page) || 1;
   const setPage = (p: number) => appliquer({ page: String(p) });
-  const { type, statut, prestataireId } = valeurs;
+  const { type, statut, prestataireId, zone } = valeurs;
+  const optionsZones = useOptionsZones();
   const tri = valeurs.tri ? { key: valeurs.tri, dir: (valeurs.sens === 'desc' ? -1 : 1) as 1 | -1 } : null;
   const [search, setSearch] = useState(valeurs.search);
   const debouncedSearch = useDebounce(search);
@@ -77,10 +79,10 @@ function MaintenancePageInner() {
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['maintenances', { page, debouncedSearch, type, statut, prestataireId, tri }],
+    queryKey: ['maintenances', { page, debouncedSearch, type, statut, prestataireId, zone, tri }],
     queryFn: () =>
       api.get('/maintenances', { params: {
-        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined,
+        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined, zone_id: zone || undefined,
         tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
       } }).then((r) => r.data),
   });
@@ -127,7 +129,8 @@ function MaintenancePageInner() {
           <>
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
             {roleExport === 'ADMIN' && equipeInterne && <RecueilPdfBouton type={type} prestataireId={prestataireId} prestataireOptions={prestataireOptions} />}
-            {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"/>}
+            {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"
+              query={[type && `type=${type}`, statut && `statut=${statut}`, zone && `zone_id=${zone}`].filter(Boolean).join('&') || undefined} />}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
         }
@@ -141,6 +144,7 @@ function MaintenancePageInner() {
           { key: 'type', label: 'Tous types', value: type, options: TYPES_MAINTENANCE, onChange: (v) => appliquer({ type: v, page: '1' }) },
           { key: 'statut', label: 'Tous statuts', value: statut, options: STATUTS_MAINTENANCE, onChange: (v) => appliquer({ statut: v, page: '1' }) },
           { key: 'prestataire', label: 'Tous prestataires', value: prestataireId, options: prestataireOptions, onChange: (v) => appliquer({ prestataireId: v, page: '1' }) },
+          ...(optionsZones.length ? [{ key: 'zone', label: 'Toutes zones', value: zone, options: optionsZones, onChange: (v: string) => appliquer({ zone: v, page: '1' }) }] : []),
         ]}
       />
 
