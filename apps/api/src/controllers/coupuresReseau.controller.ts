@@ -59,6 +59,7 @@ import { construireClasseurCoupures, COLONNES_DETAIL, LIBELLES_ALARME, fmtDuree 
 import { logger } from '../utils/logger';
 import { Intervalle, minutesUnion, minutesUnionParCle, pousser } from '../utils/intervals';
 import { io } from '../server';
+import { filtreZone } from '../utils/filtreZone';
 
 export const TECHNOLOGIES = ['2G', '3G', '4G', '5G', 'SITE'] as const;
 
@@ -814,7 +815,7 @@ export async function armerDetectionsMures(): Promise<number> {
 
 /** Filtres communs liste/export (période, statut, techno, alarme, recherche) + périmètre. */
 async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
-  const { site_id, technologie, technologies, type_alarme, statut, date_debut, date_fin, search, source, origine, a_qualifier } =
+  const { site_id, technologie, technologies, type_alarme, statut, date_debut, date_fin, search, source, origine, a_qualifier, zone_id } =
     req.query as Record<string, string>;
   const where: Record<string, unknown> = {};
   if (site_id) where.siteId = site_id;
@@ -873,10 +874,11 @@ async function whereCoupures(req: Request): Promise<Record<string, unknown>> {
     et.push({ OR: [{ source: { not: 'OSS' } }, { priseEnChargePar: { not: null } }] });
   }
   if (et.length) where.AND = et;
-  if (search || isRestreint(perimetre)) {
+  if (search || isRestreint(perimetre) || zone_id) {
     where.site = {
       ...(isRestreint(perimetre) ? perimetre : {}),
       ...(search ? { nom: { contains: search, mode: 'insensitive' } } : {}),
+      ...filtreZone(zone_id),
     };
   }
   return where;
@@ -1911,7 +1913,12 @@ async function calculerDisponibiliteReseau(req: Request) {
     // les internes (NOC/direction) voient tout + la déclinaison par prestataire.
     const perimetre = await sitePerimetre(req.user!.id);
     const restreint = isRestreint(perimetre);
-    const whereSite = { isActive: true, ...(restreint ? perimetre : {}) };
+    // Zone de maintenance : la dispo d'UNE zone (celle d'un FME). La déclinaison
+    // par prestataire, calculée sur des lots entiers, n'a alors plus de sens.
+    const zone = filtreZone(req.query.zone_id);
+    const parZone = 'zoneMaintenanceId' in zone;
+    const filtreSite = { ...(restreint ? perimetre : {}), ...zone };
+    const whereSite = { isActive: true, ...filtreSite };
 
     const [coupures, nbSites, lots] = await Promise.all([
       prisma.coupureReseau.findMany({
@@ -1929,7 +1936,7 @@ async function calculerDisponibiliteReseau(req: Request) {
             ? { OR: [...new Set([...technosSel, 'SITE'])].map((t) => ({ technologie: { contains: t } })) }
             : {}),
           ...(alarmesSel.length ? { typeAlarme: { in: alarmesSel } } : {}),
-          ...(restreint ? { site: perimetre } : {}),
+          ...(restreint || parZone ? { site: filtreSite } : {}),
         },
         // `select` explicite : l'`include` seul ramenait TOUTES les colonnes,
         // dont `observations` (text illimité) — 1 Ko par ligne au lieu de 200 o.
@@ -1940,7 +1947,7 @@ async function calculerDisponibiliteReseau(req: Request) {
         },
       }),
       prisma.site.count({ where: whereSite }),
-      restreint ? Promise.resolve([]) : prisma.lot.findMany({
+      restreint || parZone ? Promise.resolve([]) : prisma.lot.findMany({
         select: {
           id: true,
           _count: { select: { sites: { where: { isActive: true } } } },
@@ -2044,6 +2051,10 @@ async function calculerDisponibiliteReseau(req: Request) {
     const sitesTous = [...parSite.values()]
       .map((s) => ({ ...s, downtimeHeures: Math.round(s.downtime / 60), dispoPct: Math.max(0, Math.round((1 - s.downtime / fenetreMin) * 1000) / 10) }))
       .sort((a, b) => b.downtime - a.downtime);
+    const nomZone = !parZone ? null
+      : zone.zoneMaintenanceId
+        ? (await prisma.zoneMaintenance.findUnique({ where: { id: zone.zoneMaintenanceId }, select: { nom: true } }))?.nom ?? null
+        : 'Sans zone';
     const donnees = {
         periodeMois: mois,
         periodeLibre: libre,
@@ -2051,6 +2062,8 @@ async function calculerDisponibiliteReseau(req: Request) {
           ? `du ${depuis.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${finFenetre.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`
           : `sur ${mois} mois`,
         perimetreRestreint: restreint,
+        // Zone filtrée (nom affiché en titre des écrans et exports), ou null.
+        zone: nomZone,
         kpis: {
           coupures: coupures.filter((c) => (c.dateFin ?? finFenetre) > depuis && c.dateDebut < finFenetre).length,
           enCours,
@@ -2070,7 +2083,7 @@ async function calculerDisponibiliteReseau(req: Request) {
           .map((a) => ({ ...a, downtimeHeures: Math.round(a.downtime / 60) }))
           .sort((a, b) => b.downtime - a.downtime),
         // Vue interne uniquement : évaluation de chaque prestataire sur son périmètre.
-        parPrestataire: restreint ? undefined : [...parPresta.values()]
+        parPrestataire: restreint || parZone ? undefined : [...parPresta.values()]
           .map((e) => {
             const dt = minutesUnionParCle(e.iv);
             return {
@@ -2833,7 +2846,7 @@ export async function exportDisponibiliteReseau(req: Request, res: Response, nex
       donnees.periodeLibelle,
       technosSel.length ? `technologies : ${technosSel.join(', ')}` : 'toutes technologies',
       alarmesSel.length ? `alarmes : ${alarmesSel.join(', ')}` : 'toutes alarmes',
-      donnees.perimetreRestreint ? 'périmètre : vos lots' : 'réseau entier',
+      donnees.zone ? `zone : ${donnees.zone}` : donnees.perimetreRestreint ? 'périmètre : vos lots' : 'réseau entier',
     ].join(' · ');
 
     const feuilles: TabularSheet[] = [
@@ -3102,6 +3115,9 @@ async function calculerConformiteArcep(req: Request) {
 
   const perimetre = await sitePerimetre(req.user!.id);
   const restreint = isRestreint(perimetre);
+  // Conformité d'UNE zone de maintenance (celle d'un FME) si demandée.
+  const filtreSite = { ...(restreint ? perimetre : {}), ...filtreZone(req.query.zone_id) };
+  const filtre = Object.keys(filtreSite).length > 0;
 
   const [coupures, sites] = await Promise.all([
     // Toutes les coupures SITE du mois : le filtre d'adoption n'est plus posé
@@ -3111,12 +3127,12 @@ async function calculerConformiteArcep(req: Request) {
         technologie: 'SITE',
         OR: [{ dateFin: null }, { dateFin: { gte: depuis } }],
         dateDebut: { lte: finFenetre },
-        ...(restreint ? { site: perimetre } : {}),
+        ...(filtre ? { site: filtreSite } : {}),
       },
       select: { siteId: true, dateDebut: true, dateFin: true, source: true, priseEnChargePar: true },
     }),
     prisma.site.findMany({
-      where: { isActive: true, ...(restreint ? perimetre : {}) },
+      where: { isActive: true, ...filtreSite },
       select: { id: true, code: true, nom: true, region: true },
     }),
   ]);
@@ -3221,9 +3237,14 @@ async function calculerConformiteArcep(req: Request) {
     || Number(b.ecartVerdict) - Number(a.ecartVerdict)
     || b.totalMinutes - a.totalMinutes);
 
+  const zoneId = filtreZone(req.query.zone_id).zoneMaintenanceId;
+  const zone = zoneId === undefined ? null
+    : zoneId ? (await prisma.zoneMaintenance.findUnique({ where: { id: zoneId }, select: { nom: true } }))?.nom ?? null
+      : 'Sans zone';
   return {
     mois: `${annee}-${String(numMois).padStart(2, '0')}`,
     moisEnCours: finMois > maintenant,
+    zone,
     du: depuis, au: finFenetre,
     seuils: { dr1Max: SEUIL_DR1, dr2MaxMinutesParJour: SEUIL_DR2_MIN },
     sitesAnalyses: lignes.length,
@@ -3249,7 +3270,7 @@ export async function exportConformiteArcep(req: Request, res: Response, next: N
     const d = await calculerConformiteArcep(req);
     await auditLog(req.user!.id, 'EXPORT', 'coupure_reseau', undefined, { rapport: 'conformite-arcep', mois: d.mois }, req);
     const fmtMin = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ''}`.trim());
-    await sendTabular(res, req.params.format as 'xlsx' | 'pdf', 'conformite-arcep', 'Conformité ARCEP (DR1/DR2)', [{
+    await sendTabular(res, req.params.format as 'xlsx' | 'pdf', 'conformite-arcep', `Conformité ARCEP (DR1/DR2)${d.zone ? ` - zone ${d.zone}` : ''}`, [{
       name: 'Conformité',
       columns: [
         { header: 'Site', key: 'site', width: 26 },

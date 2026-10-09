@@ -62,6 +62,7 @@ import { verifierClotureEnergie, traceConfirmation, contexteSaisieSite, enregist
 import { TASK_BY_KEY } from '../utils/tachesPreventives';
 import { appAuMoins } from '../utils/versionApp';
 import { deciderCloture } from '../utils/verificationCloture';
+import { filtreZone } from '../utils/filtreZone';
 
 const techInclude = { technicien: { select: { nom: true, prenom: true } } };
 
@@ -202,7 +203,7 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
     // Périmètre prestataire (la liste était le seul endpoint maintenance à ne
     // pas l'appliquer, alors que planning et export le faisaient déjà).
     const perimetreListe = await sitePerimetre(req.user!.id);
-    const { type, statut, site_id, technicien_id, prestataire_id, categorie, date_debut, date_fin, search, page = '1', limit = '20' } =
+    const { type, statut, site_id, technicien_id, prestataire_id, categorie, date_debut, date_fin, search, zone_id, page = '1', limit = '20' } =
       req.query as Record<string, string>;
 
     const where: Record<string, unknown> = {};
@@ -210,6 +211,7 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
     if (statut) where.statut = statut;
     if (categorie) where.categorie = categorie;
     if (site_id) where.siteId = site_id;
+    if (zone_id) where.site = { ...(where.site as object ?? {}), ...filtreZone(zone_id) };
     if (technicien_id) where.technicienId = technicien_id;
     if (prestataire_id) where.prestataireId = prestataire_id;
     // Recherche texte : équipement, nom/code du site.
@@ -790,7 +792,7 @@ export async function startMaintenance(req: Request, res: Response, next: NextFu
       },
     });
     void notifierAction({
-      domaine: 'MAINTENANCE', evenement: 'DEMARRAGE', siteNom: existing.site.nom ?? existing.site.code,
+      domaine: 'MAINTENANCE', evenement: 'DEMARRAGE', siteNom: existing.site.nom ?? existing.site.code, siteId: existing.siteId,
       technicienId,
       detail: `${existing.type === 'PREVENTIVE' ? 'préventive' : 'curative'}${existing.reference ? ` (${existing.reference})` : ''}`,
     });
@@ -1487,7 +1489,7 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       ...(avertissements.length && confirmeVraisemblance ? { avertissementsConfirmes: avertissements } : {}),
     }, req);
     void notifierAction({
-      domaine: 'MAINTENANCE', evenement: 'CLOTURE', siteNom: existing.site.nom ?? existing.site.code,
+      domaine: 'MAINTENANCE', evenement: 'CLOTURE', siteNom: existing.site.nom ?? existing.site.code, siteId: existing.siteId,
       technicienId: existing.technicienId ?? req.user!.id,
       detail: `${existing.type === 'PREVENTIVE' ? 'préventive' : 'curative'}${existing.reference ? ` (${existing.reference})` : ''}`,
     });
@@ -2311,14 +2313,15 @@ export async function getPlanning(req: Request, res: Response, next: NextFunctio
 
 export async function exportMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
-    const { type, statut, site_id } = req.query as Record<string, string>;
+    const { type, statut, site_id, zone_id } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (type) where.type = type;
     if (statut) where.statut = statut;
     if (site_id) where.siteId = site_id;
+    if (zone_id) where.site = filtreZone(zone_id);
     const perimetreExp = await sitePerimetre(req.user!.id);
     if (isRestreint(perimetreExp)) {
-      where.site = perimetreExp;
+      where.site = { ...(where.site as object ?? {}), ...perimetreExp };
       where.AND = [...((where.AND as unknown[]) ?? []), await contratMaintenancePerimetre(req.user!.id)];
     }
 

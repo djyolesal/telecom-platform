@@ -42,6 +42,7 @@ import * as syncOssCtrl from '../controllers/syncOss.controller';
 import * as dbAdminCtrl from '../controllers/dbAdmin.controller';
 import * as exclusionsCtrl from '../controllers/exclusions.controller';
 import * as modelesCuveCtrl from '../controllers/modelesCuve.controller';
+import * as zonesCtrl from '../controllers/zonesMaintenance.controller';
 
 export const router = Router();
 
@@ -144,6 +145,7 @@ const NOC_ALLOW: RegExp[] = [
   /^\/rapports\/(dashboard|disponibilite-reseau|incidents|pouls-24h|conformite-arcep)$/,
   /^\/rapports\/(disponibilite-reseau|conformite-arcep)\/export\/(xlsx|pdf)$/,
   /^\/types-pylone(\/|$)/,
+  /^\/zones-maintenance$/,             // zone + FME : qui appeler sur un site
   /^\/types-site(\/|$)/,
   /^\/types-incident$/,               // libellés des types (déclaration/lecture)
   /^\/prestataires$/,                  // liste seule : options du filtre prestataire (page Sites)
@@ -573,6 +575,12 @@ router.post('/admin/modeles-cuve/affectation', rbac(['ADMIN']), modelesCuveCtrl.
 router.put('/admin/modeles-cuve/:id', rbac(['ADMIN']), modelesCuveCtrl.updateModeleCuve);
 router.put('/admin/modeles-cuve/:id/baremage', rbac(['ADMIN']), modelesCuveCtrl.replaceBaremeModele);
 router.delete('/admin/modeles-cuve/:id', rbac(['ADMIN']), modelesCuveCtrl.deleteModeleCuve);
+// ZONES DE MAINTENANCE (découpage terrain + FME) : lecture pour qui consulte le
+// parc (filtres, fiche site), édition et import du fichier réservés à l'ADMIN.
+router.get('/zones-maintenance', zonesCtrl.listZones);
+router.post('/admin/zones-maintenance/import', rbac(['ADMIN']), uploadSpreadsheet.single('file'), zonesCtrl.importerZones);
+router.put('/admin/zones-maintenance/:id', rbac(['ADMIN']), zonesCtrl.updateZone);
+router.delete('/admin/zones-maintenance/:id', rbac(['ADMIN']), zonesCtrl.deleteZone);
 router.delete('/admin/types-site/:code', rbac(['ADMIN']), adminCtrl.deleteTypeSite);
 
 // EXCLUSIONS CONTRACTUELLES : ce qui n'est pas dû, et depuis quand. La lecture

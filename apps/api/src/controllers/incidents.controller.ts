@@ -22,13 +22,14 @@ import { generateIncidentPdf } from '../services/pdf.service';
 import JSZip from 'jszip';
 import { notifierAction, envoyerSmsUtilisateur, rendreTemplate } from '../services/sms.service';
 import { genererReference } from '../services/reference.service';
+import { filtreZone } from '../utils/filtreZone';
 
 // Photos minimum (prises sur place) pour clôturer un incident.
 const MIN_PHOTOS_INCIDENT = 6;
 
 export async function getIncidents(req: Request, res: Response, next: NextFunction) {
   try {
-    const { type, severite, statut, site_id, technicien_id, region, search, page = '1', limit = '20' } = req.query as Record<string, string>;
+    const { type, severite, statut, site_id, technicien_id, region, zone_id, search, page = '1', limit = '20' } = req.query as Record<string, string>;
 
     const where: Record<string, unknown> = {};
     if (search) where.OR = [
@@ -46,6 +47,7 @@ export async function getIncidents(req: Request, res: Response, next: NextFuncti
     const perimetre = await sitePerimetre(req.user!.id);
     if (isRestreint(perimetre)) where.site = { ...(where.site as object ?? {}), ...perimetre };
     if (region) where.site = { ...(where.site as object ?? {}), region };
+    if (zone_id) where.site = { ...(where.site as object ?? {}), ...filtreZone(zone_id) };
 
     // Tri d'en-tête délégué (liste blanche) ; défaut : incidents actifs
     // (OUVERT, EN_COURS) avant les résolus/clos, puis sévérité, puis récence.
@@ -384,7 +386,7 @@ export async function startIncident(req: Request, res: Response, next: NextFunct
     await auditLog(req.user!.id, 'UPDATE', 'incidents', incident.id, { action: 'demarrage', latitude, longitude }, req);
     io.of('/supervision').emit('incident:updated', { id: updated.id, statut: updated.statut });
     void notifierAction({
-      domaine: 'INCIDENT', evenement: 'DEMARRAGE', siteNom: incident.site.nom ?? incident.site.code,
+      domaine: 'INCIDENT', evenement: 'DEMARRAGE', siteNom: incident.site.nom ?? incident.site.code, siteId: incident.siteId,
       technicienId: incident.technicienId ?? req.user!.id,
       detail: incident.reference ? `(${incident.reference})` : undefined,
     });
@@ -560,7 +562,7 @@ export async function closeIncident(req: Request, res: Response, next: NextFunct
     await auditLog(req.user!.id, 'CLOSE', 'incidents', incident.id, { causeProbable, duree, coupuresCloturees }, req);
     io.of('/supervision').emit('incident:resolved', { id: updated.id, dureeCoupureMinutes: duree });
     void notifierAction({
-      domaine: 'INCIDENT', evenement: 'CLOTURE', siteNom: incident.site.nom ?? incident.site.code,
+      domaine: 'INCIDENT', evenement: 'CLOTURE', siteNom: incident.site.nom ?? incident.site.code, siteId: incident.siteId,
       technicienId: incident.technicienId ?? req.user!.id,
       detail: incident.reference ? `(${incident.reference})` : undefined,
     });
@@ -726,6 +728,7 @@ function filtresListeIncidents(q: Record<string, string>): Record<string, unknow
   if (q.statut) where.statut = q.statut;
   if (q.site_id) where.siteId = q.site_id;
   if (q.region) where.site = { region: q.region };
+  if (q.zone_id) where.site = { ...(where.site as object ?? {}), ...filtreZone(q.zone_id) };
   return where;
 }
 

@@ -20,6 +20,8 @@ import { descendantsTransmission, assertSansCycle } from '../utils/transmission'
 import { hauteurMaxCm, resoudreConfigCuve, volumeMaxLitres } from '../utils/cuve';
 import { validerPointsBareme } from '../utils/baremeSaisi';
 import { SELECT_MODELE_CUVE, configPropre, configsModeles, cuveEffective } from '../services/cuve.service';
+import { prestataireDe, responsableVisible } from './zonesMaintenance.controller';
+import { filtreZone } from '../utils/filtreZone';
 import { publicFileUrl } from '../services/storage.service';
 import { memo } from '../utils/memo';
 
@@ -60,6 +62,8 @@ const IMPORT_COLUMNS = [
   { key: 'cuveDiametreCm', header: 'cuveDiametreCm' },
   // Par NOM (référentiel Administration → Modèles de cuve) : la capacité suit.
   { key: 'modeleCuve', header: 'modeleCuve' },
+  // Zone de maintenance (terrain) par NOM : Administration → Zones de maintenance.
+  { key: 'zoneMaintenance', header: 'zoneMaintenance' },
   { key: 'puissanceGE2', header: 'puissanceGE2' },
   { key: 'statutGE2', header: 'statutGE2' },
   { key: 'hasGardien', header: 'gardien' },
@@ -104,6 +108,7 @@ const HEADER_ALIASES: Record<string, string> = {
   gardiennuit: 'gardiennageNuitSeulement', postedenuit: 'gardiennageNuitSeulement', nuitseulement: 'gardiennageNuitSeulement',
   nodeid: 'nodeId', enodeb: 'nodeId', enodebid: 'nodeId',
   modelecuve: 'modeleCuve', typecuve: 'modeleCuve',
+  zonemaintenance: 'zoneMaintenance', zone: 'zoneMaintenance', actifmaintenancearea: 'zoneMaintenance',
   societegardiennage: 'societeGardiennage', gardiennage: 'societeGardiennage', societedegardiennage: 'societeGardiennage',
   telephonesite: 'telephoneSite', telephone: 'telephoneSite', tel: 'telephoneSite', contact: 'telephoneSite',
   datemiseenservice: 'dateMiseEnService', miseenservice: 'dateMiseEnService', datemiseservice: 'dateMiseEnService',
@@ -121,10 +126,11 @@ const HEADER_ALIASES: Record<string, string> = {
  */
 export async function getSites(req: Request, res: Response, next: NextFunction) {
   try {
-    const { region, statut_ge, power_config, power_configs, prestataire_id, type_site, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
+    const { region, statut_ge, power_config, power_configs, prestataire_id, type_site, zone_id, search, page = '1', limit = '20', sort = 'nom' } = req.query as Record<string, string>;
 
     const where: Record<string, unknown> = { isActive: true };
     if (region) where.region = region;
+    Object.assign(where, filtreZone(zone_id));
     // Nature du site : sert à cibler une population (les centres techniques,
     // par exemple) pour y poser des exclusions contractuelles en une fois.
     if (type_site) where.typeSite = type_site;
@@ -217,6 +223,7 @@ export async function getSites(req: Request, res: Response, next: NextFunction) 
           groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, marque: true } },
           lot: { select: { code: true, assignments: { select: { scope: true, prestataire: { select: { nom: true } } }, orderBy: { scope: 'asc' as const } } } },
           lotSolaire: { select: { code: true, assignments: { where: { scope: 'SOLAIRE' as const }, select: { prestataire: { select: { nom: true } } } } } },
+          zoneMaintenance: { select: { id: true, nom: true } },
         },
       },
       { page: parseInt(page), limit: parseInt(limit) }
@@ -248,6 +255,7 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
         baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } },
         modeleCuve: { select: SELECT_MODELE_CUVE },
+        zoneMaintenance: { select: { id: true, nom: true, responsable: { select: { id: true, nom: true, prenom: true, telephone: true, email: true, societe: true, prestataireId: true } } } },
         parentTransmission: { select: { id: true, nom: true } },
         enfantsTransmission: { where: { isActive: true }, select: { id: true, nom: true }, orderBy: { nom: 'asc' } },
       },
@@ -306,7 +314,8 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
     // lit le mobile pour convertir les hauteurs d'un dépotage. Rattacher un
     // site à un modèle ne demande donc pas de nouvelle version de l'app. La
     // configuration stockée sur la fiche (à éditer) est dans `cuvePropre`.
-    const { modeleCuve, ...reste } = site;
+    const { modeleCuve, zoneMaintenance, ...reste } = site;
+    const prestataireLecteur = await prestataireDe(req.user!.id);
     res.json({
       success: true,
       data: {
@@ -319,6 +328,9 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         baremage: configCuve.baremage ?? [],
         cuvePropre: configPropre(site),
         modeleCuve: modeleCuve ? { id: modeleCuve.id, nom: modeleCuve.nom, capaciteLitres: Number(modeleCuve.capaciteLitres) } : null,
+        zoneMaintenance: zoneMaintenance
+          ? { id: zoneMaintenance.id, nom: zoneMaintenance.nom, responsable: responsableVisible(zoneMaintenance.responsable, prestataireLecteur) }
+          : null,
         groupes, cuve, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       },
     });
@@ -534,6 +546,8 @@ function normaliserChampsFormulaire(data: Record<string, unknown>): void {
   if ('dateMiseEnService' in data) data.dateMiseEnService = dateMiseEnService(data.dateMiseEnService);
   // Chaîne vide = pas de nature : stocker '' fausserait les filtres par type.
   if ('typeSite' in data) data.typeSite = texteOuNull(data.typeSite);
+  // Chaîne vide du formulaire = « sans zone », pas une clé étrangère vide.
+  if ('zoneMaintenanceId' in data) data.zoneMaintenanceId = texteOuNull(data.zoneMaintenanceId);
 }
 
 /**
@@ -566,7 +580,7 @@ export async function createSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite', 'dateMiseEnService',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId', 'typeLiaison', 'nodeId', 'modeleCuveId',
+      'parentTransmissionId', 'typeLiaison', 'nodeId', 'modeleCuveId', 'zoneMaintenanceId',
     ]);
     normaliserChampsFormulaire(data);
     await appliquerModeleCuve(data, null);
@@ -605,7 +619,7 @@ export async function updateSite(req: Request, res: Response, next: NextFunction
       'powerConfig', 'statutGE', 'puissanceGEkva', 'lotId', 'lotSolaireId', 'typePylone', 'typeSite', 'dateMiseEnService',
       'hasClimatiseur', 'hasExtincteurs', 'accesPickup', 'cuveVolumeLitres', 'formeCuve',
       'cuveDimensions', 'cuveLongueurCm', 'cuveLargeurCm', 'cuveHauteurCm', 'cuveDiametreCm', 'hasGardien', 'gardiennageNuitSeulement', 'societeGardiennage', 'telephoneSite', 'gardiennagePrestataireId',
-      'parentTransmissionId', 'typeLiaison', 'nodeId', 'modeleCuveId',
+      'parentTransmissionId', 'typeLiaison', 'nodeId', 'modeleCuveId', 'zoneMaintenanceId',
     ]);
     if (Object.keys(data).length === 0) throw new AppError('Aucun champ modifiable fourni.', 400);
     normaliserChampsFormulaire(data);
@@ -773,6 +787,8 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
     const modelesCuve = await prisma.modeleCuve.findMany({ select: { id: true, nom: true, isActive: true, capaciteLitres: true } });
     const modeleByNorm = new Map(modelesCuve.map((m) => [norm(m.nom), m]));
     const modeleById = new Map(modelesCuve.map((m) => [m.id, m]));
+    const zonesMaint = await prisma.zoneMaintenance.findMany({ select: { id: true, nom: true } });
+    const zoneByNorm = new Map(zonesMaint.map((z) => [norm(z.nom), z.id]));
     const TRUE_SET = new Set(['1', 'oui', 'true', 'vrai', 'x', 'yes', 'y']);
     const toBool = (s: string) => TRUE_SET.has(norm(s));
     /** « 2022-10-03 » ou « 3-oct.-22 » → Date ; tout le reste → null. */
@@ -868,6 +884,14 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           modeleCuveId = m.id;
         }
         const modeleApres = modeleById.get(modeleCuveId ?? existant?.modeleCuveId ?? '');
+        // Zone : cellule vide = inchangée ; nom inconnu = ligne refusée (pas de
+        // zone créée par erreur de frappe - elles se gèrent dans leur écran).
+        let zoneMaintenanceId: string | undefined;
+        const zm = cellText(row, 'zoneMaintenance');
+        if (zm) {
+          zoneMaintenanceId = zoneByNorm.get(norm(zm));
+          if (!zoneMaintenanceId) throw new Error(`zone de maintenance inconnue « ${zm} » (gérez la liste dans Administration → Zones de maintenance)`);
+        }
 
         const data = {
           nom,
@@ -885,6 +909,7 @@ export async function importSites(req: Request, res: Response, next: NextFunctio
           cuveVolumeLitres: modeleApres ? modeleApres.capaciteLitres : cuveVol,
           cuveDimensions: cuveDim || null,
           ...(modeleCuveId ? { modeleCuveId } : {}),
+          ...(zoneMaintenanceId ? { zoneMaintenanceId } : {}),
           // Booléens : seulement si la colonne existe (sinon on préserve l'existant).
           ...(colByField.hasClimatiseur != null ? { hasClimatiseur: toBool(cellText(row, 'hasClimatiseur')) } : {}),
           ...(colByField.hasExtincteurs != null ? { hasExtincteurs: toBool(cellText(row, 'hasExtincteurs')) } : {}),
@@ -1232,9 +1257,10 @@ export async function getSiteReleves(req: Request, res: Response, next: NextFunc
  */
 export async function exportSites(req: Request, res: Response, next: NextFunction) {
   try {
-    const { region, statut_ge, power_config, power_configs, prestataire_id } = req.query as Record<string, string>;
+    const { region, statut_ge, power_config, power_configs, prestataire_id, zone_id } = req.query as Record<string, string>;
     const where: Record<string, unknown> = { isActive: true };
     if (region) where.region = region;
+    Object.assign(where, filtreZone(zone_id));
     if (statut_ge) where.statutGE = statut_ge;
     if (power_config) where.powerConfig = power_config;
     // Fidélité affichage/export : mêmes filtres que la liste.
@@ -1262,6 +1288,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
       include: {
         lot: { select: { code: true } },
         modeleCuve: { select: { nom: true } },
+        zoneMaintenance: { select: { nom: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, puissanceKva: true, statut: true, marque: true } },
       },
     });
@@ -1315,6 +1342,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
           cuveHauteurCm: s.cuveHauteurCm != null ? Number(s.cuveHauteurCm) : '',
           cuveDiametreCm: s.cuveDiametreCm != null ? Number(s.cuveDiametreCm) : '',
           modeleCuve: s.modeleCuve?.nom ?? '',
+          zoneMaintenance: s.zoneMaintenance?.nom ?? '',
           puissanceGE2: ge2 ? Number(ge2.puissanceKva) : '',
           statutGE2: ge2?.statut ?? '',
           hasGardien: oui(s.hasGardien),

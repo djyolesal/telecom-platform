@@ -183,6 +183,10 @@ export function settingsCatalog(): SettingMeta[] {
     { key: 'sms.affectations', label: 'SMS au technicien affecté (incident/maintenance)', groupe: 'Notifications', unite: '0/1', defaut: 1 },
     // SMS « site rétabli » (fin d'alerte) : seuil anti-rebond — pas de SMS si
     // la coupure a duré moins de N minutes (site qui « clignote »). 0 = coupé.
+    // FME (responsable d'une zone de maintenance) : 1 = il ne reçoit les alertes
+    // incidents/coupures/actions que pour les sites de SA zone ; 0 = règle du
+    // lot (tous les sites de sa société), comme avant les zones.
+    { key: 'sms.perimetreZoneFme', label: 'SMS des FME limités aux sites de leur zone', groupe: 'Notifications', unite: '0/1', defaut: 1 },
     { key: 'sms.retabliMinMinutes', label: 'SMS site rétabli : durée min. de coupure (0 = désactivé)', groupe: 'Notifications', unite: 'min', defaut: 15 },
     // Vraisemblance des saisies terrain (avertissements à confirmer, pas des blocages)
     { key: 'vraisemblance.margeCuvePct', label: 'Tolérance au-dessus de la capacité cuve', groupe: 'Vraisemblance saisies', unite: '%', defaut: 2 },

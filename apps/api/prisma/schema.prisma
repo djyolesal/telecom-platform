@@ -207,6 +207,9 @@ model Site {
   /// sert au site, sauf barème propre au site (cas particulier, prioritaire).
   /// La capacité du site est alors celle du modèle.
   modeleCuveId             String?     @map("modele_cuve_id")
+  /// Zone de maintenance (LOME 1, KARA…) : découpage TERRAIN du parc, avec son
+  /// responsable (FME). Distinct des lots, qui découpent le CONTRAT.
+  zoneMaintenanceId        String?     @map("zone_maintenance_id")
   // Gardiennage et contact local (préparation d'intervention, litiges manquants)
   hasGardien               Boolean     @default(false) @map("has_gardien")
   // Poste tenu UNIQUEMENT la nuit (plage paramétrable, défaut 18h→6h GMT) :
@@ -239,6 +242,7 @@ model Site {
   groupes                GroupeElectrogene[]
   baremage               BaremageCuve[]
   modeleCuve             ModeleCuve?              @relation(fields: [modeleCuveId], references: [id], onDelete: Restrict)
+  zoneMaintenance        ZoneMaintenance?         @relation(fields: [zoneMaintenanceId], references: [id], onDelete: SetNull)
   coupuresReseau         CoupureReseau[]
   exclusions             ExclusionContractuelle[]
   // Topologie de transmission : site AMONT dont dépend le lien de ce site.
@@ -262,6 +266,7 @@ model Site {
   @@index([gardiennagePrestataireId])
   @@index([parentTransmissionId])
   @@index([modeleCuveId])
+  @@index([zoneMaintenanceId])
   @@map("sites")
 }
 
@@ -914,10 +919,30 @@ model Contact {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  prestataire Prestataire? @relation(fields: [prestataireId], references: [id])
+  prestataire      Prestataire?      @relation(fields: [prestataireId], references: [id])
+  /// Zones dont ce contact est le responsable (FME).
+  zonesResponsable ZoneMaintenance[]
 
   @@index([prestataireId])
   @@map("contacts")
+}
+
+// Zone de maintenance : découpage TERRAIN du parc (LOME 1, KARA…) et son
+// responsable (FME, agent prestataire), pris parmi les contacts SMS. Un site
+// appartient à une zone ; la zone dit qui appeler et, si le paramètre
+// sms.perimetreZoneFme est actif, borne les alertes du FME à ses sites.
+model ZoneMaintenance {
+  id                   String   @id @default(uuid())
+  nom                  String   @unique @db.VarChar(60)
+  responsableContactId String?  @map("responsable_contact_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  responsable Contact? @relation(fields: [responsableContactId], references: [id], onDelete: SetNull)
+  sites       Site[]
+
+  @@index([responsableContactId])
+  @@map("zones_maintenance")
 }
 
 // Journal des SMS émis (ou simulés tant que la passerelle n'est pas configurée) :

@@ -178,6 +178,8 @@ export interface EvenementAction {
   domaine: 'MAINTENANCE' | 'INCIDENT';
   evenement: 'DEMARRAGE' | 'CLOTURE';
   siteNom: string;
+  /** Site de l'action : sa zone de maintenance borne les alertes des FME. */
+  siteId?: string;
   /** Utilisateur qui exécute l'action (technicien). */
   technicienId: string;
   /** Précision affichée dans le message (ex: "préventive", "coupure totale"). */
@@ -348,6 +350,52 @@ export async function envoyerSmsManuel(
 }
 
 /**
+ * PÉRIMÈTRE ZONE DES FME (paramètre sms.perimetreZoneFme, défaut 1).
+ *
+ * Un contact RESPONSABLE d'au moins une zone de maintenance (FME) reçoit les
+ * alertes des sites de SES zones, et seulement celles-là : sa zone remplace,
+ * pour lui, le périmètre « tous les sites des lots de ma société » qui lui
+ * envoyait les alertes de tout le parc de son prestataire. Les autres contacts
+ * (superviseurs, internes, « toutes sociétés ») gardent la règle d'avant.
+ * Ses préférences (incidents, coupures, démarrage, clôture) s'appliquent
+ * toujours. 0 = règle d'avant pour tout le monde.
+ *
+ * Retourne, pour chaque contact FME, les zones dont il répond, et la zone du
+ * site concerné (null : site sans zone).
+ */
+async function perimetreZones(siteId: string | undefined): Promise<{
+  actif: boolean;
+  zonesParContact: Map<string, Set<string>>;
+  zoneDuSite: string | null;
+}> {
+  if (getNum('sms.perimetreZoneFme', 1) !== 1) return { actif: false, zonesParContact: new Map(), zoneDuSite: null };
+  const [zones, site] = await Promise.all([
+    prisma.zoneMaintenance.findMany({ where: { responsableContactId: { not: null } }, select: { id: true, responsableContactId: true } }),
+    siteId ? prisma.site.findUnique({ where: { id: siteId }, select: { zoneMaintenanceId: true } }) : Promise.resolve(null),
+  ]);
+  const zonesParContact = new Map<string, Set<string>>();
+  for (const z of zones) {
+    const c = z.responsableContactId!;
+    (zonesParContact.get(c) ?? zonesParContact.set(c, new Set()).get(c)!).add(z.id);
+  }
+  return { actif: true, zonesParContact, zoneDuSite: site?.zoneMaintenanceId ?? null };
+}
+
+/**
+ * Le contact doit-il recevoir l'alerte ? `regleSociete` = la règle d'avant
+ * (toutes sociétés, ou même prestataire). Pour un FME, la zone tranche.
+ */
+export function cibleAlerte(
+  contactId: string,
+  regleSociete: boolean,
+  p: { actif: boolean; zonesParContact: Map<string, Set<string>>; zoneDuSite: string | null },
+): boolean {
+  const zones = p.actif ? p.zonesParContact.get(contactId) : undefined;
+  if (!zones) return regleSociete;
+  return p.zoneDuSite != null && zones.has(p.zoneDuSite);
+}
+
+/**
  * Notifie les contacts concernés par une action. Best-effort et non bloquant :
  * à appeler en `void notifierAction(...)` — un échec SMS ne doit jamais faire
  * échouer le démarrage ou la clôture.
@@ -368,10 +416,14 @@ export async function notifierAction(evt: EvenementAction): Promise<void> {
       },
     });
     // Périmètre : « toutes sociétés », ou même société que le technicien
-    // (contact interne ↔ technicien interne, prestataireId null des deux côtés).
-    const cibles = contacts.filter(
-      (c) => c.toutesSocietes || (c.prestataireId ?? null) === (technicien.prestataireId ?? null)
-    );
+    // (contact interne ↔ technicien interne, prestataireId null des deux côtés) ;
+    // pour un FME, sa zone de maintenance (voir perimetreZones).
+    const zones = await perimetreZones(evt.siteId);
+    const cibles = contacts.filter((c) => cibleAlerte(
+      c.id,
+      c.toutesSocietes || (c.prestataireId ?? null) === (technicien.prestataireId ?? null),
+      zones,
+    ));
     if (!cibles.length) return;
 
     const objet = evt.domaine === 'MAINTENANCE' ? 'une maintenance' : 'une intervention incident';
@@ -581,9 +633,16 @@ export async function notifierIncidentCoupure(
           : { notifIncidents: true }),
       },
     });
-    const cibles = contacts.filter(
-      (c) => c.toutesSocietes || (c.prestataireId != null && prestataires.has(c.prestataireId))
-    );
+    // Pour un FME, sa zone de maintenance remplace la règle du lot (perimetreZones).
+    // Les livraisons (opt-in, récap logistique) gardent la règle du lot.
+    const zones = pref === 'livraisons'
+      ? { actif: false, zonesParContact: new Map<string, Set<string>>(), zoneDuSite: null }
+      : await perimetreZones(siteId);
+    const cibles = contacts.filter((c) => cibleAlerte(
+      c.id,
+      c.toutesSocietes || (c.prestataireId != null && prestataires.has(c.prestataireId)),
+      zones,
+    ));
     await envoyerLotContacts(cibles, message, evenement);
   } catch (err) {
     logger.warn('[sms] notification incident-coupure échouée:', err);
