@@ -932,7 +932,7 @@ export async function getCoupures(req: Request, res: Response, next: NextFunctio
           // racine (et en infobulle du badge « N impacté(s) »).
           heritees: {
             select: {
-              id: true, technologie: true, frequence: true, secteur: true,
+              id: true, siteId: true, technologie: true, frequence: true, secteur: true,
               dateDebut: true, dateFin: true, downtimeMinutes: true,
               cause: true, actions: true, typeAlarme: true, technicienContacte: true,
               intervenants: true, observations: true, origine: true, source: true,

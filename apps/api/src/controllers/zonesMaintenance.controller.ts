@@ -43,13 +43,17 @@ export async function listZones(req: Request, res: Response, next: NextFunction)
       select: {
         id: true, nom: true,
         responsable: { select: SELECT_RESPONSABLE },
+        membres: { select: { contact: { select: SELECT_RESPONSABLE } }, orderBy: { createdAt: 'asc' } },
         _count: { select: { sites: { where: { isActive: true } } } },
       },
     });
     res.json({
       success: true,
-      data: zones.map(({ _count, responsable, ...z }) => ({
-        ...z, responsable: responsableVisible(responsable, prestataire), nbSites: _count.sites,
+      data: zones.map(({ _count, responsable, membres, ...z }) => ({
+        ...z,
+        responsable: responsableVisible(responsable, prestataire),
+        equipiers: membres.map((m) => responsableVisible(m.contact, prestataire)),
+        nbSites: _count.sites,
       })),
     });
   } catch (err) { next(err); }
@@ -60,7 +64,7 @@ export async function updateZone(req: Request, res: Response, next: NextFunction
   try {
     const zone = await prisma.zoneMaintenance.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!zone) throw new AppError('Zone introuvable', 404);
-    const b = (req.body ?? {}) as { nom?: unknown; responsableContactId?: unknown };
+    const b = (req.body ?? {}) as { nom?: unknown; responsableContactId?: unknown; equipiersContactIds?: unknown };
     const data: { nom?: string; responsableContactId?: string | null } = {};
     if ('nom' in b) {
       const nom = String(b.nom ?? '').trim().replace(/\s+/g, ' ');
@@ -76,12 +80,34 @@ export async function updateZone(req: Request, res: Response, next: NextFunction
       }
       data.responsableContactId = id;
     }
-    if (!Object.keys(data).length) throw new AppError('Aucun champ à modifier.', 400);
-    const z = await prisma.zoneMaintenance.update({ where: { id: zone.id }, data }).catch((e: { code?: string }) => {
+    // Équipiers : remplacement complet de la liste (contacts actifs, le
+    // responsable n'y figure pas - il l'est déjà).
+    let equipiers: string[] | null = null;
+    if ('equipiersContactIds' in b) {
+      if (!Array.isArray(b.equipiersContactIds) || b.equipiersContactIds.length > 10) {
+        throw new AppError('Équipiers : une liste de 10 contacts au plus.', 422);
+      }
+      equipiers = [...new Set(b.equipiersContactIds.map(String))];
+      const actifs = await prisma.contact.count({ where: { id: { in: equipiers }, actif: true } });
+      if (actifs !== equipiers.length) throw new AppError('Un équipier est introuvable ou désactivé dans les contacts SMS.', 422);
+    }
+    if (!Object.keys(data).length && !equipiers) throw new AppError('Aucun champ à modifier.', 400);
+    const z = await prisma.$transaction(async (tx) => {
+      const maj = Object.keys(data).length
+        ? await tx.zoneMaintenance.update({ where: { id: zone.id }, data })
+        : await tx.zoneMaintenance.findUniqueOrThrow({ where: { id: zone.id } });
+      if (equipiers) {
+        const responsable = maj.responsableContactId;
+        await tx.zoneMaintenanceMembre.deleteMany({ where: { zoneId: zone.id } });
+        const garder = equipiers.filter((c) => c !== responsable);
+        if (garder.length) await tx.zoneMaintenanceMembre.createMany({ data: garder.map((contactId) => ({ zoneId: zone.id, contactId })) });
+      }
+      return maj;
+    }).catch((e: { code?: string }) => {
       if (e.code === 'P2002') throw new AppError(`Une zone s'appelle déjà « ${data.nom} ».`, 409);
       throw e;
     });
-    await auditLog(req.user!.id, 'UPDATE', 'zones_maintenance', zone.id, data, req);
+    await auditLog(req.user!.id, 'UPDATE', 'zones_maintenance', zone.id, { ...data, ...(equipiers ? { equipiers } : {}) }, req);
     res.json({ success: true, data: z });
   } catch (err) { next(err); }
 }
@@ -191,5 +217,62 @@ export async function importerZones(req: Request, res: Response, next: NextFunct
     }, req);
     await cacheService.invalidate('sites:geojson*');
     res.json({ success: true, data: { applique: true, ...resume } });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Qui le NOC peut appeler pour une coupure sur ce site : l'ÉQUIPE FME de la
+ * zone du site (responsable puis équipiers), et les techniciens PASSIFS du
+ * prestataire qui tient la maintenance passive du lot du site (tous les
+ * techniciens passifs si le lot n'a pas de titulaire). Le champ « technicien
+ * contacté » reste libre : ce sont des suggestions, pas une liste fermée.
+ */
+export async function contactablesPourSite(req: Request, res: Response, next: NextFunction) {
+  try {
+    const siteId = String(req.query.site_id ?? '');
+    if (!siteId) throw new AppError('Site requis (site_id).', 400);
+    const site = await prisma.site.findUnique({
+      where: { id: siteId },
+      select: {
+        zoneMaintenance: {
+          select: {
+            nom: true,
+            responsable: { select: { nom: true, prenom: true, telephone: true, societe: true, actif: true } },
+            membres: { orderBy: { createdAt: 'asc' }, select: { contact: { select: { nom: true, prenom: true, telephone: true, societe: true, actif: true } } } },
+          },
+        },
+        lot: { select: { assignments: { select: { prestataireId: true, scope: true } } } },
+      },
+    });
+    if (!site) throw new AppError('Site introuvable', 404);
+
+    const z = site.zoneMaintenance;
+    const fme = z ? [
+      ...(z.responsable?.actif ? [{ ...z.responsable, role: 'Responsable' as const }] : []),
+      ...z.membres.filter((m) => m.contact.actif).map((m) => ({ ...m.contact, role: 'Équipier' as const })),
+    ].map(({ actif: _a, ...c }) => c) : [];
+
+    const prestatairesPassifs = [...new Set((site.lot?.assignments ?? [])
+      .filter((a) => a.scope === 'PASSIVE' || a.scope === 'LES_DEUX')
+      .map((a) => a.prestataireId))];
+    const passifs = await prisma.user.findMany({
+      where: {
+        isActive: true, role: 'TECHNICIEN', equipe: 'PASSIVE',
+        ...(prestatairesPassifs.length ? { prestataireId: { in: prestatairesPassifs } } : {}),
+      },
+      orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
+      take: 50,
+      select: { nom: true, prenom: true, telephone: true, prestataire: { select: { nom: true } } },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        zone: z?.nom ?? null,
+        fme,
+        passifs: passifs.map((t) => ({ nom: t.nom, prenom: t.prenom, telephone: t.telephone, societe: t.prestataire?.nom ?? 'interne' })),
+        passifsDuLot: prestatairesPassifs.length > 0,
+      },
+    });
   } catch (err) { next(err); }
 }

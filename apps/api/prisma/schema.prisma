@@ -919,9 +919,11 @@ model Contact {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  prestataire      Prestataire?      @relation(fields: [prestataireId], references: [id])
+  prestataire      Prestataire?            @relation(fields: [prestataireId], references: [id])
   /// Zones dont ce contact est le responsable (FME).
   zonesResponsable ZoneMaintenance[]
+  /// Zones dont ce contact est un équipier (FME de l'équipe, hors responsable).
+  zonesEquipier    ZoneMaintenanceMembre[]
 
   @@index([prestataireId])
   @@map("contacts")
@@ -938,11 +940,28 @@ model ZoneMaintenance {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  responsable Contact? @relation(fields: [responsableContactId], references: [id], onDelete: SetNull)
+  responsable Contact?                @relation(fields: [responsableContactId], references: [id], onDelete: SetNull)
   sites       Site[]
+  /// Équipiers : les FME vont souvent par deux, le fichier ne cite que le
+  /// responsable d'équipe. Ils reçoivent les alertes de la zone comme lui.
+  membres     ZoneMaintenanceMembre[]
 
   @@index([responsableContactId])
   @@map("zones_maintenance")
+}
+
+// Équipier d'une zone de maintenance (un contact SMS), en plus du responsable.
+model ZoneMaintenanceMembre {
+  zoneId    String   @map("zone_id")
+  contactId String   @map("contact_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  zone    ZoneMaintenance @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  contact Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([zoneId, contactId])
+  @@index([contactId])
+  @@map("zones_maintenance_membres")
 }
 
 // Journal des SMS émis (ou simulés tant que la passerelle n'est pas configurée) :

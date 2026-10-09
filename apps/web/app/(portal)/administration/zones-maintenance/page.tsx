@@ -10,7 +10,7 @@ import { Button } from '@/components/shared/Button';
 import { Loading, ErrorState } from '@/components/shared/states';
 
 interface Responsable { id: string; nom: string; prenom: string; telephone: string | null; email: string | null; societe: string }
-interface Zone { id: string; nom: string; nbSites: number; responsable: Responsable | null }
+interface Zone { id: string; nom: string; nbSites: number; responsable: Responsable | null; equipiers: Responsable[] }
 interface Contact { id: string; nom: string; prenom: string; telephone: string; societe: string; actif: boolean }
 
 interface Apercu {
@@ -110,6 +110,12 @@ export default function ZonesMaintenancePage() {
     onSuccess: () => { rafraichir(); setMessage({ ok: true, texte: 'Responsable de zone enregistré.' }); },
     onError: erreur,
   });
+  const changerEquipiers = useMutation({
+    mutationFn: (p: { id: string; equipiersContactIds: string[] }) =>
+      api.put(`/admin/zones-maintenance/${p.id}`, { equipiersContactIds: p.equipiersContactIds }),
+    onSuccess: () => { rafraichir(); setMessage({ ok: true, texte: 'Équipe de la zone enregistrée.' }); },
+    onError: erreur,
+  });
   const supprimer = useMutation({
     mutationFn: (id: string) => api.delete(`/admin/zones-maintenance/${id}`),
     onSuccess: () => { rafraichir(); setMessage({ ok: true, texte: 'Zone supprimée : ses sites sont désormais sans zone.' }); },
@@ -144,7 +150,7 @@ export default function ZonesMaintenancePage() {
               <tr>
                 <th className="px-4 py-2.5 font-medium">Zone</th>
                 <th className="px-4 py-2.5 text-right font-medium">Sites</th>
-                <th className="px-4 py-2.5 font-medium">Responsable (FME)</th>
+                <th className="px-4 py-2.5 font-medium">Équipe FME (responsable, puis équipiers)</th>
                 <th className="px-4 py-2.5 font-medium">Téléphone</th>
                 <th className="w-10" />
               </tr>
@@ -163,6 +169,25 @@ export default function ZonesMaintenancePage() {
                       <option value="">Aucun responsable</option>
                       {actifs.map((c) => <option key={c.id} value={c.id}>{c.nom} {c.prenom} · {c.societe}</option>)}
                     </select>
+                    {/* Équipiers : les FME vont souvent par deux, le fichier ne
+                        cite que le responsable. Mêmes alertes, mêmes suggestions NOC. */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {z.equipiers.map((e) => (
+                        <span key={e.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pl-2 pr-1 text-xs text-gray-700">
+                          {e.nom} {e.prenom}{e.telephone ? ` · ${e.telephone}` : ''}
+                          <button type="button" title="Retirer de l'équipe"
+                            onClick={() => changerEquipiers.mutate({ id: z.id, equipiersContactIds: z.equipiers.filter((x) => x.id !== e.id).map((x) => x.id) })}
+                            className="rounded-full px-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700">×</button>
+                        </span>
+                      ))}
+                      <select value="" disabled={changerEquipiers.isPending}
+                        onChange={(e) => e.target.value && changerEquipiers.mutate({ id: z.id, equipiersContactIds: [...z.equipiers.map((x) => x.id), e.target.value] })}
+                        className="rounded-lg border border-dashed border-gray-300 bg-white px-2 py-0.5 text-xs text-gray-500 outline-none">
+                        <option value="">+ équipier</option>
+                        {actifs.filter((c) => c.id !== z.responsable?.id && !z.equipiers.some((x) => x.id === c.id))
+                          .map((c) => <option key={c.id} value={c.id}>{c.nom} {c.prenom} · {c.societe}</option>)}
+                      </select>
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 text-gray-600">{z.responsable?.telephone ?? '-'}</td>
                   <td className="px-2 py-2.5">

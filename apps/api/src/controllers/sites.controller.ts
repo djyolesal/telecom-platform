@@ -255,7 +255,11 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' } },
         baremage: { orderBy: { hauteurCm: 'asc' }, select: { hauteurCm: true, litres: true } },
         modeleCuve: { select: SELECT_MODELE_CUVE },
-        zoneMaintenance: { select: { id: true, nom: true, responsable: { select: { id: true, nom: true, prenom: true, telephone: true, email: true, societe: true, prestataireId: true } } } },
+        zoneMaintenance: { select: {
+          id: true, nom: true,
+          responsable: { select: { id: true, nom: true, prenom: true, telephone: true, email: true, societe: true, prestataireId: true } },
+          membres: { orderBy: { createdAt: 'asc' }, select: { contact: { select: { id: true, nom: true, prenom: true, telephone: true, email: true, societe: true, prestataireId: true } } } },
+        } },
         parentTransmission: { select: { id: true, nom: true } },
         enfantsTransmission: { where: { isActive: true }, select: { id: true, nom: true }, orderBy: { nom: 'asc' } },
       },
@@ -329,7 +333,11 @@ export async function getSiteById(req: Request, res: Response, next: NextFunctio
         cuvePropre: configPropre(site),
         modeleCuve: modeleCuve ? { id: modeleCuve.id, nom: modeleCuve.nom, capaciteLitres: Number(modeleCuve.capaciteLitres) } : null,
         zoneMaintenance: zoneMaintenance
-          ? { id: zoneMaintenance.id, nom: zoneMaintenance.nom, responsable: responsableVisible(zoneMaintenance.responsable, prestataireLecteur) }
+          ? {
+            id: zoneMaintenance.id, nom: zoneMaintenance.nom,
+            responsable: responsableVisible(zoneMaintenance.responsable, prestataireLecteur),
+            equipiers: zoneMaintenance.membres.map((m) => responsableVisible(m.contact, prestataireLecteur)),
+          }
           : null,
         groupes, cuve, intervalleVidangeHeures: getNum('ge.intervalleVidangeHeures', 250),
       },

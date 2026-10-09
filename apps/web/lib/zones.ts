@@ -11,6 +11,8 @@ export interface ZoneMaintenance {
   nom: string;
   nbSites: number;
   responsable: { id: string; nom: string; prenom: string; telephone: string | null; email: string | null; societe: string } | null;
+  /** Les autres FME de l'équipe (le fichier ne cite que le responsable). */
+  equipiers: { id: string; nom: string; prenom: string; telephone: string | null; email: string | null; societe: string }[];
 }
 
 export function useZonesMaintenance() {

@@ -352,7 +352,7 @@ export async function envoyerSmsManuel(
 /**
  * PÉRIMÈTRE ZONE DES FME (paramètre sms.perimetreZoneFme, défaut 1).
  *
- * Un contact RESPONSABLE d'au moins une zone de maintenance (FME) reçoit les
+ * Un contact de l'ÉQUIPE d'au moins une zone (FME responsable ou équipier) reçoit les
  * alertes des sites de SES zones, et seulement celles-là : sa zone remplace,
  * pour lui, le périmètre « tous les sites des lots de ma société » qui lui
  * envoyait les alertes de tout le parc de son prestataire. Les autres contacts
@@ -370,13 +370,14 @@ async function perimetreZones(siteId: string | undefined): Promise<{
 }> {
   if (getNum('sms.perimetreZoneFme', 1) !== 1) return { actif: false, zonesParContact: new Map(), zoneDuSite: null };
   const [zones, site] = await Promise.all([
-    prisma.zoneMaintenance.findMany({ where: { responsableContactId: { not: null } }, select: { id: true, responsableContactId: true } }),
+    prisma.zoneMaintenance.findMany({ select: { id: true, responsableContactId: true, membres: { select: { contactId: true } } } }),
     siteId ? prisma.site.findUnique({ where: { id: siteId }, select: { zoneMaintenanceId: true } }) : Promise.resolve(null),
   ]);
   const zonesParContact = new Map<string, Set<string>>();
+  // Responsable ET équipiers : toute l'équipe FME de la zone.
   for (const z of zones) {
-    const c = z.responsableContactId!;
-    (zonesParContact.get(c) ?? zonesParContact.set(c, new Set()).get(c)!).add(z.id);
+    const equipe = [z.responsableContactId, ...(z.membres ?? []).map((m) => m.contactId)].filter((c): c is string => !!c);
+    for (const c of equipe) (zonesParContact.get(c) ?? zonesParContact.set(c, new Set()).get(c)!).add(z.id);
   }
   return { actif: true, zonesParContact, zoneDuSite: site?.zoneMaintenanceId ?? null };
 }

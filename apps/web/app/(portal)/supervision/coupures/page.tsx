@@ -18,9 +18,11 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useSupervisionSocket } from '@/lib/hooks/useSupervisionSocket';
 import { fmtDateTime } from '@/lib/utils';
 import { useOptionsZones } from '@/lib/zones';
+import { TechnicienContacte } from './TechnicienContacte';
 
 interface Coupure {
   id: string;
+  siteId?: string;
   technologie: string;
   frequence?: string | null;
   source?: string; // MANUEL | OSS (détection automatique)
@@ -771,7 +773,7 @@ function CoupureFormModal({ onClose, onDone, onOuvrirExistante }: {
         <Input list="motifs-cause" value={cause} onChange={(e) => setCause(e.target.value)} placeholder="ex. Coupure de l'énergie solaire" />
         <SuggestionsMotifs champ="cause" valeurs={motifs.causes} valeur={cause} onChoisir={setCause} />
       </Field>
-      <Field label="Technicien contacté"><Input value={technicien} onChange={(e) => setTechnicien(e.target.value)} /></Field>
+      <Field label="Technicien contacté"><TechnicienContacte siteId={siteId} value={technicien} onChange={setTechnicien} /></Field>
       <Field label="Observations"><Textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} /></Field>
       {siteEntier && nbAval > 0 && (
         <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
@@ -948,13 +950,13 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
           elle disparaît - proposer de « déclencher le terrain » sur une
           coupure requalifiée partielle serait contradictoire. */}
       {coupure.source === 'OSS' && !coupure.priseEnChargePar && !coupure.dateFin && siteEntier && (
-        <PriseEnChargeBloc coupureId={coupure.id} technicienInitial={coupure.technicienContacte} onDone={onDone} />
+        <PriseEnChargeBloc coupureId={coupure.id} siteId={coupure.siteId} technicienInitial={coupure.technicienContacte} onDone={onDone} />
       )}
       {/* Détection auto DÉJÀ RÉTABLIE, jamais adoptée : plus rien à envoyer sur
           le terrain, mais on peut la VALIDER a posteriori pour qu'elle compte
           dans la disponibilité (silencieux : aucun incident, aucun SMS). */}
       {coupure.source === 'OSS' && !coupure.priseEnChargePar && !!coupure.dateFin && (
-        <ValidationClotureeBloc coupureId={coupure.id} technicienInitial={coupure.technicienContacte} onDone={onDone} />
+        <ValidationClotureeBloc coupureId={coupure.id} siteId={coupure.siteId} technicienInitial={coupure.technicienContacte} onDone={onDone} />
       )}
       {peutDetacher && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
@@ -1071,7 +1073,7 @@ function CoupureEditModal({ coupure, onClose, onDone }: { coupure: Coupure; onCl
         <Field label="Intervenant(s)"><Input value={intervenants} onChange={(e) => setIntervenants(e.target.value)} /></Field>
       </div>
       <Field label="Technicien contacté">
-        <Input value={technicienContacte} onChange={(e) => setTechnicienContacte(e.target.value)} placeholder="Qui a été appelé pour cette coupure" />
+        <TechnicienContacte siteId={coupure.siteId} value={technicienContacte} onChange={setTechnicienContacte} placeholder="Qui a été appelé pour cette coupure" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Cause">
@@ -1191,7 +1193,7 @@ function HistoriqueBloc({ coupureId }: { coupureId: string }) {
 // si un site AMONT est aussi coupé, c'est lui la racine - les coupures aval
 // (dont celle-ci) sont reclassées héritées et la liste retombe à un événement.
 
-function PriseEnChargeBloc({ coupureId, technicienInitial, onDone }: { coupureId: string; technicienInitial?: string | null; onDone: () => void }) {
+function PriseEnChargeBloc({ coupureId, siteId, technicienInitial, onDone }: { coupureId: string; siteId?: string; technicienInitial?: string | null; onDone: () => void }) {
   // Le NOC appelle un technicien PENDANT qu'il adopte l'événement : la saisie
   // est ici, pas seulement dans le formulaire d'édition (elle y reste
   // corrigeable). Laisser vide n'efface jamais une valeur déjà enregistrée.
@@ -1247,7 +1249,7 @@ function PriseEnChargeBloc({ coupureId, technicienInitial, onDone }: { coupureId
           </p>
           <div className="mb-2">
             <label className="mb-1 block text-xs font-medium text-indigo-900">Technicien contacté <span className="font-normal text-indigo-500">(facultatif)</span></label>
-            <Input value={technicien} onChange={(e) => setTechnicien(e.target.value)} placeholder="Nom du technicien appelé" />
+            <TechnicienContacte siteId={siteId} value={technicien} onChange={setTechnicien} />
           </div>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             {mutation.isPending ? 'Analyse de la topologie…' : 'Prendre en charge (analyse amont/aval)'}
@@ -1263,7 +1265,7 @@ function PriseEnChargeBloc({ coupureId, technicienInitial, onDone }: { coupureId
 // Silencieuse : fait entrer l'événement clôturé au rapport de disponibilité
 // sans rien déclencher (pas d'incident, pas de SMS). Le serveur refuse en
 // dessous d'une durée minimale (anti micro-battement OSS).
-function ValidationClotureeBloc({ coupureId, technicienInitial, onDone }: { coupureId: string; technicienInitial?: string | null; onDone: () => void }) {
+function ValidationClotureeBloc({ coupureId, siteId, technicienInitial, onDone }: { coupureId: string; siteId?: string; technicienInitial?: string | null; onDone: () => void }) {
   const [technicien, setTechnicien] = useState(technicienInitial ?? '');
   const [resultat, setResultat] = useState<{ lignesValidees: number; dureeMin: number; priseEnChargePar: string } | null>(null);
   const mutation = useMutation({
@@ -1291,7 +1293,7 @@ function ValidationClotureeBloc({ coupureId, technicienInitial, onDone }: { coup
           </p>
           <div className="mb-2">
             <label className="mb-1 block text-xs font-medium text-slate-700">Technicien contacté <span className="font-normal text-slate-500">(facultatif)</span></label>
-            <Input value={technicien} onChange={(e) => setTechnicien(e.target.value)} placeholder="Nom du technicien appelé" />
+            <TechnicienContacte siteId={siteId} value={technicien} onChange={setTechnicien} />
           </div>
           <Button variant="secondary" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             {mutation.isPending ? 'Validation…' : 'Valider (compter dans la disponibilité)'}

@@ -289,6 +289,15 @@ export default function SiteDetailPage() {
             ) : (
               <span className="text-gray-400">Aucun responsable désigné pour cette zone.</span>
             )}
+            {(site.zoneMaintenance.equipiers ?? []).map((e: { id: string; nom: string; prenom: string; telephone: string | null }) => (
+              <div key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Équipier</span>
+                <span className="text-gray-800">{e.prenom} {e.nom}</span>
+                {e.telephone && (
+                  <a href={`tel:${e.telephone}`} className="font-medium text-[rgb(var(--brand-light))] hover:underline">{e.telephone}</a>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -86,6 +86,19 @@ describe('coupure partielle sur un site de LOME 1', () => {
   });
 });
 
+describe('équipe FME', () => {
+  it('un ÉQUIPIER de la zone est prévenu comme le responsable, et pas pour les autres zones', async () => {
+    const EQUIPIER = c('eq1', '90000009');
+    p.contact.findMany.mockResolvedValue([FME_LOME1, FME_KARA, EQUIPIER]);
+    p.zoneMaintenance.findMany.mockResolvedValue([
+      { id: 'z-lome1', responsableContactId: 'fme1', membres: [{ contactId: 'eq1' }] },
+      { id: 'z-kara', responsableContactId: 'fme2', membres: [] },
+    ]);
+    await notifierIncidentCoupure('site-1', 'Coupure 4G', 'COUPURE', 'ACTIVE', 'coupures');
+    expect(destinataires()).toEqual(['+22890000001', '+22890000009']);
+  });
+});
+
 describe('démarrage d\'une maintenance', () => {
   it('même règle de zone pour les actions terrain', async () => {
     await notifierAction({ domaine: 'MAINTENANCE', evenement: 'DEMARRAGE', siteNom: 'ABOBO', siteId: 'site-1', technicienId: 't1' });
