@@ -188,6 +188,9 @@ export function settingsCatalog(): SettingMeta[] {
     // lot (tous les sites de sa société), comme avant les zones.
     { key: 'sms.perimetreZoneFme', label: 'SMS des FME limités aux sites de leur zone', groupe: 'Notifications', unite: '0/1', defaut: 1 },
     { key: 'sms.retabliMinMinutes', label: 'SMS site rétabli : durée min. de coupure (0 = désactivé)', groupe: 'Notifications', unite: 'min', defaut: 15 },
+    // Site inaccessible (route coupée, crue…) : à partir de N jours dans le mois,
+    // une tâche due et non réalisée est JUSTIFIÉE (ni retard ni pénalité).
+    { key: 'maintenance.joursInaccessibiliteJustifiant', label: 'Jours d\'inaccessibilité dans le mois justifiant une tâche non faite', groupe: 'Maintenance', unite: 'jours', defaut: 7 },
     // Vraisemblance des saisies terrain (avertissements à confirmer, pas des blocages)
     { key: 'vraisemblance.margeCuvePct', label: 'Tolérance au-dessus de la capacité cuve', groupe: 'Vraisemblance saisies', unite: '%', defaut: 2 },
     { key: 'vraisemblance.maxHeuresGEParJour', label: 'Marche GE max par jour écoulé', groupe: 'Vraisemblance saisies', unite: 'h/j', defaut: 24 },

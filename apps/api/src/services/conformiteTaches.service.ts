@@ -2,7 +2,8 @@ import { prisma } from '../config/database';
 import { addMonths } from 'date-fns';
 import { CONTRACTUAL_TASKS, FREQUENCE_MOIS, exigePremiereManuelle, SiteEligibilite, TachePreventive, ExclusionPerimetre, estExclue } from '../utils/tachesPreventives';
 import { sourcesForConfig } from '../utils/energy';
-import { dateReferenceTaches } from './settings.service';
+import { dateReferenceTaches, getNum } from './settings.service';
+import { PeriodeInaccessibilite, moisJustifie } from '../utils/inaccessibilite';
 
 /**
  * MOTEUR DU DÛ CONTRACTUEL, partagé entre le rapport de conformité et le
@@ -19,7 +20,11 @@ import { dateReferenceTaches } from './settings.service';
  *    si relevé complet (GE avec carburant + CEET selon la config) OU un
  *    dépotage dans le mois ;
  *  - le contrat SOLAIRE a son propre catalogue (paramètre `catalogue`) :
- *    lots, prestataires et fiche séparés, jamais mélangés au passif.
+ *    lots, prestataires et fiche séparés, jamais mélangés au passif ;
+ *  - site INACCESSIBLE une partie du mois (au moins N jours, paramètre
+ *    maintenance.joursInaccessibiliteJustifiant) : la tâche reste DUE, mais si
+ *    elle n'est pas réalisée elle est JUSTIFIÉE - ni retard (le site reste
+ *    conforme) ni pénalité, et comptée à part (décision du 10/10/2026).
  */
 
 export interface SiteDuContrat {
@@ -32,14 +37,16 @@ export interface SiteDuContrat {
   cuveVolumeLitres: unknown;
 }
 
-export type StatutTacheMois = 'OK' | 'NOK' | 'NA';
+/** JUSTIFIE : due, non réalisée, site inaccessible ce mois-là (pas un retard). */
+export type StatutTacheMois = 'OK' | 'NOK' | 'NA' | 'JUSTIFIE';
 
 export interface DuSite {
-  /** dues/réalisées par mois demandé (clé 'AAAA-MM'). */
-  parMois: Map<string, { dues: number; realisees: number }>;
+  /** dues/réalisées par mois demandé (clé 'AAAA-MM') ; justifiées ⊂ dues non réalisées. */
+  parMois: Map<string, { dues: number; realisees: number; justifiees: number }>;
   /** État par tâche du catalogue pour le MOIS CIBLE. */
   statuts: Record<string, StatutTacheMois>;
-  /** Aucune tâche NOK sur le mois cible (le « avec dû » reste au consommateur). */
+  /** Aucune tâche NOK sur le mois cible (le « avec dû » reste au consommateur).
+   *  Une tâche JUSTIFIÉE ne rend pas le site non conforme. */
   conforme: boolean;
 }
 
@@ -83,7 +90,7 @@ export async function calculerDuParSite(
 
   // Exécutions VALIDES : la fenêtre en détail + la DERNIÈRE antérieure par
   // (site, tâche) - seule elle compte pour la dueness (historique borné).
-  const [execsFenetre, dernieresAvant, depotagesFenetre, relevesFenetre, exclusions] = await Promise.all([
+  const [execsFenetre, dernieresAvant, depotagesFenetre, relevesFenetre, exclusions, inaccessibilites] = await Promise.all([
     prisma.maintenance.findMany({
       where: {
         statut: 'TERMINEE', invalideeLe: null, tachePreventiveKey: { not: null },
@@ -113,7 +120,20 @@ export async function calculerDuParSite(
       where: { siteId: { in: idsSites } },
       select: { siteId: true, tacheKey: true, debutLe: true, finLe: true },
     }),
+    // Périodes d'inaccessibilité qui touchent la fenêtre.
+    prisma.inaccessibiliteSite.findMany({
+      where: { siteId: { in: idsSites }, debutLe: { lt: finFenetre }, OR: [{ finLe: null }, { finLe: { gte: since } }] },
+      select: { siteId: true, debutLe: true, finLe: true },
+    }),
   ]);
+
+  const inaccessibleParSite = new Map<string, PeriodeInaccessibilite[]>();
+  for (const i of inaccessibilites) {
+    (inaccessibleParSite.get(i.siteId) ?? inaccessibleParSite.set(i.siteId, []).get(i.siteId)!)
+      .push({ debut: i.debutLe, fin: i.finLe });
+  }
+  const seuilJustification = getNum('maintenance.joursInaccessibiliteJustifiant', 7);
+  const borneDe = new Map(bornes.map((b) => [b.mois, b]));
 
   const exclusionsParSite = new Map<string, ExclusionPerimetre[]>();
   for (const e of exclusions) {
@@ -154,13 +174,19 @@ export async function calculerDuParSite(
   const refTaches = dateReferenceTaches();
 
   for (const site of sites) {
-    const parMois = new Map<string, { dues: number; realisees: number }>(bornes.map((b) => [b.mois, { dues: 0, realisees: 0 }]));
+    const parMois = new Map<string, { dues: number; realisees: number; justifiees: number }>(
+      bornes.map((b) => [b.mois, { dues: 0, realisees: 0, justifiees: 0 }]));
     const statuts: Record<string, StatutTacheMois> = {};
+    const periodes = inaccessibleParSite.get(site.id) ?? [];
+    const justifieLeMois = new Map(bornes.map((b) => [b.mois, moisJustifie(periodes, b.debut, b.fin, seuilJustification)]));
     const compter = (mois: string, realisee: boolean, t: TachePreventive) => {
       const c = parMois.get(mois)!;
       c.dues++;
-      if (realisee) c.realisees++;
-      if (mois === moisCible && !realisee) statuts[t.key] = 'NOK';
+      if (realisee) { c.realisees++; return; }
+      // Due et non réalisée : justifiée si le site était inaccessible ce mois-là.
+      const justifiee = justifieLeMois.get(mois) === true && borneDe.has(mois);
+      if (justifiee) c.justifiees++;
+      if (mois === moisCible) statuts[t.key] = justifiee ? 'JUSTIFIE' : 'NOK';
     };
     const siteEl = {
       ...(site as unknown as SiteEligibilite),

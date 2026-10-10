@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, XCircle, ClipboardCheck } from 'lucide-react';
+import { CheckCircle2, XCircle, ClipboardCheck, Ban } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
@@ -25,6 +25,8 @@ interface Ligne {
   // CONFORMITÉ CONTRACTUELLE : tâches dues du mois (catalogue × sites) vs réalisées.
   dues: number;
   realisees: number;
+  /** Dues non réalisées JUSTIFIÉES (site inaccessible) : ni retard ni pénalité. */
+  justifiees: number;
   tauxContractuel: number | null;
   sitesAvecDu: number;
   sitesConformes: number;
@@ -83,6 +85,9 @@ export default function ConformitePage() {
 
   const t = data?.totaux ?? {};
   const lignes: Ligne[] = data?.parPrestataire ?? [];
+  const inaccessibles: Array<{ siteId: string; site: string; debut: string; fin: string | null; motif: string; tachesJustifiees: number }> =
+    data?.sitesInaccessibles ?? [];
+  const jour = (d: string) => new Date(d).toLocaleDateString('fr-FR', { timeZone: 'UTC' });
 
   const columns: Column<Ligne>[] = [
     { key: 'prestataireNom', header: 'Prestataire', render: (l) => <span className="font-medium text-gray-800">{l.prestataireNom}</span> },
@@ -91,8 +96,13 @@ export default function ConformitePage() {
       render: (l) => l.dues === 0
         ? <span className="text-gray-400" title="Aucune tâche contractuelle due ce mois sur ses sites.">-</span>
         : <span title={`${l.realisees} tâche(s) réalisée(s) sur ${l.dues} due(s) au contrat ce mois.`}>
-            <b className={l.realisees < l.dues ? 'text-red-600' : 'text-gray-800'}>{l.realisees}</b>
+            <b className={l.realisees + (l.justifiees ?? 0) < l.dues ? 'text-red-600' : 'text-gray-800'}>{l.realisees}</b>
             <span className="text-gray-500">/{l.dues}</span>
+            {l.justifiees > 0 && (
+              <span className="ml-1 text-xs text-amber-700" title="Dues non réalisées, justifiées : site inaccessible ce mois-là.">
+                + {l.justifiees} justifiée{l.justifiees > 1 ? 's' : ''}
+              </span>
+            )}
           </span>,
     },
     {
@@ -153,10 +163,11 @@ export default function ConformitePage() {
         <Loading />
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
             <StatCard title="Dû contractuel" value={t.dues ?? 0} subtitle="tâches dues ce mois" icon={ClipboardCheck} color="bg-[rgb(var(--brand))]" />
             <StatCard title="Réalisées" value={t.realisees ?? 0} subtitle="du dû du mois" icon={CheckCircle2} color="bg-[rgb(var(--accent))]" />
-            <StatCard title="Non réalisées" value={t.manquantes ?? 0} subtitle="à relancer" icon={XCircle} color={(t.manquantes ?? 0) > 0 ? 'bg-red-500' : 'bg-gray-400'} />
+            <StatCard title="Non réalisées" value={t.manquantes ?? 0} subtitle="en retard, à relancer" icon={XCircle} color={(t.manquantes ?? 0) > 0 ? 'bg-red-500' : 'bg-gray-400'} />
+            <StatCard title="Justifiées (accès)" value={t.justifiees ?? 0} subtitle="site inaccessible : ni retard ni pénalité" icon={Ban} color={(t.justifiees ?? 0) > 0 ? 'bg-amber-500' : 'bg-gray-400'} />
             <StatCard title="Conformité contractuelle" value={t.tauxContractuel != null ? `${t.tauxContractuel}%` : '-'} icon={ClipboardCheck} color="bg-[rgb(var(--brand-light))]" />
             <StatCard title="Sites conformes" value={t.sitesAvecDu ? `${t.sitesConformes}/${t.sitesAvecDu}` : '-'}
               subtitle="tout leur dû réalisé" icon={ClipboardCheck}
@@ -167,6 +178,35 @@ export default function ConformitePage() {
             <EmptyState title="Aucune maintenance passive clôturée sur ce mois" />
           ) : (
             <DataTable columns={columns} data={lignes} rowKey={(l) => l.prestataireId} />
+          )}
+
+          {inaccessibles.length > 0 && (
+            <section className="mt-6 rounded-xl border border-amber-100 bg-white p-5">
+              <h2 className="mb-1 text-sm font-semibold text-gray-800">Sites inaccessibles pendant le mois ({inaccessibles.length})</h2>
+              <p className="mb-3 text-xs text-gray-500">
+                Leurs tâches restent dues (dans le dû et le taux) ; non réalisées, elles sont justifiées : ni retard ni pénalité.
+              </p>
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-gray-500">
+                  <tr>
+                    <th className="py-1.5 font-medium">Site</th>
+                    <th className="py-1.5 font-medium">Inaccessible</th>
+                    <th className="py-1.5 font-medium">Motif</th>
+                    <th className="py-1.5 text-right font-medium">Tâches justifiées</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {inaccessibles.map((x, i) => (
+                    <tr key={`${x.siteId}-${i}`}>
+                      <td className="py-1.5"><a href={`/sites/${x.siteId}`} className="font-medium text-gray-800 hover:underline">{x.site}</a></td>
+                      <td className="py-1.5 text-gray-600">du {jour(x.debut)} {x.fin ? `au ${jour(x.fin)}` : '(accès non rétabli)'}</td>
+                      <td className="py-1.5 text-gray-600">{x.motif}</td>
+                      <td className="py-1.5 text-right tabular-nums">{x.tachesJustifiees || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           )}
         </>
       )}

@@ -224,12 +224,14 @@ export interface PageSiteRapport {
      * FAITE : intervention enregistrée ce mois-ci (c'est ce qui se facture).
      * A_JOUR : rien n'était dû ce mois-ci, la tâche reste conforme.
      * NON_FAITE : due et non réalisée. HORS_CONTRAT : curatif, dépannage.
+     * JUSTIFIEE : due et non réalisée, site INACCESSIBLE ce mois-là - ni
+     * retard ni pénalité, mais due (elle reste dans le compte des dues).
      * INVALIDEE : intervention contestée par un manager - elle ne compte ni
      * pour la conformité ni pour la facturation, mais elle doit rester VISIBLE
      * avec son motif : la faire disparaître donnerait la même page qu'une
      * intervention jamais effectuée, et personne ne saurait qu'il y a litige.
      */
-    etat: 'FAITE' | 'A_JOUR' | 'NON_FAITE' | 'HORS_CONTRAT' | 'INVALIDEE';
+    etat: 'FAITE' | 'A_JOUR' | 'NON_FAITE' | 'HORS_CONTRAT' | 'INVALIDEE' | 'JUSTIFIEE';
     date: string;
     technicien: string;
     duree: string;
@@ -299,7 +301,7 @@ export function dessinerRecapitulatifSites(
       bandeau();
       y = ligneEntete(58);
     }
-    const dues = page.taches.filter((t) => t.etat === 'FAITE' || t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE').length;
+    const dues = page.taches.filter((t) => t.etat === 'FAITE' || t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE' || t.etat === 'JUSTIFIEE').length;
     const faites = page.taches.filter((t) => t.etat === 'FAITE').length;
     const manquantes = page.taches.filter((t) => t.etat === 'NON_FAITE').length;
     const curatifs = page.taches.filter((t) => t.etat === 'HORS_CONTRAT').length;
@@ -379,7 +381,7 @@ export function dessinerPageSite(
   // Une tâche dont l'intervention a été REFUSÉE reste due : même dénominateur
   // que le récapitulatif, sinon le document affiche deux comptes différents
   // pour un même site à deux pages d'intervalle.
-  const dues = p.taches.filter((t) => t.etat === 'FAITE' || t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE').length;
+  const dues = p.taches.filter((t) => t.etat === 'FAITE' || t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE' || t.etat === 'JUSTIFIEE').length;
   let y = titre(`Tâches du mois (${faites} réalisée(s) sur ${dues} due(s))`, 58);
 
   const cellule = (texte: string, x: number, yy: number, largeur: number, gras = false, couleur = '#111') => {
@@ -404,12 +406,14 @@ export function dessinerPageSite(
     const etat = t.etat === 'FAITE' ? 'Réalisée'
       : t.etat === 'NON_FAITE' ? 'Non réalisée'
       : t.etat === 'INVALIDEE' ? 'Invalidée'
+      : t.etat === 'JUSTIFIEE' ? 'Justifiée (accès)'
       // « Hors dû » plutôt que « Curatif » : la ligne peut aussi être une
       // préventive que le contrat ne réclamait pas ce mois-ci. Le libellé, lui,
       // dit déjà s'il s'agit d'une curative.
       : t.etat === 'A_JOUR' ? 'À jour' : 'Hors dû';
     const couleur = t.etat === 'FAITE' ? ACCENT
       : t.etat === 'NON_FAITE' || t.etat === 'INVALIDEE' ? '#C0392B'
+      : t.etat === 'JUSTIFIEE' ? '#E67E22'
       : t.etat === 'A_JOUR' ? GRIS_PDF : '#B26A00';
     x = X;
     cellule(t.libelle, x, y, COLS[0]); x += COLS[0];
@@ -679,6 +683,8 @@ export interface RecueilSynthese {
   reference: string;
   /** Tâches contractuelles dues sur le mois et NON réalisées, par site. */
   manquantes: Array<{ site: string; taches: string[] }>;
+  /** Dues non réalisées mais JUSTIFIÉES : site inaccessible (période, motif). */
+  justifiees?: Array<{ site: string; taches: string[]; periode: string; motif: string }>;
   /** Le recueil couvre-t-il un mois calendaire entier ? */
   moisComplet: boolean;
   /** Incidents rattachés aux interventions du recueil. */
@@ -953,6 +959,23 @@ export async function generateMaintenancesRecueilPdf(
       }
     }
 
+    // ── JUSTIFIÉES : dues, non faites, mais le site était inaccessible. Ce ne
+    //    sont pas des manquantes (ni retard ni pénalité) ; elles se montrent à
+    //    part, avec la période et le motif qui les justifient.
+    if (garde.moisComplet && garde.justifiees?.length) {
+      sectionTitle(doc, `Tâches dues non réalisées, JUSTIFIÉES : site inaccessible (${garde.justifiees.length} site(s))`);
+      const L = [130, 130, 235];
+      ligneTableau(doc, ['Site', 'Inaccessible', 'Motif · tâches justifiées'], L, true);
+      garde.justifiees.slice(0, 30).forEach((x) => {
+        ligneTableau(doc, [x.site, x.periode, `${x.motif} · ${x.taches.join(' · ')}`], L, false, true);
+        doc.moveTo(50, doc.y - 2).lineTo(doc.page.width - 50, doc.y - 2).lineWidth(0.3).stroke('#E7EBF0');
+      });
+      if (garde.justifiees.length > 30) {
+        doc.fontSize(8).fillColor(GRIS_PDF).text(`+ ${garde.justifiees.length - 30} autre(s) site(s) - détail dans le rapport de conformité.`, 50, doc.y + 2);
+        doc.fillColor('black'); doc.moveDown(0.5);
+      }
+    }
+
     // ── VISA. Un recueil « contractuel » qui ne se signe pas ne vaut pas mieux
     //    qu'un listing : deux cadres, exactement comme la fiche de validation
     //    mensuelle que ces mêmes lecteurs signent déjà.
@@ -1091,6 +1114,20 @@ export async function buildFicheValidationPdf(d: FicheValidationData): Promise<B
       + 'Un repère rouge signale une ligne où tous les sites concernés n’ont pas été traités.',
       50, doc.y, { width: w - 100, align: 'justify' });
     doc.fillColor('black');
+
+    // Sites inaccessibles : leurs tâches restent dans « concernés » (le tableau
+    // contractuel ne change pas), la fiche dit pourquoi elles n'ont pas été faites.
+    if (d.inaccessibles?.length) {
+      doc.moveDown(0.6);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#B26A00')
+        .text(`Sites inaccessibles pendant le mois (${d.inaccessibles.length}) : tâches dues non réalisées JUSTIFIÉES`, 50, doc.y, { width: w - 100 });
+      doc.font('Helvetica').fontSize(8).fillColor('black');
+      for (const x of d.inaccessibles.slice(0, 25)) {
+        doc.text(`${x.site} : ${x.periode} - ${x.motif}`, 60, doc.y + 1, { width: w - 110 });
+      }
+      if (d.inaccessibles.length > 25) doc.fillColor(GRIS_PDF).text(`+ ${d.inaccessibles.length - 25} autre(s) - détail dans le rapport de conformité.`, 60, doc.y + 1);
+      doc.fillColor('black');
+    }
 
     // ── Visas : le document n'existe que pour être signé des deux côtés ──
     const largeur = (w - 120) / 2;

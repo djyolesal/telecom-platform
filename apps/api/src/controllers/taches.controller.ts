@@ -339,7 +339,27 @@ async function donneesFicheValidation(
   } else {
     zone = [...new Set(sites.map((s) => s.region))].join(', ') || '-';
   }
-  return { sites: sitesAvecPerimetre, realisesParKey, zone, nbSites: sites.length };
+  // Sites INACCESSIBLES pendant le mois : leurs tâches restent dues (le
+  // tableau ne change pas), mais la fiche dit pourquoi elles n'ont pas été
+  // faites - c'est ce qui permet de la signer sans pénalité.
+  const debutFiche = new Date(Date.UTC(an, mo - 1, 1));
+  const finFiche = new Date(Date.UTC(an, mo, 1));
+  const periodes = await prisma.inaccessibiliteSite.findMany({
+    where: {
+      siteId: { in: sites.map((x) => x.id) },
+      debutLe: { lt: finFiche }, OR: [{ finLe: null }, { finLe: { gte: debutFiche } }],
+    },
+    orderBy: { debutLe: 'asc' },
+    select: { siteId: true, debutLe: true, finLe: true, motif: true },
+  });
+  const nomDe = new Map(sites.map((x) => [x.id, (x as { nom?: string }).nom ?? '']));
+  const jourFr = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: 'UTC' });
+  const inaccessibles = periodes.map((p) => ({
+    site: nomDe.get(p.siteId) ?? '',
+    periode: `du ${jourFr(p.debutLe)}${p.finLe ? ` au ${jourFr(p.finLe)}` : ' (accès non rétabli)'}`,
+    motif: p.motif,
+  }));
+  return { sites: sitesAvecPerimetre, realisesParKey, zone, nbSites: sites.length, inaccessibles };
 }
 
 /** Format de sortie d'une fiche : le xlsx pour travailler, le PDF pour signer. */
@@ -347,7 +367,7 @@ export type FormatFiche = 'xlsx' | 'pdf';
 
 /** Génère le buffer d'une fiche pour un prestataire (et un lot optionnel). */
 async function produceFiche(presta: PrestaLite, lotId: string | null, an: number, mo: number, cb: { nom: string; adresse: string[] }, clientLogo: FicheLogo | null, contrat: 'PASSIF' | 'SOLAIRE' = 'PASSIF', format: FormatFiche = 'xlsx'): Promise<Buffer> {
-  const { sites, realisesParKey, zone } = await donneesFicheValidation(presta, lotId, an, mo, contrat);
+  const { sites, realisesParKey, zone, inaccessibles } = await donneesFicheValidation(presta, lotId, an, mo, contrat);
   const prestataireLogo = await chargerLogo(presta.logoPath);
   // Mêmes DONNÉES pour les deux formats : seule la mise en page change.
   const data: FicheValidationData = {
@@ -355,6 +375,7 @@ async function produceFiche(presta: PrestaLite, lotId: string | null, an: number
     client: cb,
     zone, nbSites: sites.length, annee: an, mois: mo,
     sites: sites as unknown as SiteEligibilite[], realisesParKey, prestataireLogo, clientLogo, contrat,
+    inaccessibles,
   };
   return format === 'pdf' ? buildFicheValidationPdf(data) : buildFicheValidationXlsx(data);
 }

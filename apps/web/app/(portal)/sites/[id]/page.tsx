@@ -22,6 +22,7 @@ import { fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils';
 import { useTypesLiaison, couleurLiaison } from '@/lib/liaisons';
 import { SearchSelect } from '@/components/shared/SearchSelect';
 import { Select } from '@/components/shared/Form';
+import { AccesSite } from './AccesSite';
 
 const SCOPE_LABELS: Record<string, string> = {
   PASSIVE: 'Passive',
@@ -301,6 +302,8 @@ export default function SiteDetailPage() {
           </div>
         )}
       </div>
+
+      <AccesSite siteId={site.id} peutDeclarer={['MANAGER', 'ADMIN'].includes(role)} />
 
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Infrastructure</h3>

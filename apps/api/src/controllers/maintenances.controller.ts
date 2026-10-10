@@ -1805,6 +1805,8 @@ export async function construireRapportActivite(
     //    le MÊME moteur que le rapport de conformité — deux chiffres qui se
     //    contrediraient seraient pires que pas de chiffre du tout.
     const manquantes: Array<{ site: string; taches: string[] }> = [];
+    const justifiees: Array<{ site: string; taches: string[]; periode: string; motif: string }> = [];
+    const aJustifier: Array<{ siteId: string; site: string; taches: string[] }> = [];
     let sitesSansDu = 0;
     // Sites du périmètre contractuel : ils servent DEUX fois - au calcul des
     // tâches manquantes, et aux pages par site.
@@ -1839,6 +1841,34 @@ export async function construireRapportActivite(
             .filter(([, v]) => v === 'NOK')
             .map(([k]) => libelleTache.get(k) ?? k);
           if (nok.length) manquantes.push({ site: site.nom, taches: nok });
+          const just = Object.entries(etat.statuts)
+            .filter(([, v]) => v === 'JUSTIFIE')
+            .map(([k]) => libelleTache.get(k) ?? k);
+          if (just.length) aJustifier.push({ siteId: site.id, site: site.nom, taches: just });
+        }
+        // Période et motif de l'inaccessibilité qui justifie (celles qui touchent le mois).
+        if (aJustifier.length) {
+          const [ay, am] = moisCible.split('-').map(Number);
+          const debutM = new Date(Date.UTC(ay, am - 1, 1));
+          const finM = new Date(Date.UTC(ay, am, 1));
+          const periodes = await prisma.inaccessibiliteSite.findMany({
+            where: {
+              siteId: { in: aJustifier.map((j) => j.siteId) },
+              debutLe: { lt: finM }, OR: [{ finLe: null }, { finLe: { gte: debutM } }],
+            },
+            orderBy: { debutLe: 'asc' },
+            select: { siteId: true, debutLe: true, finLe: true, motif: true },
+          });
+          const jour = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: 'UTC' });
+          for (const j of aJustifier) {
+            const ps = periodes.filter((p) => p.siteId === j.siteId);
+            justifiees.push({
+              site: j.site,
+              taches: j.taches,
+              periode: ps.map((p) => `du ${jour(p.debutLe)}${p.finLe ? ` au ${jour(p.finLe)}` : ' (non rétabli)'}`).join(' ; '),
+              motif: [...new Set(ps.map((p) => p.motif))].join(' ; '),
+            });
+          }
         }
         manquantes.sort((a, b) => b.taches.length - a.taches.length || a.site.localeCompare(b.site));
       }
@@ -1876,7 +1906,7 @@ export async function construireRapportActivite(
         if (etat) {
           for (const t of catalogue) {
             const statut = etat.statuts[t.key];
-            if (statut !== 'OK' && statut !== 'NOK') continue;   // NA : hors équipement du site
+            if (statut !== 'OK' && statut !== 'NOK' && statut !== 'JUSTIFIE') continue;   // NA : hors équipement du site
             const faite = interventions.find((i) => i.tachePreventiveKey === t.key && !i.invalideeLe);
             const refusee = faite ? undefined : interventions.find((i) => i.tachePreventiveKey === t.key && i.invalideeLe);
             // FAITE seulement s'il y a une intervention DANS LE MOIS : le
@@ -1885,7 +1915,7 @@ export async function construireRapportActivite(
             const trace = faite ?? refusee ?? null;
             taches.push({
               libelle: libelleTache.get(t.key) ?? t.key,
-              etat: faite ? 'FAITE' : refusee ? 'INVALIDEE' : statut === 'OK' ? 'A_JOUR' : 'NON_FAITE',
+              etat: faite ? 'FAITE' : refusee ? 'INVALIDEE' : statut === 'OK' ? 'A_JOUR' : statut === 'JUSTIFIE' ? 'JUSTIFIEE' : 'NON_FAITE',
               date: jour(trace?.dateFin ?? null),
               technicien: nomTech(trace?.technicien ?? null),
               duree: trace?.dureeMinutes != null ? `${trace.dureeMinutes} min` : '-',
@@ -1897,7 +1927,7 @@ export async function construireRapportActivite(
         // 2. Le CURATIF et tout ce qui n'entre pas dans une case du contrat :
         //    facturable aussi, et invisible du calcul de conformité.
         for (const i of interventions) {
-          if (i.tachePreventiveKey && etat && (etat.statuts[i.tachePreventiveKey] === 'OK' || etat.statuts[i.tachePreventiveKey] === 'NOK')) continue;
+          if (i.tachePreventiveKey && etat && ['OK', 'NOK', 'JUSTIFIE'].includes(etat.statuts[i.tachePreventiveKey])) continue;
           taches.push({
             libelle: `${i.type === 'PREVENTIVE' ? 'Préventive' : 'Curative'} - ${i.equipement}`,
             etat: i.invalideeLe ? 'INVALIDEE' : 'HORS_CONTRAT',
@@ -2077,6 +2107,7 @@ export async function construireRapportActivite(
       incidents,
       pieces,
       manquantes,
+      justifiees,
       moisComplet: !!moisCible,
     };
     const pdf = await generateMaintenancesRecueilPdf({

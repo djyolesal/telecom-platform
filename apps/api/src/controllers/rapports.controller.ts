@@ -7,7 +7,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams, getNum, dateReferenceTaches } from '../services/settings.service';
 import { generateMonthlyReportPdf, MonthlyReportData } from '../services/pdf.service';
 import { computeManquants } from '../services/manquants.service';
-import { calculerDuParSite, tachesCataloguePassif } from '../services/conformiteTaches.service';
+import { calculerDuParSite, tachesCataloguePassif, StatutTacheMois } from '../services/conformiteTaches.service';
 import { bilanCarburant } from '../services/bilanCarburant.service';
 import { bilanEnergie } from '../services/bilanEnergie.service';
 import { sendTabular } from '../utils/exporter';
@@ -628,11 +628,14 @@ async function chargerConformiteMaintenance(req: Request) {
 
   const duesPar = new Map<string, number>();
   const realiseesPar = new Map<string, number>();
+  // Dues non réalisées mais JUSTIFIÉES (site inaccessible) : dans le dû et le
+  // taux, hors retard - comptées à part.
+  const justifieesPar = new Map<string, number>();
   const sitesAvecDuPar = new Map<string, Set<string>>();
   const sitesEnRetardPar = new Map<string, Set<string>>();
   const sitesConformesPar = new Map<string, Set<string>>();
   const evolutionDuPar = new Map<string, Map<string, { dues: number; realisees: number }>>();
-  const matriceSites: { siteId: string; site: string; region: string; prestataireId: string; powerConfig: string; statutGE: string; statuts: Record<string, 'OK' | 'NOK' | 'NA'>; conforme: boolean }[] = [];
+  const matriceSites: { siteId: string; site: string; region: string; prestataireId: string; powerConfig: string; statutGE: string; statuts: Record<string, StatutTacheMois>; conforme: boolean }[] = [];
   for (const site of sitesContrat) {
     const pid = passifByLot.get(site.lotId!)!;
     const du = duParSite.get(site.id)!;
@@ -644,10 +647,11 @@ async function chargerConformiteMaintenance(req: Request) {
       eb.realisees += c.realisees;
       evo.set(mois, eb);
     }
-    const cible = du.parMois.get(cleMoisChoisi) ?? { dues: 0, realisees: 0 };
+    const cible = du.parMois.get(cleMoisChoisi) ?? { dues: 0, realisees: 0, justifiees: 0 };
     if (cible.dues > 0) {
       duesPar.set(pid, (duesPar.get(pid) ?? 0) + cible.dues);
       realiseesPar.set(pid, (realiseesPar.get(pid) ?? 0) + cible.realisees);
+      justifieesPar.set(pid, (justifieesPar.get(pid) ?? 0) + cible.justifiees);
       (sitesAvecDuPar.get(pid) ?? sitesAvecDuPar.set(pid, new Set()).get(pid)!).add(site.id);
       if (!du.conforme) (sitesEnRetardPar.get(pid) ?? sitesEnRetardPar.set(pid, new Set()).get(pid)!).add(site.id);
     }
@@ -713,6 +717,7 @@ async function chargerConformiteMaintenance(req: Request) {
         // CONFORMITÉ CONTRACTUELLE : tâches dues du mois réalisées / dues.
         dues,
         realisees,
+        justifiees: justifieesPar.get(e.prestataireId) ?? 0,
         tauxContractuel: dues ? Math.round((realisees / dues) * 100) : null,
         sitesAvecDu,
         sitesConformes: sitesConformesPar.get(e.prestataireId)?.size ?? 0,
@@ -727,19 +732,43 @@ async function chargerConformiteMaintenance(req: Request) {
     })
     .sort((a, b) => b.dues - a.dues || a.prestataireNom.localeCompare(b.prestataireNom));
 
+  // Sites INACCESSIBLES pendant le mois choisi (au moins un jour) : la
+  // justification des tâches non faites, avec le motif et les dates.
+  const debutMoisChoisi = new Date(Date.UTC(a, mo - 1, 1));
+  const finMoisChoisi = new Date(Date.UTC(a, mo, 1));
+  const periodesMois = await prisma.inaccessibiliteSite.findMany({
+    where: {
+      siteId: { in: sitesContrat.map((x) => x.id) },
+      debutLe: { lt: finMoisChoisi },
+      OR: [{ finLe: null }, { finLe: { gte: debutMoisChoisi } }],
+    },
+    orderBy: { debutLe: 'asc' },
+    select: { siteId: true, debutLe: true, finLe: true, motif: true },
+  });
+  const nomSite = new Map(sitesContrat.map((x) => [x.id, x.nom]));
+  const sitesInaccessibles = periodesMois.map((p) => ({
+    siteId: p.siteId,
+    site: nomSite.get(p.siteId) ?? '',
+    debut: p.debutLe,
+    fin: p.finLe,
+    motif: p.motif,
+    tachesJustifiees: Object.values(duParSite.get(p.siteId)?.statuts ?? {}).filter((x) => x === 'JUSTIFIE').length,
+  }));
+
   const MOIS_PLEIN = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  return { annee: a, mois: mo, labelMois: `${MOIS_PLEIN[mo]} ${a}`, region, duMois, parPrestataire, moisListe, matriceSites, tachesCatalogue };
+  return { annee: a, mois: mo, labelMois: `${MOIS_PLEIN[mo]} ${a}`, region, duMois, parPrestataire, moisListe, matriceSites, tachesCatalogue, sitesInaccessibles };
 }
 
 export async function getConformiteMaintenance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { annee, mois, labelMois, duMois, parPrestataire, moisListe } = await chargerConformiteMaintenance(req);
+    const { annee, mois, labelMois, duMois, parPrestataire, moisListe, sitesInaccessibles } = await chargerConformiteMaintenance(req);
 
     const conformes = parPrestataire.reduce((s, x) => s + x.conformes, 0);
     const parcSites = parPrestataire.reduce((s, x) => s + (x.parcSites ?? 0), 0);
     const sitesCouverts = parPrestataire.reduce((s, x) => s + x.sitesCouverts, 0);
     const dues = parPrestataire.reduce((s, x) => s + x.dues, 0);
     const realisees = parPrestataire.reduce((s, x) => s + x.realisees, 0);
+    const justifiees = parPrestataire.reduce((s, x) => s + x.justifiees, 0);
     const sitesAvecDu = parPrestataire.reduce((s, x) => s + x.sitesAvecDu, 0);
     const sitesConformes = parPrestataire.reduce((s, x) => s + x.sitesConformes, 0);
     res.json({
@@ -752,7 +781,9 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
           // Conformité CONTRACTUELLE : le dû du mois (catalogue × sites).
           dues,
           realisees,
-          manquantes: dues - realisees,
+          // Manquantes = en RETARD : les justifiées (site inaccessible) n'en sont pas.
+          justifiees,
+          manquantes: dues - realisees - justifiees,
           tauxContractuel: dues ? Math.round((realisees / dues) * 100) : null,
           sitesAvecDu,
           sitesConformes,
@@ -767,6 +798,7 @@ export async function getConformiteMaintenance(req: Request, res: Response, next
         },
         mois: moisListe,
         parPrestataire,
+        sitesInaccessibles,
       },
     });
   } catch (err) { next(err); }
@@ -782,7 +814,7 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
     // Export dessiné (mois seul) : plus de sélecteur de colonnes ici.
     if (req.query.colonnes === '?') return res.json({ success: true, data: [] });
 
-    const { annee, mois, labelMois, region, parPrestataire, matriceSites, tachesCatalogue } = await chargerConformiteMaintenance(req);
+    const { annee, mois, labelMois, region, parPrestataire, matriceSites, tachesCatalogue, sitesInaccessibles } = await chargerConformiteMaintenance(req);
     const nomsPrestataires = new Map(parPrestataire.map((p) => [p.prestataireId, p.prestataireNom]));
     const donnees = {
       labelMois,
@@ -795,6 +827,7 @@ export async function exportConformiteMaintenance(req: Request, res: Response, n
         ge: libelleStatutGE(s.statutGE),
       })),
       nomsPrestataires,
+      sitesInaccessibles,
     };
     await auditLog(req.user!.id, 'EXPORT', 'conformite_maintenance', undefined,
       { annee, mois, sites: matriceSites.length, prestataires: parPrestataire.length, format: req.params.format }, req);

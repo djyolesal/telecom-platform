@@ -137,6 +137,8 @@ export interface FicheValidationData {
   realisesParKey: Record<string, number>;
   /** PASSIF (défaut) ou SOLAIRE : choisit les lignes contractuelles de la fiche. */
   contrat?: 'PASSIF' | 'SOLAIRE';
+  /** Sites inaccessibles pendant le mois : leurs tâches non faites sont justifiées. */
+  inaccessibles?: Array<{ site: string; periode: string; motif: string }>;
   prestataireLogo?: FicheLogo | null;
   clientLogo?: FicheLogo | null;
 }
@@ -242,6 +244,20 @@ export async function buildFicheValidationXlsx(d: FicheValidationData): Promise<
     for (const c of [2, 3, 4, 5, 6, 7, 8, 9]) xl.getCell(c).border = border;
     xl.height = 28;
     r++;
+  }
+
+  // ── Sites inaccessibles du mois : les tâches restent dues (tableau
+  //    inchangé), la non-réalisation y est JUSTIFIÉE - ni retard ni pénalité.
+  if (d.inaccessibles?.length) {
+    r += 2;
+    ws.getCell(`B${r}`).value = `Sites inaccessibles pendant le mois (${d.inaccessibles.length}) : tâches dues non réalisées justifiées`;
+    ws.getCell(`B${r}`).font = { bold: true, color: { argb: 'FFB26A00' } };
+    for (const x of d.inaccessibles) {
+      r++;
+      ws.getCell(`B${r}`).value = x.site;
+      ws.getCell(`C${r}`).value = `${x.periode} - ${x.motif}`;
+      ws.getCell(`C${r}`).alignment = { wrapText: true, vertical: 'top' };
+    }
   }
 
   // ── Signatures ──

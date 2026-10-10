@@ -7,19 +7,23 @@ import { drawLogo } from './pdf.service';
  * SEUL mois sélectionné :
  *  - en tête, le résumé par prestataire avec les mêmes repères visuels que la
  *    page (bande d'évolution 6 mois colorée, barre de conformité) ;
- *  - en bas, la matrice sites × tâches contractuelles : OK / NOK / N/A.
+ *  - en bas, la matrice sites × tâches contractuelles : OK / NOK / J / N/A
+ *    (J = due, non réalisée, JUSTIFIÉE : site inaccessible ce mois-là), puis
+ *    la liste des sites inaccessibles du mois avec leurs dates et le motif.
  * Le PDF reprend la même matière avec de vrais graphes (barres) dessinés.
  */
 
 const NAVY = 'FF1B3F6B', TEAL = 'FF0E7C6B', AMBER = 'FFE67E22', RED = 'FFC0392B',
       ZEBRA = 'FFF7F9FB', GRIS = 'FF6B7280',
-      ROUGE_PALE = 'FFFDECEA', VERT_PALE = 'FFE8F6F3', GRIS_PALE = 'FFF1F2F4';
+      ROUGE_PALE = 'FFFDECEA', VERT_PALE = 'FFE8F6F3', GRIS_PALE = 'FFF1F2F4', AMBRE_PALE = 'FFFEF3E2';
 
 export interface EvolutionMois { mois: string; label: string; dues: number; realisees: number; taux: number | null }
 export interface PrestataireConformite {
   prestataireNom: string;
   dues: number;
   realisees: number;
+  /** Dues non réalisées mais justifiées (site inaccessible). */
+  justifiees?: number;
   tauxContractuel: number | null;
   sitesAvecDu: number;
   sitesConformes: number;
@@ -31,9 +35,14 @@ export interface LigneSiteMatrice {
   site: string; region: string; prestataireId: string;
   /** Configuration d'énergie du site et rôle de son GE, en toutes lettres. */
   energie: string; ge: string;
-  statuts: Record<string, 'OK' | 'NOK' | 'NA'>;
+  statuts: Record<string, 'OK' | 'NOK' | 'NA' | 'JUSTIFIE'>;
   conforme: boolean;
 }
+/** Période d'inaccessibilité qui touche le mois du rapport. */
+export interface SiteInaccessible { site: string; debut: Date; fin: Date | null; motif: string; tachesJustifiees: number }
+
+const jourFr = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: 'UTC' });
+const periodeFr = (s: SiteInaccessible) => `du ${jourFr(s.debut)} ${s.fin ? `au ${jourFr(s.fin)}` : '(accès non rétabli)'}`;
 export interface DonneesConformite {
   labelMois: string;
   region?: string;
@@ -41,6 +50,7 @@ export interface DonneesConformite {
   taches: TacheColonne[];
   sites: LigneSiteMatrice[];
   nomsPrestataires: Map<string, string>;
+  sitesInaccessibles?: SiteInaccessible[];
 }
 
 const couleurTaux = (t: number) => (t >= 90 ? TEAL : t >= 70 ? AMBER : RED);
@@ -97,8 +107,9 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
     row.getCell(1).value = p.prestataireNom;
     row.getCell(1).font = { size: 10, bold: true };
     row.getCell(2).value = p.dues;
-    row.getCell(3).value = p.realisees;
-    row.getCell(3).font = { size: 10, color: { argb: p.realisees < p.dues ? RED : TEAL } };
+    // « 5 + 2 j. » : les justifiées (site inaccessible) ne sont pas des retards.
+    row.getCell(3).value = p.justifiees ? `${p.realisees} + ${p.justifiees} j.` : p.realisees;
+    row.getCell(3).font = { size: 10, color: { argb: p.realisees + (p.justifiees ?? 0) < p.dues ? RED : TEAL } };
     row.getCell(4).value = p.sitesAvecDu ? `${p.sitesConformes}/${p.sitesAvecDu}` : '-';
     row.getCell(4).font = { size: 10, color: { argb: p.sitesConformes < p.sitesAvecDu ? RED : TEAL } };
     row.getCell(5).value = p.invalidees || '';
@@ -179,10 +190,10 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
     d.taches.forEach((t, i) => {
       const c = row.getCell(COL_TACHE1 + i);
       const st = site.statuts[t.key];
-      c.value = st === 'NA' ? '–' : st;
+      c.value = st === 'NA' ? '–' : st === 'JUSTIFIE' ? 'J' : st;
       c.alignment = { horizontal: 'center', vertical: 'middle' };
-      c.font = { size: 8, bold: st === 'NOK', color: { argb: st === 'OK' ? TEAL : st === 'NOK' ? RED : GRIS } };
-      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: st === 'OK' ? VERT_PALE : st === 'NOK' ? ROUGE_PALE : GRIS_PALE } };
+      c.font = { size: 8, bold: st === 'NOK', color: { argb: st === 'OK' ? TEAL : st === 'NOK' ? RED : st === 'JUSTIFIE' ? AMBER : GRIS } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: st === 'OK' ? VERT_PALE : st === 'NOK' ? ROUGE_PALE : st === 'JUSTIFIE' ? AMBRE_PALE : GRIS_PALE } };
     });
     const cc = row.getCell(COL_TACHE1 + nbColTaches);
     cc.value = site.conforme ? 'OK' : 'NOK';
@@ -191,6 +202,31 @@ export async function buildConformiteXlsx(d: DonneesConformite): Promise<Buffer>
     cc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: site.conforme ? VERT_PALE : ROUGE_PALE } };
     zeb = !zeb;
     r++;
+  }
+
+  // ── Sites inaccessibles du mois : la justification des « J ». ──
+  r++;
+  const legende = ws.getRow(r);
+  legende.getCell(1).value = 'J = tâche due non réalisée, JUSTIFIÉE : site inaccessible ce mois-là (ni retard ni pénalité, comptée dans le dû).';
+  legende.getCell(1).font = { size: 9, italic: true, color: { argb: GRIS } };
+  r++;
+  if (d.sitesInaccessibles?.length) {
+    const t = ws.getRow(r);
+    ['Site inaccessible', 'Période', 'Motif', 'Tâches justifiées'].forEach((h, i) => {
+      t.getCell(1 + i).value = h;
+      t.getCell(1 + i).font = { size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+      t.getCell(1 + i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMBER } };
+    });
+    r++;
+    for (const si of d.sitesInaccessibles) {
+      const row = ws.getRow(r);
+      row.getCell(1).value = si.site;
+      row.getCell(2).value = periodeFr(si);
+      row.getCell(3).value = si.motif;
+      row.getCell(4).value = si.tachesJustifiees;
+      [1, 2, 3, 4].forEach((i) => { row.getCell(i).font = { size: 9 }; });
+      r++;
+    }
   }
 
   const buffer = await wb.xlsx.writeBuffer();
@@ -225,13 +261,16 @@ export async function buildConformitePdf(d: DonneesConformite): Promise<Buffer> 
   /* ── Cartes KPI ── */
   const dues = d.parPrestataire.reduce((s, p) => s + p.dues, 0);
   const realisees = d.parPrestataire.reduce((s, p) => s + p.realisees, 0);
+  const justifiees = d.parPrestataire.reduce((s, p) => s + (p.justifiees ?? 0), 0);
+  const enRetard = dues - realisees - justifiees;
   const sitesAvecDu = d.parPrestataire.reduce((s, p) => s + p.sitesAvecDu, 0);
   const sitesConformes = d.parPrestataire.reduce((s, p) => s + p.sitesConformes, 0);
   const taux = dues ? Math.round((realisees / dues) * 100) : null;
   const kpis: Array<[string, string, string]> = [
     ['Tâches dues', String(dues), P_NAVY],
     ['Réalisées', String(realisees), P_TEAL],
-    ['Non réalisées', String(dues - realisees), dues - realisees > 0 ? P_RED : P_GRIS],
+    // En retard seulement : les justifiées (site inaccessible) sont annoncées à part.
+    [justifiees ? `Non réalisées (+${justifiees} justif.)` : 'Non réalisées', String(enRetard), enRetard > 0 ? P_RED : P_GRIS],
     ['Conformité', taux != null ? `${taux}%` : '-', taux != null ? pCouleur(taux) : P_GRIS],
     ['Sites conformes', sitesAvecDu ? `${sitesConformes}/${sitesAvecDu}` : '-', sitesConformes < sitesAvecDu ? P_RED : P_TEAL],
   ];
@@ -253,7 +292,7 @@ export async function buildConformitePdf(d: DonneesConformite): Promise<Buffer> 
     doc.roundedRect(M, y, INNER, 46, 6).fill(P_FOND);
     doc.fill('#111827').font('Helvetica-Bold').fontSize(10).text(p.prestataireNom, M + 12, y + 8, { width: 200, lineBreak: false });
     doc.fill(P_GRIS).font('Helvetica').fontSize(8)
-      .text(`${p.realisees}/${p.dues} tâches dues réalisées · ${p.sitesAvecDu ? `${p.sitesConformes}/${p.sitesAvecDu} sites conformes` : 'aucun dû'}${p.invalidees ? ` · ${p.invalidees} invalidée(s)` : ''}`,
+      .text(`${p.realisees}/${p.dues} tâches dues réalisées${p.justifiees ? ` (+${p.justifiees} justifiée(s) : accès)` : ''} · ${p.sitesAvecDu ? `${p.sitesConformes}/${p.sitesAvecDu} sites conformes` : 'aucun dû'}${p.invalidees ? ` · ${p.invalidees} invalidée(s)` : ''}`,
         M + 12, y + 26, { width: 250, lineBreak: false });
     // Barre de conformité (comme la page).
     const bx = M + 280, bw = 170, by = y + 20;
@@ -325,6 +364,9 @@ export async function buildConformitePdf(d: DonneesConformite): Promise<Buffer> 
       const x = M + colSite + colRegion + colPresta + i * colT + colT / 2;
       if (st === 'NA') {
         doc.fill('#D1D5DB').font('Helvetica').fontSize(7).text('–', x - 2, y + 2.5, { lineBreak: false });
+      } else if (st === 'JUSTIFIE') {
+        // Justifiée (site inaccessible) : ni vert ni rouge - un « J » ambre.
+        doc.fill(P_AMBER).font('Helvetica-Bold').fontSize(7).text('J', x - 2, y + 2.5, { lineBreak: false });
       } else {
         doc.circle(x, y + 6, 3.4).fill(st === 'OK' ? P_TEAL : P_RED);
       }
@@ -335,6 +377,25 @@ export async function buildConformitePdf(d: DonneesConformite): Promise<Buffer> 
       .text(site.conforme ? 'OK' : 'NOK', cx + 6, y + 3.5, { width: colConf - 12, align: 'center', lineBreak: false });
     zebre = !zebre;
     y += 12;
+  }
+
+  /* ── Sites inaccessibles du mois (justification des « J ») ── */
+  if (y > doc.page.height - 90) { doc.addPage(); bandeau(); y = 76; }
+  y += 8;
+  doc.fill(P_GRIS).font('Helvetica-Oblique').fontSize(7)
+    .text('J = tâche due non réalisée, JUSTIFIÉE : site inaccessible ce mois-là (ni retard ni pénalité, comptée dans le dû).', M, y, { width: INNER });
+  y = doc.y + 6;
+  if (d.sitesInaccessibles?.length) {
+    doc.fill(P_NAVY).font('Helvetica-Bold').fontSize(9).text(`Sites inaccessibles pendant le mois (${d.sitesInaccessibles.length})`, M, y);
+    y = doc.y + 4;
+    for (const si of d.sitesInaccessibles) {
+      if (y > doc.page.height - 60) { doc.addPage(); bandeau(); y = 76; }
+      doc.fill('#111827').font('Helvetica-Bold').fontSize(7.5).text(si.site, M, y, { width: 150, lineBreak: false, ellipsis: true });
+      doc.font('Helvetica').fill(P_GRIS).text(periodeFr(si), M + 155, y, { width: 150, lineBreak: false });
+      doc.fill('#111827').text(`${si.motif}${si.tachesJustifiees ? ` · ${si.tachesJustifiees} tâche(s) justifiée(s)` : ''}`,
+        M + 310, y, { width: INNER - 310 });
+      y = Math.max(doc.y, y + 10) + 2;
+    }
   }
 
   /* ── Pieds de page ── */

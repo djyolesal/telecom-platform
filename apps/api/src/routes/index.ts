@@ -43,6 +43,7 @@ import * as dbAdminCtrl from '../controllers/dbAdmin.controller';
 import * as exclusionsCtrl from '../controllers/exclusions.controller';
 import * as modelesCuveCtrl from '../controllers/modelesCuve.controller';
 import * as zonesCtrl from '../controllers/zonesMaintenance.controller';
+import * as inaccessCtrl from '../controllers/inaccessibilites.controller';
 
 export const router = Router();
 
@@ -256,6 +257,11 @@ router.put('/sites/:id/baremage', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceBa
 // Campagne terrain : le technicien mesure la cuve à la première visite.
 router.put('/sites/:id/cuve', rbac(['TECHNICIEN','SUPERVISEUR','MANAGER','ADMIN']), sitesCtrl.updateCuveSite);
 router.put('/sites/:id/groupes', rbac(['MANAGER','ADMIN']), sitesCtrl.replaceSiteGroupes);
+// Périodes d'INACCESSIBILITÉ (route coupée, crue) : tâches dues mais justifiées.
+router.get('/sites/:id/inaccessibilites', inaccessCtrl.listInaccessibilitesSite);
+router.post('/sites/:id/inaccessibilites', rbac(['MANAGER','ADMIN']), inaccessCtrl.createInaccessibilite);
+router.put('/inaccessibilites/:id', rbac(['MANAGER','ADMIN']), inaccessCtrl.updateInaccessibilite);
+router.delete('/inaccessibilites/:id', rbac(['MANAGER','ADMIN']), inaccessCtrl.deleteInaccessibilite);
 router.delete('/sites/:id', rbac(['ADMIN']), sitesCtrl.deleteSite);
 router.get('/sites/:id/transmission', sitesCtrl.getSiteTransmission);
 router.get('/sites/:id/taches-preventives', tachesCtrl.getTachesForSite);

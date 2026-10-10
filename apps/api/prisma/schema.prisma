@@ -152,18 +152,19 @@ model User {
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
-  prestataire           Prestataire?             @relation(fields: [prestataireId], references: [id])
-  maintenances          Maintenance[]            @relation("TechnicienMaintenances")
-  depotages             Depotage[]               @relation("TechnicienDepotages")
-  bonsLivraisonClotures BonLivraison[]           @relation("ClotureBonsLivraison")
-  mouvementsCarburant   MouvementCarburant[]
-  releves               ReleveEnergie[]
-  relevesSaisis         ReleveEnergie[]          @relation("RelevesSaisisParAdmin")
-  incidents             Incident[]               @relation("TechnicienIncidents")
-  incidentsDeclares     Incident[]               @relation("DeclarantIncidents")
-  auditLogs             AuditLog[]
-  notifications         Notification[]
-  exclusionsCreees      ExclusionContractuelle[] @relation("ExclusionsCreees")
+  prestataire               Prestataire?             @relation(fields: [prestataireId], references: [id])
+  maintenances              Maintenance[]            @relation("TechnicienMaintenances")
+  depotages                 Depotage[]               @relation("TechnicienDepotages")
+  bonsLivraisonClotures     BonLivraison[]           @relation("ClotureBonsLivraison")
+  mouvementsCarburant       MouvementCarburant[]
+  releves                   ReleveEnergie[]
+  relevesSaisis             ReleveEnergie[]          @relation("RelevesSaisisParAdmin")
+  incidents                 Incident[]               @relation("TechnicienIncidents")
+  incidentsDeclares         Incident[]               @relation("DeclarantIncidents")
+  auditLogs                 AuditLog[]
+  notifications             Notification[]
+  exclusionsCreees          ExclusionContractuelle[] @relation("ExclusionsCreees")
+  inaccessibilitesDeclarees InaccessibiliteSite[]    @relation("InaccessibilitesDeclarees")
 
   @@index([prestataireId])
   @@index([appareilId])
@@ -245,6 +246,7 @@ model Site {
   zoneMaintenance        ZoneMaintenance?         @relation(fields: [zoneMaintenanceId], references: [id], onDelete: SetNull)
   coupuresReseau         CoupureReseau[]
   exclusions             ExclusionContractuelle[]
+  inaccessibilites       InaccessibiliteSite[]
   // Topologie de transmission : site AMONT dont dépend le lien de ce site.
   parentTransmissionId   String?                  @map("parent_transmission_id")
   parentTransmission     Site?                    @relation("TransmissionSite", fields: [parentTransmissionId], references: [id])
@@ -1396,6 +1398,29 @@ model ExclusionContractuelle {
   @@index([siteId], map: "exclusions_contractuelles_site_idx")
   @@index([tacheKey], map: "exclusions_contractuelles_tache_idx")
   @@map("exclusions_contractuelles")
+}
+
+// Période où le site est INACCESSIBLE à la maintenance (route coupée, crue,
+// saison des pluies…). Décision de l'exploitant (10/10/2026) : les tâches
+// restent DUES (dans le dû et le taux de réalisation), mais une tâche due et
+// non réalisée sur un mois couvert est JUSTIFIÉE - ni retard ni pénalité, et
+// montrée à part dans les rapports. Déclarée au cas par cas par un manager.
+model InaccessibiliteSite {
+  id        String    @id @default(uuid())
+  siteId    String    @map("site_id")
+  debutLe   DateTime  @map("debut_le") @db.Date
+  /// NULL = toujours inaccessible (accès pas encore rétabli).
+  finLe     DateTime? @map("fin_le") @db.Date
+  motif     String    @db.VarChar(300)
+  creePar   String?   @map("cree_par")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  site   Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  auteur User? @relation("InaccessibilitesDeclarees", fields: [creePar], references: [id])
+
+  @@index([siteId])
+  @@map("inaccessibilites_sites")
 }
 
 model AnomalieSaisie {
