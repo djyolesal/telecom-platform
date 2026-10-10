@@ -135,8 +135,11 @@ cat >> /etc/crontab << 'EOF'
 # Backup BDD tous les jours à 3h
 0 3 * * * deploy cd /opt/telecom/app && make backup >> /opt/telecom/logs/backup.log 2>&1
 
-# Renouvellement SSL (1er et 15 du mois)
-0 0 1,15 * * root certbot renew --quiet && docker compose -f /opt/telecom/app/docker-compose.yml restart nginx >> /opt/telecom/logs/ssl.log 2>&1
+# Renouvellement SSL (1er et 15 du mois) en WEBROOT : nginx (conteneur) garde
+# le port 80 et sert le challenge. Un « certbot renew » nu rejoue la méthode de
+# la première émission (standalone) qui exige le port 80 LIBRE : il échouait en
+# silence et le certificat a expiré le 10/10/2026 (erreur Cloudflare 526).
+0 0 1,15 * * root certbot renew --quiet --webroot -w /opt/telecom/certbot-webroot --deploy-hook "docker compose -f /opt/telecom/app/docker-compose.yml restart nginx" >> /opt/telecom/logs/ssl.log 2>&1
 EOF
 
 # ── 11. Alias utiles ──────────────────────────────────────────

@@ -71,3 +71,23 @@ Une fois le HTTPS opérationnel, vous pouvez repasser les enregistrements A en
 bénéficiez de la protection DDoS gratuite. Le renouvellement continue de
 fonctionner (méthode webroot, port 80 servi par nginx derrière Cloudflare).
 Réglez alors le mode SSL Cloudflare sur **Full (strict)**.
+
+## 5. Incident du 10/10/2026 : erreur Cloudflare 526 (certificat expiré)
+
+**Cause.** Le certificat émis le 12/07 en mode `--standalone` expirait le 10/10.
+Le cron posé par `setup-server.sh` lançait `certbot renew` sans méthode : certbot
+rejoue alors celle de la première émission (standalone), qui exige le port 80
+libre - or nginx l'occupe en permanence. Chaque renouvellement échouait en
+silence (voir `/opt/telecom/logs/ssl.log`). Avec le proxy Cloudflare en mode
+**Full (strict)**, un certificat d'origine expiré donne la page « Error 526 ».
+
+**Rétablir.**
+1. Cloudflare → SSL/TLS → mode **Full** (temporairement) : le site revient tout
+   de suite (chiffré, certificat d'origine non vérifié), et le challenge ACME
+   passe même si « Always Use HTTPS » redirige vers https.
+2. Sur le serveur : `sudo certbot renew --webroot -w /opt/telecom/certbot-webroot`
+   (ce passage enregistre aussi la méthode webroot pour les renouvellements
+   suivants), puis `docker compose restart nginx`.
+3. Remplacer la ligne certbot de `/etc/crontab` par celle du paragraphe 2, et
+   tester : `sudo certbot renew --dry-run`.
+4. Cloudflare → SSL/TLS → repasser en **Full (strict)**.

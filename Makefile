@@ -160,7 +160,9 @@ update:
 	@echo "✅ Mise à jour terminée"
 
 ssl:
-	@certbot renew --nginx --quiet
+	@# WEBROOT : nginx tourne dans un conteneur et garde le port 80 (le plugin
+	@# --nginx vise un nginx de l'hôte, le mode standalone exige le port libre).
+	@certbot renew --quiet --webroot -w /opt/telecom/certbot-webroot
 	@docker compose restart nginx
 	@echo "✅ Certificats SSL renouvelés"
 
