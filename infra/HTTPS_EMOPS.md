@@ -88,6 +88,16 @@ silence (voir `/opt/telecom/logs/ssl.log`). Avec le proxy Cloudflare en mode
 2. Sur le serveur : `sudo certbot renew --webroot -w /opt/telecom/certbot-webroot`
    (ce passage enregistre aussi la méthode webroot pour les renouvellements
    suivants), puis `docker compose restart nginx`.
-3. Remplacer la ligne certbot de `/etc/crontab` par celle du paragraphe 2, et
-   tester : `sudo certbot renew --dry-run`.
+3. Le renouvellement automatique n'est PAS dans `/etc/crontab` sur ce serveur :
+   c'est le minuteur du paquet certbot (`systemctl list-timers | grep certbot`
+   ou `/etc/cron.d/certbot`), qui lance `certbot renew` deux fois par jour.
+   Après l'étape 2, `/etc/letsencrypt/renewal/emops.uk.conf` porte
+   `authenticator = webroot` : le minuteur renouvelle alors correctement. Il
+   reste à redémarrer nginx après chaque renouvellement, par un hook :
+   ```bash
+   printf '#!/bin/sh\ndocker compose -f /opt/telecom-platform/docker-compose.yml restart nginx\n' \
+     | sudo tee /etc/letsencrypt/renewal-hooks/deploy/restart-nginx.sh
+   sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/restart-nginx.sh
+   sudo certbot renew --dry-run
+   ```
 4. Cloudflare → SSL/TLS → repasser en **Full (strict)**.
