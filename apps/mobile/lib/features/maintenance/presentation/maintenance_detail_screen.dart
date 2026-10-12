@@ -20,6 +20,8 @@ import '../data/maintenance_repository.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/appareil_photo.dart';
+import 'choix_piece.dart';
+import '../../../core/config/piece_catalogue.dart';
 
 class MaintenanceDetailScreen extends StatefulWidget {
   final String id;
@@ -768,13 +770,14 @@ class _CloseSheetState extends State<_CloseSheet> {
   final Map<String, String> _ckResultats = {};
   final Map<String, TextEditingController> _ckValeurs = {};
   final Map<String, TextEditingController> _ckComms = {};
-  // Pièces remplacées : lignes libres (nom + quantité), suggestions du
-  // catalogue serveur (AppConfig.pieces) - la frappe libre reste possible.
-  // Le FocusNode vit DANS la ligne (pas de liste parallèle à garder alignée),
-  // et une ligne supprimée n'est pas libérée tout de suite : ses widgets sont
-  // encore montés pendant le rebuild - dispose() du sheet s'en charge.
-  final List<({TextEditingController nom, TextEditingController qte, FocusNode focus})> _pieces = [];
-  final List<({TextEditingController nom, TextEditingController qte, FocusNode focus})> _piecesRetirees = [];
+  // Pièces remplacées : CHOISIES dans le catalogue (sélecteur avec recherche),
+  // ou « hors catalogue » en dernier recours. Une ligne supprimée n'est pas
+  // libérée tout de suite : ses widgets sont encore montés pendant le rebuild -
+  // dispose() du sheet s'en charge.
+  final List<_LignePiece> _pieces = [];
+  final List<_LignePiece> _piecesRetirees = [];
+  // Le kit vidange n'est proposé qu'une fois par clôture (refus respecté).
+  bool _kitVidangePropose = false;
   // Déclaration obligatoire : agent de gardiennage présent sur site ?
   bool? _agentPresent;
   // Présent ⇒ il signe (exigé par le serveur, comme au dépotage).
@@ -812,14 +815,11 @@ class _CloseSheetState extends State<_CloseSheet> {
       _puissance,
       _nomAgent,
       ..._geCtrls.values,
-      for (final l in [..._pieces, ..._piecesRetirees]) ...[l.nom, l.qte],
+      for (final l in [..._pieces, ..._piecesRetirees]) l.qte,
       ..._ckValeurs.values,
       ..._ckComms.values,
     ]) {
       c.dispose();
-    }
-    for (final l in [..._pieces, ..._piecesRetirees]) {
-      l.focus.dispose();
     }
     super.dispose();
   }
@@ -1053,10 +1053,15 @@ class _CloseSheetState extends State<_CloseSheet> {
       dense: true,
       controlAffinity: ListTileControlAffinity.leading,
       value: _vidangeEffective(g),
-      onChanged: (v) => setState(() {
-        _vidangeTouched.add(g.id);
-        _vidange[g.id] = v ?? false;
-      }),
+      onChanged: (v) {
+        setState(() {
+          _vidangeTouched.add(g.id);
+          _vidange[g.id] = v ?? false;
+        });
+        // Vidange cochée : on propose le kit (huile + filtres) - l'opération
+        // la plus fréquente, et la plus souvent mal saisie à la main.
+        if (v == true && !_kitVidangePropose) _proposerKitVidange();
+      },
       title: Text('Vidange GE n°${g.numero} effectuée',
           style: const TextStyle(fontSize: 13)),
       subtitle: Text(hint,
@@ -1195,6 +1200,14 @@ class _CloseSheetState extends State<_CloseSheet> {
       return;
     }
 
+    // Pièces : quantités renseignées (et confirmées si inhabituelles).
+    final erreurPieces = await _verifierPieces();
+    if (!mounted) return;
+    if (erreurPieces != null) {
+      setState(() => _error = erreurPieces.isEmpty ? null : erreurPieces);
+      return;
+    }
+
     // Pré-contrôle de vraisemblance AVANT envoi/mise en file : le technicien
     // corrige immédiatement (même hors-ligne) ou confirme explicitement —
     // la confirmation est tracée côté serveur.
@@ -1236,11 +1249,14 @@ class _CloseSheetState extends State<_CloseSheet> {
       'photos': _photos,
       'pieces': [
         for (final l in _pieces)
-          if (l.nom.text.trim().isNotEmpty)
-            {
-              'nom': l.nom.text.trim(),
-              'quantite': int.tryParse(l.qte.text.trim()) ?? 1,
-            }
+          {
+            'nom': l.choix.libelle,
+            'quantite': int.tryParse(l.qte.text.trim()) ?? 1,
+            // Pièce du catalogue : envoyée IDENTIFIÉE, le serveur n'a plus à
+            // deviner. Hors catalogue : texte seul, à rattacher au bureau.
+            if (l.choix.piece != null && l.choix.piece!.id.isNotEmpty)
+              'pieceRefId': l.choix.piece!.id,
+          }
       ],
       'agentPresent': _agentPresent,
       if (_nomAgent.text.trim().isNotEmpty)
@@ -1253,88 +1269,64 @@ class _CloseSheetState extends State<_CloseSheet> {
   /// Choix obligatoire Présent/Absent (sans valeur par défaut : une case
   /// pré-cochée serait validée machinalement et la donnée ne vaudrait rien).
 
-  /// Pièces remplacées : lignes nom + quantité, suggestions du catalogue
-  /// serveur (frappe libre toujours possible - le serveur rapproche).
+  /// Pièces remplacées : choisies dans le catalogue, quantité dans l'unité de
+  /// la pièce (litres d'huile, mètres de câble…).
   Widget _sectionPieces() {
+    final vidangeCochee = _vidange.values.any((v) => v) ||
+        widget.maintenance.siteGroupes.any((g) => _vidangeEffective(g));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
           Expanded(
-            child: Text('Pièces remplacées (optionnel)',
+            child: Text('Pièces remplacées',
                 style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.grey.shade700,
                     fontSize: 13)),
           ),
           TextButton.icon(
-            onPressed: () => setState(() => _pieces.add((
-                  nom: TextEditingController(),
-                  qte: TextEditingController(text: '1'),
-                  focus: FocusNode(),
-                ))),
+            onPressed: _ajouterPiece,
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Ajouter'),
+            label: const Text('Ajouter une pièce'),
           ),
         ]),
+        if (vidangeCochee && !_kitDejaPresent())
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ActionChip(
+              avatar: const Icon(Icons.oil_barrel_outlined, size: 18),
+              label: const Text('Ajouter le kit vidange'),
+              onPressed: _ajouterKitVidange,
+            ),
+          ),
         for (var i = 0; i < _pieces.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: RawAutocomplete<String>(
-                    textEditingController: _pieces[i].nom,
-                    focusNode: _pieces[i].focus,
-                    optionsBuilder: (v) {
-                      final q = v.text.trim().toLowerCase();
-                      if (q.isEmpty) return const Iterable<String>.empty();
-                      return AppConfig.pieces
-                          .map((e) => e['libelle']!)
-                          .where((l) => l.toLowerCase().contains(q))
-                          .take(6);
-                    },
-                    fieldViewBuilder: (context, ctrl, focus, onSubmit) =>
-                        TextField(
-                      controller: ctrl,
-                      focusNode: focus,
-                      decoration:
-                          const InputDecoration(labelText: 'Pièce (nom)'),
-                    ),
-                    optionsViewBuilder: (context, onSelected, options) =>
-                        Align(
-                      alignment: Alignment.topLeft,
-                      child: Material(
-                        elevation: 4,
-                        borderRadius: BorderRadius.circular(8),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                              maxHeight: 200, maxWidth: 280),
-                          child: ListView(
-                            padding: EdgeInsets.zero,
-                            shrinkWrap: true,
-                            children: [
-                              for (final o in options)
-                                ListTile(
-                                    dense: true,
-                                    title: Text(o,
-                                        style: const TextStyle(fontSize: 13)),
-                                    onTap: () => onSelected(o)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_pieces[i].choix.libelle, style: const TextStyle(fontSize: 14)),
+                      if (_pieces[i].choix.horsCatalogue)
+                        Text('Hors catalogue - vérifiée au bureau',
+                            style: TextStyle(fontSize: 11, color: Colors.orange.shade800)),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
-                  width: 64,
+                  width: 96,
                   child: TextField(
                     controller: _pieces[i].qte,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Qté'),
+                    decoration: InputDecoration(
+                      labelText: 'Qté',
+                      suffixText: _pieces[i].choix.unite == 'unité' ? null : _pieces[i].choix.unite,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1352,6 +1344,84 @@ class _CloseSheetState extends State<_CloseSheet> {
         const SizedBox(height: 4),
       ],
     );
+  }
+
+  Future<void> _ajouterPiece() async {
+    final choix = await choisirPiece(context, categorie: widget.maintenance.categorie);
+    if (choix == null || !mounted) return;
+    // Même pièce déjà listée : on ne double pas la ligne, on la signale.
+    final existe = _pieces.any((l) => choix.piece != null && l.choix.piece?.id == choix.piece!.id);
+    if (existe) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('« ${choix.libelle} » est déjà dans la liste : modifiez sa quantité.')),
+      );
+      return;
+    }
+    // Quantité VIDE pour une unité continue (litres, mètres) : à saisir, jamais
+    // un « 1 » pré-rempli qu'on valide sans regarder.
+    setState(() => _pieces.add(_LignePiece(choix, qte: (choix.piece?.uniteContinue ?? false) ? '' : '1')));
+  }
+
+  bool _kitDejaPresent() {
+    final presents = _pieces.map((l) => l.choix.piece?.code).toSet();
+    final kit = AppConfig.pieces.where((p) => codesKitVidange.contains(p.code));
+    return kit.isEmpty || kit.every((p) => presents.contains(p.code));
+  }
+
+  /// Kit vidange : huile (quantité à saisir, en litres) et les trois filtres.
+  void _ajouterKitVidange() {
+    final presents = _pieces.map((l) => l.choix.piece?.code).toSet();
+    setState(() {
+      for (final code in codesKitVidange) {
+        final p = AppConfig.pieces.where((x) => x.code == code).firstOrNull;
+        if (p == null || presents.contains(code)) continue;
+        _pieces.add(_LignePiece(PieceChoisie.catalogue(p), qte: p.uniteContinue ? '' : '1'));
+      }
+    });
+  }
+
+  Future<void> _proposerKitVidange() async {
+    _kitVidangePropose = true;
+    if (_kitDejaPresent()) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kit vidange'),
+        content: const Text('Ajouter les pièces de la vidange : huile moteur, filtre à huile, filtre à gasoil, filtre à air ?\n'
+            'Vous indiquerez la quantité d\'huile et retirerez ce qui n\'a pas été changé.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Non')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Ajouter')),
+        ],
+      ),
+    );
+    if (ok == true && mounted) _ajouterKitVidange();
+  }
+
+  /// Quantités : renseignées, entières, et confirmées si inhabituelles.
+  /// null = on peut continuer ; sinon le message d'erreur à afficher.
+  Future<String?> _verifierPieces() async {
+    final inhabituelles = <String>[];
+    for (final l in _pieces) {
+      final q = int.tryParse(l.qte.text.trim());
+      if (q == null || q <= 0) {
+        return 'Indiquez la quantité de « ${l.choix.libelle} »${l.choix.unite == 'unité' ? '' : ' (en ${l.choix.unite})'}.';
+      }
+      if (q > seuilQuantiteInhabituelle(l.choix.piece)) inhabituelles.add('${l.choix.libelle} : $q ${l.choix.unite}');
+    }
+    if (inhabituelles.isEmpty) return null;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Quantité inhabituelle'),
+        content: Text('Vérifiez :\n${inhabituelles.join('\n')}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Corriger')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('C\'est correct')),
+        ],
+      ),
+    );
+    return ok == true ? null : '';
   }
 
   Widget _agentSelector() {
@@ -1806,4 +1876,11 @@ class _MotifSuspensionDialogState extends State<_MotifSuspensionDialog> {
       ],
     );
   }
+}
+
+/// Ligne « pièce remplacée » de la clôture : la pièce choisie et sa quantité.
+class _LignePiece {
+  final PieceChoisie choix;
+  final TextEditingController qte;
+  _LignePiece(this.choix, {String qte = '1'}) : qte = TextEditingController(text: qte);
 }

@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
 import '../network/dio_client.dart';
 import '../theme/app_theme.dart';
+import 'piece_catalogue.dart';
 
 /// Règles terrain configurables côté serveur, récupérées via GET /config.
 /// Valeurs par défaut sûres si le serveur n'a pas (encore) répondu.
@@ -22,10 +23,10 @@ class AppConfig {
   static int minPhotosMouvementCarburant = 2;
   static int intervalleVidangeHeures = 250;
 
-  /// Catalogue des pièces de rechange (code → libellé/unité), servi par
-  /// /config : suggestions à la clôture de maintenance. Vide tant que rien
-  /// n'est chargé - la saisie libre reste toujours possible.
-  static List<Map<String, String>> pieces = [];
+  /// Catalogue des pièces de rechange, servi par /config : le sélecteur de la
+  /// clôture de maintenance. Vide tant que rien n'est chargé - la saisie
+  /// « pièce absente du catalogue » reste toujours possible.
+  static List<PieceCatalogue> pieces = [];
 
   /// Référentiel des types d'incident (code → libellé), éditable en admin et
   /// servi par /config : une évolution ne demande pas de nouvelle version de
@@ -168,12 +169,7 @@ class ConfigService {
     if (pcs is List && pcs.isNotEmpty) {
       AppConfig.pieces = [
         for (final e in pcs)
-          if (e is Map && e['libelle'] != null)
-            {
-              'code': e['code']?.toString() ?? '',
-              'libelle': e['libelle'].toString(),
-              'unite': e['unite']?.toString() ?? 'unité',
-            },
+          if (PieceCatalogue.fromJson(e) case final p?) p,
       ];
     }
     final equips = d['equipements'];
