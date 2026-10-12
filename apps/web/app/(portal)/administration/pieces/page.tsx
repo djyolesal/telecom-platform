@@ -10,6 +10,7 @@ import { Button } from '@/components/shared/Button';
 import { Input } from '@/components/shared/Form';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { fmtNumber } from '@/lib/utils';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 
 interface PieceRef {
   id: string; code: string; libelle: string; categorie: string | null;
@@ -75,9 +76,12 @@ export default function PiecesRefPage() {
         subtitle="Catalogue de rapprochement : la saisie terrain reste libre, le serveur fait le lien"
         backHref="/administration"
         actions={
-          <Button variant="secondary" icon={Link2} loading={rapprocher.isPending} onClick={() => rapprocher.mutate()}>
-            Rapprocher l&apos;historique
-          </Button>
+          <>
+            <ExportButtons base="/pieces-ref/export" name="catalogue-pieces-rechange" />
+            <Button variant="secondary" icon={Link2} loading={rapprocher.isPending} onClick={() => rapprocher.mutate()}>
+              Rapprocher l&apos;historique
+            </Button>
+          </>
         }
       />
 

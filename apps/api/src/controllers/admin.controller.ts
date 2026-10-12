@@ -14,6 +14,7 @@ import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../ser
 import { SMS_TEMPLATES, CANAUX_SMS } from '../services/sms.service';
 import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride, definirCoutTache } from '../services/tachesPreventives.service';
 import { cleLogoValide, logoClient } from '../services/logoClient.service';
+import { sendTabular } from '../utils/exporter';
 
 // ── Paramètres système (clé/valeur JSON) ─────────────────────
 export async function getSettings(_req: Request, res: Response, next: NextFunction) {
@@ -428,6 +429,44 @@ export async function listPiecesRef(req: Request, res: Response, next: NextFunct
       success: true,
       data: pieces.map((p) => ({ ...p, utilisations: p._count.pieces, _count: undefined })),
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Export du CATALOGUE des pièces de rechange (Excel ou PDF). La colonne du code
+ * pièce porte la clé `codePiece` : la règle « code réservé à l'ADMIN » des
+ * exports vise le code SITE (clé `code`), pas celui d'une pièce.
+ */
+export async function exportPiecesRef(req: Request, res: Response, next: NextFunction) {
+  try {
+    const pieces = await prisma.pieceRef.findMany({
+      orderBy: [{ categorie: 'asc' }, { libelle: 'asc' }],
+      include: { _count: { select: { pieces: true } } },
+    });
+    await auditLog(req.user!.id, 'EXPORT', 'pieces_ref', undefined, { pieces: pieces.length, format: req.params.format }, req);
+    await sendTabular(res, req.params.format, 'catalogue-pieces-rechange', 'Catalogue des pièces de rechange', [{
+      name: 'Pièces de rechange',
+      columns: [
+        { header: 'Code pièce', key: 'codePiece', width: 30 },
+        { header: 'Libellé', key: 'libelle', width: 60 },
+        { header: 'Catégorie', key: 'categorie', width: 14 },
+        { header: 'Unité', key: 'unite', width: 10 },
+        { header: 'Coût standard (FCFA)', key: 'coutStandard', width: 18 },
+        { header: 'Synonymes', key: 'synonymes', width: 30 },
+        { header: 'Actif', key: 'actif', width: 8 },
+        { header: 'Consommations liées', key: 'utilisations', width: 18 },
+      ],
+      rows: pieces.map((p) => ({
+        codePiece: p.code,
+        libelle: p.libelle,
+        categorie: p.categorie ?? '',
+        unite: p.unite,
+        coutStandard: p.coutStandard != null ? Number(p.coutStandard) : '',
+        synonymes: (p.synonymes ?? []).join(', '),
+        actif: p.actif ? 'Oui' : 'Non',
+        utilisations: p._count.pieces,
+      })),
+    }], `${pieces.length} pièce(s) · ${pieces.filter((p) => p.actif).length} active(s)`);
   } catch (err) { next(err); }
 }
 
