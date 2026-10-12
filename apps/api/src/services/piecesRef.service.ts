@@ -142,3 +142,95 @@ export async function validerSynonymes(
   }
   return out;
 }
+
+/** Mots significatifs d'un libellé (accents, casse et mots vides retirés). */
+const VIDES = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'a', 'au', 'aux', 'et', 'en', 'pour', 'l', 'd', 'un', 'une']);
+export const motsPiece = (s: string): string[] =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .split(/[^a-z0-9]+/).filter((m) => m && !VIDES.has(m));
+
+/**
+ * Pièce du catalogue la plus proche d'un texte libre : mots communs (avec le
+ * libellé et les synonymes), pondérés par la part du texte couverte. Une
+ * SUGGESTION seulement - l'admin confirme, rien n'est rattaché sans lui.
+ */
+export function suggestionPiece(
+  texte: string,
+  catalogue: Array<{ id: string; libelle: string; synonymes?: string[] | null }>,
+): { id: string; libelle: string } | null {
+  const mots = new Set(motsPiece(texte));
+  if (!mots.size) return null;
+  let meilleur: { id: string; libelle: string; score: number } | null = null;
+  for (const p of catalogue) {
+    for (const nom of [p.libelle, ...(p.synonymes ?? [])]) {
+      const cand = motsPiece(nom);
+      if (!cand.length) continue;
+      const communs = cand.filter((m) => mots.has(m) || [...mots].some((x) => x.length >= 4 && (m.startsWith(x) || x.startsWith(m)))).length;
+      if (!communs) continue;
+      const score = communs / Math.max(mots.size, cand.length);
+      if (!meilleur || score > meilleur.score) meilleur = { id: p.id, libelle: p.libelle, score };
+    }
+  }
+  return meilleur && meilleur.score >= 0.34 ? { id: meilleur.id, libelle: meilleur.libelle } : null;
+}
+
+export interface SaisieHorsCatalogue {
+  cle: string;
+  /** Les graphies rencontrées (les plus fréquentes d'abord). */
+  textes: string[];
+  occurrences: number;
+  sites: number;
+  derniere: Date | null;
+  suggestion: { id: string; libelle: string } | null;
+}
+
+/**
+ * SAISIES HORS CATALOGUE : les pièces saisies en texte libre que le
+ * rapprochement n'a pas reconnues, regroupées par texte normalisé (« filtre
+ * gasoil » et « Filtre  Gasoil » sont une seule entrée), les plus fréquentes
+ * d'abord. C'est la file de travail de l'admin : un rattachement ajoute le
+ * texte en SYNONYME, donc vaut aussi pour les saisies à venir.
+ */
+export async function saisiesHorsCatalogue(): Promise<SaisieHorsCatalogue[]> {
+  const [libres, catalogue] = await Promise.all([
+    prisma.pieceRechange.findMany({
+      where: { pieceRefId: null },
+      select: { nom: true, maintenance: { select: { siteId: true, dateFin: true, datePlanifiee: true } } },
+    }),
+    prisma.pieceRef.findMany({ where: { actif: true }, select: { id: true, libelle: true, synonymes: true } }),
+  ]);
+  const groupes = new Map<string, { textes: Map<string, number>; occurrences: number; sites: Set<string>; derniere: Date | null }>();
+  for (const l of libres) {
+    const cle = normaliserPiece(l.nom);
+    if (!cle) continue;
+    const g = groupes.get(cle) ?? { textes: new Map(), occurrences: 0, sites: new Set(), derniere: null };
+    const brut = l.nom.trim().replace(/\s+/g, ' ');
+    g.textes.set(brut, (g.textes.get(brut) ?? 0) + 1);
+    g.occurrences++;
+    g.sites.add(l.maintenance.siteId);
+    const d = l.maintenance.dateFin ?? l.maintenance.datePlanifiee;
+    if (d && (!g.derniere || d > g.derniere)) g.derniere = d;
+    groupes.set(cle, g);
+  }
+  return [...groupes.entries()]
+    .map(([cle, g]) => {
+      const textes = [...g.textes.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+      return { cle, textes, occurrences: g.occurrences, sites: g.sites.size, derniere: g.derniere, suggestion: suggestionPiece(textes[0], catalogue) };
+    })
+    .sort((a, b) => b.occurrences - a.occurrences || a.textes[0].localeCompare(b.textes[0]));
+}
+
+/**
+ * Rattache des textes libres à une pièce du catalogue : ils deviennent ses
+ * SYNONYMES (refus si l'un désigne déjà une autre pièce), puis l'historique est
+ * rapproché. Les saisies à venir avec la même graphie se rattacheront seules.
+ */
+export async function rattacherTextes(pieceId: string, textes: string[]): Promise<{ synonymes: string[]; rapprochees: number }> {
+  const piece = await prisma.pieceRef.findUnique({ where: { id: pieceId }, select: { id: true, code: true, libelle: true, synonymes: true, actif: true } });
+  if (!piece) throw new AppError('Pièce introuvable.', 404);
+  if (!piece.actif) throw new AppError('Cette pièce est désactivée : réactivez-la avant d\'y rattacher des saisies.', 422);
+  const synonymes = await validerSynonymes([...(piece.synonymes ?? []), ...textes], piece);
+  await prisma.pieceRef.update({ where: { id: piece.id }, data: { synonymes } });
+  const { rapprochees } = await rapprocherHistorique();
+  return { synonymes, rapprochees };
+}

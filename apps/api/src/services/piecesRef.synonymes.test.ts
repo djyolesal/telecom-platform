@@ -62,3 +62,24 @@ describe('saisie des synonymes', () => {
       .rejects.toThrow(/déjà la pièce « Batterie 12V 100 Ah »/);
   });
 });
+
+describe('suggestion pour une saisie hors catalogue', () => {
+  // Import local : la fonction est pure (aucun accès base).
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { suggestionPiece } = require('./piecesRef.service') as typeof import('./piecesRef.service');
+  const catalogue = [
+    { id: 'fg', libelle: 'Filtre à gasoil', synonymes: [] },
+    { id: 'fa', libelle: 'Filtre à air', synonymes: [] },
+    { id: 'hm', libelle: 'Huile moteur 15W40', synonymes: [] },
+    { id: 'b100', libelle: 'Batterie 12V 100 Ah', synonymes: ['Batterie 100 Ah'] },
+  ];
+  it('variantes de saisie : la bonne pièce est proposée', () => {
+    expect(suggestionPiece('filtre gasoil', catalogue)?.id).toBe('fg');
+    expect(suggestionPiece('FILTRE A AIR', catalogue)?.id).toBe('fa');
+    expect(suggestionPiece('huile 15w40', catalogue)?.id).toBe('hm');
+    expect(suggestionPiece('batterie 100ah', catalogue)?.id).toBe('b100');
+  });
+  it('rien de ressemblant : aucune suggestion (jamais deviné)', () => {
+    expect(suggestionPiece('Câble coaxial', catalogue)).toBeNull();
+  });
+});

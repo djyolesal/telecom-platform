@@ -23,9 +23,12 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
       select: { code: true, libelle: true, categorie: true },
       orderBy: { libelle: 'asc' },
     }),
+    // id : le sélecteur mobile (b51+) envoie la pièce IDENTIFIÉE (pieceRefId),
+    // plus de rapprochement à deviner ; catégorie et synonymes servent à la
+    // recherche et au tri. Ajouts purs : les APK antérieurs les ignorent.
     prisma.pieceRef.findMany({
       where: { actif: true },
-      select: { code: true, libelle: true, unite: true },
+      select: { id: true, code: true, libelle: true, unite: true, categorie: true, synonymes: true },
       orderBy: { libelle: 'asc' },
     }),
   ]);

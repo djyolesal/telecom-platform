@@ -255,12 +255,7 @@ export async function getMaintenances(req: Request, res: Response, next: NextFun
       }
       where.AND = [...((where.AND as unknown[]) ?? []), { OR: scope }];
     }
-    if (date_debut || date_fin) {
-      where.datePlanifiee = {
-        ...(date_debut ? { gte: parseISO(date_debut) } : {}),
-        ...(date_fin ? { lte: parseISO(date_fin) } : {}),
-      };
-    }
+    Object.assign(where, filtrePeriodeMaintenance(req.query as Record<string, string>));
 
     // Le périmètre par sites ne s'applique PAS au technicien : sa branche
     // « entreprise » est déjà bornée par ses lots via prestataireId, et
@@ -2342,10 +2337,30 @@ export async function getPlanning(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
+/**
+ * Filtre de période de la liste et de l'export : `date_debut` / `date_fin`
+ * (AAAA-MM-JJ, bornes INCLUSES - « jusqu'au 31 » comprend le 31, l'ancien
+ * filtre s'arrêtait à minuit et perdait la journée), sur la date PLANIFIÉE
+ * (défaut) ou la date de RÉALISATION (`date_champ=realisation` : la clôture).
+ */
+export function filtrePeriodeMaintenance(q: Record<string, string>): Record<string, unknown> {
+  const jour = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00.000Z`) : null);
+  const du = jour(q.date_debut);
+  const au = jour(q.date_fin);
+  if (!du && !au) return {};
+  const champ = q.date_champ === 'realisation' ? 'dateFin' : 'datePlanifiee';
+  return {
+    [champ]: {
+      ...(du ? { gte: du } : {}),
+      ...(au ? { lt: new Date(au.getTime() + 86_400_000) } : {}),
+    },
+  };
+}
+
 export async function exportMaintenances(req: Request, res: Response, next: NextFunction) {
   try {
     const { type, statut, site_id, zone_id } = req.query as Record<string, string>;
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = filtrePeriodeMaintenance(req.query as Record<string, string>);
     if (type) where.type = type;
     if (statut) where.statut = statut;
     if (site_id) where.siteId = site_id;

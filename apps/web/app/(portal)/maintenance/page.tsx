@@ -41,7 +41,7 @@ interface Maintenance {
   _count?: { photos: number };
 }
 
-const FILTRES_DEFAUT = { page: '1', search: '', type: '', statut: '', prestataireId: '', zone: '', tri: '', sens: '' };
+const FILTRES_DEFAUT = { page: '1', search: '', type: '', statut: '', prestataireId: '', zone: '', du: '', au: '', champ: '', tri: '', sens: '' };
 
 function MaintenancePageInner() {
   // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
@@ -53,7 +53,12 @@ function MaintenancePageInner() {
   const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
   const page = Number(valeurs.page) || 1;
   const setPage = (p: number) => appliquer({ page: String(p) });
-  const { type, statut, prestataireId, zone } = valeurs;
+  const { type, statut, prestataireId, zone, du, au, champ } = valeurs;
+  // Période : sur la date PLANIFIÉE (défaut) ou la date de RÉALISATION.
+  const periode = {
+    date_debut: du || undefined, date_fin: au || undefined,
+    date_champ: (du || au) && champ === 'realisation' ? 'realisation' : undefined,
+  };
   const optionsZones = useOptionsZones();
   const tri = valeurs.tri ? { key: valeurs.tri, dir: (valeurs.sens === 'desc' ? -1 : 1) as 1 | -1 } : null;
   const [search, setSearch] = useState(valeurs.search);
@@ -79,10 +84,10 @@ function MaintenancePageInner() {
   const prestataireOptions = (prestataires ?? []).map((p: { id: string; nom: string }) => ({ value: p.id, label: p.nom }));
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['maintenances', { page, debouncedSearch, type, statut, prestataireId, zone, tri }],
+    queryKey: ['maintenances', { page, debouncedSearch, type, statut, prestataireId, zone, du, au, champ, tri }],
     queryFn: () =>
       api.get('/maintenances', { params: {
-        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined, zone_id: zone || undefined,
+        page, limit: 20, search: debouncedSearch || undefined, type: type || undefined, statut: statut || undefined, prestataire_id: prestataireId || undefined, zone_id: zone || undefined, ...periode,
         tri: tri?.key, sens: tri ? (tri.dir === 1 ? 'asc' : 'desc') : undefined,
       } }).then((r) => r.data),
   });
@@ -130,7 +135,9 @@ function MaintenancePageInner() {
             <ButtonLink href="/maintenance/planning" variant="secondary" icon={CalendarDays}>Planning</ButtonLink>
             {roleExport === 'ADMIN' && equipeInterne && <RecueilPdfBouton type={type} prestataireId={prestataireId} prestataireOptions={prestataireOptions} />}
             {roleExport !== 'TECHNICIEN' && <ExportButtons base="/maintenances/export" name="maintenances"
-              query={[type && `type=${type}`, statut && `statut=${statut}`, zone && `zone_id=${zone}`].filter(Boolean).join('&') || undefined} />}
+              query={[type && `type=${type}`, statut && `statut=${statut}`, zone && `zone_id=${zone}`,
+                du && `date_debut=${du}`, au && `date_fin=${au}`, periode.date_champ && `date_champ=${periode.date_champ}`,
+              ].filter(Boolean).join('&') || undefined} />}
             <ButtonLink href="/maintenance/nouveau" icon={Plus}>Planifier</ButtonLink>
           </>
         }
@@ -147,6 +154,25 @@ function MaintenancePageInner() {
           ...(optionsZones.length ? [{ key: 'zone', label: 'Toutes zones', value: zone, options: optionsZones, onChange: (v: string) => appliquer({ zone: v, page: '1' }) }] : []),
         ]}
       />
+
+      {/* Période : bornes INCLUSES, sur la date planifiée ou de réalisation. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <select value={champ || 'planifiee'} onChange={(e) => appliquer({ champ: e.target.value === 'planifiee' ? '' : e.target.value, page: '1' })}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]">
+          <option value="planifiee">Date planifiée</option>
+          <option value="realisation">Date de réalisation</option>
+        </select>
+        <span className="text-gray-500">du</span>
+        <input type="date" value={du} max={au || undefined} onChange={(e) => appliquer({ du: e.target.value, page: '1' })}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
+        <span className="text-gray-500">au</span>
+        <input type="date" value={au} min={du || undefined} onChange={(e) => appliquer({ au: e.target.value, page: '1' })}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-[rgb(var(--brand-light))]" />
+        {(du || au) && (
+          <button type="button" onClick={() => appliquer({ du: '', au: '', champ: '', page: '1' })}
+            className="text-xs font-medium text-[rgb(var(--brand-light))] hover:underline">Effacer la période</button>
+        )}
+      </div>
 
       {isLoading ? (
         <TableSkeleton cols={7} />

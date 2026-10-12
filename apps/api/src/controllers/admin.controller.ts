@@ -8,7 +8,7 @@ import { paginate } from '../utils/paginator';
 import { AppError } from '../utils/AppError';
 import { sendEmail } from '../services/email.service';
 import { auditLog } from '../services/audit.service';
-import { rapprocherHistorique, validerSynonymes } from '../services/piecesRef.service';
+import { rapprocherHistorique, validerSynonymes, saisiesHorsCatalogue, rattacherTextes } from '../services/piecesRef.service';
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
 import { SMS_TEMPLATES, CANAUX_SMS } from '../services/sms.service';
@@ -533,6 +533,26 @@ export async function deletePieceRef(req: Request, res: Response, next: NextFunc
     await prisma.pieceRef.delete({ where: { id: req.params.id } });
     await auditLog(req.user!.id, 'DELETE', 'pieces_ref', req.params.id, {}, req);
     res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+/** File de travail : saisies terrain non reconnues, regroupées, avec une suggestion. */
+export async function listPiecesHorsCatalogue(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ success: true, data: await saisiesHorsCatalogue() });
+  } catch (err) { next(err); }
+}
+
+/** Rattache des textes libres à une pièce : synonymes + rapprochement de l'historique. */
+export async function rattacherPiecesHorsCatalogue(req: Request, res: Response, next: NextFunction) {
+  try {
+    const textes = (req.body as { textes?: unknown })?.textes;
+    if (!Array.isArray(textes) || !textes.length || textes.length > 20) {
+      throw new AppError('Textes à rattacher : une liste de 1 à 20 graphies.', 422);
+    }
+    const r = await rattacherTextes(req.params.id, textes.map(String));
+    await auditLog(req.user!.id, 'UPDATE', 'pieces_ref', req.params.id, { action: 'rattachement hors catalogue', textes, rapprochees: r.rapprochees }, req);
+    res.json({ success: true, data: r });
   } catch (err) { next(err); }
 }
 

@@ -558,6 +558,9 @@ router.get('/pieces-ref', rbac(['MANAGER','ADMIN']), adminCtrl.listPiecesRef);
 router.post('/admin/pieces-ref', rbac(['ADMIN']), adminCtrl.upsertPieceRef);
 router.delete('/admin/pieces-ref/:id', rbac(['ADMIN']), adminCtrl.deletePieceRef);
 router.post('/admin/pieces-ref/rapprocher', rbac(['ADMIN']), adminCtrl.rapprocherPiecesHistorique);
+// Saisies terrain hors catalogue : file de rattachement (synonyme + historique).
+router.get('/admin/pieces-ref/hors-catalogue', rbac(['ADMIN']), adminCtrl.listPiecesHorsCatalogue);
+router.post('/admin/pieces-ref/:id/rattacher', rbac(['ADMIN']), adminCtrl.rattacherPiecesHorsCatalogue);
 // Liste des pièces CHANGÉES (une ligne par pièce posée) : lecture seule, internes
 // et superviseurs prestataires - bornée au périmètre de l'utilisateur côté contrôleur.
 // L'export AVANT toute route paramétrée : même piège que /incidents/export/pdf.

@@ -11,6 +11,7 @@ import { Input } from '@/components/shared/Form';
 import { Loading, ErrorState } from '@/components/shared/states';
 import { fmtNumber } from '@/lib/utils';
 import { ExportButtons } from '@/components/shared/ExportButtons';
+import { SaisiesHorsCatalogue } from './SaisiesHorsCatalogue';
 
 interface PieceRef {
   id: string; code: string; libelle: string; categorie: string | null;
@@ -84,6 +85,8 @@ export default function PiecesRefPage() {
           </>
         }
       />
+
+      <SaisiesHorsCatalogue pieces={pieces} />
 
       <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4">
         <p className="mb-3 text-xs text-gray-500">
