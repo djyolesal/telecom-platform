@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { prisma } from '../config/database';
 import { getNum, getRaw, typesLiaison } from '../services/settings.service';
 import { themeEffectif } from './theme.controller';
+import { dureeMinGlobale, dureesMinTaches } from '../services/tachesPreventives.service';
 
 /**
  * Paramètres terrain exposés aux applications (mobile/web) pour garder les
@@ -35,7 +36,11 @@ export async function getAppConfig(_req: Request, res: Response, next: NextFunct
   res.json({
     success: true,
     data: {
-      minDureeClotureMin: getNum('maintenance.minDureeClotureMin', env.MIN_DUREE_CLOTURE_MIN),
+      minDureeClotureMin: dureeMinGlobale(),
+      // Durées propres à certaines tâches préventives ({ clé: minutes }), les
+      // autres prennent minDureeClotureMin. Lues par b52+ ; un APK antérieur
+      // les ignore ET le serveur le juge sur la durée globale (même règle).
+      dureesMinTaches: dureesMinTaches(),
       geofenceRadiusM: getNum('maintenance.geofenceRadiusM', env.GEOFENCE_RADIUS_M),
       minPhotosPreventive: 6,
       minPhotosMouvement: getNum('maintenance.minPhotosMouvement', 2),

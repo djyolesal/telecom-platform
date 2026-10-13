@@ -221,17 +221,19 @@ class _MaintenanceDetailScreenState extends State<MaintenanceDetailScreen> {
     // après une attente (l'écran peut avoir disparu entre-temps).
     final auth = context.read<AuthCubit>();
 
-    // 0. Durée minimale 1h depuis le démarrage.
+    // 0. Durée minimale de travail depuis le démarrage : propre à la tâche si
+    //    le portail l'a réglée, durée globale sinon.
     final debut = m.dateDebut;
     if (debut == null) {
       _snack('La maintenance doit d\'abord être démarrée.');
       return;
     }
+    final dureeMin = AppConfig.dureeMinCloture(m.tachePreventiveKey);
     final ecoule =
         DateTime.now().difference(debut).inMinutes - m.dureeSuspendueMinutes;
-    if (ecoule < AppConfig.minDureeClotureMin) {
+    if (ecoule < dureeMin) {
       _snack(
-          'Clôture possible après ${AppConfig.minDureeClotureMin} min de travail (encore ${AppConfig.minDureeClotureMin - ecoule} min).');
+          'Clôture possible après $dureeMin min de travail (encore ${dureeMin - ecoule} min).');
       return;
     }
 

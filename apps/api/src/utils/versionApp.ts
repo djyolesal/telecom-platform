@@ -78,3 +78,10 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * identifiant qui n'est pas un UUID ne lie rien et ne refuse personne.
  */
 export const estIdentifiantTelephone = (id: string): boolean => UUID_V4.test(id);
+
+/**
+ * Premier build qui contrôle la DURÉE MINIMALE PROPRE À LA TÂCHE avant de
+ * clôturer (servie par /config). En dessous, l'app n'a vérifié que la durée
+ * globale et le serveur la juge sur cette même durée globale.
+ */
+export const BUILD_DUREE_PAR_TACHE = 52;

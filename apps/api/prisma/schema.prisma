@@ -828,6 +828,19 @@ model TachePreventiveCout {
   @@map("taches_preventives_couts")
 }
 
+// Durée minimale de travail avant clôture propre à UNE tâche (minutes). Pas de
+// ligne = durée globale (maintenance.minDureeClotureMin). Appliquée côté
+// serveur aux seuls APK qui la connaissent (b52+) : un APK antérieur contrôle
+// la durée globale et doit être jugé sur la même règle.
+model TachePreventiveDuree {
+  tacheKey           String   @id @map("tache_key") @db.VarChar(40)
+  dureeMinClotureMin Int      @map("duree_min_cloture_min")
+  updatedBy          String?  @map("updated_by")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("taches_preventives_durees")
+}
+
 model Notification {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")

@@ -57,6 +57,9 @@ class Maintenance {
   final String? siteId;
   final String type;
   final String categorie;
+  // Tâche contractuelle d'une préventive planifiée (null : curative, mouvement,
+  // préventive libre) : sa durée min. avant clôture peut lui être propre.
+  final String? tachePreventiveKey;
   final String equipement;
   final String
       natureTravaux; // ENTRETIEN / INSTALLATION / DESINSTALLATION / DEPLACEMENT
@@ -99,6 +102,7 @@ class Maintenance {
     this.siteId,
     required this.type,
     required this.categorie,
+    this.tachePreventiveKey,
     required this.equipement,
     this.natureTravaux = 'ENTRETIEN',
     this.description,
@@ -153,6 +157,7 @@ class Maintenance {
       siteId: j['siteId'] as String?,
       type: j['type'] as String,
       categorie: j['categorie'] as String,
+      tachePreventiveKey: j['tachePreventiveKey'] as String?,
       equipement: j['equipement'] as String,
       natureTravaux: j['natureTravaux'] as String? ?? 'ENTRETIEN',
       description: j['description'] as String?,

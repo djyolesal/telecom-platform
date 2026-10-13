@@ -48,6 +48,7 @@ import { sendTabular, EXPORT_MAX } from '../utils/exporter';
 import { GE_PARAMS } from '../utils/calculator';
 import { expectedGasoilGE, analyseGasoilCoherence } from '../utils/energy';
 import { getNum } from '../services/settings.service';
+import { dureeMinExigee } from '../services/tachesPreventives.service';
 import { logger } from '../utils/logger';
 import { envoyerEmail } from '../services/email.service';
 import { photoAllegee } from '../services/vignettes.service';
@@ -79,7 +80,6 @@ const TARIF_CEET_FCFA = 105; // FCFA / kWh (indicatif)
 const MIN_PHOTOS_PREVENTIVE = 6; // photos minimum pour clôturer une maintenance préventive
 // Configurables via variables d'environnement (cf. config/env.ts).
 // Seuils éditables en base (SystemSettings) avec repli sur l'environnement.
-const minDureeClotureMin = () => getNum('maintenance.minDureeClotureMin', env.MIN_DUREE_CLOTURE_MIN);
 const seuilEcartGasoilPct = () => getNum('maintenance.seuilEcartGasoilPct', env.SEUIL_ECART_GASOIL_PCT);
 
 // Tâches contractuelles où la clôture exige UNIQUEMENT les photos (≥6) — pas de
@@ -1040,16 +1040,18 @@ export async function closeMaintenance(req: Request, res: Response, next: NextFu
       throw new AppError(`Cette maintenance ne peut pas être clôturée (statut actuel : ${libelle(L_STATUT_MAINTENANCE, existing.statut)}).`, 409);
     }
 
-    // Une maintenance doit avoir été démarrée et durer au moins 1h avant clôture.
-    // Le temps SUSPENDU (urgence ailleurs) ne compte pas comme du travail.
+    // Une maintenance doit avoir été démarrée et durer une durée minimale avant
+    // clôture. Le temps SUSPENDU (urgence ailleurs) ne compte pas comme du travail.
     if (!existing.dateDebut) throw new AppError('La maintenance doit être démarrée avant clôture.', 409);
     // Heure de fin TERRAIN (bornée) : sur une clôture rejouée depuis la file, la
     // durée doit se mesurer entre le début et la fin réels de l'intervention.
     const finReelle = dateBornee((req.body as { dateFin?: unknown }).dateFin);
     const ecouleMin = differenceInMinutes(finReelle, existing.dateDebut) - existing.dureeSuspendueMinutes;
-    if (ecouleMin < minDureeClotureMin()) {
+    // Durée propre à la tâche pour un APK b52+, durée globale sinon (voir dureeMinExigee).
+    const dureeMin = dureeMinExigee(req, existing.tachePreventiveKey);
+    if (ecouleMin < dureeMin) {
       throw new AppError(
-        `Une maintenance doit durer au moins 1h avant clôture (démarrée il y a ${ecouleMin} min).`,
+        `Cette maintenance doit durer au moins ${dureeMin} min de travail avant clôture (démarrée il y a ${ecouleMin} min).`,
         422
       );
     }

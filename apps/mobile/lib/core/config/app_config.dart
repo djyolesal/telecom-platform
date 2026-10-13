@@ -11,6 +11,17 @@ import 'piece_catalogue.dart';
 /// Valeurs par défaut sûres si le serveur n'a pas (encore) répondu.
 class AppConfig {
   static int minDureeClotureMin = 60;
+
+  /// Durées min. avant clôture PROPRES à certaines tâches préventives
+  /// ({ clé de tâche: minutes }), réglées au portail. Absente = durée globale.
+  static Map<String, int> dureesMinTaches = const {};
+
+  /// Durée de travail exigée avant de clôturer une maintenance de cette tâche
+  /// (curative, mouvement ou tâche sans réglage : durée globale). Le serveur
+  /// applique la même règle aux APK b52+.
+  static int dureeMinCloture(String? tacheKey) =>
+      (tacheKey == null ? null : dureesMinTaches[tacheKey]) ??
+      minDureeClotureMin;
   static double geofenceRadiusM = 20;
   static int minPhotosPreventive = 6;
   static int minPhotosMouvement = 2;
@@ -130,6 +141,13 @@ class ConfigService {
   void _appliquer(Map d) {
     AppConfig.minDureeClotureMin = (d['minDureeClotureMin'] as num?)?.toInt() ??
         AppConfig.minDureeClotureMin;
+    final durees = d['dureesMinTaches'];
+    if (durees is Map) {
+      AppConfig.dureesMinTaches = {
+        for (final e in durees.entries)
+          if (e.value is num) e.key.toString(): (e.value as num).toInt(),
+      };
+    }
     AppConfig.geofenceRadiusM =
         (d['geofenceRadiusM'] as num?)?.toDouble() ?? AppConfig.geofenceRadiusM;
     AppConfig.minPhotosPreventive =

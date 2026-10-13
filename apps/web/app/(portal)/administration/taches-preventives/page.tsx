@@ -22,6 +22,9 @@ interface TacheRow {
   isOverridden: boolean;
   /** Prix d'UNE exécution sur UN site (FCFA) ; null = non tarifée. */
   cout: number | null;
+  /** Durée min. avant clôture propre à la tâche (min) ; null = durée globale. */
+  dureeMin: number | null;
+  dureeMinGlobale: number;
 }
 
 const FREQUENCE_OPTIONS = [
@@ -40,6 +43,10 @@ export default function TachesPreventivesPage() {
   const [couts, setCouts] = useState<Record<string, string>>({});
   const [coutEnregistre, setCoutEnregistre] = useState<string | null>(null);
   const [coutErreur, setCoutErreur] = useState<{ key: string; message: string } | null>(null);
+  // Durée min. en cours de saisie (minutes, en texte : vide = durée globale).
+  const [durees, setDurees] = useState<Record<string, string>>({});
+  const [dureeEnregistree, setDureeEnregistree] = useState<string | null>(null);
+  const [dureeErreur, setDureeErreur] = useState<{ key: string; message: string } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-taches-preventives'],
@@ -50,6 +57,7 @@ export default function TachesPreventivesPage() {
     if (data) {
       setEdited(Object.fromEntries(data.map((t) => [t.key, { libelle: t.libelle, frequence: t.frequence }])));
       setCouts(Object.fromEntries(data.map((t) => [t.key, t.cout != null ? String(t.cout) : ''])));
+      setDurees(Object.fromEntries(data.map((t) => [t.key, t.dureeMin != null ? String(t.dureeMin) : ''])));
     }
   }, [data]);
 
@@ -72,6 +80,19 @@ export default function TachesPreventivesPage() {
       setCoutErreur({ key, message: e.response?.data?.error ?? 'Enregistrement impossible' }),
   });
 
+  // Endpoint à part, comme le prix : survit à « Restaurer le défaut ».
+  const saveDuree = useMutation({
+    mutationFn: ({ key, valeur }: { key: string; valeur: string }) =>
+      api.put(`/admin/taches-preventives/${key}/duree-min`, { dureeMin: valeur.trim() === '' ? null : valeur.trim() }),
+    onSuccess: (_r, { key }) => {
+      setDureeErreur(null);
+      setDureeEnregistree(key);
+      queryClient.invalidateQueries({ queryKey: ['admin-taches-preventives'] });
+    },
+    onError: (e: { response?: { data?: { error?: string } } }, { key }) =>
+      setDureeErreur({ key, message: e.response?.data?.error ?? 'Enregistrement impossible' }),
+  });
+
   const reset = useMutation({
     mutationFn: (key: string) => api.delete(`/admin/taches-preventives/${key}`),
     onSuccess: (_r, key) => { setSavedKey(key); queryClient.invalidateQueries({ queryKey: ['admin-taches-preventives'] }); },
@@ -83,7 +104,7 @@ export default function TachesPreventivesPage() {
     <div>
       <PageHeader
         title="Tâches préventives contractuelles"
-        subtitle="Libellé, fréquence et prix modifiables sans redéploiement - la clé et l'éligibilité restent fixes"
+        subtitle="Libellé, fréquence, prix et durée minimale modifiables sans redéploiement - la clé et l'éligibilité restent fixes"
         backHref="/administration"
       />
 
@@ -159,6 +180,47 @@ export default function TachesPreventivesPage() {
                       {t.cout == null
                         ? 'Tâche non tarifée : la facture mensuelle signalera un prix manquant. Laisser vide n\'est pas la même chose que 0 (prestation incluse).'
                         : 'Montant facturé pour une exécution de cette tâche sur un site. Il survit à « Restaurer le défaut ».'}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* DURÉE MIN. AVANT CLÔTURE. Bloc séparé, son propre endpoint : comme le
+                  prix, elle survit à « Restaurer le défaut ». */}
+              {(() => {
+                const saisi = durees[t.key] ?? '';
+                const enBase = t.dureeMin != null ? String(t.dureeMin) : '';
+                const sale = saisi.trim() !== enBase;
+                return (
+                  <div className="mt-3 rounded-lg bg-gray-50 px-4 py-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="w-56">
+                        <Field label="Durée min. avant clôture (min)">
+                          <Input
+                            inputMode="numeric"
+                            placeholder={`${t.dureeMinGlobale} (globale)`}
+                            value={saisi}
+                            onChange={(ev) => { setDurees((p) => ({ ...p, [t.key]: ev.target.value })); setDureeEnregistree(null); }}
+                          />
+                        </Field>
+                      </div>
+                      <Button
+                        variant="secondary" icon={Save}
+                        loading={saveDuree.isPending && saveDuree.variables?.key === t.key}
+                        disabled={!sale}
+                        onClick={() => saveDuree.mutate({ key: t.key, valeur: saisi })}
+                      >
+                        {saisi.trim() === '' && t.dureeMin != null ? 'Revenir à la durée globale' : 'Enregistrer la durée'}
+                      </Button>
+                      {dureeEnregistree === t.key && !sale && (
+                        <span className="flex items-center gap-1 pb-2 text-xs text-green-600"><CheckCircle2 size={13} /> Durée enregistrée</span>
+                      )}
+                    </div>
+                    {dureeErreur?.key === t.key && <p className="mt-1 text-xs text-red-600">{dureeErreur.message}</p>}
+                    <p className="mt-1.5 text-xs text-gray-400">
+                      {t.dureeMin == null
+                        ? `Vide : la durée globale s'applique (${t.dureeMinGlobale} min, Paramètres). Temps de travail sur site, pauses exclues.`
+                        : `Le technicien ne peut pas clôturer avant ${t.dureeMin} min de travail sur site (pauses exclues). Appliquée à partir de l'application b52 ; les versions antérieures restent sur la durée globale.`}
                     </p>
                   </div>
                 );

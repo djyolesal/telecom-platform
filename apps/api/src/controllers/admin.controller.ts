@@ -12,7 +12,7 @@ import { rapprocherHistorique, validerSynonymes, saisiesHorsCatalogue, rattacher
 import { logger } from '../utils/logger';
 import { loadSettings, effectiveSettings, settingsCatalog, getRaw } from '../services/settings.service';
 import { SMS_TEMPLATES, CANAUX_SMS } from '../services/sms.service';
-import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride, definirCoutTache } from '../services/tachesPreventives.service';
+import { tacheOverridesCatalog, upsertTacheOverride, resetTacheOverride, definirCoutTache, definirDureeMinTache } from '../services/tachesPreventives.service';
 import { cleLogoValide, logoClient } from '../services/logoClient.service';
 import { sendTabular } from '../utils/exporter';
 
@@ -152,6 +152,20 @@ export async function updateTachePreventiveCout(req: Request, res: Response, nex
     const { avant, apres } = await definirCoutTache(key, (req.body as { cout?: unknown }).cout, req.user!.id);
     // Avant ET après : ce montant pilote des factures, qui a changé quoi se retrouve.
     await auditLog(req.user!.id, 'UPDATE', 'taches_preventives_couts', key, { avant, apres }, req);
+    res.json({ success: true, data: await tacheOverridesCatalog() });
+  } catch (err) { next(err); }
+}
+
+/**
+ * Durée minimale de travail avant clôture propre à la tâche (minutes). Vide =
+ * retour à la durée globale. Comme le prix, elle survit à « Restaurer le
+ * défaut ».
+ */
+export async function updateTachePreventiveDureeMin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { key } = req.params;
+    const { avant, apres } = await definirDureeMinTache(key, (req.body as { dureeMin?: unknown }).dureeMin, req.user!.id);
+    await auditLog(req.user!.id, 'UPDATE', 'taches_preventives_durees', key, { avant, apres }, req);
     res.json({ success: true, data: await tacheOverridesCatalog() });
   } catch (err) { next(err); }
 }
