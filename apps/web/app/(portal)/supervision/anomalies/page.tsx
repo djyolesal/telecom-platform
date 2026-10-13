@@ -13,6 +13,7 @@ import { Pagination, PaginationMeta } from '@/components/shared/Pagination';
 import { TableSkeleton, EmptyState, ErrorState } from '@/components/shared/states';
 import { Button } from '@/components/shared/Button';
 import { Field, Textarea } from '@/components/shared/Form';
+import { ExportButtons } from '@/components/shared/ExportButtons';
 import { fmtDateTime } from '@/lib/utils';
 
 interface Anomalie {
@@ -53,6 +54,18 @@ const STATUTS = [
   { value: 'A_CORRIGER', label: 'À corriger' },
 ];
 
+/** Les 12 derniers mois (AAAA-MM), du plus récent au plus ancien. */
+function derniersMois(): { value: string; label: string }[] {
+  const d = new Date();
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    const value = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
+    const label = m.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    return { value, label: label.charAt(0).toUpperCase() + label.slice(1) };
+  });
+}
+const MOIS = derniersMois();
+
 function BadgeStatut({ value }: { value: string }) {
   const style = value === 'JUSTIFIEE' ? 'bg-green-50 text-green-700 ring-green-100'
     : value === 'A_CORRIGER' ? 'bg-red-50 text-red-700 ring-red-100'
@@ -82,6 +95,7 @@ function AnomaliesSaisieEcran() {
   const [statut, setStatut] = useState('A_VERIFIER');
   const [code, setCode] = useState('');
   const [source, setSource] = useState('');
+  const [mois, setMois] = useState('');
   const [page, setPage] = useState(1);
   const [cible, setCible] = useState<Anomalie | null>(null);
   const [motif, setMotif] = useState('');
@@ -89,9 +103,9 @@ function AnomaliesSaisieEcran() {
   const [busy, setBusy] = useState('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['anomalies', { statut, code, source, page, siteId }],
+    queryKey: ['anomalies', { statut, code, source, mois, page, siteId }],
     queryFn: () => api.get('/anomalies-saisie', {
-      params: { page, limit: 30, statut: statut || undefined, code: code || undefined, source: source || undefined, site_id: siteId || undefined },
+      params: { page, limit: 30, statut: statut || undefined, code: code || undefined, source: source || undefined, mois: mois || undefined, site_id: siteId || undefined },
     }).then((r) => r.data),
   });
 
@@ -107,6 +121,11 @@ function AnomaliesSaisieEcran() {
       setBusy('');
     }
   };
+
+  // L'export reprend EXACTEMENT les filtres de l'écran.
+  const filtresExport = new URLSearchParams(
+    Object.entries({ statut, code, source, mois, site_id: siteId }).filter(([, v]) => v) as [string, string][],
+  ).toString();
 
   const lignes: Anomalie[] = data?.data ?? [];
   const meta: PaginationMeta | undefined = data?.meta;
@@ -152,6 +171,7 @@ function AnomaliesSaisieEcran() {
         title="Anomalies de saisie"
         subtitle="Valeurs relevées par les contrôles de vraisemblance, à justifier ou à corriger"
         backHref="/supervision/carte"
+        actions={<ExportButtons base="/anomalies-saisie/export" name="anomalies-saisie" query={filtresExport} />}
       />
 
       {aVerifier > 0 && (
@@ -170,6 +190,8 @@ function AnomaliesSaisieEcran() {
           { key: 'source', label: 'Toutes origines', value: source,
             options: Object.entries(LIBELLE_SOURCE).map(([value, label]) => ({ value, label })),
             onChange: (v) => { setSource(v); setPage(1); } },
+          { key: 'mois', label: 'Tous les mois', value: mois, options: MOIS,
+            onChange: (v) => { setMois(v); setPage(1); } },
         ]}
       />
 

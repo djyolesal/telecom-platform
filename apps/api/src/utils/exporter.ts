@@ -14,6 +14,8 @@ export interface TabularSheet {
   name: string;
   columns: ExcelColumn[];
   rows: Record<string, unknown>[];
+  /** PDF : cellules sur plusieurs lignes (textes longs). Sans effet sur l'xlsx. */
+  retourLigne?: boolean;
 }
 
 /**

@@ -355,6 +355,7 @@ router.get('/maintenances/export/rapports.pdf', rbac(['ADMIN']), maintenanceCtrl
 // exercé SUR les saisies du terrain, pas un écran de travail du prestataire.
 router.get('/anomalies-saisie', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), anomaliesCtrl.listerAnomalies);
 router.get('/anomalies-saisie/stats', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), anomaliesCtrl.statsAnomalies);
+router.get('/anomalies-saisie/export/:format(xlsx|pdf)', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN', 'DIRECTION']), anomaliesCtrl.exportAnomalies);
 router.patch('/anomalies-saisie/:id', rbac(['SUPERVISEUR', 'MANAGER', 'ADMIN']), anomaliesCtrl.traiterAnomalie);
 
 // ── Rapports mensuels PUBLIÉS ─────────────────────────────────
