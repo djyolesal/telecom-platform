@@ -78,11 +78,10 @@ export async function verdictPertes(opts: { jours?: number } = {}): Promise<Verd
   });
   const ids = sites.map((s) => s.id);
   const mois = moisDeLaFenetre(jours);
-  const finFenetre = new Date(Date.UTC(mois[mois.length - 1].annee, mois[mois.length - 1].mois, 1));
 
   const [depotagesParSite, series, signalees] = await Promise.all([
     detectFuelAnomalies({ jours }).then((l) => new Map(l.map((x) => [x.siteId, x]))),
-    chargerSeries(ids, finFenetre),
+    chargerSeries(ids),
     anomaliesCarburantParSite({ siteIds: ids }),
   ]);
 

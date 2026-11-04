@@ -1444,8 +1444,8 @@ export async function exportManquantsLivraison(req: Request, res: Response, next
  * site avec priorité, autonomie, stock, conso et quantité recommandée.
  */
 /**
- * Bilan mensuel des stocks carburant (méthode validée 07/09/2026, voir
- * stocksMensuels.service). Écran + exports xlsx/PDF.
+ * Bilan mensuel des stocks carburant (voir stocksMensuels.service). Écran +
+ * exports xlsx/PDF.
  */
 export async function getStocksMensuels(req: Request, res: Response, next: NextFunction) {
   try {
@@ -1476,6 +1476,7 @@ export async function getStocksMensuels(req: Request, res: Response, next: NextF
           conso: lignes.reduce((s, l) => s + (l.conso ?? 0), 0),
           anomalies: lignes.filter((l) => l.drapeaux.some((d) => d.includes('vérifier') || d.includes('expliqué'))).length,
           sitesSaisiesSignalees: anomalies.size,
+          provisoires: lignes.filter((l) => l.provisoire).length,
         },
       },
     });
@@ -1518,10 +1519,10 @@ export async function exportStocksMensuels(req: Request, res: Response, next: Ne
           mvt: l.mouvements || '', conso: l.conso ?? '', consoJour: l.consoJour ?? '', lh: l.debitLh ?? '',
           inexplique: l.gasoilInexplique ?? '', fenetre: l.fenetreJours,
           signalees: anomalies.get(l.siteId)?.codes.join(' · ') ?? '',
-          obs: l.drapeaux.join(' · '),
+          obs: [...(l.provisoire ? ['provisoire - pas de relevé après la fin du mois'] : []), ...l.drapeaux].join(' · '),
         })),
       }],
-      `${lignes.length} site(s)${region ? ` · ${region}` : ''} · méthode bilan matière validée 07/09/2026`
+      `${lignes.length} site(s)${region ? ` · ${region}` : ''} · bilan matière, fin de mois = début du mois suivant`
     );
   } catch (err) { next(err); }
 }

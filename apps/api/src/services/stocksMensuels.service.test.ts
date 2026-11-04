@@ -1,4 +1,4 @@
-import { bilanMensuelSite, ReleveStockLite, LivraisonLite, MouvementLite } from './stocksMensuels.service';
+import { bilanMensuelSite, ReleveStockLite, LivraisonLite, MouvementLite, debitLisse } from './stocksMensuels.service';
 
 const d = (iso: string) => new Date(iso);
 const rel = (date: string, volume: number | null, index: number | null = null): ReleveStockLite =>
@@ -35,14 +35,16 @@ describe('bilanMensuelSite - méthode validée 07/09/2026', () => {
     })!;
     expect(b.drapeaux).toContain('fenêtre élargie');
     expect(b.fenetreJours).toBe(35); // 01/07 → 05/08
-    // Frontières interpolées depuis les bornes de la fenêtre : le bilan publié
-    // BOUCLE (début + livraisons − fin = conso du mois, aux arrondis près).
-    const consoJour = 200 / 35;
-    expect(b.stockDebut).toBe(Math.round(2000 - consoJour * 31)); // 01/07 → 01/08
-    expect(b.stockDebut + b.livraisons - b.stockFin).toBeCloseTo(b.conso!, -1);
+    // Le début vient des deux relevés qui encadrent le 01/08 (30/07 → 05/08),
+    // au rythme mesuré entre eux, pas de la fenêtre élargie.
+    expect(b.stockDebut).toBe(Math.round(1900 - (100 / 6) * 2));
+    // Pas de relevé après août : fin estimée au rythme de la fenêtre.
+    expect(b.provisoire).toBe(true);
+    expect(b.stockFin).toBe(Math.round(1800 - (200 / 35) * 27));
+    expect(b.stockDebut + b.livraisons - b.stockFin).toBe(b.conso);
   });
 
-  it('conso négative : drapeau, frontières en report brut', () => {
+  it('conso négative : drapeau, frontière en report brut', () => {
     const b = bilanMensuelSite({
       releves: [rel('2026-06-30T00:00:00Z', 500), rel('2026-07-28T00:00:00Z', 900)],
       livraisons: [], // le niveau monte sans livraison → incohérent
@@ -50,7 +52,8 @@ describe('bilanMensuelSite - méthode validée 07/09/2026', () => {
     })!;
     expect(b.conso).toBeNull();
     expect(b.drapeaux.join()).toContain('conso négative');
-    expect(b.stockDebut).toBe(500); // report brut
+    expect(b.drapeaux.join()).toContain('report brut');
+    expect(b.stockDebut).toBe(500);
   });
 
   it("index bloqué : L/h hors plage → pas de débit publié, drapeau", () => {
@@ -115,5 +118,152 @@ describe('bilanMensuelSite - méthode validée 07/09/2026', () => {
       releves: [rel('2026-06-15T00:00:00Z', 1000)],
       livraisons: [], annee: 2026, mois: 7,
     })).toBeNull();
+  });
+});
+
+describe('frontières de mois : une seule valeur par changement de mois', () => {
+  // Rythmes très différents d'un mois à l'autre, relevés loin des fins de mois :
+  // c'est le cas où l'ancien calcul donnait deux stocks pour le même instant.
+  const releves = [
+    rel('2026-06-05T08:00:00Z', 3000),
+    rel('2026-07-06T08:00:00Z', 2970),   // ~1 L/j
+    rel('2026-08-05T08:00:00Z', 2940),   // ~1 L/j
+    rel('2026-09-03T08:00:00Z', 840),    // ~72 L/j, avec 0 livraison
+    rel('2026-10-04T08:00:00Z', 2500),   // 2500 L livrés, ~27 L/j
+    rel('2026-11-03T08:00:00Z', 1900),   // 20 L/j
+  ];
+  const livraisons = [liv('2026-09-20T10:00:00Z', 2500)];
+  const mouvements = [mvt('2026-07-20T10:00:00Z', -100)];
+  const mois = (m: number) => bilanMensuelSite({ releves, livraisons, mouvements, annee: 2026, mois: m })!;
+
+  it('la fin de chaque mois est EXACTEMENT le début du suivant', () => {
+    for (const m of [7, 8, 9]) expect(mois(m).stockFin).toBe(mois(m + 1).stockDebut);
+  });
+
+  it('chaque mois boucle au litre : début + livraisons + mouvements - fin = conso', () => {
+    for (const m of [7, 8, 9, 10]) {
+      const b = mois(m);
+      expect(b.stockDebut + b.livraisons + b.mouvements - b.stockFin).toBe(b.conso);
+    }
+  });
+
+  it('les mois s\'additionnent : la conso cumulée se retrouve depuis les stocks de la période', () => {
+    const b = [7, 8, 9, 10].map(mois);
+    const cumul = b.reduce((s, x) => s + x.conso!, 0);
+    const flux = b.reduce((s, x) => s + x.livraisons + x.mouvements, 0);
+    expect(cumul).toBe(b[0].stockDebut + flux - b[3].stockFin);
+  });
+
+  it('le stock au changement de mois suit le rythme mesuré entre les deux relevés qui l\'encadrent', () => {
+    // 05/08 8h : 2940 L → 03/09 8h : 840 L, soit 2100 L en 29 j.
+    const j = (Date.UTC(2026, 8, 1) - Date.parse('2026-08-05T08:00:00Z')) / 86_400_000;
+    expect(mois(8).stockFin).toBe(Math.round(2940 - (2100 / 29) * j));
+  });
+
+  it('une livraison entre deux relevés compte du bon côté du changement de mois', () => {
+    // Livrés le 20/09, donc AVANT le 01/10 : le stock du 01/10 les contient.
+    const j = (Date.UTC(2026, 9, 1) - Date.parse('2026-09-03T08:00:00Z')) / 86_400_000;
+    const conso = 840 + 2500 - 2500; // 03/09 → 04/10
+    expect(mois(9).stockFin).toBe(Math.round(840 + 2500 - (conso / 31) * j));
+    expect(mois(9).livraisons).toBe(2500);
+    expect(mois(10).livraisons).toBe(0);
+  });
+
+  it('un relevé pile au changement de mois fait foi pour les deux mois', () => {
+    const r = [rel('2026-06-15T00:00:00Z', 1500), rel('2026-07-01T00:00:00Z', 1234), rel('2026-07-20T00:00:00Z', 900), rel('2026-08-10T00:00:00Z', 500)];
+    const juin = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 6 });
+    const juil = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
+    expect(juil.stockDebut).toBe(1234);
+    expect(juin).toBeNull(); // un seul relevé en juin, sans antériorité : pas de bilan
+  });
+
+  it('provisoire tant qu\'aucun relevé ne suit la fin du mois, définitif ensuite', () => {
+    const r = [rel('2026-06-20T00:00:00Z', 1000), rel('2026-07-20T00:00:00Z', 700)];
+    const avant = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
+    expect(avant.provisoire).toBe(true);
+    expect(avant.stockFin).toBe(Math.round(700 - 10 * 12)); // estimée à 10 L/j
+
+    // Le relevé d'août révèle un rythme de 20 L/j : la fin de juillet est corrigée.
+    const apres = bilanMensuelSite({ releves: [...r, rel('2026-08-04T00:00:00Z', 400)], livraisons: [], annee: 2026, mois: 7 })!;
+    expect(apres.provisoire).toBe(false);
+    expect(apres.stockFin).toBe(Math.round(700 - 20 * 12));
+  });
+
+  it('un mois passé ne bouge pas tant que rien ne change autour de sa fin', () => {
+    const base = [...releves.slice(0, 4)];
+    const sept = mois(9);
+    expect(bilanMensuelSite({ releves, livraisons, mouvements, annee: 2026, mois: 8 })!.stockFin)
+      .toBe(bilanMensuelSite({ releves: [...base, releves[4]], livraisons, mouvements, annee: 2026, mois: 8 })!.stockFin);
+    // Un relevé bien plus tard laisse septembre intact : il n'encadre aucune de ses frontières.
+    const plusTard = bilanMensuelSite({
+      releves: [...releves, rel('2026-12-01T00:00:00Z', 1000)], livraisons, mouvements, annee: 2026, mois: 9,
+    })!;
+    expect(plusTard).toEqual(sept);
+  });
+
+  it('un niveau aberrant (> 5 000 L) ne sert pas de borne au changement de mois', () => {
+    const r = [rel('2026-06-20T00:00:00Z', 1000), rel('2026-07-20T00:00:00Z', 700), rel('2026-08-02T00:00:00Z', 90000), rel('2026-08-20T00:00:00Z', 100)];
+    const b = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
+    // Encadré par 20/07 et 20/08 (600 L en 31 j), le relevé de 90 000 L est ignoré.
+    expect(b.stockFin).toBe(Math.round(700 - (600 / 31) * 12));
+  });
+
+  it('jauge qui remonte sans livraison autour du changement de mois : report brut signalé, pas d\'extrapolation', () => {
+    const r = [rel('2026-06-01T00:00:00Z', 1000), rel('2026-07-15T00:00:00Z', 800), rel('2026-08-15T00:00:00Z', 1200)];
+    const b = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
+    expect(b.stockFin).toBe(800);
+    expect(b.drapeaux.join()).toContain('report brut');
+    expect(b.provisoire).toBe(false);
+  });
+
+  it('site nouveau, sans antériorité : le stock du 1er est estimé pour que le mois boucle', () => {
+    const r = [rel('2026-07-10T00:00:00Z', 1000), rel('2026-07-20T00:00:00Z', 800)];
+    const b = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
+    expect(b.drapeaux).toContain('fenêtre intra-mois');
+    expect(b.stockDebut).toBe(1000 + 20 * 9);
+    expect(b.stockDebut + b.livraisons - b.stockFin).toBe(b.conso);
+  });
+});
+
+describe('non-régression : mêmes chiffres que la méthode H1 quand les données sont propres', () => {
+  it('conso constante, relevés irréguliers, livraisons : la théorie, H1 et le nouveau calcul coïncident', () => {
+    const J = 86_400_000;
+    const t0 = Date.UTC(2026, 0, 3, 9);
+    const consoJour = 48;
+    const livraisons = [20, 55, 90, 130, 170, 210, 250, 290].map((j) => ({ date: new Date(t0 + j * J + 5 * 3_600_000), litres: 1800 }));
+    const volume = (j: number) => 2500 - consoJour * j
+      + livraisons.filter((l) => l.date.getTime() <= t0 + j * J).reduce((s, l) => s + l.litres, 0);
+    const pas = [17, 26, 31, 12, 38, 22, 29, 9, 33, 27, 19, 35];
+    const releves: ReleveStockLite[] = [];
+    for (let j = 0, k = 0; j < 320; j += pas[k++ % pas.length]) {
+      releves.push({ date: new Date(t0 + j * J), volume: volume(j), index: null, groupeId: null });
+    }
+    for (const mois of [3, 5, 7, 9]) {
+      const b = bilanMensuelSite({ releves, livraisons, annee: 2026, mois })!;
+      const theorique = consoJour * new Date(Date.UTC(2026, mois, 0)).getUTCDate();
+      expect(b.provisoire).toBe(false);
+      expect(b.consoFenetre).toBe(theorique);
+      expect(Math.abs(b.conso! - theorique)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('contre-épreuve : indépendante de ce qui suit le mois', () => {
+  const avant = [
+    rel('2026-04-01T00:00:00Z', 2000, 0),
+    rel('2026-04-30T00:00:00Z', 1900, 50),
+    rel('2026-05-30T00:00:00Z', 1800, 100),
+    rel('2026-06-29T00:00:00Z', 1700, 150),
+    rel('2026-07-30T00:00:00Z', 700, 200),
+  ];
+
+  it('le gasoil non expliqué et le débit d\'un mois passé ne bougent pas avec les relevés suivants', () => {
+    const seul = bilanMensuelSite({ releves: avant, livraisons: [], annee: 2026, mois: 7 })!;
+    const suite = [rel('2026-08-29T00:00:00Z', 200, 210), rel('2026-09-28T00:00:00Z', 100, 215), rel('2026-10-28T00:00:00Z', 50, 217)];
+    const avecSuite = bilanMensuelSite({ releves: [...avant, ...suite], livraisons: [], annee: 2026, mois: 7 })!;
+    expect(debitLisse([...avant, ...suite], [])).not.toBe(debitLisse(avant, []));
+    expect(avecSuite.gasoilInexplique).toBe(seul.gasoilInexplique);
+    expect(avecSuite.debitLh).toBe(seul.debitLh);
+    expect(avecSuite.consoFenetre).toBe(seul.consoFenetre);
   });
 });

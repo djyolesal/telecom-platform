@@ -6,14 +6,20 @@ import { signeMouvement } from './mouvementsCarburant.service';
  * 07/09/2026 sur 4 mois de relevés terrain (voir le fichier d'étude
  * stocks-mensuels-v2.xlsx) :
  *
- *  - CONSO = bilan matière « H1 » : fenêtre du dernier relevé de cuve du mois
+ *  - RYTHME = bilan matière « H1 » : fenêtre du dernier relevé de cuve du mois
  *    au dernier relevé antérieur, ÉLARGIE vers l'arrière si < 10 jours (une
  *    fenêtre courte extrapolée au mois amplifie n'importe quel accident) ;
- *    conso = niveau₁ + livraisons − niveau₂ ; conso/j × jours calendaires.
- *  - STOCKS AUX FRONTIÈRES : interpolés par la conso/j depuis les bornes de
- *    la fenêtre (livraisons de l'intervalle comptées) — jamais de report brut,
- *    qui surestimait systématiquement ; le bilan publié BOUCLE ainsi
- *    (début + livraisons − fin = conso).
+ *    conso/j = (niveau₁ + livraisons − niveau₂) / jours. Il sert au débit L/h,
+ *    à la contre-épreuve et à l'estimation d'une frontière encore sans relevé.
+ *  - STOCKS AUX FRONTIÈRES : UNE seule valeur par changement de mois (voir
+ *    `stockFrontiere`), la fin de M et le début de M+1 sont le même chiffre.
+ *    Chaque mois la recalculait auparavant avec SA conso/j : le même instant
+ *    recevait deux valeurs, écart de (conso/j M+1 − conso/j M) × jours sans
+ *    relevé - des centaines de litres, sur presque tous les sites.
+ *  - CONSO DU MOIS = début + livraisons + mouvements − fin, sur les valeurs
+ *    publiées : le bilan boucle au litre, et les mois s'additionnent.
+ *  - PROVISOIRE : tant qu'aucun relevé n'existe après la fin du mois, sa fin
+ *    est une estimation (`provisoire`) ; le premier relevé suivant la fixe.
  *  - GARDES : delta d'index GE rejeté si négatif ou > 25 h/j (compteur
  *    changé/aberrant) ; L/h publié seulement dans [0,5 – 60] — hors plage,
  *    l'index ment (bloqué) et le site est signalé.
@@ -48,8 +54,13 @@ export interface LigneStockMensuel {
   livraisons: number;
   /** Transferts nets − purges du mois (signés). */
   mouvements: number;
+  /** Début + livraisons + mouvements − fin. Null si négative (jauge à vérifier). */
   conso: number | null;
   consoJour: number | null;
+  /** Conso du mois au rythme de la fenêtre H1 (méthode du 07/09/2026) : base de la contre-épreuve. */
+  consoFenetre: number | null;
+  /** Aucun relevé après la fin du mois : la fin (et donc la conso) reste une estimation. */
+  provisoire: boolean;
   debitLh: number | null;
   gasoilInexplique: number | null;
   fenetreJours: number;
@@ -115,9 +126,53 @@ export function debitLisse(releves: ReleveStockLite[], livraisons: LivraisonLite
   return debits.length % 2 ? debits[m] : (debits[m - 1] + debits[m]) / 2;
 }
 
+type SourceFrontiere = 'MESURE' | 'INTERPOLE' | 'ESTIME' | 'REPORT';
+
+/**
+ * Stock à l'instant `t` (un changement de mois), LE MÊME quel que soit le mois
+ * qui le demande : c'est ce qui fait que la fin de M égale le début de M+1.
+ *
+ * Interpolé entre les deux relevés qui ENCADRENT `t`, au rythme réellement
+ * mesuré entre eux, flux datés comptés. Sans relevé d'un côté, estimé au
+ * `rythme` fourni (fenêtre H1 du mois). Rythme négatif ou inconnu : report
+ * brut, une jauge incohérente ne se prolonge pas.
+ */
+function stockFrontiere(
+  niveaux: ReleveStockLite[],
+  livraisons: LivraisonLite[],
+  mouvements: MouvementLite[],
+  t: Date,
+  rythme: number | null,
+): { litres: number; source: SourceFrontiere } {
+  const flux = (a: Date, b: Date) => sommeEvts(livraisons, a, b) + sommeEvts(mouvements, a, b);
+  const jours = (a: Date, b: Date) => (b.getTime() - a.getTime()) / JOUR_MS;
+  const positif = (v: number) => Math.max(0, v);
+
+  const avant = [...niveaux].reverse().find((r) => r.date <= t);
+  const apres = niveaux.find((r) => r.date > t);
+
+  if (avant && avant.date.getTime() === t.getTime()) return { litres: avant.volume!, source: 'MESURE' };
+  if (avant && apres) {
+    const consoEntre = avant.volume! + flux(avant.date, apres.date) - apres.volume!;
+    const base = avant.volume! + flux(avant.date, t);
+    if (consoEntre < 0) return { litres: positif(base), source: 'REPORT' };
+    return { litres: positif(base - (consoEntre / jours(avant.date, apres.date)) * jours(avant.date, t)), source: 'INTERPOLE' };
+  }
+  if (avant) {
+    const base = avant.volume! + flux(avant.date, t);
+    return rythme == null
+      ? { litres: positif(base), source: 'REPORT' }
+      : { litres: positif(base - rythme * jours(avant.date, t)), source: 'ESTIME' };
+  }
+  const base = apres!.volume! - flux(t, apres!.date);
+  return rythme == null
+    ? { litres: positif(base), source: 'REPORT' }
+    : { litres: positif(base + rythme * jours(t, apres!.date)), source: 'ESTIME' };
+}
+
 /** Cœur pur de la méthode : bilan d'UN site pour UN mois. */
 export function bilanMensuelSite(opts: {
-  releves: ReleveStockLite[];       // relevés GE du site (niveaux + index), toute la période disponible
+  releves: ReleveStockLite[];       // relevés GE du site (niveaux + index), TOUTE la série : ceux d'après le mois encadrent sa fin
   livraisons: LivraisonLite[];
   mouvements?: MouvementLite[];     // transferts et purges validés, déjà signés
   annee: number;
@@ -162,12 +217,12 @@ export function bilanMensuelSite(opts: {
   // autrement que par le moteur n'est pas de la consommation.
   const mvtFenetre = sommeEvts(mvts, r1.date, r2.date);
   const consoFenetre = r1.volume! + livFenetre + mvtFenetre - r2.volume!;
-  let consoJour: number | null = null;
-  if (consoFenetre >= 0) consoJour = consoFenetre / fenetreJours;
-  else drapeaux.push('conso négative - jauge ou livraison à vérifier');
-  const conso = consoJour != null ? consoJour * nbJours : null;
+  const rythme = consoFenetre >= 0 ? consoFenetre / fenetreJours : null;
+  const consoRythme = rythme != null ? rythme * nbJours : null;
 
-  // L/h de la fenêtre + contre-épreuve heures × débit lissé.
+  // L/h de la fenêtre + contre-épreuve heures × débit lissé. Le débit lissé
+  // s'arrête à la fin du mois : la série contient désormais la suite, et le
+  // chiffre d'un mois passé ne doit pas bouger à chaque nouveau relevé.
   let debitLh: number | null = null;
   let gasoilInexplique: number | null = null;
   const heures = heuresFenetre(opts.releves, r1.date, r2.date);
@@ -175,41 +230,43 @@ export function bilanMensuelSite(opts: {
     const brut = consoFenetre / heures;
     if (brut >= 0.5 && brut <= 60) debitLh = brut;
     else drapeaux.push('index incohérent avec la conso - à vérifier');
-    const lisse = debitLisse(opts.releves, opts.livraisons, mvts);
-    if (lisse != null && conso != null) {
+    const lisse = debitLisse(opts.releves.filter((r) => r.date < suivant), opts.livraisons, mvts);
+    if (lisse != null && consoRythme != null) {
       const attendu = (lisse * heures / fenetreJours) * nbJours;
-      const ecart = conso - attendu;
-      if (ecart > 200 && conso > 1.5 * attendu) {
+      const ecart = consoRythme - attendu;
+      if (ecart > 200 && consoRythme > 1.5 * attendu) {
         gasoilInexplique = Math.round(ecart);
         drapeaux.push('gasoil non expliqué par la marche du GE');
       }
     }
   }
 
-  // Stocks aux frontières, interpolés par la conso/j depuis les BORNES DE LA
-  // FENÊTRE (report brut à défaut, signalé). Ancrer sur un relevé intermédiaire
-  // « plus proche » semblait plus précis, mais cassait le bouclage du bilan
-  // publié (stockDebut + livraisons − stockFin ≠ conso) dès que ce relevé
-  // s'écartait de la droite d'interpolation - un rapport de réconciliation
-  // doit boucler ; le bruit de jauge est le travail de la contre-épreuve.
-  const interp = consoJour ?? 0;
-  if (consoJour == null) drapeaux.push('frontières en report brut (conso incalculable)');
-  const jAvant = Math.max(0, (premier.getTime() - r1.date.getTime()) / JOUR_MS);
-  const stockDebut = r1.date < premier
-    ? Math.max(0, r1.volume! - interp * jAvant
-        + sommeLivraisons(opts.livraisons, r1.date, premier) + sommeEvts(mvts, r1.date, premier))
-    : r1.volume!;
-  const jApres = Math.max(0, (suivant.getTime() - r2.date.getTime()) / JOUR_MS);
-  const stockFin = Math.max(0, r2.volume! - interp * jApres
-    + sommeLivraisons(opts.livraisons, r2.date, suivant) + sommeEvts(mvts, r2.date, suivant));
+  const debut = stockFrontiere(niveaux, opts.livraisons, mvts, premier, rythme);
+  const fin = stockFrontiere(niveaux, opts.livraisons, mvts, suivant, rythme);
+  if (debut.source === 'REPORT' || fin.source === 'REPORT') drapeaux.push('frontière en report brut - jauge à vérifier');
+
+  // Sur les valeurs PUBLIÉES : le lecteur refait l'opération et tombe juste.
+  const stockDebut = Math.round(debut.litres);
+  const stockFin = Math.round(fin.litres);
+  const livraisons = Math.round(sommeLivraisons(opts.livraisons, premier, suivant));
+  const mouvements = Math.round(sommeEvts(mvts, premier, suivant));
+  const bilan = stockDebut + livraisons + mouvements - stockFin;
+  const conso = bilan >= 0 ? bilan : null;
+  if (conso == null) drapeaux.push('conso négative - jauge ou livraison à vérifier');
+  else if (rythme == null) drapeaux.push('niveau en hausse sur la fenêtre - jauge ou livraison à vérifier');
 
   return {
-    stockDebut: Math.round(stockDebut),
-    stockFin: Math.round(stockFin),
-    livraisons: Math.round(sommeLivraisons(opts.livraisons, premier, suivant)),
-    mouvements: Math.round(sommeEvts(mvts, premier, suivant)),
-    conso: conso != null ? Math.round(conso) : null,
-    consoJour: consoJour != null ? Math.round(consoJour * 10) / 10 : null,
+    stockDebut,
+    stockFin,
+    livraisons,
+    mouvements,
+    conso,
+    // Sur les litres exacts : un arrondi d'1 L fausserait la moyenne journalière.
+    consoJour: conso != null
+      ? Math.round(((debut.litres + sommeEvts(opts.livraisons, premier, suivant) + sommeEvts(mvts, premier, suivant) - fin.litres) / nbJours) * 10) / 10
+      : null,
+    consoFenetre: consoRythme != null ? Math.round(consoRythme) : null,
+    provisoire: !niveaux.some((r) => r.date >= suivant),
     debitLh: debitLh != null ? Math.round(debitLh * 100) / 100 : null,
     gasoilInexplique,
     fenetreJours: Math.round(fenetreJours),
@@ -228,20 +285,22 @@ export interface SerieCarburant {
  * CHARGEUR UNIQUE des séries carburant, partagé par le bilan mensuel et le
  * bilan sur période.
  *
- * Toute l'antériorité disponible est chargée : le débit lissé et
- * l'élargissement de fenêtre en vivent, et une série tronquée changerait
- * silencieusement le résultat. Charger une fois pour douze mois de courbe
- * évite aussi douze relectures du parc.
+ * TOUTE la série est chargée, sans borne : le débit lissé et l'élargissement
+ * de fenêtre vivent de l'antériorité, et la fin d'un mois a besoin du relevé
+ * qui le SUIT. Une série tronquée changerait silencieusement le résultat - la
+ * fin d'un mois passé sortirait provisoire. Les calculs bornent eux-mêmes ce
+ * qu'ils lisent. Charger une fois pour douze mois de courbe évite aussi douze
+ * relectures du parc.
  */
-export async function chargerSeries(siteIds: string[], avant: Date): Promise<Map<string, SerieCarburant>> {
+export async function chargerSeries(siteIds: string[]): Promise<Map<string, SerieCarburant>> {
   const [releves, depots, mvts] = await Promise.all([
     prisma.releveEnergie.findMany({
-      where: { siteId: { in: siteIds }, source: 'GE', dateReleve: { lt: avant } },
+      where: { siteId: { in: siteIds }, source: 'GE' },
       select: { siteId: true, dateReleve: true, volumeGasoilLitres: true, indexHeuresGE: true, groupeId: true },
       orderBy: { dateReleve: 'asc' },
     }),
     prisma.depotage.findMany({
-      where: { siteId: { in: siteIds }, dateDepotage: { lt: avant } },
+      where: { siteId: { in: siteIds } },
       select: { siteId: true, dateDepotage: true, volumeLitres: true },
     }),
     // SEULS les mouvements VALIDÉS bougent le stock : une déclaration du
@@ -249,7 +308,7 @@ export async function chargerSeries(siteIds: string[], avant: Date): Promise<Map
     // la réconciliation des dépotages).
     prisma.mouvementCarburant.findMany({
       where: {
-        siteId: { in: siteIds }, dateMouvement: { lt: avant },
+        siteId: { in: siteIds },
         type: { in: ['TRANSFERT_SORTIE', 'TRANSFERT_ENTREE', 'PURGE'] }, statut: 'VALIDE',
       },
       select: { siteId: true, dateMouvement: true, type: true, volumeLitres: true },
@@ -307,12 +366,11 @@ export function bilanMensuelSerie(serie: SerieCarburant | undefined, annee: numb
 
 /** Charge les données et déroule la méthode sur tout le parc pour (annee, mois). */
 export async function stocksMensuels(opts: { annee: number; mois: number; region?: string }): Promise<LigneStockMensuel[]> {
-  const suivant = new Date(Date.UTC(opts.annee, opts.mois, 1));
   const sites = await prisma.site.findMany({
     where: { isActive: true, ...(opts.region ? { region: opts.region } : {}) },
     select: { id: true, nom: true, region: true },
   });
-  const series = await chargerSeries(sites.map((s) => s.id), suivant);
+  const series = await chargerSeries(sites.map((s) => s.id));
 
   const out: LigneStockMensuel[] = [];
   for (const s of sites) {

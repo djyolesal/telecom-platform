@@ -28,7 +28,7 @@ const JOUR_MS = 86_400_000;
  * MAIS dès que la période demandée couvre des MOIS ENTIERS - ce que font les
  * trois raccourcis de la page, et la courbe par construction - c'est la méthode
  * validée avec l'exploitant le 07/09/2026 qui s'applique (stocksMensuels) :
- * frontières interpolées, fenêtre d'au moins 10 jours, gardes sur l'index GE.
+ * une seule valeur de stock par changement de mois, gardes sur l'index GE.
  *
  * Deux moteurs publiaient jusqu'ici le même mois par deux chemins différents,
  * dans deux menus différents. Le report brut de la jauge aux frontières
@@ -209,7 +209,8 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
   // Méthode validée dès que la période tient en mois entiers ; la courbe, elle,
   // y passe toujours (ses points SONT des mois).
   const mois = moisEntiers(debut, fin);
-  const series = await chargerSeries(siteIds, new Date(Math.max(fin.getTime(), finMois.getTime())));
+  const series = await chargerSeries(siteIds);
+  const bornePeriode = new Date(Math.max(fin.getTime(), finMois.getTime()));
 
   // PÉRIMÈTRE : un site sans groupe électrogène ni cuve n'a pas de stock - il
   // gonflait « sites mesurés : N / 558 » et noyait la liste de lignes « aucun
@@ -219,7 +220,8 @@ async function bilanCarburantImpl(debut: Date, fin: Date, region?: string, porte
   // qui a reçu du carburant retirerait du « livré » des totaux.
   const aDesDonnees = (id: string) => {
     const s = series.get(id);
-    return !!s && (s.releves.length > 0 || s.livraisons.length > 0 || s.mouvements.length > 0);
+    const dansPeriode = (e: { date: Date }) => e.date < bornePeriode; // la série complète va au-delà
+    return !!s && (s.releves.some(dansPeriode) || s.livraisons.some(dansPeriode) || s.mouvements.some(dansPeriode));
   };
   const sites = tousLesSites.filter((s) => !sansCarburant(s) || aDesDonnees(s.id));
   const nbSitesHorsPerimetre = tousLesSites.length - sites.length;
