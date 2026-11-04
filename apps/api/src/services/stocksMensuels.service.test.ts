@@ -208,12 +208,40 @@ describe('frontières de mois : une seule valeur par changement de mois', () => 
     expect(b.stockFin).toBe(Math.round(700 - (600 / 31) * 12));
   });
 
-  it('jauge qui remonte sans livraison autour du changement de mois : report brut signalé, pas d\'extrapolation', () => {
-    const r = [rel('2026-06-01T00:00:00Z', 1000), rel('2026-07-15T00:00:00Z', 800), rel('2026-08-15T00:00:00Z', 1200)];
-    const b = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
-    expect(b.stockFin).toBe(800);
+  describe('jauge qui remonte sans livraison enregistrée après le dernier relevé du mois', () => {
+    // Cas réel (ADOGBENOU) : ~5 L/j, puis la cuve remonte entre deux relevés
+    // sans dépotage saisi. La conso du mois ne doit pas s'arrêter au relevé.
+    const r = [
+      rel('2026-05-20T00:00:00Z', 490),
+      rel('2026-06-19T00:00:00Z', 340),
+      rel('2026-07-20T00:00:00Z', 1120),
+      rel('2026-08-19T00:00:00Z', 1000),
+    ];
+    const juin = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 6 })!;
+    const juil = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
+
+    it('le mois continue de consommer au rythme mesuré avant la hausse', () => {
+      expect(juin.consoJour).toBeCloseTo(5, 1);
+      expect(juin.stockFin).toBe(Math.round(340 - 5 * 12));
+    });
+
+    it('le changement de mois reste une valeur unique, et le mois qui porte la hausse reste signalé', () => {
+      expect(juin.stockFin).toBe(juil.stockDebut);
+      expect(juil.conso).toBeNull();
+      expect(juin.drapeaux.join()).toContain('hausse sans livraison');
+      expect(juin.drapeaux.join()).not.toContain('report brut');
+    });
+  });
+
+  it('jauge qui remonte sans aucun rythme connu avant : report brut signalé, pas d\'invention', () => {
+    const r = [rel('2026-07-15T00:00:00Z', 800), rel('2026-07-25T00:00:00Z', 780), rel('2026-08-15T00:00:00Z', 1200)];
+    const avecRythme = bilanMensuelSite({ releves: r, livraisons: [], annee: 2026, mois: 7 })!;
+    expect(avecRythme.stockFin).toBe(Math.round(780 - 2 * 7));
+
+    const sansRythme = [rel('2026-06-01T00:00:00Z', 900), rel('2026-06-10T00:00:00Z', 950), rel('2026-07-25T00:00:00Z', 1000), rel('2026-08-15T00:00:00Z', 1200)];
+    const b = bilanMensuelSite({ releves: sansRythme, livraisons: [], annee: 2026, mois: 7 })!;
+    expect(b.stockFin).toBe(1000);
     expect(b.drapeaux.join()).toContain('report brut');
-    expect(b.provisoire).toBe(false);
   });
 
   it('site nouveau, sans antériorité : le stock du 1er est estimé pour que le mois boucle', () => {

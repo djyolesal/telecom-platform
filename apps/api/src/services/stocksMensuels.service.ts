@@ -126,7 +126,30 @@ export function debitLisse(releves: ReleveStockLite[], livraisons: LivraisonLite
   return debits.length % 2 ? debits[m] : (debits[m - 1] + debits[m]) / 2;
 }
 
-type SourceFrontiere = 'MESURE' | 'INTERPOLE' | 'ESTIME' | 'REPORT';
+type SourceFrontiere = 'MESURE' | 'INTERPOLE' | 'ESTIME' | 'RUPTURE' | 'REPORT';
+
+/**
+ * Rythme mesuré JUSTE AVANT un relevé, sur au moins FENETRE_MIN_J jours quand
+ * l'historique le permet. Ne dépend que de la série : les deux mois qui se
+ * partagent une frontière obtiennent donc le même chiffre.
+ */
+function rythmeAvant(
+  niveaux: ReleveStockLite[],
+  livraisons: LivraisonLite[],
+  mouvements: MouvementLite[],
+  releve: ReleveStockLite,
+): number | null {
+  for (let k = niveaux.indexOf(releve) - 1; k >= 0; k--) {
+    const precedent = niveaux[k];
+    const jours = (releve.date.getTime() - precedent.date.getTime()) / JOUR_MS;
+    if (jours < FENETRE_MIN_J && k > 0) continue;
+    if (jours < 1) return null;
+    const conso = precedent.volume! + sommeEvts(livraisons, precedent.date, releve.date)
+      + sommeEvts(mouvements, precedent.date, releve.date) - releve.volume!;
+    return conso >= 0 ? conso / jours : null;
+  }
+  return null;
+}
 
 /**
  * Stock à l'instant `t` (un changement de mois), LE MÊME quel que soit le mois
@@ -134,8 +157,13 @@ type SourceFrontiere = 'MESURE' | 'INTERPOLE' | 'ESTIME' | 'REPORT';
  *
  * Interpolé entre les deux relevés qui ENCADRENT `t`, au rythme réellement
  * mesuré entre eux, flux datés comptés. Sans relevé d'un côté, estimé au
- * `rythme` fourni (fenêtre H1 du mois). Rythme négatif ou inconnu : report
- * brut, une jauge incohérente ne se prolonge pas.
+ * `rythme` fourni (fenêtre H1 du mois).
+ *
+ * Si la jauge REMONTE entre ces deux relevés sans livraison enregistrée, leur
+ * rythme n'a pas de sens (RUPTURE) : le GE a pourtant continué de tourner, on
+ * prolonge donc le rythme mesuré AVANT. Figer le stock au dernier relevé
+ * arrêtait la conso à cette date : en production, un mois tombait de 153 à 3 L.
+ * Report brut seulement si aucun rythme n'est connu.
  */
 function stockFrontiere(
   niveaux: ReleveStockLite[],
@@ -155,7 +183,12 @@ function stockFrontiere(
   if (avant && apres) {
     const consoEntre = avant.volume! + flux(avant.date, apres.date) - apres.volume!;
     const base = avant.volume! + flux(avant.date, t);
-    if (consoEntre < 0) return { litres: positif(base), source: 'REPORT' };
+    if (consoEntre < 0) {
+      const avantRupture = rythmeAvant(niveaux, livraisons, mouvements, avant);
+      return avantRupture == null
+        ? { litres: positif(base), source: 'REPORT' }
+        : { litres: positif(base - avantRupture * jours(avant.date, t)), source: 'RUPTURE' };
+    }
     return { litres: positif(base - (consoEntre / jours(avant.date, apres.date)) * jours(avant.date, t)), source: 'INTERPOLE' };
   }
   if (avant) {
@@ -244,6 +277,7 @@ export function bilanMensuelSite(opts: {
   const debut = stockFrontiere(niveaux, opts.livraisons, mvts, premier, rythme);
   const fin = stockFrontiere(niveaux, opts.livraisons, mvts, suivant, rythme);
   if (debut.source === 'REPORT' || fin.source === 'REPORT') drapeaux.push('frontière en report brut - jauge à vérifier');
+  if (debut.source === 'RUPTURE' || fin.source === 'RUPTURE') drapeaux.push('jauge en hausse sans livraison enregistrée - à vérifier');
 
   // Sur les valeurs PUBLIÉES : le lecteur refait l'opération et tombe juste.
   const stockDebut = Math.round(debut.litres);
