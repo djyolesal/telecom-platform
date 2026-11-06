@@ -191,7 +191,7 @@ export default function NouvelleMaintenancePage() {
           ) : (
             <>
               <Field label="Actif concerné" required className="md:col-span-2">
-                <Select value={form.actifKey} onChange={(e) => set('actifKey', e.target.value)} required options={actifOptions} placeholder={form.nature === 'INSTALLATION' ? 'Actif au dépôt…' : 'Actif en service…'} />
+                <SearchSelect value={form.actifKey} onChange={(v) => set('actifKey', v)} options={actifOptions} placeholder={form.nature === 'INSTALLATION' ? 'Rechercher un actif au dépôt…' : 'Rechercher par actif ou nom de site…'} />
               </Field>
               {needsDest && (
                 <Field label="Site de destination" required className="md:col-span-2">

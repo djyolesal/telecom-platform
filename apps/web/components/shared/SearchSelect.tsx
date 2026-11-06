@@ -5,6 +5,9 @@ import { ChevronDown, Search, X } from 'lucide-react';
 
 export interface SearchSelectOption { value: string; label: string }
 
+/** Casse et accents ignorés : « sokode » trouve « Sokodé ». */
+const sansAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 /**
  * Sélecteur avec recherche pour les longues listes (ex. 700+ sites) : un champ
  * texte filtre les options, clic pour choisir, croix pour effacer. Remplace un
@@ -41,9 +44,9 @@ export function SearchSelect({
     return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  const terme = q.trim().toLowerCase();
+  const terme = sansAccents(q.trim());
   const resultats = useMemo(
-    () => (terme ? options.filter((o) => o.label.toLowerCase().includes(terme)) : options).slice(0, 50),
+    () => (terme ? options.filter((o) => sansAccents(o.label).includes(terme)) : options).slice(0, 50),
     [options, terme]
   );
 

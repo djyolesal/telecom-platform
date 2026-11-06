@@ -274,6 +274,7 @@ class ActifLite {
   final String? libelle;
   final String? siteId;
   final String? siteCode;
+  final String? siteNom;
 
   const ActifLite(
       {required this.id,
@@ -281,7 +282,8 @@ class ActifLite {
       required this.categorie,
       this.libelle,
       this.siteId,
-      this.siteCode});
+      this.siteCode,
+      this.siteNom});
 
   factory ActifLite.fromJson(Map<String, dynamic> j) {
     final site = j['site'] as Map<String, dynamic>?;
@@ -293,11 +295,16 @@ class ActifLite {
       libelle: j['libelle'] as String?,
       siteId: j['siteId'] as String?,
       siteCode: site?['code'] as String?,
+      siteNom: site?['nom'] as String?,
     );
   }
 
-  String get display =>
-      // Jamais le code de catégorie brut dans le sélecteur : libellé traduit
-      // en repli quand l'API ne fournit pas de libellé d'actif.
-      '${libelle ?? kCategorieEquipement[categorie] ?? categorie}${siteId != null ? '' : ' - Dépôt'}';
+  /// Jamais le code de catégorie brut dans le sélecteur : libellé traduit en
+  /// repli quand l'API ne fournit pas de libellé d'actif.
+  String get libelleAffiche =>
+      libelle ?? kCategorieEquipement[categorie] ?? categorie;
+
+  /// Où se trouve l'actif, tel que le terrain le désigne : le nom du site.
+  String get emplacement =>
+      siteId == null ? 'Dépôt' : (siteNom ?? siteCode ?? 'Site inconnu');
 }

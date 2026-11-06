@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/site_picker.dart';
 import '../../sites/data/site_model.dart';
 import '../../sites/data/site_repository.dart';
+import 'choix_actif.dart';
 import '../data/maintenance_model.dart';
 import '../data/maintenance_repository.dart';
 import '../../../core/theme/app_theme.dart';
@@ -437,32 +438,14 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                 ),
               ],
             ] else ...[
-              DropdownButtonFormField<String>(
-                initialValue: _actif?.id,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: _nature == 'INSTALLATION'
-                      ? 'Actif au dépôt *'
-                      : 'Actif en service *',
-                  suffixIcon: _loadingActifs
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                              height: 16,
-                              width: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2)))
-                      : null,
-                ),
-                items: _actifs
-                    .map((a) => DropdownMenuItem(
-                        value: a.id,
-                        child:
-                            Text(a.display, overflow: TextOverflow.ellipsis)))
-                    .toList(),
-                onChanged: (v) => setState(
-                    () => _actif = _actifs.where((a) => a.id == v).firstOrNull),
-                validator: (v) =>
-                    !_isEntretien && (v == null || v.isEmpty) ? 'Requis' : null,
+              ActifPicker(
+                label: _nature == 'INSTALLATION'
+                    ? 'Actif au dépôt *'
+                    : 'Actif en service *',
+                actifs: _actifs,
+                valeur: _actif,
+                chargement: _loadingActifs,
+                onChanged: (a) => setState(() => _actif = a),
               ),
               if (_needsDest) ...[
                 const SizedBox(height: 14),

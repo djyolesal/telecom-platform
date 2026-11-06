@@ -1263,6 +1263,19 @@ export async function getSiteReleves(req: Request, res: Response, next: NextFunc
  * cycle est donc : exporter → corriger dans Excel → réimporter (upsert par
  * code) — sans jamais reconstruire un fichier à la main.
  */
+/**
+ * Prestataires passif et actif d'un lot, pour l'export. LES_DEUX vaut pour les
+ * deux colonnes ; plusieurs sociétés sur un même périmètre sont toutes citées.
+ */
+export function prestatairesDuLot(
+  assignments: Array<{ scope: string; prestataire: { nom: string } }>,
+): { prestatairePassif: string; prestataireActif: string } {
+  const noms = (scope: string) => [...new Set(assignments
+    .filter((a) => a.scope === scope || a.scope === 'LES_DEUX')
+    .map((a) => a.prestataire.nom))].join(' / ');
+  return { prestatairePassif: noms('PASSIVE'), prestataireActif: noms('ACTIVE') };
+}
+
 export async function exportSites(req: Request, res: Response, next: NextFunction) {
   try {
     const { region, statut_ge, power_config, power_configs, prestataire_id, zone_id } = req.query as Record<string, string>;
@@ -1294,7 +1307,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
       take: EXPORT_MAX,
       orderBy: { code: 'asc' },
       include: {
-        lot: { select: { code: true } },
+        lot: { select: { code: true, assignments: { select: { scope: true, prestataire: { select: { nom: true } } } } } },
         modeleCuve: { select: { nom: true } },
         zoneMaintenance: { select: { nom: true } },
         groupes: { where: { isActive: true }, orderBy: { numero: 'asc' }, select: { numero: true, puissanceKva: true, statut: true, marque: true } },
@@ -1319,7 +1332,15 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
       name: 'Sites',
       columns: [
         { header: 'n° ancienneté', key: 'rangAnciennete', width: 13 },
-        ...colonnes.map((c) => ({ header: c.header, key: c.key, width: 16 })),
+        ...colonnes.flatMap((c) => [
+          { header: c.header, key: c.key, width: 16 },
+          // Colonnes de LECTURE, comme le rang : l'import les ignore (aucun alias
+          // d'en-tête), le prestataire se gère sur le lot, pas sur le site.
+          ...(c.key === 'lot' ? [
+            { header: 'Prestataire passif', key: 'prestatairePassif', width: 24 },
+            { header: 'Prestataire actif', key: 'prestataireActif', width: 24 },
+          ] : []),
+        ]),
       ],
       rows: sites.map((s) => {
         const ge1 = s.groupes[0];
@@ -1337,6 +1358,7 @@ export async function exportSites(req: Request, res: Response, next: NextFunctio
           statutGE: ge1?.statut ?? s.statutGE,
           puissanceGEkva: ge1 ? Number(ge1.puissanceKva) : Number(s.puissanceGEkva),
           lot: s.lot?.code ?? '',
+          ...prestatairesDuLot(s.lot?.assignments ?? []),
           typePylone: s.typePylone ?? '',
           typeSite: s.typeSite ?? '',
           dateMiseEnService: s.dateMiseEnService ? s.dateMiseEnService.toISOString().slice(0, 10) : '',
