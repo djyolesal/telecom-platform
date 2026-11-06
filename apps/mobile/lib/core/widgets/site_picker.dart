@@ -52,6 +52,7 @@ class _SitePickerState extends State<SitePicker> {
                 if (picked != null) {
                   setState(() { _selected = picked; _value = picked.id; });
                   field.didChange(picked.id);
+                  field.validate(); // efface un « Site requis » déjà affiché
                   widget.onChanged(picked.id);
                 }
               },

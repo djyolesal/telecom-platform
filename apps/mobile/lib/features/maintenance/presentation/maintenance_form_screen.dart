@@ -125,7 +125,8 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   }
 
   void _onNatureChanged(String? v) {
-    if (v == null) return;
+    // Resélectionner la même nature ne doit pas effacer ce qui est déjà saisi.
+    if (v == null || v == _nature) return;
     setState(() {
       _nature = v;
       _tacheKey = null;
@@ -139,6 +140,13 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
     });
     if (_isMouvement) _loadActifs();
   }
+
+  /// La clé suit la nature : le sélecteur garde sinon l'ancien site à l'écran
+  /// alors que le formulaire l'a oublié, et l'enregistrement le réclamait.
+  Widget _sitePicker() => SitePicker(
+      key: ValueKey('site-$_nature'),
+      initialSiteId: _siteId,
+      onChanged: _onSiteChanged);
 
   void _onSiteChanged(String? v) {
     _siteId = v;
@@ -342,7 +350,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
             ),
             const SizedBox(height: 14),
             if (_isEntretien) ...[
-              SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
+              _sitePicker(),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: _tacheKey,
@@ -373,7 +381,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
                     _isEntretien && (v == null || v.isEmpty) ? 'Requis' : null,
               ),
             ] else if (_isCurative) ...[
-              SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
+              _sitePicker(),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: _equipementCode,
@@ -449,7 +457,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
               ),
               if (_needsDest) ...[
                 const SizedBox(height: 14),
-                SitePicker(initialSiteId: _siteId, onChanged: _onSiteChanged),
+                _sitePicker(),
               ],
             ],
             const SizedBox(height: 14),

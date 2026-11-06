@@ -80,6 +80,20 @@ void main() {
       expect(find.text('Requis'), findsOneWidget);
     });
 
+    testWidgets('le « Requis » disparaît dès qu\'un actif est choisi', (t) async {
+      final cle = GlobalKey<FormState>();
+      await monter(t, parc, cle: cle);
+      cle.currentState!.validate();
+      await t.pump();
+      expect(find.text('Requis'), findsOneWidget);
+      await t.tap(find.textContaining('Rechercher par actif'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Lomé Port'));
+      await t.pumpAndSettle();
+      expect(find.text('Requis'), findsNothing);
+      expect(cle.currentState!.validate(), isTrue);
+    });
+
     testWidgets('liste vide : le dit au lieu d\'ouvrir une feuille vide', (t) async {
       await monter(t, const []);
       expect(find.text('Aucun actif disponible'), findsOneWidget);

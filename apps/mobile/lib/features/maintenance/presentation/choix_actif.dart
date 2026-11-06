@@ -47,7 +47,9 @@ class ActifPicker extends StatelessWidget {
     );
     if (choisi != null) {
       onChanged(choisi);
-      field.didChange(choisi.id);
+      // Efface le « Requis » d'un enregistrement précédent : l'erreur d'un
+      // FormField ne disparaît pas seule quand la valeur arrive.
+      field.reset();
     }
   }
 
