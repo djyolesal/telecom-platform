@@ -16,6 +16,8 @@ import { signeMouvement } from './mouvementsCarburant.service';
  *    Chaque mois la recalculait auparavant avec SA conso/j : le même instant
  *    recevait deux valeurs, écart de (conso/j M+1 − conso/j M) × jours sans
  *    relevé - des centaines de litres, sur presque tous les sites.
+ *  - JAUGES DE DÉPOTAGE : les niveaux avant/après livraison servent aussi de
+ *    points pour ces frontières (`niveauxFrontieres`), pas pour le rythme.
  *  - CONSO DU MOIS = début + livraisons + mouvements − fin, sur les valeurs
  *    publiées : le bilan boucle au litre, et les mois s'additionnent.
  *  - PROVISOIRE : tant qu'aucun relevé n'existe après la fin du mois, sa fin
@@ -126,6 +128,42 @@ export function debitLisse(releves: ReleveStockLite[], livraisons: LivraisonLite
   return debits.length % 2 ? debits[m] : (debits[m - 1] + debits[m]) / 2;
 }
 
+/**
+ * Jauges relevées à un dépotage, AVANT et APRÈS livraison : deux niveaux
+ * mesurés à une date connue, que le terrain saisit déjà.
+ */
+export interface JaugeDepotageLite { date: Date; litres: number; avant: number | null; apres: number | null }
+
+/** Écart toléré entre (après − avant) et le volume livré pour croire les jauges. */
+const TOLERANCE_JAUGE_DEPOTAGE_L = 50;
+
+/**
+ * Niveaux servant aux FRONTIÈRES : les relevés, plus les jauges de dépotage
+ * crédibles. Le niveau « avant » est posé 1 ms avant la livraison, l'« après »
+ * à son heure exacte : la livraison tombe ainsi entre les deux, comptée une
+ * seule fois. À la même heure, le relevé prime.
+ *
+ * La fenêtre H1, le débit et la contre-épreuve n'utilisent que les relevés :
+ * ajouter des points sans index d'heures couperait leurs intervalles.
+ */
+export function niveauxFrontieres(releves: ReleveStockLite[], jauges: JaugeDepotageLite[] = []): ReleveStockLite[] {
+  const points = releves.filter((r) => r.volume != null && r.volume <= VOLUME_MAX_PLAUSIBLE);
+  const prises = new Set(points.map((r) => r.date.getTime()));
+  const poser = (date: Date, volume: number) => {
+    if (prises.has(date.getTime())) return;
+    prises.add(date.getTime());
+    points.push({ date, volume, index: null, groupeId: null });
+  };
+  for (const j of jauges) {
+    if (j.avant == null || j.apres == null) continue;
+    if (j.avant < 0 || j.apres < j.avant || j.apres > VOLUME_MAX_PLAUSIBLE) continue;
+    if (Math.abs(j.apres - j.avant - j.litres) > TOLERANCE_JAUGE_DEPOTAGE_L) continue;
+    poser(new Date(j.date.getTime() - 1), j.avant);
+    poser(j.date, j.apres);
+  }
+  return points.sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
 type SourceFrontiere = 'MESURE' | 'INTERPOLE' | 'ESTIME' | 'RUPTURE' | 'REPORT';
 
 /**
@@ -133,7 +171,7 @@ type SourceFrontiere = 'MESURE' | 'INTERPOLE' | 'ESTIME' | 'RUPTURE' | 'REPORT';
  * l'historique le permet. Ne dépend que de la série : les deux mois qui se
  * partagent une frontière obtiennent donc le même chiffre.
  */
-function rythmeAvant(
+export function rythmeAvant(
   niveaux: ReleveStockLite[],
   livraisons: LivraisonLite[],
   mouvements: MouvementLite[],
@@ -165,7 +203,7 @@ function rythmeAvant(
  * arrêtait la conso à cette date : en production, un mois tombait de 153 à 3 L.
  * Report brut seulement si aucun rythme n'est connu.
  */
-function stockFrontiere(
+export function stockFrontiere(
   niveaux: ReleveStockLite[],
   livraisons: LivraisonLite[],
   mouvements: MouvementLite[],
@@ -208,6 +246,7 @@ export function bilanMensuelSite(opts: {
   releves: ReleveStockLite[];       // relevés GE du site (niveaux + index), TOUTE la série : ceux d'après le mois encadrent sa fin
   livraisons: LivraisonLite[];
   mouvements?: MouvementLite[];     // transferts et purges validés, déjà signés
+  jauges?: JaugeDepotageLite[];     // jauges avant/après des dépotages : précisent les frontières
   annee: number;
   mois: number;                     // 1-12
 }): Omit<LigneStockMensuel, 'siteId' | 'site' | 'region'> | null {
@@ -274,8 +313,9 @@ export function bilanMensuelSite(opts: {
     }
   }
 
-  const debut = stockFrontiere(niveaux, opts.livraisons, mvts, premier, rythme);
-  const fin = stockFrontiere(niveaux, opts.livraisons, mvts, suivant, rythme);
+  const points = niveauxFrontieres(opts.releves, opts.jauges);
+  const debut = stockFrontiere(points, opts.livraisons, mvts, premier, rythme);
+  const fin = stockFrontiere(points, opts.livraisons, mvts, suivant, rythme);
   if (debut.source === 'REPORT' || fin.source === 'REPORT') drapeaux.push('frontière en report brut - jauge à vérifier');
   if (debut.source === 'RUPTURE' || fin.source === 'RUPTURE') drapeaux.push('jauge en hausse sans livraison enregistrée - à vérifier');
 
@@ -300,7 +340,7 @@ export function bilanMensuelSite(opts: {
       ? Math.round(((debut.litres + sommeEvts(opts.livraisons, premier, suivant) + sommeEvts(mvts, premier, suivant) - fin.litres) / nbJours) * 10) / 10
       : null,
     consoFenetre: consoRythme != null ? Math.round(consoRythme) : null,
-    provisoire: !niveaux.some((r) => r.date >= suivant),
+    provisoire: !points.some((r) => r.date >= suivant),
     debitLh: debitLh != null ? Math.round(debitLh * 100) / 100 : null,
     gasoilInexplique,
     fenetreJours: Math.round(fenetreJours),
@@ -313,6 +353,7 @@ export interface SerieCarburant {
   releves: ReleveStockLite[];
   livraisons: LivraisonLite[];
   mouvements: MouvementLite[];
+  jauges?: JaugeDepotageLite[];
 }
 
 /**
@@ -335,7 +376,7 @@ export async function chargerSeries(siteIds: string[]): Promise<Map<string, Seri
     }),
     prisma.depotage.findMany({
       where: { siteId: { in: siteIds } },
-      select: { siteId: true, dateDepotage: true, volumeLitres: true },
+      select: { siteId: true, dateDepotage: true, volumeLitres: true, stockAvantLitres: true, stockApresLitres: true },
     }),
     // SEULS les mouvements VALIDÉS bougent le stock : une déclaration du
     // terrain encore en attente ne doit pas effacer un écart (même règle que
@@ -352,7 +393,7 @@ export async function chargerSeries(siteIds: string[]): Promise<Map<string, Seri
   const series = new Map<string, SerieCarburant>();
   const de = (id: string): SerieCarburant => {
     let s = series.get(id);
-    if (!s) { s = { releves: [], livraisons: [], mouvements: [] }; series.set(id, s); }
+    if (!s) { s = { releves: [], livraisons: [], mouvements: [], jauges: [] }; series.set(id, s); }
     return s;
   };
   for (const r of releves) {
@@ -363,7 +404,16 @@ export async function chargerSeries(siteIds: string[]): Promise<Map<string, Seri
       groupeId: r.groupeId,
     });
   }
-  for (const d of depots) de(d.siteId).livraisons.push({ date: d.dateDepotage, litres: Number(d.volumeLitres) });
+  for (const d of depots) {
+    const serie = de(d.siteId);
+    const litres = Number(d.volumeLitres);
+    serie.livraisons.push({ date: d.dateDepotage, litres });
+    (serie.jauges ??= []).push({
+      date: d.dateDepotage, litres,
+      avant: d.stockAvantLitres != null ? Number(d.stockAvantLitres) : null,
+      apres: d.stockApresLitres != null ? Number(d.stockApresLitres) : null,
+    });
+  }
   for (const m of mvts) {
     if (!m.siteId) continue;
     de(m.siteId).mouvements.push({ date: m.dateMouvement, litres: signeMouvement(m.type) * Number(m.volumeLitres) });
@@ -395,7 +445,7 @@ export function fluxDuMois(serie: SerieCarburant | undefined, annee: number, moi
 /** Déroule la méthode sur les séries déjà chargées. */
 export function bilanMensuelSerie(serie: SerieCarburant | undefined, annee: number, mois: number) {
   const s = serie ?? SERIE_VIDE;
-  return bilanMensuelSite({ releves: s.releves, livraisons: s.livraisons, mouvements: s.mouvements, annee, mois });
+  return bilanMensuelSite({ releves: s.releves, livraisons: s.livraisons, mouvements: s.mouvements, jauges: s.jauges, annee, mois });
 }
 
 /** Charge les données et déroule la méthode sur tout le parc pour (annee, mois). */
