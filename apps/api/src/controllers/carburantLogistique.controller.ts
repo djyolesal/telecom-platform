@@ -14,6 +14,7 @@ import { buildXlsx, setXlsxHeaders } from '../utils/excel';
 import { sendTabular, colonnesSelonRole } from '../utils/exporter';
 import { suiviCommandes, lirePeriode } from '../services/suiviCommandes.service';
 import { stocksMensuels } from '../services/stocksMensuels.service';
+import { litresManquants } from '../services/livraisonsManquantes.service';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { rapprochementBc } from '../services/rapprochement.service';
@@ -1477,6 +1478,9 @@ export async function getStocksMensuels(req: Request, res: Response, next: NextF
           anomalies: lignes.filter((l) => l.drapeaux.some((d) => d.includes('vérifier') || d.includes('expliqué'))).length,
           sitesSaisiesSignalees: anomalies.size,
           provisoires: lignes.filter((l) => l.provisoire).length,
+          livraisonManquante: lignes.reduce((s, l) => s + l.livraisonManquante, 0),
+          livraisonManquanteAConfirmer: lignes.reduce((s, l) => s + litresManquants(l.hausses, 'A_CONFIRMER'), 0),
+          sitesLivraisonManquante: lignes.filter((l) => l.livraisonManquante > 0).length,
         },
       },
     });
@@ -1495,6 +1499,8 @@ export async function exportStocksMensuels(req: Request, res: Response, next: Ne
       depuis: new Date(Date.UTC(a, m - 1, 1)),
       jusqua: new Date(Date.UTC(a, m, 1)),
     });
+    const fmtJour = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' });
+    const manquante = lignes.reduce((s, l) => s + l.livraisonManquante, 0);
     await auditLog(req.user!.id, 'EXPORT', 'stocks_mensuels', undefined, { annee: a, mois: m, sites: lignes.length, format: req.params.format }, req);
     await sendTabular(res, req.params.format, `stocks-${a}-${String(m).padStart(2, '0')}`, `Stocks carburant - ${MOIS[m]} ${a}`,
       [{
@@ -1506,6 +1512,8 @@ export async function exportStocksMensuels(req: Request, res: Response, next: Ne
           { header: 'Stock fin de mois (L)', key: 'fin', width: 18 },
           { header: 'Livraisons (L)', key: 'liv', width: 13 },
           { header: 'Transferts / purges (L)', key: 'mvt', width: 20 },
+          { header: 'Livraison manquante probable (L)', key: 'manquante', width: 28 },
+          { header: 'Hausse de jauge', key: 'hausse', width: 34 },
           { header: 'Conso du mois (L)', key: 'conso', width: 16 },
           { header: 'Conso/j (L/j)', key: 'consoJour', width: 13 },
           { header: 'Débit (L/h)', key: 'lh', width: 11 },
@@ -1516,13 +1524,16 @@ export async function exportStocksMensuels(req: Request, res: Response, next: Ne
         ],
         rows: lignes.map((l) => ({
           site: l.site, region: l.region, debut: l.stockDebut, fin: l.stockFin, liv: l.livraisons,
-          mvt: l.mouvements || '', conso: l.conso ?? '', consoJour: l.consoJour ?? '', lh: l.debitLh ?? '',
+          mvt: l.mouvements || '', manquante: l.livraisonManquante || '',
+          hausse: l.hausses.filter((h) => h.statut !== 'SAISIE').map((h) =>
+            `entre le ${fmtJour(h.depuis)} et le ${fmtJour(h.date)}${h.statut === 'A_CONFIRMER' ? ' (à confirmer)' : ''}`).join(' · '),
+          conso: l.conso ?? '', consoJour: l.consoJour ?? '', lh: l.debitLh ?? '',
           inexplique: l.gasoilInexplique ?? '', fenetre: l.fenetreJours,
           signalees: anomalies.get(l.siteId)?.codes.join(' · ') ?? '',
           obs: [...(l.provisoire ? ['provisoire - pas de relevé après la fin du mois'] : []), ...l.drapeaux].join(' · '),
         })),
       }],
-      `${lignes.length} site(s)${region ? ` · ${region}` : ''} · bilan matière, fin de mois = début du mois suivant`
+      `${lignes.length} site(s)${region ? ` · ${region}` : ''} · bilan matière, fin de mois = début du mois suivant${manquante ? ` · consommation sans doute sous-estimée : environ ${manquante} L probablement livrés sans être enregistrés` : ''}`
     );
   } catch (err) { next(err); }
 }

@@ -25,7 +25,12 @@ interface Ligne {
   provisoire: boolean;
   /** Saisies du mois encore à vérifier sur ce site (contrôle de vraisemblance). */
   anomalies: { nb: number; codes: string[] } | null;
+  /** Hausses de jauge sans livraison révélées dans le mois. */
+  hausses: { depuis: string; date: string; litres: number; statut: 'PROBABLE' | 'A_CONFIRMER' | 'SAISIE' }[];
+  livraisonManquante: number;
 }
+
+const fmtJour = (d: string) => new Date(d).toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' });
 
 /** Libellés courts des codes de vraisemblance, pour l'infobulle. */
 const LIBELLE_CODE: Record<string, string> = {
@@ -54,7 +59,7 @@ export default function StocksMensuelsPage() {
     queryKey: ['stocks-mensuels', annee, mois, region],
     queryFn: () => api.get('/rapports/stocks-mensuels', {
       params: { annee, mois, region: region || undefined },
-    }).then((r) => r.data.data as { lignes: Ligne[]; totaux: { sites: number; stockDebut: number; stockFin: number; livraisons: number; mouvements: number; conso: number; anomalies: number; sitesSaisiesSignalees: number; provisoires: number } }),
+    }).then((r) => r.data.data as { lignes: Ligne[]; totaux: { sites: number; stockDebut: number; stockFin: number; livraisons: number; mouvements: number; conso: number; anomalies: number; sitesSaisiesSignalees: number; provisoires: number; livraisonManquante: number; livraisonManquanteAConfirmer: number; sitesLivraisonManquante: number } }),
   });
 
   const cols: Column<Ligne>[] = [
@@ -75,6 +80,23 @@ export default function StocksMensuelsPage() {
       render: (l) => l.mouvements
         ? <span className={l.mouvements < 0 ? 'text-amber-700' : 'text-teal-700'} title="Transferts nets et purges validés du mois : retirés de la consommation.">{fmtNumber(l.mouvements)}</span>
         : <span className="text-gray-300">-</span>,
+    },
+    {
+      // Signalée, jamais ajoutée à la conso : le volume est déduit des jauges,
+      // pas d'un bon de livraison.
+      key: 'manquante', header: 'Livr. manquante prob. (L)', align: 'right',
+      render: (l) => {
+        const hausses = l.hausses.filter((h) => h.statut !== 'SAISIE');
+        if (!hausses.length) return <span className="text-gray-300">-</span>;
+        return (
+          <span title={hausses.map((h) => `Jauge en hausse entre le ${fmtJour(h.depuis)} et le ${fmtJour(h.date)} sans livraison ni transfert enregistré (environ ${fmtNumber(h.litres)} L)${h.statut === 'A_CONFIRMER' ? ' - à confirmer à la prochaine visite' : ''}`).join(' · ')}>
+            <span className="font-semibold text-red-600">{fmtNumber(l.livraisonManquante)}</span>
+            <span className="block text-[11px] text-gray-500 whitespace-nowrap">
+              {fmtJour(hausses[hausses.length - 1].date)}{hausses.some((h) => h.statut === 'A_CONFIRMER') ? ' · à confirmer' : ''}
+            </span>
+          </span>
+        );
+      },
     },
     { key: 'conso', header: 'Conso (L)', align: 'right', render: (l) => l.conso != null ? fmtNumber(l.conso) : '-' },
     { key: 'consoJour', header: 'Conso/j', align: 'right', render: (l) => l.consoJour != null ? `${l.consoJour} L/j` : '-' },
@@ -135,11 +157,14 @@ export default function StocksMensuelsPage() {
       </div>
 
       {t && (
-        <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-5">
+        <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3 min-[1800px]:grid-cols-6">
           <StatCard title="Stock au 1er" value={`${fmtNumber(t.stockDebut)} L`} subtitle={`${t.sites} sites`} icon={Fuel} color="bg-[rgb(var(--brand))]" />
           <StatCard title="Stock fin de mois" value={`${fmtNumber(t.stockFin)} L`} subtitle={t.provisoires ? `${t.provisoires} site(s) provisoire(s)` : 'début du mois suivant'} icon={Fuel} color="bg-[rgb(var(--accent))]" />
           <StatCard title="Livraisons" value={`${fmtNumber(t.livraisons)} L`} subtitle={t.mouvements ? `dépotages · ${fmtNumber(t.mouvements)} L transférés/purgés` : 'dépotages du mois'} icon={Fuel} color="bg-[rgb(var(--brand-light))]" />
-          <StatCard title="Consommation" value={`${fmtNumber(t.conso)} L`} subtitle="début + livraisons - fin" icon={Fuel} color="bg-[#7D3C98]" />
+          <StatCard title="Consommation" value={`${fmtNumber(t.conso)} L`} subtitle={t.livraisonManquante ? 'sans doute sous-estimée : livraisons manquantes' : 'début + livraisons - fin'} icon={Fuel} color="bg-[#7D3C98]" />
+          <StatCard title="Livraisons manquantes" value={`${fmtNumber(t.livraisonManquante)} L`}
+            subtitle={t.livraisonManquante ? `${t.sitesLivraisonManquante} site(s)${t.livraisonManquanteAConfirmer ? ` · dont ${fmtNumber(t.livraisonManquanteAConfirmer)} L à confirmer` : ''}` : 'aucune hausse inexpliquée'}
+            icon={TriangleAlert} color={t.livraisonManquante ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
           <StatCard title="À vérifier" value={String(t.anomalies)}
             subtitle={t.sitesSaisiesSignalees ? `dont ${t.sitesSaisiesSignalees} site(s) à saisies signalées` : 'gasoil non expliqué, index, jauges'}
             icon={TriangleAlert} color={t.anomalies ? 'bg-[#B23124]' : 'bg-[rgb(var(--accent))]'} />
@@ -155,6 +180,7 @@ export default function StocksMensuelsPage() {
           <p className="mt-2 text-xs text-gray-400">
             Méthode : le stock de chaque changement de mois est estimé entre les deux relevés qui l&apos;encadrent, livraisons comptées ; la fin d&apos;un mois est donc exactement le début du suivant, et conso = début + livraisons + transferts/purges - fin.
             « Provisoire » : aucun relevé après la fin du mois, la fin est estimée au rythme récent et sera fixée par le prochain relevé.
+            « Livraison manquante probable » : la jauge monte d&apos;au moins 100 L sans livraison ni transfert enregistré ; le volume est déduit des jauges, il n&apos;est pas ajouté à la conso, qui est donc sans doute sous-estimée.
             « Non expliqué » compare la conso des derniers relevés (fenêtre d&apos;au moins 10 jours) aux heures de marche du GE × son débit habituel - un écart fort signale un vol, une fuite ou un index bloqué.
           </p>
         </>

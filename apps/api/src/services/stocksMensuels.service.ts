@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { signeMouvement } from './mouvementsCarburant.service';
+import { haussesDuMois, HausseSansLivraison, litresManquants } from './livraisonsManquantes.service';
 
 /**
  * BILAN MENSUEL DES STOCKS CARBURANT — méthode validée avec l'exploitant le
@@ -67,6 +68,10 @@ export interface LigneStockMensuel {
   gasoilInexplique: number | null;
   fenetreJours: number;
   drapeaux: string[];
+  /** Hausses de jauge sans livraison révélées dans le mois (voir livraisonsManquantes.service). */
+  hausses: HausseSansLivraison[];
+  /** Litres probablement livrés sans être enregistrés : la conso du mois est sous-estimée d'autant. JAMAIS ajoutés à la conso. */
+  livraisonManquante: number;
 }
 
 const JOUR_MS = 86_400_000;
@@ -249,7 +254,7 @@ export function bilanMensuelSite(opts: {
   jauges?: JaugeDepotageLite[];     // jauges avant/après des dépotages : précisent les frontières
   annee: number;
   mois: number;                     // 1-12
-}): Omit<LigneStockMensuel, 'siteId' | 'site' | 'region'> | null {
+}): Omit<LigneStockMensuel, 'siteId' | 'site' | 'region' | 'hausses' | 'livraisonManquante'> | null {
   const { annee, mois } = opts;
   const mvts = opts.mouvements ?? [];
   const premier = new Date(Date.UTC(annee, mois - 1, 1));
@@ -458,8 +463,14 @@ export async function stocksMensuels(opts: { annee: number; mois: number; region
 
   const out: LigneStockMensuel[] = [];
   for (const s of sites) {
-    const bilan = bilanMensuelSerie(series.get(s.id), opts.annee, opts.mois);
-    if (bilan) out.push({ siteId: s.id, site: s.nom, region: s.region, ...bilan });
+    const serie = series.get(s.id);
+    const bilan = bilanMensuelSerie(serie, opts.annee, opts.mois);
+    if (!bilan) continue;
+    const hausses = haussesDuMois(serie, opts.annee, opts.mois);
+    const drapeaux = hausses.some((h) => h.statut === 'SAISIE')
+      ? [...bilan.drapeaux, 'jauge isolée (hausse annulée avant ou après) - saisie à vérifier']
+      : bilan.drapeaux;
+    out.push({ siteId: s.id, site: s.nom, region: s.region, ...bilan, drapeaux, hausses, livraisonManquante: litresManquants(hausses) });
   }
   return out.sort((a, b) => a.site.localeCompare(b.site));
 }
