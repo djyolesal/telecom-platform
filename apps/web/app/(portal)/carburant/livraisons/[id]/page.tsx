@@ -21,7 +21,7 @@ const TOL = 0.5;
 const BL_COLORS: Record<string, string> = { PLANIFIE: 'bg-amber-100 text-amber-700', CHARGE: 'bg-blue-100 text-blue-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 const LIGNE_COLORS: Record<string, string> = { PREVU: 'bg-gray-100 text-gray-600', PARTIEL: 'bg-amber-100 text-amber-700', LIVRE: 'bg-green-100 text-green-700', ANNULE: 'bg-red-100 text-red-700' };
 
-interface SiteLite { id: string; code: string; nom: string; accesPickup?: boolean }
+interface SiteLite { id: string; code: string; nom: string; accesPickup?: boolean; cuveVolumeLitres?: number | string | null }
 interface Ligne {
   id: string; volumePrevuLitres: number; volumeLivreReel: number; ecart: number; statut: string;
   site: { code: string; nom: string; region: string; latitude?: number | null; longitude?: number | null; accesPickup?: boolean };
@@ -102,6 +102,14 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
     return { ...x, pickup: voulu === defautSite ? null : voulu };
   }));
 
+  // Seuls les sites à cuve sont proposés, et un site déjà choisi sur une autre
+  // ligne disparaît des suivantes : une ligne par site.
+  const aCuve = (x?: SiteLite) => Number(x?.cuveVolumeLitres ?? 0) > 0;
+  const choisis = new Set(lignes.map((l) => l.siteId).filter(Boolean));
+  const optionsPour = (siteId: string) => sites
+    .filter((x) => x.id === siteId || (aCuve(x) && !choisis.has(x.id)))
+    .map((x) => ({ value: x.id, label: `${x.code} - ${x.nom}` }));
+
   const somme = lignes.reduce((s, l) => s + (Number(l.volume) || 0), 0);
   const charge = Number(bl.volumeChargeLitres);
   const coherent = lignes.every((l) => l.siteId && Number(l.volume) > 0) && Math.abs(somme - charge) <= TOL;
@@ -136,7 +144,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
         {warnings.length === 0 && (
           <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-gray-500">Sites à approvisionner</p>
+              <p className="text-xs font-semibold text-gray-500">Sites à approvisionner <span className="font-normal text-gray-400">(sites à cuve, une ligne par site)</span></p>
               <button type="button" onClick={() => setLignes((l) => [...l, { siteId: '', volume: '', pickup: null }])} className="text-sm text-blue-600 flex items-center gap-1"><Plus size={14} /> Ajouter un site</button>
             </div>
             <div className="space-y-2">
@@ -145,7 +153,10 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
                   <div className="flex-1">
                     <SearchSelect value={l.siteId} onChange={(v) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, siteId: v } : x))}
                       placeholder="Rechercher un site (nom ou code)…"
-                      options={sites.map((s) => ({ value: s.id, label: `${s.code} - ${s.nom}` }))} />
+                      options={optionsPour(l.siteId)} />
+                    {l.siteId && parId.has(l.siteId) && !aCuve(parId.get(l.siteId)) && (
+                      <p className="mt-0.5 text-[11px] text-amber-700">Aucune cuve renseignée sur la fiche de ce site.</p>
+                    )}
                   </div>
                   <div className="w-28"><Input type="number" value={l.volume} placeholder="L" onChange={(e) => setLignes((arr) => arr.map((x, j) => j === i ? { ...x, volume: e.target.value } : x))} /></div>
                   <button type="button" onClick={() => basculerPickup(i)} disabled={!l.siteId}

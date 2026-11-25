@@ -15,6 +15,7 @@ import { sendTabular, colonnesSelonRole } from '../utils/exporter';
 import { suiviCommandes, lirePeriode } from '../services/suiviCommandes.service';
 import { stocksMensuels } from '../services/stocksMensuels.service';
 import { litresManquants } from '../services/livraisonsManquantes.service';
+import { exigerSitesACuve } from '../services/planLivraison.service';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { rapprochementBc } from '../services/rapprochement.service';
@@ -92,6 +93,12 @@ function parseLignes(raw: unknown): { siteId: string; volumePrevuLitres: number;
     out.push({ siteId, volumePrevuLitres: vol, pickup });
   }
   return out;
+}
+
+/** Sites déjà inscrits au plan d'un bon de livraison. */
+async function sitesDuPlan(blId: string): Promise<string[]> {
+  const lignes = await prisma.ligneLivraison.findMany({ where: { bonLivraisonId: blId }, select: { siteId: true } });
+  return lignes.map((l) => l.siteId);
 }
 
 // ── BONS DE COMMANDE ──────────────────────────────────────────
@@ -612,6 +619,7 @@ export async function createBonLivraison(req: Request, res: Response, next: Next
     // (sinon il s'auto-affectait des sites qu'il ne dessert pas).
     const estTransporteur = req.user!.role === 'TRANSPORTEUR';
     const lignes = estTransporteur ? [] : parseLignes(req.body.lignes);
+    await exigerSitesACuve(lignes.map((l) => l.siteId));
     const { warnings } = await validatePlan(bonCommandeId, m, volume, lignes);
 
     // CHAUFFEUR DÉCLARÉ AU DÉPART. La signature du chauffeur était bloquante au
@@ -843,6 +851,7 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     let nouvellesLignes: { siteId: string; volumePrevuLitres: number; pickup: boolean | null }[] | null = null;
     if (req.body.lignes !== undefined && !isTransporteur) {
       nouvellesLignes = parseLignes(req.body.lignes);
+      await exigerSitesACuve(nouvellesLignes.map((l) => l.siteId), await sitesDuPlan(existing.id));
       ({ warnings } = await validatePlan(existing.bonCommandeId, effMois, effVolume, nouvellesLignes, existing.id));
       // Les lignes sont remplacées en préservant les dépotages (hors bloc update ci-dessous).
     } else if (data.mois != null || data.volumeChargeLitres != null) {
@@ -1115,6 +1124,7 @@ export async function setPlanLivraison(req: Request, res: Response, next: NextFu
     if (!bl) throw new AppError('Bon de livraison introuvable', 404);
 
     const lignes = parseLignes(req.body.lignes);
+    await exigerSitesACuve(lignes.map((l) => l.siteId), await sitesDuPlan(bl.id));
     const dispo = await volumeDisponibleBl(bl.id, bl.volumeChargeLitres);
     const { warnings: planWarn } = await validatePlan(bl.bonCommandeId, bl.mois, dispo, lignes, bl.id);
 
@@ -1667,6 +1677,7 @@ export async function createBrouillonLivraison(req: Request, res: Response, next
 
     const plan = parseLignes(lignes);
     if (!plan.length) throw new AppError('Aucun site dans la tournée', 400);
+    await exigerSitesACuve(plan.map((l) => l.siteId));
     const m = Math.trunc(n(mois)) || (new Date().getMonth() + 1);
     const volume = plan.reduce((s, l) => s + l.volumePrevuLitres, 0);
     // Suffixe aléatoire en plus du timestamp → pas de collision sur la même milliseconde.
