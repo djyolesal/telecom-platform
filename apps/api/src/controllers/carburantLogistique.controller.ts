@@ -15,7 +15,7 @@ import { sendTabular, colonnesSelonRole } from '../utils/exporter';
 import { suiviCommandes, lirePeriode } from '../services/suiviCommandes.service';
 import { stocksMensuels } from '../services/stocksMensuels.service';
 import { litresManquants } from '../services/livraisonsManquantes.service';
-import { exigerSitesACuve } from '../services/planLivraison.service';
+import { exigerSitesACuve, TOLERANCE_L, validatePlan, volumeRecuBl } from '../services/planLivraison.service';
 import { generatePlanLivraisonPdf } from '../services/pdf.service';
 import { computeManquants, computePilotageBL } from '../services/manquants.service';
 import { rapprochementBc } from '../services/rapprochement.service';
@@ -50,8 +50,6 @@ async function assertTransporteurAccess(req: Request, transporteurId: string | n
   if (!pid || transporteurId !== pid) throw new AppError('Accès refusé à ce bon de livraison', 403);
 }
 
-// Tolérance d'arrondi (litres) pour le contrôle « Σ lignes = volume chargé ».
-const TOLERANCE_L = 0.5;
 const MAX_LITRES = 10_000_000; // borne de sûreté (anti-pollution d'agrégats / overflow numeric)
 
 // Number sûr : rejette NaN/Infinity (qui sinon franchissent les tests `<= 0`).
@@ -439,49 +437,6 @@ export async function getBonLivraisonById(req: Request, res: Response, next: Nex
   } catch (err) { next(err); }
 }
 
-/** Valide le plan : Σ lignes = volume chargé, et alerte si dépassement mensuel du BC. */
-async function validatePlan(
-  bonCommandeId: string,
-  mois: number,
-  volumeCharge: number,
-  lignes: { volumePrevuLitres: number }[],
-  ignoreBlId?: string
-): Promise<{ warnings: string[] }> {
-  const sommeLignes = lignes.reduce((s, l) => s + l.volumePrevuLitres, 0);
-  if (lignes.length > 0 && Math.abs(sommeLignes - volumeCharge) > TOLERANCE_L) {
-    throw new AppError(
-      `Le total du plan (${sommeLignes} L) doit être égal au volume chargé du camion (${volumeCharge} L).`,
-      400
-    );
-  }
-  const warnings: string[] = [];
-  // Contrôle « respect du volume mensuel du BC ».
-  const vm = await prisma.volumeMensuel.findUnique({
-    where: { bonCommandeId_mois: { bonCommandeId, mois } },
-  });
-  if (!vm) {
-    warnings.push(`Aucun volume prévu pour le mois ${mois} dans ce bon de commande.`);
-  } else {
-    const autres = await prisma.bonLivraison.aggregate({
-      _sum: { volumeChargeLitres: true },
-      where: {
-        bonCommandeId,
-        mois,
-        statut: { not: 'ANNULE' },
-        isBrouillon: false, // un brouillon n'est pas un chargement réel
-        ...(ignoreBlId ? { id: { not: ignoreBlId } } : {}),
-      },
-    });
-    const cumul = n(autres._sum.volumeChargeLitres) + volumeCharge;
-    if (cumul > n(vm.volumePrevuLitres) + TOLERANCE_L) {
-      warnings.push(
-        `Dépassement du volume mensuel : ${cumul} L chargés pour le mois ${mois} contre ${n(vm.volumePrevuLitres)} L prévus au bon de commande.`
-      );
-    }
-  }
-  return { warnings };
-}
-
 /**
  * Analyse un document de bon de livraison — PDF (web, possiblement plusieurs BL,
  * un par page) ou photo du transporteur (mobile) — et renvoie les champs par BL
@@ -839,10 +794,8 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
 
     let warnings: string[] = [];
     const effMois = data.mois != null ? (data.mois as number) : existing.mois;
-    const effVolume = await volumeDisponibleBl(
-      existing.id,
-      data.volumeChargeLitres != null ? (data.volumeChargeLitres as number) : existing.volumeChargeLitres
-    );
+    const effVolume = n(data.volumeChargeLitres != null ? data.volumeChargeLitres : existing.volumeChargeLitres);
+    const recu = await volumeRecuBl(existing.id);
 
     // Nombre de lignes AVANT modification : le SMS n'a de sens qu'au passage de
     // « pas de plan » à « plan posé ». Le renvoyer à chaque retouche du plan
@@ -852,14 +805,14 @@ export async function updateBonLivraison(req: Request, res: Response, next: Next
     if (req.body.lignes !== undefined && !isTransporteur) {
       nouvellesLignes = parseLignes(req.body.lignes);
       await exigerSitesACuve(nouvellesLignes.map((l) => l.siteId), await sitesDuPlan(existing.id));
-      ({ warnings } = await validatePlan(existing.bonCommandeId, effMois, effVolume, nouvellesLignes, existing.id));
+      ({ warnings } = await validatePlan(existing.bonCommandeId, effMois, effVolume, nouvellesLignes, existing.id, recu));
       // Les lignes sont remplacées en préservant les dépotages (hors bloc update ci-dessous).
     } else if (data.mois != null || data.volumeChargeLitres != null) {
       // Volume/mois changé sans toucher aux lignes : re-vérifie cohérence sur les lignes existantes.
       const lignes = await prisma.ligneLivraison.findMany({ where: { bonLivraisonId: existing.id } });
       ({ warnings } = await validatePlan(
         existing.bonCommandeId, effMois, effVolume,
-        lignes.map((l) => ({ volumePrevuLitres: n(l.volumePrevuLitres) })), existing.id
+        lignes.map((l) => ({ volumePrevuLitres: n(l.volumePrevuLitres) })), existing.id, recu
       ));
     }
 
@@ -1103,21 +1056,8 @@ async function replaceLignesPreservees(
 
 /**
  * Génère / édite le plan de livraison d'un bon de livraison (réservé MANAGER/ADMIN).
- * Remplace les lignes en PRÉSERVANT les livraisons déjà rattachées ; Σ = volume chargé.
+ * Remplace les lignes en PRÉSERVANT les livraisons déjà rattachées ; Σ = volume à bord (voir validatePlan).
  */
-/**
- * Volume RÉELLEMENT embarqué par un chargement : chargé au dépôt + reports reçus
- * d'autres chargements. Le plan et la cohérence se mesurent là-dessus, sinon un
- * camion qui reprend le reste d'un autre est jugé sur un volume qu'il n'a pas.
- */
-async function volumeDisponibleBl(blId: string, volumeCharge: unknown): Promise<number> {
-  const r = await prisma.bonLivraison.aggregate({
-    where: { reportSurBlId: blId },
-    _sum: { resteReportLitres: true },
-  });
-  return n(volumeCharge) + n(r._sum.resteReportLitres);
-}
-
 export async function setPlanLivraison(req: Request, res: Response, next: NextFunction) {
   try {
     const bl = await prisma.bonLivraison.findUnique({ where: { id: req.params.id } });
@@ -1125,8 +1065,9 @@ export async function setPlanLivraison(req: Request, res: Response, next: NextFu
 
     const lignes = parseLignes(req.body.lignes);
     await exigerSitesACuve(lignes.map((l) => l.siteId), await sitesDuPlan(bl.id));
-    const dispo = await volumeDisponibleBl(bl.id, bl.volumeChargeLitres);
-    const { warnings: planWarn } = await validatePlan(bl.bonCommandeId, bl.mois, dispo, lignes, bl.id);
+    const { warnings: planWarn } = await validatePlan(
+      bl.bonCommandeId, bl.mois, n(bl.volumeChargeLitres), lignes, bl.id, await volumeRecuBl(bl.id)
+    );
 
     const updated = await prisma.$transaction(async (tx) => {
       const preserveWarn = await replaceLignesPreservees(tx, bl.id, lignes);

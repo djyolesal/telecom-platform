@@ -56,6 +56,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return <div className="flex justify-between py-1.5 text-sm border-b last:border-0"><span className="text-gray-500">{label}</span><span className="font-medium text-gray-800">{value}</span></div>;
 }
 
+/** Litres reçus du reste d'autres chargements. */
+const recuExact = (bl: BL) => (bl.reportsRecus ?? []).reduce((s, r) => s + Number(r.resteReportLitres), 0);
+
 interface LigneEdit { siteId: string; volume: string; pickup: boolean | null }
 
 // Upload d'une pièce jointe (bon de retour) → renvoie la clé de stockage.
@@ -111,7 +114,10 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
     .map((x) => ({ value: x.id, label: `${x.code} - ${x.nom}` }));
 
   const somme = lignes.reduce((s, l) => s + (Number(l.volume) || 0), 0);
-  const charge = Number(bl.volumeChargeLitres);
+  // Même règle que le serveur : chargé au dépôt + reste reçu d'autres camions.
+  // Valeurs exactes, `reportRecu` étant arrondi pour l'affichage.
+  const recu = recuExact(bl);
+  const charge = Number(bl.volumeChargeLitres) + recu;
   const coherent = lignes.every((l) => l.siteId && Number(l.volume) > 0) && Math.abs(somme - charge) <= TOL;
 
   const mutation = useMutation({
@@ -170,7 +176,7 @@ function EditPlanModal({ bl, onClose }: { bl: BL; onClose: () => void }) {
             </div>
             <div className={`mt-3 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium ${coherent ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
               <span>Total plan : {fmtNumber(somme)} L</span>
-              <span>Chargé : {fmtNumber(charge)} L {coherent ? '✓' : `(écart ${fmtNumber(somme - charge)} L)`}</span>
+              <span>{recu > 0 ? `À bord : ${fmtNumber(charge)} L (dont ${fmtNumber(recu)} L reçus d’un autre camion)` : `Chargé : ${fmtNumber(charge)} L`} {coherent ? '✓' : `(écart ${fmtNumber(somme - charge)} L)`}</span>
             </div>
             {lignes.filter((l) => l.siteId && pickupEffectif(l)).length > 0 && (
               <p className="mt-2 text-xs text-amber-700">
@@ -397,7 +403,7 @@ function ClotureModal({ bl, reste, onClose }: { bl: BL; reste: number; onClose: 
         </div>
         <p className="mb-4 text-xs text-gray-500">
           Reste en citerne à expliquer : <strong className="text-gray-800">{fmtNumber(reste)} L</strong>
-          {' '}({fmtNumber(Number(bl.volumeChargeLitres))} L chargés − {fmtNumber(Number(bl.volumeChargeLitres) - reste)} L livrés).
+          {' '}({fmtNumber(Number(bl.volumeChargeLitres) + recuExact(bl))} L à bord − {fmtNumber(Number(bl.volumeChargeLitres) + recuExact(bl) - reste)} L livrés).
         </p>
 
         <form onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }} className="space-y-3">
@@ -602,7 +608,7 @@ export default function BonLivraisonDetailPage() {
             </div>
           )}
           <p className={`mt-2 text-sm font-medium ${data.coherenceCharge ? 'text-green-700' : 'text-amber-700'}`}>
-            {!hasPlan ? 'Plan non encore défini par le manager.' : data.coherenceCharge ? 'Plan cohérent : Σ sites = volume chargé.' : 'Incohérence : la somme des volumes prévus diffère du volume chargé.'}
+            {!hasPlan ? 'Plan non encore défini par le manager.' : data.coherenceCharge ? `Plan cohérent : Σ sites = volume ${reportRecu > 0 ? 'à bord' : 'chargé'}.` : `Incohérence : la somme des volumes prévus diffère du volume ${reportRecu > 0 ? 'à bord' : 'chargé'}.`}
           </p>
         </div>
       </div>
