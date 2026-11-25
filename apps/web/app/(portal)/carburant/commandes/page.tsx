@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { L_STATUT_BC } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Download, GitCompare, AlertTriangle, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { downloadFile } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { SuiviDetaille } from './SuiviDetaille';
@@ -169,9 +170,14 @@ function CreateModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export default function BonsCommandePage() {
+const FILTRES_DEFAUT = { page: '1' };
+
+function BonsCommandePageInner() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
+  // Page dans l'URL : ouvrir une fiche puis revenir ne doit pas ramener page 1.
+  const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
+  const page = Number(valeurs.page) || 1;
+  const setPage = (p: number) => appliquer({ page: String(p) });
   const [showModal, setShowModal] = useState(false);
   // Le transporteur CONSULTE les bons de commande (pour y rattacher ses
   // chargements) mais ne les crée pas : création, modification, export et
@@ -237,5 +243,14 @@ export default function BonsCommandePage() {
 
       {showModal && <CreateModal onClose={() => setShowModal(false)} />}
     </div>
+  );
+}
+
+/** useFiltresUrl lit la query : Next exige une frontière Suspense. */
+export default function BonsCommandePage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={6} />}>
+      <BonsCommandePageInner />
+    </Suspense>
   );
 }

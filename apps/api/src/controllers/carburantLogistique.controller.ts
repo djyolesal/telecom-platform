@@ -108,7 +108,9 @@ export async function getBonsCommande(req: Request, res: Response, next: NextFun
       prisma.bonCommande,
       {
         where,
-        orderBy: [{ annee: 'desc' }, { trimestre: 'desc' }],
+        // Plusieurs BC par trimestre : sans départage, la base renvoie les ex aequo
+        // dans un ordre libre et un BC peut changer de page d'un appel à l'autre.
+        orderBy: [{ annee: 'desc' }, { trimestre: 'desc' }, { numero: 'desc' }],
         include: {
           volumesMensuels: { orderBy: { mois: 'asc' } },
           _count: { select: { bonsLivraison: true } },
@@ -339,7 +341,7 @@ export async function getBonsLivraison(req: Request, res: Response, next: NextFu
       prisma.bonLivraison,
       {
         where,
-        orderBy: { dateChargement: 'desc' },
+        orderBy: [{ dateChargement: 'desc' }, { id: 'asc' }], // départage : pagination stable
         include: {
           bonCommande: { select: { numero: true } },
           transporteur: { select: { nom: true } },

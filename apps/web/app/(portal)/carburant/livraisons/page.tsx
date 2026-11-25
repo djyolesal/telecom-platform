@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense } from 'react';
 import { L_STATUT_BL } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { downloadFile } from '@/lib/download';
 import { Button } from '@/components/shared/Button';
 import { ExportButtons } from '@/components/shared/ExportButtons';
@@ -26,9 +27,14 @@ interface BL {
   bonCommande?: { numero: string }; _count?: { lignes: number };
 }
 
-export default function BonsLivraisonPage() {
+const FILTRES_DEFAUT = { page: '1' };
+
+function BonsLivraisonPageInner() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
+  // Page dans l'URL : ouvrir une fiche puis revenir ne doit pas ramener page 1.
+  const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
+  const page = Number(valeurs.page) || 1;
+  const setPage = (p: number) => appliquer({ page: String(p) });
   // L'export global des BL est réservé au pilotage (rbac MANAGER/ADMIN) : sans
   // ce test, le transporteur voyait un bouton qui ne pouvait que renvoyer 403.
   const { data: session } = useSession();
@@ -77,5 +83,14 @@ export default function BonsLivraisonPage() {
         </>
       )}
     </div>
+  );
+}
+
+/** useFiltresUrl lit la query : Next exige une frontière Suspense. */
+export default function BonsLivraisonPage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={8} />}>
+      <BonsLivraisonPageInner />
+    </Suspense>
   );
 }

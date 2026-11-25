@@ -242,7 +242,7 @@ export async function getDepotages(req: Request, res: Response, next: NextFuncti
       prisma.depotage,
       {
         where,
-        orderBy: { dateDepotage: 'desc' },
+        orderBy: [{ dateDepotage: 'desc' }, { id: 'asc' }],
         include: {
           site: { select: { nom: true, code: true, region: true } },
           technicien: { select: { nom: true, prenom: true } },

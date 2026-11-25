@@ -393,7 +393,7 @@ export default function BonCommandeDetailPage() {
             </thead>
             <tbody>
               {data.bonsLivraison.map((bl) => (
-                <tr key={bl.id} className="border-b last:border-0 cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/carburant/livraisons/${bl.id}`)}>
+                <tr key={bl.id} className="border-b last:border-0 cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/carburant/livraisons/${bl.id}?bc=${id}`)}>
                   <td className="py-2 font-medium text-gray-800">{bl.numeroBL}{bl.isBrouillon && <Badge className="bg-amber-100 text-amber-700 ml-1.5">brouillon</Badge>}</td>
                   <td>{MOIS[bl.mois]}</td>
                   <td>{bl.immatriculation}</td>

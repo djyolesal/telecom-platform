@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { FilterBar } from '@/components/shared/FilterBar';
 import { DataTable, Column } from '@/components/shared/DataTable';
@@ -71,13 +72,23 @@ function CreateModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export default function LotsPage() {
+const FILTRES_DEFAUT = { page: '1', search: '', region: '' };
+
+function LotsPageInner() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [region, setRegion] = useState('');
+  // Page dans l'URL : ouvrir une fiche puis revenir ne doit pas ramener page 1 ni effacer les filtres.
+  const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
+  const page = Number(valeurs.page) || 1;
+  const setPage = (p: number) => appliquer({ page: String(p) });
+  const [search, setSearch] = useState(valeurs.search);
+  const { region } = valeurs;
   const [showModal, setShowModal] = useState(false);
   const debounced = useDebounce(search);
+  // Saisie locale ; seule sa version debouncée rejoint l'URL.
+  useEffect(() => {
+    if (debounced !== valeurs.search) appliquer({ search: debounced, page: '1' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['lots', { page, debounced, region }],
@@ -121,9 +132,9 @@ export default function LotsPage() {
 
       <FilterBar
         search={search}
-        onSearch={(v) => { setSearch(v); setPage(1); }}
+        onSearch={setSearch}
         searchPlaceholder="Rechercher (code, nom)…"
-        filters={[{ key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => { setRegion(v); setPage(1); } }]}
+        filters={[{ key: 'region', label: 'Toutes régions', value: region, options: regionOptions, onChange: (v) => appliquer({ region: v, page: '1' }) }]}
       />
 
       {isLoading ? (
@@ -141,5 +152,14 @@ export default function LotsPage() {
 
       {showModal && <CreateModal onClose={() => setShowModal(false)} />}
     </div>
+  );
+}
+
+/** useFiltresUrl lit la query : Next exige une frontière Suspense. */
+export default function LotsPage() {
+  return (
+    <Suspense fallback={<TableSkeleton cols={5} />}>
+      <LotsPageInner />
+    </Suspense>
   );
 }

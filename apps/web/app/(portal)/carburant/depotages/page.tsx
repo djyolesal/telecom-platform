@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Camera } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useFiltresUrl } from '@/lib/hooks/useFiltresUrl';
 import { downloadFile } from '@/lib/download';
 import { ExportButtons } from '@/components/shared/ExportButtons';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -34,6 +35,8 @@ interface Depotage {
   site?: { code: string; nom: string; region: string };
 }
 
+const FILTRES_DEFAUT = { page: '1', search: '' };
+
 function DepotagesPageInner() {
   // L'export est refusé au TECHNICIEN (rbac serveur) : bouton masqué.
   const { data: sessionExp } = useSession();
@@ -41,9 +44,17 @@ function DepotagesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const siteId = searchParams.get('site_id') || undefined;
-  const [page, setPage] = useState(1);
-  const [recherche, setRecherche] = useState('');
+  // Page dans l'URL : ouvrir une fiche puis revenir ne doit pas ramener page 1 ni effacer la recherche.
+  const { valeurs, appliquer } = useFiltresUrl(FILTRES_DEFAUT);
+  const page = Number(valeurs.page) || 1;
+  const setPage = (p: number) => appliquer({ page: String(p) });
+  const [recherche, setRecherche] = useState(valeurs.search);
   const debounced = useDebounce(recherche);
+  // Saisie locale ; seule sa version debouncée rejoint l'URL.
+  useEffect(() => {
+    if (debounced !== valeurs.search) appliquer({ search: debounced, page: '1' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['depotages', { page, debounced, siteId }],
@@ -103,7 +114,7 @@ function DepotagesPageInner() {
 
       {/* La recherche porte sur TOUT le registre, pas sur la page affichée :
           elle part au serveur et la pagination se recalcule. */}
-      <FilterBar search={recherche} onSearch={(v) => { setRecherche(v); setPage(1); }}
+      <FilterBar search={recherche} onSearch={setRecherche}
         searchPlaceholder="Rechercher (site, référence, n° BL, fournisseur)…" />
 
       {siteId && (

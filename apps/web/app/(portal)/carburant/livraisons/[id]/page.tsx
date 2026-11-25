@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { L_STATUT_BL, L_STATUT_LIGNE } from '@/lib/constants';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, AlertTriangle, Plus, X, Trash2, Download, FileText, Pencil, Navigation, Truck } from 'lucide-react';
@@ -436,6 +436,9 @@ function ClotureModal({ bl, reste, onClose }: { bl: BL; reste: number; onClose: 
 
 export default function BonLivraisonDetailPage() {
   const { id } = useParams<{ id: string }>();
+  // Ouvert depuis un bon de commande : « Retour » y ramène, pas à la liste des BL.
+  const bc = useSearchParams().get('bc');
+  const retour = bc && /^[\w-]+$/.test(bc) ? `/carburant/commandes/${bc}` : '/carburant/livraisons';
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -457,7 +460,7 @@ export default function BonLivraisonDetailPage() {
     mutationFn: () => api.delete(`/bons-livraison/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bons-livraison'] });
-      router.push('/carburant/livraisons');
+      router.push(retour);
     },
     onError: (e: { response?: { data?: { error?: string } } }) =>
       window.alert(e.response?.data?.error ?? 'Suppression impossible'),
@@ -485,7 +488,7 @@ export default function BonLivraisonDetailPage() {
       <PageHeader
         title={`Bon de livraison ${data.numeroBL}`}
         subtitle={`${MOIS[data.mois]} ${data.annee} · BC ${data.bonCommande?.numero ?? ''} · Camion ${data.immatriculation}`}
-        backHref={`/carburant/livraisons`}
+        backHref={retour}
         actions={
           <div className="flex items-center gap-2">
             {hasPlan && <Button variant="secondary" icon={Download} onClick={() => downloadFile(`/bons-livraison/${data.id}/plan.xlsx`, `plan-${data.numeroBL}.xlsx`)}>Excel</Button>}
