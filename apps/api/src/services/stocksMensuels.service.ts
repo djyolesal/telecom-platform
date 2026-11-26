@@ -143,6 +143,17 @@ export interface JaugeDepotageLite { date: Date; litres: number; avant: number |
 const TOLERANCE_JAUGE_DEPOTAGE_L = 50;
 
 /**
+ * Jauges avant/après d'un dépotage CRÉDIBLES : toutes deux saisies, dans
+ * l'ordre, plausibles, et leur différence égale au volume livré (à 50 L près).
+ * Règle partagée avec le stock courant (stockCourant.service).
+ */
+export function jaugeDepotageCredible(j: JaugeDepotageLite): boolean {
+  if (j.avant == null || j.apres == null) return false;
+  if (j.avant < 0 || j.apres < j.avant || j.apres > VOLUME_MAX_PLAUSIBLE) return false;
+  return Math.abs(j.apres - j.avant - j.litres) <= TOLERANCE_JAUGE_DEPOTAGE_L;
+}
+
+/**
  * Niveaux servant aux FRONTIÈRES : les relevés, plus les jauges de dépotage
  * crédibles. Le niveau « avant » est posé 1 ms avant la livraison, l'« après »
  * à son heure exacte : la livraison tombe ainsi entre les deux, comptée une
@@ -160,11 +171,9 @@ export function niveauxFrontieres(releves: ReleveStockLite[], jauges: JaugeDepot
     points.push({ date, volume, index: null, groupeId: null });
   };
   for (const j of jauges) {
-    if (j.avant == null || j.apres == null) continue;
-    if (j.avant < 0 || j.apres < j.avant || j.apres > VOLUME_MAX_PLAUSIBLE) continue;
-    if (Math.abs(j.apres - j.avant - j.litres) > TOLERANCE_JAUGE_DEPOTAGE_L) continue;
-    poser(new Date(j.date.getTime() - 1), j.avant);
-    poser(j.date, j.apres);
+    if (!jaugeDepotageCredible(j)) continue;
+    poser(new Date(j.date.getTime() - 1), j.avant!);
+    poser(j.date, j.apres!);
   }
   return points.sort((a, b) => a.date.getTime() - b.date.getTime());
 }

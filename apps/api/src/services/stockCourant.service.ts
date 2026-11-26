@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { soldeMouvementsParSite } from './mouvementsCarburant.service';
+import { jaugeDepotageCredible, JaugeDepotageLite } from './stocksMensuels.service';
 
 /**
  * SOURCE UNIQUE du stock de gasoil par site.
@@ -11,8 +12,9 @@ import { soldeMouvementsParSite } from './mouvementsCarburant.service';
  * sur un écran et sortait de la liste sur l'autre — le même matin. Le manager
  * lisait deux chiffres contradictoires et perdait confiance dans l'outil.
  *
- * Règle retenue (celle du job, la plus proche du réel) :
- *   stock = dernier relevé GE + Σ dépotages postérieurs
+ * Règle retenue (partagée avec le job d'alerte et le réapprovisionnement) :
+ *   stock = dernière mesure (relevé GE ou jauge après un dépotage crédible)
+ *           + Σ dépotages postérieurs
  *           + Σ mouvements postérieurs (transferts entrants − sortants − purges).
  *
  * Un site jamais relevé mais déjà livré est compté sur ses seuls dépotages ; un
@@ -37,7 +39,67 @@ export async function stockCourantParSite(): Promise<Map<string, number>> {
   return stock;
 }
 
-/** Stock ET date de la mesure la plus récente qui le fonde, en une passe. */
+/** Un niveau de cuve connu à une date. */
+export interface PointStock { date: Date; litres: number }
+
+/**
+ * Stock d'UN site à partir de sa dernière MESURE (fonction pure).
+ *
+ * La mesure de départ est la plus récente entre le dernier relevé GE et la
+ * jauge APRÈS livraison d'un dépotage crédible (jaugeDepotageCredible : même
+ * règle que les stocks mensuels). Partir du relevé et lui ajouter le volume
+ * livré oubliait le gasoil brûlé entre la visite et la livraison : le stock
+ * était surestimé d'autant, avec la date de livraison affichée comme une date
+ * de mesure. À la même heure, le relevé prime.
+ *
+ * stock = mesure de départ + Σ dépotages strictement postérieurs.
+ * Site sans aucune mesure mais déjà livré : somme de ses dépotages, référence
+ * au plus ancien (règle inchangée), `mesure` faux. Ni mesure ni dépotage : null.
+ */
+export function stockDepuisMesure(
+  releve: PointStock | null,
+  depotages: JaugeDepotageLite[],
+): { litres: number; reference: Date; dernierEvenement: Date; mesure: boolean } | null {
+  let ref = releve;
+  for (const d of depotages) {
+    if (!jaugeDepotageCredible(d)) continue;
+    if (!ref || d.date > ref.date) ref = { date: d.date, litres: d.apres! };
+  }
+  if (!ref) {
+    if (!depotages.length) return null;
+    let premier = depotages[0].date;
+    let dernier = depotages[0].date;
+    let litres = 0;
+    for (const d of depotages) {
+      litres += d.litres;
+      if (d.date < premier) premier = d.date;
+      if (d.date > dernier) dernier = d.date;
+    }
+    return { litres, reference: premier, dernierEvenement: dernier, mesure: false };
+  }
+  let litres = ref.litres;
+  let dernier = ref.date;
+  for (const d of depotages) {
+    if (d.date <= ref.date) continue;
+    litres += d.litres;
+    if (d.date > dernier) dernier = d.date;
+  }
+  return { litres, reference: ref.date, dernierEvenement: dernier, mesure: true };
+}
+
+/** Dépotage tel que lu en base, converti pour stockDepuisMesure. */
+export function depotageLite(d: {
+  dateDepotage: Date; volumeLitres: unknown; stockAvantLitres?: unknown; stockApresLitres?: unknown;
+}): JaugeDepotageLite {
+  return {
+    date: d.dateDepotage,
+    litres: Number(d.volumeLitres),
+    avant: d.stockAvantLitres != null ? Number(d.stockAvantLitres) : null,
+    apres: d.stockApresLitres != null ? Number(d.stockApresLitres) : null,
+  };
+}
+
+/** Stock ET date de l'événement le plus récent qui le fonde, en une passe. */
 export async function stockEtDates(): Promise<{ stock: Map<string, number>; dates: Map<string, Date> }> {
   // `distinct` : une ligne par site au lieu de tout l'historique GE.
   const releves = await prisma.releveEnergie.findMany({
@@ -46,55 +108,42 @@ export async function stockEtDates(): Promise<{ stock: Map<string, number>; date
     distinct: ['siteId'],
     select: { siteId: true, volumeGasoilLitres: true, dateReleve: true },
   });
-
-  const stock = new Map<string, number>();
-  const dateRef = new Map<string, Date>();
-  for (const r of releves) {
-    stock.set(r.siteId, Number(r.volumeGasoilLitres));
-    dateRef.set(r.siteId, r.dateReleve);
-  }
+  const releveParSite = new Map<string, PointStock>();
+  for (const r of releves) releveParSite.set(r.siteId, { date: r.dateReleve, litres: Number(r.volumeGasoilLitres) });
 
   // Dépotages postérieurs au relevé de référence. Bornés au plus ancien relevé :
   // charger toute la table depuis la création du parc croîtrait sans fin.
-  const plusAncien = [...dateRef.values()].reduce<Date | null>((min, d) => (!min || d < min ? d : min), null);
+  const plusAncien = [...releveParSite.values()].reduce<Date | null>((min, r) => (!min || r.date < min ? r.date : min), null);
   const depotages = await prisma.depotage.findMany({
     where: plusAncien ? { dateDepotage: { gte: plusAncien } } : {},
-    select: { siteId: true, dateDepotage: true, volumeLitres: true },
+    select: { siteId: true, dateDepotage: true, volumeLitres: true, stockAvantLitres: true, stockApresLitres: true },
   });
-
+  const depotsParSite = new Map<string, JaugeDepotageLite[]>();
   for (const d of depotages) {
-    const ref = dateRef.get(d.siteId);
-    // Site jamais relevé (ref absente) : le dépotage constitue la seule mesure.
-    if (!ref || d.dateDepotage > ref) {
-      stock.set(d.siteId, (stock.get(d.siteId) ?? 0) + Number(d.volumeLitres));
-    }
+    const arr = depotsParSite.get(d.siteId) ?? [];
+    arr.push(depotageLite(d));
+    depotsParSite.set(d.siteId, arr);
   }
 
-  // Transferts et purges postérieurs au relevé : sans eux, un site vidé au
-  // profit d'un autre resterait affiché plein, et un site secouru resterait
-  // affiché critique alors qu'il vient d'être servi.
-  // Les sites connus par leurs SEULS dépotages (jamais relevés) doivent y
-  // figurer aussi : sinon leur purge n'était jamais déduite et leur stock
-  // restait surévalué. Leur borne est le PLUS ANCIEN de leurs dépotages —
-  // `depotages` n'est pas trié, d'où la comparaison à chaque passage.
-  const sitesReleves = new Set(dateRef.keys());
-  for (const d of depotages) {
-    if (sitesReleves.has(d.siteId)) continue;
-    const actuel = dateRef.get(d.siteId);
-    if (!actuel || d.dateDepotage < actuel) dateRef.set(d.siteId, d.dateDepotage);
+  const stock = new Map<string, number>();
+  const reference = new Map<string, Date>();
+  const dates = new Map<string, Date>();
+  for (const siteId of new Set([...releveParSite.keys(), ...depotsParSite.keys()])) {
+    const r = stockDepuisMesure(releveParSite.get(siteId) ?? null, depotsParSite.get(siteId) ?? []);
+    if (!r) continue;
+    stock.set(siteId, r.litres);
+    reference.set(siteId, r.reference);
+    // La date publiée est celle du dernier ÉVÉNEMENT qui a bougé le stock -
+    // relevé, jauge ou dépotage -, pas celle du seul relevé.
+    dates.set(siteId, r.dernierEvenement);
   }
-  const solde = await soldeMouvementsParSite(dateRef);
+
+  // Transferts et purges postérieurs à la mesure de départ : sans eux, un site
+  // vidé au profit d'un autre resterait affiché plein, et un site secouru
+  // resterait affiché critique alors qu'il vient d'être servi.
+  const solde = await soldeMouvementsParSite(reference);
   for (const [siteId, delta] of solde) {
     stock.set(siteId, (stock.get(siteId) ?? 0) + delta);
-  }
-  // La date publiée est celle du dernier ÉVÉNEMENT qui a bougé le stock -
-  // relevé ou dépotage -, pas celle du seul relevé : un site livré hier a bien
-  // une information d'hier, même si sa cuve n'a pas été jaugée depuis.
-  const dates = new Map<string, Date>();
-  for (const [siteId, d] of dateRef) dates.set(siteId, d);
-  for (const d of depotages) {
-    const vue = dates.get(d.siteId);
-    if (!vue || d.dateDepotage > vue) dates.set(d.siteId, d.dateDepotage);
   }
   return { stock, dates };
 }

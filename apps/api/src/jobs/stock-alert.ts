@@ -4,6 +4,7 @@ import { calculerStockSite } from '../utils/calculator';
 import { geParams } from '../services/settings.service';
 import { notificationService } from '../services/notifications.service';
 import { logger } from '../utils/logger';
+import { stockEtDates } from '../services/stockCourant.service';
 
 /**
  * Vérifie le stock de carburant de chaque site et notifie les superviseurs
@@ -13,36 +14,17 @@ import { logger } from '../utils/logger';
 export async function stockAlertJob(): Promise<void> {
   const sites = await prisma.site.findMany({ where: { isActive: true } });
 
-  // Dernier niveau de cuve relevé par site (+ date, pour rejouer les dépotages postérieurs)
-  const releves = await prisma.releveEnergie.findMany({
-    where: { source: 'GE', volumeGasoilLitres: { not: null } },
-    orderBy: [{ siteId: 'asc' }, { dateReleve: 'desc' }],
-    distinct: ['siteId'],
-    select: { siteId: true, volumeGasoilLitres: true, dateReleve: true },
-  });
-  const stockMap = new Map<string, number>();
-  const dateMap = new Map<string, Date>();
-  for (const r of releves) { stockMap.set(r.siteId, Number(r.volumeGasoilLitres)); dateMap.set(r.siteId, r.dateReleve); }
-
-  // Dépotages postérieurs au dernier relevé → cuve réapprovisionnée (cohérent avec le forecast).
-  // Bornés au plus ancien relevé de référence : charger TOUTE la table des
-  // dépotages depuis la création du parc était une croissance sans fin.
-  const plusAncienReleve = [...dateMap.values()].reduce<Date | null>((min, d) => (!min || d < min ? d : min), null);
-  const depots = await prisma.depotage.findMany({
-    where: plusAncienReleve ? { dateDepotage: { gte: plusAncienReleve } } : {},
-    select: { siteId: true, dateDepotage: true, volumeLitres: true },
-  });
-  const depotMap = new Map<string, number>();
-  for (const d of depots) {
-    const ref = dateMap.get(d.siteId);
-    if (ref && d.dateDepotage > ref) depotMap.set(d.siteId, (depotMap.get(d.siteId) ?? 0) + Number(d.volumeLitres));
-  }
+  // Même stock que la page « Stock carburant » et le tableau de bord (source
+  // unique) : dernière mesure - relevé ou jauge après livraison - + dépotages
+  // et mouvements postérieurs. Ce job en gardait une copie qui ignorait les
+  // jauges de dépotage et les transferts.
+  const { stock: stockMap } = await stockEtDates();
 
   const alertes = sites
     // Un site JAMAIS relevé (aucun stock connu) ne doit pas générer un faux
     // « VIDE » quotidien : on ne l'évalue que si une mesure de cuve existe.
-    .filter((site) => stockMap.has(site.id) || depotMap.has(site.id))
-    .map((site) => ({ site, stock: calculerStockSite(site, { volumeGasoilLitres: (stockMap.get(site.id) ?? 0) + (depotMap.get(site.id) ?? 0) }, geParams()) }))
+    .filter((site) => stockMap.has(site.id))
+    .map((site) => ({ site, stock: calculerStockSite(site, { volumeGasoilLitres: stockMap.get(site.id)! }, geParams()) }))
     .filter(({ stock }) => ['CRITIQUE', 'VIDE'].includes(stock.niveauAlerte));
 
   if (!alertes.length) {
