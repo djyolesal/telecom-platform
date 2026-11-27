@@ -34,51 +34,57 @@ export function cleDe(valeur: string | null | undefined): string | null {
   return sansQuery.replace(/^\/+/, '');
 }
 
+/**
+ * TOUTES les colonnes qui portent une clé (ou une URL) d'objet MinIO.
+ *
+ * Un champ oublié ici voit ses fichiers effacés 7 jours après l'envoi, sans
+ * bruit : de août à novembre 2026, certificats de jaugeage des camions,
+ * pièces et signatures des mouvements, bons de retour, signatures d'agent de
+ * sécurité, rapports mensuels archivés et logo client ont disparu ainsi.
+ * Le test `purge-orphelins.test.ts` compare cette liste au schéma Prisma :
+ * une nouvelle colonne `...Path` / `...MinioKey` non déclarée le fait échouer.
+ */
+export const CHAMPS_FICHIERS: Record<string, string[]> = {
+  photo: ['minioKey', 'url'],
+  maintenance: ['signaturePath', 'signatureAgentSecuritePath', 'rapportPdfPath'],
+  depotage: ['signaturePath', 'bonLivraisonPath', 'signatureChauffeurPath', 'signatureAgentSecuritePath', 'signatureTechnicienPath'],
+  incident: ['signaturePath', 'signatureAgentSecuritePath'],
+  prestataire: ['logoPath'],
+  mouvementCarburant: ['documentPath', 'signaturePath'],
+  vehicule: ['certificatJaugeagePath'],
+  bonCommande: ['bcPdfPath'],
+  bonLivraison: ['blPdfPath', 'bordereauPdfPath', 'bonRetourPath'],
+  rapportMensuel: ['minioKey', 'ficheMinioKey'],
+};
+
+/** Paramètres (system_settings) dont la valeur est une clé d'objet. */
+export const PARAMETRES_FICHIERS = ['client.logoKey'];
+
+type Delegue = { findMany(args: unknown): Promise<Array<Record<string, unknown>>> };
+
 /** Toutes les clés d'objets référencées quelque part en base. */
-async function clesReferencees(): Promise<Set<string>> {
+export async function clesReferencees(): Promise<Set<string>> {
   const refs = new Set<string>();
-  const ajouter = (...valeurs: Array<string | null | undefined>) => {
-    for (const v of valeurs) {
-      const cle = cleDe(v);
-      if (!cle) continue;
-      refs.add(cle);
-      // La vignette d'une photo (cache du rapport mensuel d'activité) vit
-      // aussi longtemps que son original : sans cette ligne, le ménage
-      // nocturne effaçait un cache que le rapport suivant devait recalculer.
-      if (!cle.startsWith(PREFIXE_VIGNETTE)) refs.add(cleVignette(cle));
-    }
+  const ajouter = (v: unknown) => {
+    const cle = typeof v === 'string' ? cleDe(v) : null;
+    if (!cle) return;
+    refs.add(cle);
+    // La vignette d'une photo (cache du rapport mensuel d'activité) vit
+    // aussi longtemps que son original : sans cette ligne, le ménage
+    // nocturne effaçait un cache que le rapport suivant devait recalculer.
+    if (!cle.startsWith(PREFIXE_VIGNETTE)) refs.add(cleVignette(cle));
   };
 
-  const [photos, maintenances, depotages, incidents, prestataires, bcs, bls] = await Promise.all([
-    prisma.photo.findMany({ select: { minioKey: true, url: true } }),
-    prisma.maintenance.findMany({
-      where: { OR: [{ signaturePath: { not: null } }, { rapportPdfPath: { not: null } }] },
-      select: { signaturePath: true, rapportPdfPath: true },
-    }),
-    prisma.depotage.findMany({
-      select: {
-        signaturePath: true, bonLivraisonPath: true,
-        signatureChauffeurPath: true, signatureAgentSecuritePath: true, signatureTechnicienPath: true,
-      },
-    }),
-    prisma.incident.findMany({ where: { signaturePath: { not: null } }, select: { signaturePath: true } }),
-    prisma.prestataire.findMany({ where: { logoPath: { not: null } }, select: { logoPath: true } }),
-    prisma.bonCommande.findMany({ where: { bcPdfPath: { not: null } }, select: { bcPdfPath: true } }),
-    prisma.bonLivraison.findMany({
-      where: { OR: [{ blPdfPath: { not: null } }, { bordereauPdfPath: { not: null } }] },
-      select: { blPdfPath: true, bordereauPdfPath: true },
-    }),
-  ]);
+  const lignes = await Promise.all(Object.entries(CHAMPS_FICHIERS).map(([modele, champs]) => {
+    const delegue = (prisma as unknown as Record<string, Delegue>)[modele];
+    // Pas de filtre `not: null` : Prisma le refuse sur une colonne obligatoire
+    // (photo.url, rapportMensuel.minioKey) ; les vides sont ignorés par cleDe.
+    return delegue.findMany({ select: Object.fromEntries(champs.map((c) => [c, true])) }).then((rs) => rs.map((r) => champs.map((c) => r[c])));
+  }));
+  for (const parModele of lignes) for (const valeurs of parModele) valeurs.forEach(ajouter);
 
-  for (const p of photos) ajouter(p.minioKey, p.url);
-  for (const m of maintenances) ajouter(m.signaturePath, m.rapportPdfPath);
-  for (const d of depotages) {
-    ajouter(d.signaturePath, d.bonLivraisonPath, d.signatureChauffeurPath, d.signatureAgentSecuritePath, d.signatureTechnicienPath);
-  }
-  for (const i of incidents) ajouter(i.signaturePath);
-  for (const p of prestataires) ajouter(p.logoPath);
-  for (const b of bcs) ajouter(b.bcPdfPath);
-  for (const b of bls) ajouter(b.blPdfPath, b.bordereauPdfPath);
+  const parametres = await prisma.systemSettings.findMany({ where: { key: { in: PARAMETRES_FICHIERS } } });
+  for (const p of parametres) ajouter(p.value);
   return refs;
 }
 
